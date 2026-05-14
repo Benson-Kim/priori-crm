@@ -1,0 +1,36 @@
+import { cva } from "class-variance-authority";
+
+export const buttonVariants = cva(
+  "inline-flex gap-1.5 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-0 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+        danger: "bg-danger text-white hover:bg-danger/90",
+        success: "bg-success text-white hover:bg-success/90",
+        neutral: "bg-neutral text-white hover:bg-neutral/90",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        outline: "border border-primary text-primary bg-white hover:bg-primary hover:text-white",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+        "outline-success": "border border-success text-success bg-white hover:bg-success hover:text-white",
+        "outline-danger": "border border-danger text-danger bg-white hover:bg-danger hover:text-white",
+        "outline-neutral": "border border-neutral text-neutral bg-white hover:bg-neutral hover:text-white",
+        "outline-secondary": "border border-gray-300 text-secondary-foreground bg-white hover:bg-secondary",
+      },
+      size: {
+        default: "px-4 py-2",
+        sm: "rounded-md py-1.5 px-3",
+        lg: "rounded-md py-4 px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  },
+);
+
+// Made with Bob

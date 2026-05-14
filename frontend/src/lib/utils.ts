@@ -1,0 +1,119 @@
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export const focusInput = [
+  "focus:ring-2",
+  "focus:ring-blue-200 focus:dark:ring-blue-700/30",
+  "focus:border-blue-500 focus:dark:border-blue-700",
+];
+
+export const focusRing = [
+  "outline outline-offset-2 outline-0 focus-visible:outline-2",
+  "outline-blue-500 dark:outline-blue-500",
+];
+
+export const hasErrorInput = [
+  "ring-2",
+  "border-red-500 dark:border-red-700",
+  "ring-red-200 dark:ring-red-700/30",
+];
+
+export function createSearchParams(
+  params: Record<string, string | number | boolean | null | undefined>
+) {
+  const stringParams: Record<string, string> = {};
+
+  Object.keys(params).forEach((key) => {
+    const value = params[key];
+    if (value != null && value !== "") {
+      stringParams[key] = String(value);
+    }
+  });
+
+  return new URLSearchParams(stringParams).toString();
+}
+
+export const wait = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export const getNameInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map((n) => n.charAt(0))
+    .join("");
+};
+
+export function getDayNames(days: number[]): string[] {
+  const dayNames = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  return days.map((day) => dayNames[day] || "Invalid day");
+}
+
+export const validateDate = (date: string | null | undefined) => {
+  if (!date) return null;
+  const date_ = new Date(date);
+  if (Number.isNaN(date_.getTime())) return null;
+  return date;
+};
+
+export const validateInt = (value: string | null | undefined) => {
+  if (!value) return null;
+  const intValue = Number.parseInt(value, 10);
+  if (Number.isNaN(intValue)) return null;
+  return value;
+};
+
+export const formatDate = (dateString: string) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-KE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+export function formatCurrency(
+  amount: number,
+  currency: string = "KES"
+): string {
+  const prefix = currency === "KES" ? "Ksh" : currency;
+
+  return `${prefix} ${amount.toLocaleString("en-KE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * Mask an email address for display (e.g. "fra**********18@mail.com").
+ */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (local.length <= 5) {
+    return `${local[0]}${"*".repeat(local.length - 1)}@${domain}`;
+  }
+  const start = local.slice(0, 3);
+  const end = local.slice(-2);
+  const masked = "*".repeat(Math.min(local.length - 5, 10));
+  return `${start}${masked}${end}@${domain}`;
+}
+
+/**
+ * Format a delta percentage with sign (e.g. "+1.5%" or "-1.5%").
+ */
+export function formatDelta(value: number): string {
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
+}
