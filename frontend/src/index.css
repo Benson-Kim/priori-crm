@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@theme {
+  --color-priori-purple: #912b90;
+  --color-cocoa: #39302d;
+  --color-sky-blue-900: #3ab3e5;
+
+  --color-success: #039855;
+  --color-warning: #dc6803;
+  --color-danger: #ef4444;
+
+  --color-ghostwhite: #f8fafc;
+  --color-surface-table-header: #ffffff;
+  --color-surface-app: #f1f5f9;
+
+  --color-content-primary: var(--color-gray-800);
+  --color-content-secondary: var(--color-gray-600);
+  --color-content-priori-purple: #334155;
+  --color-border: var(--color-gray-300);
+
+  --color-pink-25: #fcfcfd;
+  --color-gray-25: #f9fafb;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #eaecf0;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+
+  --font-sans: "Poppins", sans-serif;
+}
+
+::marker {
+  color: transparent;
+  height: 0 !important;
+}
+
+@layer base {
+  * {
+    font-family: "Poppins", sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    @apply bg-gray-100 text-gray-800 overflow-x-hidden px-2;
+  }
+
+  td[data-selected="true"] button {
+    @apply hover:bg-gray-200 hover:text-gray-800;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-1 ring-priori-purple border-priori-purple;
+  }
+}
+
+.box-shadow {
+  box-shadow: 0px 0px 12px rgba(0, 0, 0, 0.1);
+}
+
+fieldset {
+  display: block;
+  min-inline-size: min-content;
+  margin-inline: 2px;
+  border-width: 2px;
+  border-style: groove;
+  border-color: gray;
+  border-image: initial;
+  padding-block: 0.35em 0.625em;
+  padding-inline: 0.75em;
+}
+
+legend {
+  display: block;
+  unicode-bidi: isolate;
+  padding-inline: 2px;
+}

@@ -1,0 +1,361 @@
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import (
+    BaseModel, 
+    EmailStr, 
+    Field, 
+    field_validator, 
+    model_validator
+)
+
+from app.common.validators import (
+    capitalize_location as _capitalize_location,
+    empty_str_to_none as _empty_str_to_none,
+    normalize_phone,
+    validate_country_code,
+)
+from app.constants.enums import Currency, CustomerStatus, CustomerType
+
+
+# Request Schemas
+
+
+class CustomerCreate(BaseModel):
+    """Request body for creating a new customer."""
+    customer_type: CustomerType = Field(..., description="Customer type", alias="customerType")
+    company_name: str | None = Field(
+        None,
+        max_length=255,
+        description="Company name (required for business customers)",
+        alias="companyName",
+    )
+    first_name: str = Field(..., min_length=1, max_length=100, description="First name", alias="firstName")
+    last_name: str = Field(..., min_length=1, max_length=100, description="Last name", alias="lastName")
+    email: EmailStr = Field(..., description="Email address")
+    phone: str = Field(..., description="Phone number in international format")
+    website: str | None = Field(None, max_length=500, description="Website URL")
+    vat_number: str | None = Field(None, max_length=50, description="VAT/Tax number", alias="vatNumber")
+    currency: Currency = Field(default=Currency.KES, description="Default currency")
+    address: str | None = Field(..., min_length=5, description="Primary address")
+    address2: str | None = Field(None, description="Secondary address")
+    country: str | None = Field(..., min_length=2, max_length=2, description="ISO country code")
+    province: str | None = Field(..., min_length=2, max_length=100, description="State/Province")
+    city: str | None = Field(..., min_length=2, max_length=100, description="City")
+    postal_code: str | None = Field(..., min_length=3, max_length=20, description="Postal code", alias="postalCode")
+
+    @field_validator(
+        "company_name", "website", "vat_number",
+        "address", "address2", "province", "city", "postal_code",
+        mode="before",
+    )
+    @classmethod
+    def empty_str_to_none(cls, v: str | None) -> str | None:
+        """Convert empty strings to None for optional fields."""
+        return _empty_str_to_none(v)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str, info) -> str:
+        """Validate and normalize phone number to E.164 format."""
+        country = info.data.get("country")
+        return normalize_phone(v, country)
+
+    @field_validator("country")
+    @classmethod
+    def validate_country(cls, v: str | None) -> str | None:
+        """Validate and normalize ISO 3166-1 alpha-2 country code."""
+        return validate_country_code(v)
+
+    @field_validator("province", "city")
+    @classmethod
+    def capitalize_location(cls, v: str | None) -> str | None:
+        """Capitalize location names for consistency."""
+        return _capitalize_location(v)
+
+    @model_validator(mode="after")
+    def validate_business_company_name(self) -> "CustomerCreate":
+        """Ensure business customers have a company name."""
+        if self.customer_type == CustomerType.BUSINESS and not self.company_name:
+            raise ValueError("company_name is required for business customers")
+        return self
+
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "customerType": "individual",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "email": "john.doe@example.com",
+                    "phone": "0712345678",
+                    "currency": "KES",
+                    "address": "123 Main Street",
+                    "city": "Nairobi",
+                    "province": "Nairobi County",
+                    "country": "KE",
+                    "postalCode": "00100",
+                },
+                {
+                    "customer_type": "business",
+                    "company_name": "Acme Corporation",
+                    "first_name": "Jane",
+                    "last_name": "Smith",
+                    "email": "jane@acme.com",
+                    "phone": "+254700000000",
+                    "website": "https://acme.com",
+                    "vat_number": "KE1234567890",
+                    "currency": "KES",
+                    "address": "456 Business Ave",
+                    "country": "KE",
+                    "province": "Nairobi",
+                    "city": "Nairobi",
+                    "postal_code": "00100",
+                },
+            ]
+        },
+    }
+
+
+class CustomerUpdate(BaseModel):
+    """Request body for updating a customer. All fields optional."""
+
+    customer_type: CustomerType | None = Field(None, alias="customerType")
+    company_name: str | None = Field(None, max_length=255, alias="companyName")
+    first_name: str | None = Field(None, min_length=1, max_length=100, alias="firstName")
+    last_name: str | None = Field(None, min_length=1, max_length=100, alias="lastName")
+    email: EmailStr | None = None
+    phone: str | None = None
+    website: str | None = Field(None, max_length=500)
+    vat_number: str | None = Field(None, max_length=50, alias="vatNumber")
+    currency: Currency | None = None
+    address: str | None = None
+    address2: str | None = None
+    country: str | None = Field(None, min_length=2, max_length=2)
+    province: str | None = None
+    city: str | None = None
+    postal_code: str | None = Field(None, alias="postalCode")
+    status: CustomerStatus | None = None
+
+    @field_validator(
+        "company_name", "website", "vat_number",
+        "address", "address2", "province", "city", "postal_code",
+        mode="before",
+    )
+    @classmethod
+    def empty_str_to_none(cls, v: str | None) -> str | None:
+        """Convert empty strings to None."""
+        return _empty_str_to_none(v)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str, info) -> str:
+        """Validate and normalize phone number to E.164 format."""
+        country = info.data.get("country")
+        return normalize_phone(v, country)
+
+    @field_validator("country")
+    @classmethod
+    def validate_country(cls, v: str | None) -> str | None:
+        """Validate ISO country code if provided."""
+        return validate_country_code(v)
+
+    @field_validator("province", "city")
+    @classmethod
+    def capitalize_location(cls, v: str | None) -> str | None:
+        """Capitalize location names."""
+        return _capitalize_location(v)
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+# Response Schemas
+
+
+class CustomerResponse(BaseModel):
+    """Full customer record returned in API responses."""
+
+    id: UUID
+    customer_type: str
+    status: str
+    company_name: str | None = None
+    first_name: str
+    last_name: str
+    email: str
+    phone: str
+    website: str | None = None
+    vat_number: str | None = None
+    currency: str
+    balance: Decimal
+    address: str | None = None
+    address2: str | None = None
+    country: str | None = None
+    province: str | None = None
+    city: str | None = None
+    postal_code: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CustomerSummary(BaseModel):
+    """Lightweight customer summary for lists."""
+
+    id: UUID
+    customer_type: str
+    status: str
+    display_name: str
+    email: str
+    phone: str
+    balance: Decimal
+    currency: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CustomerStatusCounts(BaseModel):
+    """Customer counts by status for dashboard filter tabs."""
+
+    all: int = 0
+    active: int = 0
+    inactive: int = 0
+    suspended: int = 0
+    deleted: int = 0
+
+
+class FinancialSummary(BaseModel):
+    """Financial summary for customer overview."""
+
+    total_unpaid: Decimal = Field(
+        default=Decimal("0.00"), description="Total unpaid invoice balance"
+    )
+    overdue: Decimal = Field(
+        default=Decimal("0.00"), description="Total overdue invoice balance"
+    )
+    total_invoiced: Decimal = Field(
+        default=Decimal("0.00"), description="Total invoiced amount (all time)"
+    )
+    total_paid: Decimal = Field(
+        default=Decimal("0.00"), description="Total paid amount (all time)"
+    )
+
+
+class MockInvoice(BaseModel):
+    """Mock invoice for customer detail view."""
+
+    id: UUID
+    invoice_number: str
+    amount: Decimal
+    balance: Decimal
+    status: str
+    date: str
+
+
+class MockStatement(BaseModel):
+    """Mock statement for customer detail view."""
+
+    id: UUID
+    period: str
+    opening_balance: Decimal
+    invoiced_amount: Decimal
+    amount_paid: Decimal
+    balance_due: Decimal
+
+
+class CustomerDetailResponse(BaseModel):
+    """Single customer with mock invoices and statements."""
+
+    customer: CustomerResponse
+    financial_summary: FinancialSummary
+    invoices: list[MockInvoice] = Field(default_factory=list)
+    statements: list[MockStatement] = Field(default_factory=list)
+
+
+class StatementTransaction(BaseModel):
+    """Single transaction line in a statement."""
+
+    date: date
+    description: str
+    amount: Decimal
+    payment: Decimal
+    balance: Decimal
+
+
+class StatementSummary(BaseModel):
+    """Account summary for statement header."""
+
+    opening_balance: Decimal
+    invoiced_amount: Decimal
+    amount_paid: Decimal
+    balance_due: Decimal
+
+class CustomerDeleteCheckResponse(BaseModel):
+    """Pre-delete validation response."""
+
+    can_delete: bool = Field(description="Whether soft delete is allowed")
+    can_hard_delete: bool = Field(description="Whether hard delete is allowed")
+    delete_type: str = Field(description="Recommended delete type: 'soft_only' | 'hard_allowed'")
+    warnings: list[str] = Field(default_factory=list, description="Warnings about deletion")
+    associated_records: dict[str, int] = Field(
+        default_factory=dict, description="Count of related records by type"
+    )
+    message: str = Field(description="Human-readable summary")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "can_delete": True,
+                "can_hard_delete": False,
+                "delete_type": "soft_only",
+                "warnings": [
+                    "Customer has outstanding balance: KES 15000.00",
+                    "42 invoice(s) associated with this customer (3 unpaid)",
+                ],
+                "associated_records": {
+                    "invoices": 42,
+                    "quotes": 5,
+                    "payments": 38,
+                },
+                "message": "Customer has associated records. Soft delete recommended.",
+            }
+        }
+    }
+
+
+class CustomerDeleteResponse(BaseModel):
+    """Response after deleting a customer."""
+
+    customer_id: UUID = Field(description="ID of the deleted customer")
+    delete_type: str = Field(description="Type of deletion performed: 'soft' | 'hard'")
+    deleted_at: datetime = Field(description="Timestamp when deletion occurred")
+    warnings: list[str] = Field(default_factory=list, description="Any warnings from the delete operation")
+    associated_records: dict[str, int] = Field(default_factory=dict, description="Count of associated records that were affected")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "customer_id": "123e4567-e89b-12d3-a456-426614174000",
+                "delete_type": "soft",
+                "deleted_at": "2024-05-14T13:45:00Z",
+                "warnings": [],
+                "associated_records": {},
+            }
+        }
+    }
+
+
+class CustomerStatement(BaseModel):
+    """Complete customer statement."""
+
+    customer: CustomerResponse
+    period_start: date
+    period_end: date
+    summary: StatementSummary
+    transactions: list[StatementTransaction]
+    generated_at: datetime

@@ -1,0 +1,71 @@
+from datetime import UTC, datetime, timedelta
+
+import bcrypt
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+
+from app.common.exceptions import UnauthorizedException
+from app.lib.config import settings
+
+bearer_scheme = HTTPBearer()
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plaintext password against its bcrypt hash."""
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
+
+
+def create_access_token(subject: str, extra: dict | None = None) -> str:
+    """Create a JWT access token."""
+    expire = datetime.now(UTC) + timedelta(
+        minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    payload = {"sub": subject, "exp": expire, "type": "access"}
+    if extra:
+        payload.update(extra)
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def create_refresh_token(subject: str) -> str:
+    """Create a JWT refresh token."""
+    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = {"sub": subject, "exp": expire, "type": "refresh"}
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_access_token(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> dict:
+    """Decode and validate a JWT access token from the Authorization header."""
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        if payload.get("type") != "access":
+            raise UnauthorizedException("Invalid token type.")
+        return payload
+    except JWTError as e:
+        raise UnauthorizedException("Invalid or expired token.") from e
+
+
+def decode_refresh_token(token: str) -> dict:
+    """Decode and validate a JWT refresh token."""
+    try:
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+        if payload.get("type") != "refresh":
+            raise UnauthorizedException("Invalid token type.")
+        return payload
+    except JWTError as e:
+        raise UnauthorizedException("Invalid or expired refresh token.") from e
