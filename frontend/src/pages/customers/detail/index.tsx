@@ -48,7 +48,7 @@ export default function CustomerDetailsPage() {
         );
     }
 
-    const { customer: details, financial_summary, invoices, statements } = customer;
+    const { customer: details, financial_summary, invoices } = customer;
 
     return (
         <div className="space-y-6">

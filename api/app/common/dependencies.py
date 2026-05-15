@@ -40,3 +40,11 @@ def get_customer_service(db: DbSession):
 
 
 CustomerServiceDep = Annotated["CustomerService", Depends(get_customer_service)]  # noqa: F821
+
+def get_invoice_service(db: DbSession):
+    """Provide a InvoiceService scoped to the current request session."""
+    from app.modules.invoices.service import InvoiceService
+    return InvoiceService(db)
+
+
+InvoiceServiceDep = Annotated["InvoiceService", Depends(get_invoice_service)]  # noqa: F821

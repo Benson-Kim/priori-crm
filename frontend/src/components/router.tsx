@@ -5,6 +5,9 @@ import AddCustomerPage from "@/pages/customers/add";
 import EditCustomerPage from "@/pages/customers/edit";
 import CustomerDetailsPage from "@/pages/customers/detail";
 import InvoicesPage from "@/pages/invoices";
+import AddInvoicePage from "@/pages/invoices/add";
+import InvoiceDetailPage from "@/pages/invoices/detail";
+import EditInvoicePage from "@/pages/invoices/edit";
 import ProductsPage from "@/pages/products";
 import QuotesPage from "@/pages/quotes";
 import DefaultLayout from "./layout/default-layout";
@@ -75,13 +78,48 @@ const routes = [
             },
             {
                 path: "invoices",
-                element: <InvoicesPage />,
-                handle: {
-                    header: {
-                        title: "Invoices",
-                        description: "Effortlessly handle your billing and invoices here.",
+                children: [
+                    {
+                        index: true,
+                        element: <InvoicesPage />,
+                        handle: {
+                            header: {
+                                title: "Invoices",
+                                description: "Effortlessly handle your billing and invoices here.",
+                            },
+                        },
                     },
-                },
+                    {
+                        path: "add",
+                        element: <AddInvoicePage />,
+                        handle: {
+                            header: {
+                                title: "Create New Invoice",
+                                description: "Effortlessly add your invoices here.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <InvoiceDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Invoice Detail",
+                                description: "View complete invoice information.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id/edit",
+                        element: <EditInvoicePage />,
+                        handle: {
+                            header: {
+                                title: "Edit Invoice",
+                                description: "Update invoice details.",
+                            },
+                        },
+                    },
+                ],
             },
             {
                 path: "products",

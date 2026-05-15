@@ -15,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import (
     UUID,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
 from app.constants.enums import Currency, CustomerStatus, CustomerType
@@ -211,6 +211,14 @@ class Customer(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         onupdate=lambda: datetime.now(UTC),
         comment="Record last update timestamp",
+    )
+
+    # Relationships
+    invoices = relationship(
+        "Invoice",
+        back_populates="customer",
+        cascade="save-update, merge",
+        lazy="dynamic",
     )
 
     def __repr__(self) -> str:

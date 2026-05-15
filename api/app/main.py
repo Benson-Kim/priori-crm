@@ -16,7 +16,9 @@ from app.lib.config import settings
 from app.modules.auth.models import OTPCode, User  # noqa: F401
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.models import Customer  # noqa: F401
+from app.modules.invoices.models import Invoice  # noqa: F401
 from app.modules.customers.router import router as customers_router
+from app.modules.invoices.router import router as invoices_router
 from app.modules.health.router import router as health_router
 
 setup_logging()
@@ -33,8 +35,8 @@ async def lifespan(app: FastAPI):
         settings.APP_VERSION,
         settings.ENVIRONMENT,
     )
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created/verified")
+    logger.info("Verifying database connection")
+    # Base.metadata.create_all(bind=engine)  # Removed: using Alembic for migrations
     logger.info("API documentation available at /docs")
     yield
     # --- Shutdown ---
@@ -82,6 +84,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(health_router, prefix=api_prefix, tags=["Health"])
     app.include_router(auth_router, prefix=f"{api_prefix}/auth", tags=["Auth"])
     app.include_router(customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"])
+    app.include_router(invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"])
 
     logger.info(
        "Registered routers: %s",

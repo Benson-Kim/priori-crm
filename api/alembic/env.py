@@ -10,6 +10,7 @@ from app.lib.config import settings
 # Import all models so Base.metadata is populated
 from app.modules.auth.models import OTPCode, User  # noqa: F401
 from app.modules.customers.models import Customer  # noqa: F401
+from app.modules.invoices.models import Invoice  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))

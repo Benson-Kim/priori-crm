@@ -37,10 +37,37 @@ class TransactionType(StrEnum):
 
 
 class InvoiceStatus(StrEnum):
-    """Invoice payment status."""
+    """Invoice lifecycle status with strict state machine."""
+    
+    DRAFT = "draft"          # Created but not sent
+    SENT = "sent"            # Sent to customer, awaiting payment
+    PARTIAL = "partial"      # Partially paid
+    PAID = "paid"            # Fully paid
+    OVERDUE = "overdue"      # Past due date, unpaid
+    CANCELED = "canceled"    # Voided/cancelled (immutable)
 
-    DRAFT = "draft"
-    PENDING = "pending"
-    PAID = "paid"
-    OVERDUE = "overdue"
-    CANCELLED = "cancelled"
+
+class PaymentMethod(StrEnum):
+    """Payment method types."""
+    
+    CASH = "cash"
+    BANK_TRANSFER = "bank_transfer"
+    CHECK = "check"
+    CARD = "card"
+    MOBILE_MONEY = "mobile_money"
+    OTHER = "other"
+
+
+class TaxType(StrEnum):
+    """Tax types for invoice line items."""
+    
+    VAT_16 = "vat_16"        # 16% VAT (Kenya standard)
+    VAT_0 = "vat_0"          # 0% VAT (exempt)
+    NO_TAX = "no_tax"        # No tax
+
+
+class DiscountType(StrEnum):
+    """Discount calculation types."""
+    
+    AMOUNT = "amount"        # Fixed amount
+    PERCENTAGE = "percentage" # Percentage of subtotal

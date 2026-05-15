@@ -1,44 +1,44 @@
-import { CustomerDetailsForm } from "@/components/forms/CustomerDetailsForm";
-import { createCustomer } from "@/lib/customerApi";
-import type { CustomerFormData } from "@/validations/customerSchema";
+import { InvoiceForm } from "@/components/forms/InvoiceForm";
+import { createInvoice, type InvoiceCreatePayload } from "@/lib/invoiceApi";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function AddCustomerPage() {
+export default function AddInvoicePage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     const handleCancel = () => {
-        navigate("/customers");
+        navigate("/invoices");
     };
 
-    const handleSave = async (data: CustomerFormData) => {
+    const handleSave = async (data: InvoiceCreatePayload) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            await createCustomer(data);
+            const invoice = await createInvoice(data);
+            console.log("[AddInvoice] Created invoice:", invoice.invoice_number, invoice.id);
 
-            // Navigate back to customers list on success
-            navigate("/customers");
+            // Redirect to detail page
+            navigate(`/invoices/${invoice.id}`);
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to add customer"
-            );
+            const message = err instanceof Error ? err.message : "Failed to create invoice";
+            console.error("[AddInvoice] Error:", message);
+            setError(message);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="">
+        <div>
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-red-800 font-medium">{error}</p>
                 </div>
             )}
-            <CustomerDetailsForm
+            <InvoiceForm
                 onCancel={handleCancel}
                 onSave={handleSave}
                 isLoading={isLoading}
