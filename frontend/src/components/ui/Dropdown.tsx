@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 
@@ -57,14 +57,15 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
                 setIsOpen(false);
               }}
               className={cn(
-                "flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left transition-colors last:rounded-b-2xl",
+                "group flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left transition-colors last:rounded-b-2xl",
                 item.danger
                   ? "text-danger hover:bg-danger/10"
                   : "text-content-priori-purple hover:bg-priori-purple hover:text-white hover:font-bold transition-all ease-in-out duration-100"
               )}
             >
               {item.icon && <span className="shrink-0">{item.icon}</span>}
-              {item.label}
+              <span>{item.label}</span>
+              <ChevronRight size={16} className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
             </button>
           ))}
         </div>

@@ -32,7 +32,7 @@ export default function CustomersPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [counts, setCounts] = useState<StatusCounts>({ all: 0, active: 0, inactive: 0 });
     const [isLoading, setIsLoading] = useState(true);
-    
+
     // Dialog state
     const [confirmDialog, setConfirmDialog] = useState<{
         isOpen: boolean;
@@ -47,7 +47,7 @@ export default function CustomersPage() {
         isOpen: false,
         title: "",
         description: "",
-        onConfirm: async () => {},
+        onConfirm: async () => { },
     });
 
     const navigate = useNavigate();
@@ -146,12 +146,12 @@ export default function CustomersPage() {
 
     const handleDeactivate = (customer: CustomerSummary) => {
         if (customer.status === "inactive") return;
-        
+
         const hasBalance = customer.balance > 0;
-        
+
         showConfirm({
             title: "Deactivate Customer",
-            description: hasBalance 
+            description: hasBalance
                 ? `${customer.display_name} has an outstanding balance of ${formatCurrency(customer.balance, customer.currency)}. Are you sure you want to force deactivation?`
                 : `Are you sure you want to deactivate ${customer.display_name}?`,
             confirmLabel: hasBalance ? "Force Deactivate" : "Deactivate",
@@ -166,7 +166,7 @@ export default function CustomersPage() {
     const handleDelete = async (customer: CustomerSummary) => {
         try {
             const check: DeleteCheckResult = await checkDeleteEligibility(customer.id);
-            
+
             showConfirm({
                 title: check.can_hard_delete ? "Permanently Delete" : "Archive Customer",
                 description: check.message,
@@ -200,7 +200,7 @@ export default function CustomersPage() {
         const actions: DropdownItem[] = [
             {
                 key: "view",
-                label: "View Details",
+                label: "View",
                 icon: <Eye size={16} />,
                 onClick: () => handleView(customer),
             },

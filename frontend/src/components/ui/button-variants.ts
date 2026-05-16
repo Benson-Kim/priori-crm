@@ -39,5 +39,3 @@ export const buttonVariants = cva(
     },
   }
 );
-
-// Made with Bob
