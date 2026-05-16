@@ -80,7 +80,13 @@ export default function EditInvoicePage() {
     const isRestricted = invoice.status.toLowerCase() === "sent";
 
     return (
-        <div>
+        <div className="flex flex-col h-full px-4 mx-auto font-sans">
+            <div className="flex justify-end mb-6">
+                <button type="button" className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors">
+                    Actions <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+            </div>
+
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-red-800 font-medium">{error}</p>

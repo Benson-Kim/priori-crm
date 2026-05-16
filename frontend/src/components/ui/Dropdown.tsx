@@ -48,7 +48,7 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-1 w-44 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl">
+        <div className="absolute right-0 top-full z-50 mt-1 w-44 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl">
           {items.map((item) => (
             <button
               key={item.key}

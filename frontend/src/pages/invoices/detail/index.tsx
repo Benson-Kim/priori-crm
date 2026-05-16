@@ -1,3 +1,4 @@
+import { RecordPaymentModal } from "@/components/invoices/RecordPaymentModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Dropdown";
@@ -21,7 +22,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { RecordPaymentModal } from "@/components/invoices/RecordPaymentModal";
 
 export default function InvoiceDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -139,7 +139,7 @@ export default function InvoiceDetailPage() {
                         {invoice.is_overdue ? `Overdue (${invoice.days_overdue} days)` : status.charAt(0).toUpperCase() + status.slice(1)}
                     </Badge>
                 </div>
-                <Dropdown items={actions} className="" />
+                <Dropdown items={actions} className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
             </div>
 
             {/* Main Content Card */}

@@ -165,6 +165,8 @@ export function InvoiceForm({ initialData, onSave, isLoading, onCancel, restrict
         <div className="flex flex-col gap-6 font-sans">
             <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
 
+
+
                 {/* Top Section */}
                 <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
