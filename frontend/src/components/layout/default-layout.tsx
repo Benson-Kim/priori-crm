@@ -14,7 +14,7 @@ const DefaultLayout = () => {
     const header = current?.handle?.header;
 
     return (
-        <div className="flex min-h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">
+        <div className="flex h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">
             <Sidebar />
             <div className="flex flex-col flex-1 min-w-0 border border-gray-300 bg-gray-50 p-2 pb-4 rounded-2xl">
                 {header && (

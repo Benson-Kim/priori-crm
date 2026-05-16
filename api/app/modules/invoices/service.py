@@ -429,6 +429,120 @@ class InvoiceService:
             logger.exception("Database error getting status counts")
             raise DatabaseException("Failed to get status counts") from e
 
+    def get_invoice_statistics(
+        self,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict[str, Any]:
+        """
+        Get comprehensive invoice statistics for dashboard.
+        
+        Defaults to current month if no date range provided.
+        """
+        try:
+            from datetime import timedelta
+            from sqlalchemy import case, extract
+
+            # Default to current month if no dates provided
+            if not date_from and not date_to:
+                today = date.today()
+                date_from = date(today.year, today.month, 1)
+                # Last day of current month
+                if today.month == 12:
+                    date_to = date(today.year, 12, 31)
+                else:
+                    date_to = date(today.year, today.month + 1, 1) - timedelta(days=1)
+
+            # Build base query with date filter
+            query = self._db.query(Invoice)
+            
+            if date_from:
+                query = query.filter(Invoice.transaction_date >= date_from)
+            if date_to:
+                query = query.filter(Invoice.transaction_date <= date_to)
+
+            # Get all invoices in range (excluding canceled)
+            invoices = query.filter(
+                Invoice.status != InvoiceStatus.CANCELED
+            ).all()
+
+            # Calculate basic metrics
+            total_invoices = len(invoices)
+            
+            if total_invoices == 0:
+                return {
+                    "total_invoices": 0,
+                    "total_invoiced": Decimal("0.00"),
+                    "total_paid": Decimal("0.00"),
+                    "total_outstanding": Decimal("0.00"),
+                    "average_invoice_value": Decimal("0.00"),
+                    "average_days_to_payment": 0,
+                    "overdue_count": 0,
+                    "overdue_amount": Decimal("0.00"),
+                    "date_from": date_from,
+                    "date_to": date_to,
+                }
+
+            total_invoiced = sum(inv.total_due for inv in invoices)
+            total_paid = sum(inv.amount_paid for inv in invoices)
+            total_outstanding = sum(inv.balance_due for inv in invoices)
+
+            average_invoice_value = total_invoiced / total_invoices if total_invoices > 0 else Decimal("0.00")
+
+            # Calculate average days to payment (for paid invoices only)
+            paid_invoices = [
+                inv for inv in invoices 
+                if inv.status == InvoiceStatus.PAID and inv.paid_at
+            ]
+            
+            if paid_invoices:
+                total_days = sum(
+                    (inv.paid_at.date() - inv.transaction_date).days
+                    for inv in paid_invoices
+                )
+                average_days_to_payment = total_days / len(paid_invoices)
+            else:
+                average_days_to_payment = 0
+
+            # Calculate overdue metrics
+            today = date.today()
+            overdue_invoices = [
+                inv for inv in invoices
+                if inv.status in [InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]
+                and inv.due_date < today
+                and inv.balance_due > 0
+            ]
+            
+            overdue_count = len(overdue_invoices)
+            overdue_amount = sum(inv.balance_due for inv in overdue_invoices)
+
+            logger.debug(
+                "Calculated invoice statistics",
+                extra={
+                    "date_from": str(date_from),
+                    "date_to": str(date_to),
+                    "total_invoices": total_invoices,
+                    "total_invoiced": float(total_invoiced),
+                }
+            )
+
+            return {
+                "total_invoices": total_invoices,
+                "total_invoiced": total_invoiced,
+                "total_paid": total_paid,
+                "total_outstanding": total_outstanding,
+                "average_invoice_value": average_invoice_value,
+                "average_days_to_payment": round(average_days_to_payment, 1),
+                "overdue_count": overdue_count,
+                "overdue_amount": overdue_amount,
+                "date_from": date_from,
+                "date_to": date_to,
+            }
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error calculating invoice statistics")
+            raise DatabaseException("Failed to calculate statistics") from e
+
     # UPDATE
 
     def update(
@@ -477,29 +591,36 @@ class InvoiceService:
 
         # Handle line items update (replace all)
         if "line_items" in update_data:
-            # Delete existing line items
             self._db.query(InvoiceLineItem).filter(
                 InvoiceLineItem.invoice_id == invoice_id
             ).delete()
 
-            # Recalculate with new line items
-            line_items_data = update_data.pop("line_items")
+            line_items_raw: list[dict] = update_data.pop("line_items")
             subtotal = Decimal("0.00")
             tax_total = Decimal("0.00")
 
-            for idx, item_data in enumerate(line_items_data, start=1):
-                line_total = item_data.quantity * item_data.unit_price
-                tax_rate = self.TAX_RATES.get(item_data.tax_type, Decimal("0.00"))
+            for idx, item in enumerate(line_items_raw, start=1):
+                # Validate required fields
+                if not all(k in item for k in ("quantity", "unit_price", "description", "tax_type")):
+                    raise BadRequestException(
+                        detail="Line item missing required fields",
+                        field="line_items"
+                    )
+
+                quantity = Decimal(str(item["quantity"]))
+                unit_price = Decimal(str(item["unit_price"]))
+                line_total = quantity * unit_price
+                tax_rate = self.TAX_RATES.get(item["tax_type"], Decimal("0.00"))
                 tax_amount = line_total * tax_rate
 
                 line_item = InvoiceLineItem(
                     invoice_id=invoice.id,
                     line_number=idx,
-                    description=item_data.description,
-                    quantity=item_data.quantity,
-                    unit_price=item_data.unit_price,
+                    description=item["description"],
+                    quantity=quantity,
+                    unit_price=unit_price,
                     line_total=line_total,
-                    tax_type=item_data.tax_type,
+                    tax_type=item["tax_type"],
                     tax_amount=tax_amount,
                 )
                 self._db.add(line_item)
@@ -515,12 +636,11 @@ class InvoiceService:
             subtotal = update_data.get("subtotal", invoice.subtotal)
             tax_total = update_data.get("tax_total", invoice.tax_total)
 
-            discount_type = update_data.get("discount_type", invoice.discount_type)
-            discount_amount = update_data.get("discount_amount", invoice.discount_amount)
-            discount_percentage = update_data.get("discount_percentage", invoice.discount_percentage)
-
             discount_value = self._calculate_discount(
-                subtotal, discount_type, discount_amount, discount_percentage
+                subtotal,
+                update_data.get("discount_type", invoice.discount_type),
+                update_data.get("discount_amount", invoice.discount_amount),
+                update_data.get("discount_percentage", invoice.discount_percentage),
             )
 
             total_due = subtotal - discount_value + tax_total
@@ -761,56 +881,79 @@ class InvoiceService:
             new_transaction_date = date.today()
             new_due_date = new_transaction_date + timedelta(days=30)
 
+            last_error: Exception | None = None
+
             # Create duplicate invoice
-            duplicate = Invoice(
-                invoice_number=new_number,
-                invoice_reference=new_reference,
-                customer_id=original.customer_id,
-                transaction_date=new_transaction_date,
-                due_date=new_due_date,
-                currency=original.currency,
-                status=InvoiceStatus.DRAFT,
-                subtotal=original.subtotal,
-                discount_type=original.discount_type,
-                discount_amount=original.discount_amount,
-                discount_percentage=original.discount_percentage,
-                tax_total=original.tax_total,
-                total_due=original.total_due,
-                amount_paid=Decimal("0.00"),
-                balance_due=original.total_due,
-                rfq_number=original.rfq_number,
-                notes=original.notes,
-                created_by=user_id,
-            )
+            for attempt in range(self.MAX_INVOICE_NUMBER_RETRIES + 1):
+                try:
+                    duplicate = Invoice(
+                        invoice_number=new_number,
+                        invoice_reference=new_reference,
+                        customer_id=original.customer_id,
+                        transaction_date=new_transaction_date,
+                        due_date=new_due_date,
+                        currency=original.currency,
+                        status=InvoiceStatus.DRAFT,
+                        subtotal=original.subtotal,
+                        discount_type=original.discount_type,
+                        discount_amount=original.discount_amount,
+                        discount_percentage=original.discount_percentage,
+                        tax_total=original.tax_total,
+                        total_due=original.total_due,
+                        amount_paid=Decimal("0.00"),
+                        balance_due=original.total_due,
+                        rfq_number=original.rfq_number,
+                        notes=original.notes,
+                        created_by=user_id,
+                    )
 
-            self._db.add(duplicate)
-            self._db.flush()
+                    self._db.add(duplicate)
+                    self._db.flush()
 
-            # Duplicate line items
-            for original_item in original.line_items:
-                duplicate_item = InvoiceLineItem(
-                    invoice_id=duplicate.id,
-                    line_number=original_item.line_number,
-                    description=original_item.description,
-                    quantity=original_item.quantity,
-                    unit_price=original_item.unit_price,
-                    line_total=original_item.line_total,
-                    tax_type=original_item.tax_type,
-                    tax_amount=original_item.tax_amount,
-                )
-                self._db.add(duplicate_item)
+                    # Duplicate line items
+                    for original_item in original.line_items:
+                        duplicate_item = InvoiceLineItem(
+                            invoice_id=duplicate.id,
+                            line_number=original_item.line_number,
+                            description=original_item.description,
+                            quantity=original_item.quantity,
+                            unit_price=original_item.unit_price,
+                            line_total=original_item.line_total,
+                            tax_type=original_item.tax_type,
+                            tax_amount=original_item.tax_amount,
+                        )
+                        self._db.add(duplicate_item)
 
-            self._db.flush()
+                    self._db.flush()
 
-            logger.info(
-                f"Duplicated invoice {original.invoice_number} → {duplicate.invoice_number}",
-                extra={
-                    "original_id": str(original.id),
-                    "duplicate_id": str(duplicate.id),
-                }
-            )
+                    logger.info(
+                        f"Duplicated invoice {original.invoice_number} → {duplicate.invoice_number}",
+                        extra={
+                            "original_id": str(original.id),
+                            "duplicate_id": str(duplicate.id),
+                        }
+                    )
 
-            return duplicate
+                    return duplicate
+
+                except IntegrityError as exc:
+                    last_error = exc
+                    if (
+                        "invoice_number" in str(exc.orig)
+                        and attempt < self.MAX_INVOICE_NUMBER_RETRIES
+                    ):
+                        logger.warning(
+                            "Invoice number collision during duplicate, retry %d", attempt + 1
+                        )
+                        self._db.rollback()
+                        continue
+                    raise ConflictException(
+                        "Invoice data violates database constraints"
+                    ) from exc
+
+            raise ConflictException(
+                "Failed to generate unique invoice number after retries"
+            ) from last_error
 
         except NotFoundException:
             raise

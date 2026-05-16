@@ -157,7 +157,13 @@ export default function InvoiceDetailPage() {
                     <div className="text-right md:text-left">
                         <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Invoice</p>
                         <h4 className="text-sm font-medium text-gray-600 mb-1">To</h4>
-                        <p className="text-sm font-semibold text-gray-800">{invoice.customer_id}</p>
+                        <p className="text-sm font-semibold text-gray-800">{invoice.customer?.display_name || invoice.customer_id}</p>
+                        {invoice.customer && (
+                            <>
+                                <p className="text-sm text-gray-500">{invoice.customer.email}</p>
+                                <p className="text-sm text-gray-500">{invoice.customer.phone}</p>
+                            </>
+                        )}
                     </div>
                 </div>
 

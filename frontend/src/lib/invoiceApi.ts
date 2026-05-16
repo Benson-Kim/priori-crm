@@ -71,6 +71,13 @@ export interface InvoiceResponse {
   version: number;
   line_items: InvoiceLineItem[];
   payments: Payment[];
+  customer: {
+    id: string;
+    display_name: string;
+    email: string;
+    phone: string;
+    address?: string;
+  };
   is_editable: boolean;
   is_overdue: boolean;
   days_overdue: number;

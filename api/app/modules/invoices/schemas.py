@@ -18,6 +18,7 @@ from app.constants.enums import (
     PaymentMethod,
     TaxType,
 )
+from app.modules.customers.schemas import CustomerSummary
 
 
 # LINE ITEM SCHEMAS
@@ -305,6 +306,7 @@ class InvoiceResponse(BaseModel):
     version: int
     
     # Relationships
+    customer: CustomerSummary
     line_items: list[InvoiceLineItemResponse] = Field(default_factory=list)
     payments: list[PaymentResponse] = Field(default_factory=list)
     
@@ -386,6 +388,23 @@ class InvoiceStatusCounts(BaseModel):
     paid: int = 0
     overdue: int = 0
     canceled: int = 0
+
+
+class InvoiceStatisticsResponse(BaseModel):
+    """Response schema for invoice statistics."""
+    
+    total_invoices: int = Field(..., description="Total number of invoices in period")
+    total_invoiced: Decimal = Field(..., description="Total invoiced amount")
+    total_paid: Decimal = Field(..., description="Total amount paid")
+    total_outstanding: Decimal = Field(..., description="Total outstanding balance")
+    average_invoice_value: Decimal = Field(..., description="Average invoice amount")
+    average_days_to_payment: float = Field(..., description="Average days from invoice to payment")
+    overdue_count: int = Field(..., description="Number of overdue invoices")
+    overdue_amount: Decimal = Field(..., description="Total overdue amount")
+    date_from: date | None = Field(None, description="Start date of period")
+    date_to: date | None = Field(None, description="End date of period")
+
+    model_config = {"from_attributes": True}
 
 
 # ACTION SCHEMAS

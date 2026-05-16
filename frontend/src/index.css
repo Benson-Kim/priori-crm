@@ -19,6 +19,7 @@
   --color-border: var(--color-gray-300);
 
   --color-pink-25: #fcfcfd;
+  --color-purple-25: #e3c9df;
   --color-gray-25: #f9fafb;
   --color-gray-50: #f9fafb;
   --color-gray-100: #f2f4f7;
@@ -59,6 +60,20 @@
   [tabindex]:focus-visible {
     @apply outline-none ring-1 ring-priori-purple border-priori-purple;
   }
+}
+
+.date-picker-overlay::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
+
+input[type="date"] {
+  color-scheme: light;
+  accent-color: var(--color-priori-purple);
 }
 
 .box-shadow {
