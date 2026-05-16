@@ -38,7 +38,13 @@ function calcLineTotal(qty: string, price: string): number {
     return q * p;
 }
 
-export function InvoiceForm({ initialData, onSave, isLoading, onCancel, restrictedMode = false }: InvoiceFormProps) {
+export function InvoiceForm({
+    initialData,
+    onSave,
+    isLoading,
+    //  onCancel, 
+    restrictedMode = false
+}: Readonly<InvoiceFormProps>) {
     const [customerId, setCustomerId] = useState(initialData?.customer_id || "");
     const [customerSearch, setCustomerSearch] = useState("");
     const [customers, setCustomers] = useState<CustomerSummary[]>([]);
@@ -158,8 +164,8 @@ export function InvoiceForm({ initialData, onSave, isLoading, onCancel, restrict
         return `${day}${suffix} ${month} ${year}`;
     };
 
-    const [isEditingTxnDate, setIsEditingTxnDate] = useState(false);
-    const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+    // const [isEditingTxnDate, setIsEditingTxnDate] = useState(false);
+    // const [isEditingDueDate, setIsEditingDueDate] = useState(false);
 
     return (
         <div className="flex flex-col gap-6 font-sans">

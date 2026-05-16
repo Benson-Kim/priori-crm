@@ -20,13 +20,13 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 // Click Outside Hook
-function useOnClickOutside(ref: React.RefObject<HTMLElement | null>, handler: () => void) {
+function useOnClickOutside(ref: React.RefObject<HTMLElement | null>, handler: (event: MouseEvent | TouchEvent) => void) {
     useEffect(() => {
         const listener = (event: MouseEvent | TouchEvent) => {
             if (!ref.current || ref.current.contains(event.target as Node)) {
                 return;
             }
-            handler();
+            handler(event);
         };
         document.addEventListener("mousedown", listener);
         document.addEventListener("touchstart", listener);
