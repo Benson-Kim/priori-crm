@@ -190,9 +190,6 @@ export default function CustomersPage() {
         }
     };
 
-    const handleAddCustomer = () => {
-        navigate("/customers/add");
-    };
 
     // Action menu items (contextual per customer status)
 
@@ -304,50 +301,47 @@ export default function CustomersPage() {
     ];
 
     return (
-        <div className="flex flex-col h-full space-y-4">
+        <div className="flex flex-col space-y-4">
             {/* Top Card / Container */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col min-h-0 flex-1">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
 
                 {/* Actions Bar */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border border-white rounded-lg">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}
                         onTabChange={setActiveTab}
                     />
 
-                    <div className="flex items-center gap-6 w-full sm:w-auto">
+                    <div className="flex items-center gap-4 w-full xl:w-auto">
                         <SearchInput
-                            placeholder="Search Customer"
+                            placeholder="Search customer"
                             value={search}
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
                         <Button
-                            onClick={handleAddCustomer}
-                            className="bg-priori-purple hover:bg-priori-purple/90 text-white rounded-lg font-normal whitespace-nowrap px-4 py-3 flex items-center gap-2"
-                        >
-                            <Plus size={14} />
-                            Add Customer
+                            variant="primary"
+                            onClick={() => navigate("/customers/add")}>
+                            <Plus size={16} /> Add Customer
                         </Button>
                     </div>
+
+
                 </div>
 
                 {/* Table */}
-                <div className="flex-1 overflow-auto min-h-0 rounded-b-lg border border-white">
+                <div className="overflow-x-auto rounded-b-lg border border-white">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-40 text-gray-400">
                             Loading customers...
-                        </div>
-                    ) : customers.length === 0 ? (
-                        <div className="flex items-center justify-center h-40 text-gray-400">
-                            No customers found.
                         </div>
                     ) : (
                         <Table
                             columns={columns}
                             data={customers}
                             rowKey={(item) => item.id}
+                            emptyMessage="No customers found."
                         />
                     )}
                 </div>
