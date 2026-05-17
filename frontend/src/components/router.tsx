@@ -2,14 +2,17 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import CustomersPage from "@/pages/customers";
 import AddCustomerPage from "@/pages/customers/add";
-import EditCustomerPage from "@/pages/customers/edit";
 import CustomerDetailsPage from "@/pages/customers/detail";
+import EditCustomerPage from "@/pages/customers/edit";
 import InvoicesPage from "@/pages/invoices";
 import AddInvoicePage from "@/pages/invoices/add";
-import InvoiceDetailPage from "@/pages/invoices/detail";
+import { InvoiceDetailPage } from "@/pages/invoices/detail";
 import EditInvoicePage from "@/pages/invoices/edit";
 import ProductsPage from "@/pages/products";
 import QuotesPage from "@/pages/quotes";
+import AddQuotePage from "@/pages/quotes/add";
+import QuoteDetailPage from "@/pages/quotes/detail";
+import EditQuotePage from "@/pages/quotes/edit";
 import DefaultLayout from "./layout/default-layout";
 
 const routes = [
@@ -68,13 +71,48 @@ const routes = [
             },
             {
                 path: "quotes",
-                element: <QuotesPage />,
-                handle: {
-                    header: {
-                        title: "Quotes",
-                        description: "Effortlessly handle your billing and quotes here.",
+                children: [
+                    {
+                        index: true,
+                        element: <QuotesPage />,
+                        handle: {
+                            header: {
+                                title: "Quotes",
+                                description: "Effortlessly handle your billing and quotes here.",
+                            },
+                        },
                     },
-                },
+                    {
+                        path: "add",
+                        element: <AddQuotePage />,
+                        handle: {
+                            header: {
+                                title: "Create New Quote",
+                                description: "Effortlessly add your quotes here.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <QuoteDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Quote Detail",
+                                description: "View complete quote information.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id/edit",
+                        element: <EditQuotePage />,
+                        handle: {
+                            header: {
+                                title: "Edit Quote",
+                                description: "Update quote details.",
+                            },
+                        },
+                    },
+                ],
             },
             {
                 path: "invoices",

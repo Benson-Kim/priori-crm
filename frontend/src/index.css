@@ -22,6 +22,8 @@
 
   --color-pink-25: #fcfcfd;
   --color-purple-25: #e3c9df;
+  --color-error-50: #fef3f2;
+
   --color-gray-25: #f9fafb;
   --color-gray-50: #f9fafb;
   --color-gray-100: #f2f4f7;
@@ -29,6 +31,7 @@
   --color-gray-300: #d0d5dd;
   --color-gray-400: #98a2b3;
   --color-gray-500: #667085;
+  --color-gray-600: #475467;
   --color-gray-700: #344054;
   --color-gray-800: #1d2939;
 

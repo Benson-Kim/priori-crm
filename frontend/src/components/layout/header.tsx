@@ -2,7 +2,7 @@ import { Bell, ChevronDown, Sun } from "lucide-react";
 
 type HeaderProps = {
     title: string;
-    description: string;
+    description?: string;
 };
 
 export function Header({ title, description }: Readonly<HeaderProps>) {
@@ -10,7 +10,7 @@ export function Header({ title, description }: Readonly<HeaderProps>) {
         <header className="bg-[linear-gradient(90deg,#F9FAFB_50.33%,rgba(217,226,235,0.2)_100.65%)] px-4 py-3 rounded-t-lg border border-gray-200 flex items-center justify-between">
             <div className="">
                 <h1 className="text-2xl font-bold tracking-normal leading-8 text-content-primary">{title}</h1>
-                <p className="text-base text-content-secondary leading-6">{description}</p>
+                {description && <p className="text-base text-content-secondary leading-6">{description}</p>}
             </div>
 
             <div className="flex items-center gap-3 shrink-0">

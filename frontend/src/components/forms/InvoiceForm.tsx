@@ -1,8 +1,11 @@
-import { getCustomers, type CustomerSummary } from "@/lib/customerApi";
+import { getCustomer, getCustomers, type CustomerSummary } from "@/lib/customerApi";
 import type { InvoiceCreatePayload, InvoiceResponse, LineItemPayload } from "@/lib/invoiceApi";
 import { formatCurrency } from "@/lib/utils";
-import { Image as ImageIcon, Plus, Save, SquarePen, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, CircleUserRound, Image as ImageIcon, Plus, Save, Search, SquarePen, Trash } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { AddCustomerModal } from "../invoices/AddCustomerModal";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 
 interface InvoiceFormProps {
     initialData?: InvoiceResponse;
@@ -38,6 +41,73 @@ function calcLineTotal(qty: string, price: string): number {
     return q * p;
 }
 
+interface CustomerDropdownProps {
+    onClose: () => void;
+    onAddNew: () => void;
+    searchQuery: string;
+    onSearchChange: (value: string) => void;
+    customers: CustomerSummary[];
+    onSelectCustomer: (customer: CustomerSummary) => void;
+}
+
+function CustomerDropdown({
+    onClose,
+    onAddNew,
+    searchQuery,
+    onSearchChange,
+    customers,
+    onSelectCustomer,
+}: CustomerDropdownProps) {
+    const [isFocused, setIsFocused] = useState(false);
+
+    return (
+        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto right-0">
+            <Button
+                variant="outline"
+                onClick={() => {
+                    onClose();
+                    onAddNew();
+                }}
+                className="w-full text-[20px] mb-6"
+            >
+                <Plus size={20} /> Add New Customer
+            </Button>
+            <div className="border-b border-gray-100 flex flex-col gap-2 mb-2">
+                <span className="capitalize font-bold text-gray-800 leading-8">Search Existing Customer</span>
+                <div className="[&>div>div]:focus-within:!bg-white transition-all duration-100">
+                    <Input
+                        type="text"
+                        placeholder="Search"
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        suffix={isFocused ? <Search size={20} /> : <ChevronDown size={20} />}
+                    />
+                </div>
+            </div>
+
+            {customers.length === 0 ? (
+                <p className="px-3 py-4 text-gray-400 text-center">No customers found</p>
+            ) : (
+                customers.map((c, index) => (
+                    <button
+                        key={c.id}
+                        type="button"
+                        className={`w-full text-left px-3 py-4 ${index === 0 ? 'font-bold' : 'font-normal'} text-gray-700 hover:bg-error-50 flex items-center gap-2`}
+                        onClick={() => onSelectCustomer(c)}
+                    >
+                        <CircleUserRound size={24} stroke="#475467" />
+                        <span className={`block text-[14px] text-gray-800 `}>
+                            {c.display_name} ({c.phone})
+                        </span>
+                    </button>
+                ))
+            )}
+        </div>
+    );
+}
+
 export function InvoiceForm({
     initialData,
     onSave,
@@ -50,6 +120,16 @@ export function InvoiceForm({
     const [customers, setCustomers] = useState<CustomerSummary[]>([]);
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
     const [selectedCustomerName, setSelectedCustomerName] = useState(initialData?.customer?.display_name || "");
+    const [selectedCustomerDetails, setSelectedCustomerDetails] = useState<{
+        address?: string;
+        phone: string;
+        email: string;
+    } | null>(initialData?.customer ? {
+        address: initialData.customer.address,
+        phone: initialData.customer.phone,
+        email: initialData.customer.email,
+    } : null);
+    const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
 
     const today = new Date().toISOString().split("T")[0];
     const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -58,6 +138,17 @@ export function InvoiceForm({
     const [currency, setCurrency] = useState(initialData?.currency || "KES");
     const [rfqNumber, setRfqNumber] = useState(initialData?.rfq_number || "");
     const [notes, setNotes] = useState(initialData?.notes || "");
+
+    const [discountType, setDiscountType] = useState<"amount" | "percentage" | null>(
+        (initialData?.discount_type as "amount" | "percentage" | null) || null
+    );
+    const [discountValue, setDiscountValue] = useState<string>(
+        initialData?.discount_type === "amount"
+            ? String(initialData?.discount_amount || "")
+            : initialData?.discount_type === "percentage"
+                ? String(initialData?.discount_percentage || "")
+                : ""
+    );
 
     const [lineItems, setLineItems] = useState<LineItemRow[]>(() => {
         if (initialData?.line_items?.length) {
@@ -89,13 +180,25 @@ export function InvoiceForm({
 
     const totals = useMemo(() => {
         let subtotal = 0;
+        let taxTotal = 0;
         for (const item of lineItems) {
-            subtotal += calcLineTotal(item.quantity, item.unitPrice);
+            const lineTotal = calcLineTotal(item.quantity, item.unitPrice);
+            subtotal += lineTotal;
+            if (item.taxType === 'vat_16') taxTotal += lineTotal * 0.16;
+            if (item.taxType === 'vat_8') taxTotal += lineTotal * 0.08;
         }
-        // Strict to design: No tax, no discount shown in totals
-        const totalDue = subtotal;
-        return { subtotal, totalDue };
-    }, [lineItems]);
+
+        let discountValueNum = parseFloat(discountValue) || 0;
+        let discountAmount = 0;
+        if (discountType === "amount") {
+            discountAmount = Math.min(discountValueNum, subtotal);
+        } else if (discountType === "percentage") {
+            discountAmount = subtotal * (discountValueNum / 100);
+        }
+
+        const totalDue = subtotal - discountAmount + taxTotal;
+        return { subtotal, taxTotal, discountAmount, totalDue };
+    }, [lineItems, discountType, discountValue]);
 
     const addRow = () => setLineItems((prev) => [...prev, createEmptyRow()]);
     const removeRow = (key: string) => setLineItems((prev) => prev.filter((r) => r.key !== key));
@@ -105,11 +208,45 @@ export function InvoiceForm({
         );
     };
 
-    const selectCustomer = (c: CustomerSummary) => {
+    const selectCustomer = async (c: CustomerSummary) => {
         setCustomerId(c.id);
         setSelectedCustomerName(c.display_name);
         setShowCustomerDropdown(false);
         setCustomerSearch("");
+
+        // Fetch full customer details
+        try {
+            const customerData = await getCustomer(c.id);
+            setSelectedCustomerDetails({
+                address: customerData.customer.address || undefined,
+                phone: customerData.customer.phone,
+                email: customerData.customer.email,
+            });
+        } catch (err) {
+            console.error("[InvoiceForm] Failed to fetch customer details:", err);
+            // Fallback to summary data
+            setSelectedCustomerDetails({
+                phone: c.phone,
+                email: c.email,
+            });
+        }
+    };
+
+    const handleCustomerAdded = async (newCustomerId: string, customerName: string) => {
+        setCustomerId(newCustomerId);
+        setSelectedCustomerName(customerName);
+
+        // Fetch full customer details
+        try {
+            const customerData = await getCustomer(newCustomerId);
+            setSelectedCustomerDetails({
+                address: customerData.customer.address || undefined,
+                phone: customerData.customer.phone,
+                email: customerData.customer.email,
+            });
+        } catch (err) {
+            console.error("[InvoiceForm] Failed to fetch new customer details:", err);
+        }
     };
 
     const handleSubmit = async () => {
@@ -147,6 +284,9 @@ export function InvoiceForm({
             lineItems: items,
             rfqNumber: rfqNumber || undefined,
             notes: notes || undefined,
+            discountType: discountType || undefined,
+            discountAmount: discountType === "amount" ? parseFloat(discountValue) || undefined : undefined,
+            discountPercentage: discountType === "percentage" ? parseFloat(discountValue) || undefined : undefined,
         };
 
         await onSave(payload);
@@ -164,14 +304,9 @@ export function InvoiceForm({
         return `${day}${suffix} ${month} ${year}`;
     };
 
-    // const [isEditingTxnDate, setIsEditingTxnDate] = useState(false);
-    // const [isEditingDueDate, setIsEditingDueDate] = useState(false);
-
     return (
         <div className="flex flex-col gap-6 font-sans">
             <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
-
-
 
                 {/* Top Section */}
                 <div className="p-6">
@@ -203,7 +338,46 @@ export function InvoiceForm({
                             <p className="text-sm text-gray-500 mb-1">To</p>
 
                             {restrictedMode ? (
-                                <p className="text-[16px] font-bold text-priori-purple">{selectedCustomerName || customerId}</p>
+                                <div className="flex flex-col gap-1">
+                                    <p className="text-[16px] font-bold text-priori-purple">{selectedCustomerName || customerId}</p>
+                                    {selectedCustomerDetails && (
+                                        <>
+                                            {selectedCustomerDetails.address && (
+                                                <p className="text-sm text-gray-600">{selectedCustomerDetails.address}</p>
+                                            )}
+                                            <p className="text-sm text-gray-600">{selectedCustomerDetails.phone}</p>
+                                            <p className="text-sm text-gray-600">{selectedCustomerDetails.email}</p>
+                                        </>
+                                    )}
+                                </div>
+                            ) : customerId && selectedCustomerDetails ? (
+                                <div className="flex flex-col gap-1">
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
+                                            onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
+                                        >
+                                            {selectedCustomerName} <SquarePen size={18} />
+                                        </button>
+
+                                        {showCustomerDropdown && (
+                                            <CustomerDropdown
+                                                onClose={() => setShowCustomerDropdown(false)}
+                                                onAddNew={() => setShowAddCustomerModal(true)}
+                                                searchQuery={customerSearch}
+                                                onSearchChange={setCustomerSearch}
+                                                customers={customers}
+                                                onSelectCustomer={selectCustomer}
+                                            />
+                                        )}
+                                    </div>
+                                    {selectedCustomerDetails.address && (
+                                        <p className="text-sm text-gray-600">{selectedCustomerDetails.address}</p>
+                                    )}
+                                    <p className="text-sm text-gray-600">{selectedCustomerDetails.phone}</p>
+                                    <p className="text-sm text-gray-600">{selectedCustomerDetails.email}</p>
+                                </div>
                             ) : (
                                 <div className="relative">
                                     <button
@@ -211,36 +385,18 @@ export function InvoiceForm({
                                         className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left"
                                         onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
                                     >
-                                        {selectedCustomerName || "Add / Select Customer"} <SquarePen size={20} />
+                                        Add / Select Customer <SquarePen size={18} />
                                     </button>
 
                                     {showCustomerDropdown && (
-                                        <div className="absolute z-20 top-full mt-2 left-0 w-64 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                                            <div className="p-2 border-b border-gray-100">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search..."
-                                                    value={customerSearch}
-                                                    onChange={(e) => setCustomerSearch(e.target.value)}
-                                                    className="w-full text-sm outline-none px-2 py-1"
-                                                />
-                                            </div>
-                                            {customers.length === 0 ? (
-                                                <p className="p-3 text-sm text-gray-400">No customers found</p>
-                                            ) : (
-                                                customers.map((c) => (
-                                                    <button
-                                                        key={c.id}
-                                                        type="button"
-                                                        className="w-full text-left px-4 py-2 text-sm hover:bg-purple-50 text-gray-700"
-                                                        onClick={() => selectCustomer(c)}
-                                                    >
-                                                        <span className="font-medium block">{c.display_name}</span>
-                                                        <span className="text-gray-400 text-xs">{c.email}</span>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
+                                        <CustomerDropdown
+                                            onClose={() => setShowCustomerDropdown(false)}
+                                            onAddNew={() => setShowAddCustomerModal(true)}
+                                            searchQuery={customerSearch}
+                                            onSearchChange={setCustomerSearch}
+                                            customers={customers}
+                                            onSelectCustomer={selectCustomer}
+                                        />
                                     )}
                                     {errors.customer && <p className="text-xs text-red-500 mt-1">{errors.customer}</p>}
                                 </div>
@@ -249,186 +405,315 @@ export function InvoiceForm({
                     </div>
                 </div>
 
-                <div className="h-px bg-gray-300 w-full" />
 
                 {/* Metadata Row */}
-                <div className="p-8 grid grid-cols-2 md:grid-cols-5 gap-6">
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[13px] text-gray-500 font-medium w-full">Reference</label>
-                        <p className="text-[16px] font-bold text-gray-800">{initialData?.invoice_reference || "Autogenerated"}</p>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[13px] text-gray-500 font-medium w-full">Transaction Date</label>
-                        <div className="flex items-center gap-2 relative w-full">
-                            <span className="text-[16px] font-bold text-priori-purple pr-8 whitespace-nowrap">{formatDisplayDate(transactionDate)}</span>
-                            {!restrictedMode && <SquarePen size={20} className="text-priori-purple absolute right-0 pointer-events-none" />}
-                            {!restrictedMode && (
-                                <input
-                                    type="date"
-                                    value={transactionDate}
-                                    onChange={e => setTransactionDate(e.target.value)}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer date-picker-overlay text-priori-purple"
-                                />
-                            )}
+                <div className="p-6 gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-10 gap-6">
+                        <div className="flex flex-col gap-2 md:col-span-2">
+                            <label className="text-gray-500 font-medium w-full">Reference</label>
+                            <p className="font-bold text-gray-800">{initialData?.invoice_reference || "Autogenerated"}</p>
                         </div>
-                        {errors.transactionDate && <p className="text-xs text-red-500">{errors.transactionDate}</p>}
-                    </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[13px] text-gray-500 font-medium w-full">Due Date</label>
-                        <div className="flex items-center gap-2 relative w-full">
-                            <span className="text-[16px] font-bold text-priori-purple pr-8 whitespace-nowrap">{formatDisplayDate(dueDate)}</span>
-                            {!restrictedMode && <SquarePen size={20} className="text-priori-purple absolute right-0 pointer-events-none" />}
-                            {!restrictedMode && (
-                                <input
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={e => setDueDate(e.target.value)}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer date-picker-overlay text-priori-purple"
-                                />
-                            )}
+                        <div className="flex flex-col gap-2 md:col-span-2">
+                            <label className="text-gray-500 font-medium w-full">Transaction Date</label>
+                            <div className="flex items-center gap-2 relative w-fit">
+                                <span className="font-bold text-priori-purple whitespace-nowrap">{formatDisplayDate(transactionDate)}</span>
+                                {!restrictedMode && <SquarePen size={20} className="text-priori-purple pointer-events-none shrink-0" />}
+                                {!restrictedMode && (
+                                    <input
+                                        type="date"
+                                        value={transactionDate}
+                                        onChange={e => setTransactionDate(e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    />
+                                )}
+                            </div>
+                            {errors.transactionDate && <p className="text-xs text-red-500">{errors.transactionDate}</p>}
                         </div>
-                        {errors.dueDate && <p className="text-xs text-red-500">{errors.dueDate}</p>}
-                    </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[13px] text-gray-500 font-medium w-full">RFQ/RFP Number</label>
-                        <div className="flex items-center gap-2 w-full">
-                            <input
-                                type="text"
-                                value={rfqNumber}
-                                onChange={e => setRfqNumber(e.target.value)}
-                                placeholder="Enter"
-                                disabled={restrictedMode}
-                                className="text-[16px] font-bold text-priori-purple outline-none bg-transparent w-full placeholder-priori-purple/70"
-                            />
-                            {!restrictedMode && <SquarePen size={20} className="text-priori-purple pointer-events-none shrink-0" />}
+                        <div className="flex flex-col gap-2 md:col-span-2">
+                            <label className="text-gray-500 font-medium w-full">Due Date</label>
+                            <div className="flex items-center gap-2 relative w-fit">
+                                <span className="font-bold text-priori-purple whitespace-nowrap">{formatDisplayDate(dueDate)}</span>
+                                {!restrictedMode && <SquarePen size={20} className="text-priori-purple pointer-events-none shrink-0" />}
+                                {!restrictedMode && (
+                                    <input
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={e => setDueDate(e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    />
+                                )}
+                            </div>
+                            {errors.dueDate && <p className="text-xs text-red-500">{errors.dueDate}</p>}
                         </div>
-                    </div>
 
-                    <div className="flex flex-col gap-2 relative group">
-                        <label className="text-[13px] text-gray-500 font-medium w-full">Currency</label>
-                        <div className="flex items-center gap-2 relative w-full">
-                            <span className="text-[16px] font-bold text-priori-purple pr-8">{currency}</span>
-                            {!restrictedMode && <SquarePen size={20} className="text-priori-purple absolute right-0 pointer-events-none" />}
-                            {!restrictedMode && (
-                                <select
-                                    value={currency}
-                                    onChange={e => setCurrency(e.target.value)}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                >
-                                    {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            )}
+                        <div className="flex flex-col gap-2 min-w-0 md:col-span-3">
+                            <label className="text-gray-500 font-medium w-full">RFQ/RFP Number</label>
+                            <label htmlFor="rfq-input" className="flex items-center gap-2 w-fit max-w-full cursor-text">
+                                <div className="relative flex items-center min-w-0">
+                                    <span className="invisible font-bold truncate block">{rfqNumber || 'Enter'}</span>
+                                    <input
+                                        id="rfq-input"
+                                        type="text"
+                                        value={rfqNumber}
+                                        onChange={e => setRfqNumber(e.target.value)}
+                                        placeholder="Enter"
+                                        disabled={restrictedMode}
+                                        className="font-bold text-priori-purple outline-none bg-transparent w-full h-full placeholder-priori-purple/70 absolute inset-0 truncate"
+                                    />
+                                </div>
+                                {!restrictedMode && <SquarePen size={20} className="text-priori-purple shrink-0 cursor-pointer" />}
+                            </label>
+                        </div>
+
+                        <div className="flex flex-col gap-2 md:col-span-1">
+                            <label className="text-gray-500 font-medium w-full">Currency</label>
+                            <div className="flex items-center gap-2 relative w-fit min-w-[100px]">
+                                <span className="font-bold text-priori-purple whitespace-nowrap">{currency}</span>
+                                {!restrictedMode && <SquarePen size={20} className="text-priori-purple pointer-events-none shrink-0" />}
+                                {!restrictedMode && (
+                                    <select
+                                        value={currency}
+                                        onChange={e => setCurrency(e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    >
+                                        {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="h-px bg-gray-300 w-full" />
+                <div className="h-px bg-purple-25 w-full" />
 
                 {/* Line Items */}
-                <div className="p-8 pb-4">
-                    <h3 className="text-[17px] font-bold text-gray-800 mb-5">Item Details</h3>
-                    {errors.lineItems && <p className="text-xs text-red-500 mb-2">{errors.lineItems}</p>}
+                <div className="p-6 flex flex-col gap-6">
+                    <h3 className="text-[20px] leading-7.5 font-bold text-gray-800">Item Details</h3>
+                    {errors.lineItems && <p className="text-xs text-red-500 mb-3">{errors.lineItems}</p>}
 
-                    <div className="mb-4">
+                    <div className="flex flex-col gap-3">
                         <table className="w-full text-[16px]">
                             <thead>
-                                <tr className="bg-priori-purple text-white">
-                                    <th className="text-left px-4 py-4 font-semibold w-[20%]">Item</th>
-                                    <th className="text-left px-4 py-4 font-semibold w-[40%]">Description</th>
-                                    <th className="text-left px-4 py-4 font-semibold w-[15%]">Quantity</th>
-                                    <th className="text-left px-4 py-4 font-semibold w-[15%]">Price</th>
-                                    <th className="text-left px-4 py-4 font-semibold w-[10%]">Total</th>
+                                <tr className="bg-priori-purple text-white px-3 py-4 first:rounded-tl-lg last:rounded-tr-lg grid grid-cols-7">
+                                    <th className="text-left px-3 font-bold leading-8 col-span-2">Item</th>
+                                    <th className="text-left px-3 font-bold leading-8 col-span-2">Description</th>
+                                    <th className="text-left px-3 font-bold leading-8">Quantity</th>
+                                    <th className="text-left px-3 font-bold leading-8">Price</th>
+                                    <th className="text-left px-3 font-bold leading-8">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {lineItems.map((row) => {
                                     const lineTotal = calcLineTotal(row.quantity, row.unitPrice);
-                                    return (
-                                        <tr key={row.key} className="border-b border-gray-300 hover:bg-gray-100 transition-colors group relative">
-                                            <td className="p-2 align-top">
-                                                <input
-                                                    type="text"
-                                                    value={row.description.split('\n')[0] || ""}
-                                                    onChange={(e) => updateRow(row.key, "description", e.target.value)}
-                                                    placeholder="Item name"
-                                                    disabled={restrictedMode}
-                                                    className="w-full bg-transparent px-3 py-2 outline-none font-bold text-gray-500 placeholder-gray-500"
-                                                    style={{ color: "transparent", textShadow: "0 0 0 var(--color-priori-purple)" }}
-                                                />
-                                            </td>
-                                            <td className="p-2 align-top">
-                                                <textarea
-                                                    value={row.description}
-                                                    onChange={(e) => updateRow(row.key, "description", e.target.value)}
-                                                    placeholder="Detailed description"
-                                                    disabled={restrictedMode}
-                                                    rows={1}
-                                                    className="w-full bg-transparent px-3 py-2 outline-none text-gray-800 resize-none min-h-6"
-                                                />
-                                            </td>
-                                            <td className="p-2 align-top">
-                                                <input
-                                                    type="number"
-                                                    value={row.quantity}
-                                                    onChange={(e) => updateRow(row.key, "quantity", e.target.value)}
-                                                    disabled={restrictedMode}
-                                                    className="w-full bg-transparent px-3 py-2 outline-none text-left font-bold text-gray-800"
-                                                />
-                                            </td>
-                                            <td className="p-2 align-top">
-                                                <input
-                                                    type="number"
-                                                    value={row.unitPrice}
-                                                    onChange={(e) => updateRow(row.key, "unitPrice", e.target.value)}
-                                                    disabled={restrictedMode}
-                                                    className="w-full bg-transparent px-3 py-2 outline-none text-left font-bold text-gray-800"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-4 text-left font-bold text-gray-800 align-top">
-                                                {formatCurrency(lineTotal, "")}
-                                            </td>
 
-                                            {/* Delete button (shows on hover) */}
-                                            {!restrictedMode && lineItems.length > 1 && (
-                                                <div className="absolute right-0 top-3 translate-x-full opacity-0 group-hover:opacity-100 pl-2">
-                                                    <button type="button" onClick={() => removeRow(row.key)} className="text-red-400 hover:text-red-600">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </tr>
+                                    const hasTax = row.taxType !== "no_tax" && row.taxType !== undefined;
+                                    const taxCategory = row.taxType?.startsWith("vat") ? "vat" : row.taxType || "no_tax";
+                                    const taxRate = row.taxType === "vat_16" ? "16" : row.taxType === "vat_8" ? "8" : "0";
+                                    const taxAmount = row.taxType === "vat_16" ? lineTotal * 0.16 : row.taxType === "vat_8" ? lineTotal * 0.08 : 0;
+
+                                    const handleCategoryChange = (val: string) => {
+                                        if (val === "no_tax") updateRow(row.key, "taxType", "no_tax");
+                                        else if (val === "exempt") updateRow(row.key, "taxType", "exempt");
+                                        else updateRow(row.key, "taxType", "vat_16");
+                                    };
+
+                                    const handleRateChange = (val: string) => {
+                                        updateRow(row.key, "taxType", `vat_${val}`);
+                                    };
+
+                                    return (
+                                        <Fragment key={row.key}>
+                                            <tr className="group relative mb-3 grid grid-cols-7 gap-4 pt-2">
+                                                <td className="align-left col-span-2">
+                                                    <input
+                                                        type="text"
+                                                        value={row.description.split('\n')[0] || ""}
+                                                        onChange={(e) => updateRow(row.key, "description", e.target.value)}
+                                                        placeholder="Item name"
+                                                        disabled={restrictedMode}
+                                                        className="w-full bg-transparent px-3 py-4 border border-gray-300 font-bold text-gray-800 placeholder-gray-300 rounded-lg"
+                                                    />
+                                                </td>
+                                                <td className="align-top col-span-2">
+                                                    <textarea
+                                                        value={row.description}
+                                                        onChange={(e) => updateRow(row.key, "description", e.target.value)}
+                                                        placeholder="Detailed description"
+                                                        disabled={restrictedMode}
+                                                        rows={1}
+                                                        className="w-full bg-transparent px-3 py-4 border border-gray-300 text-gray-800 resize-none rounded-lg"
+                                                    />
+                                                </td>
+                                                <td className="align-top">
+                                                    <input
+                                                        type="number"
+                                                        value={row.quantity}
+                                                        onChange={(e) => updateRow(row.key, "quantity", e.target.value)}
+                                                        disabled={restrictedMode}
+                                                        className="w-full bg-transparent px-3 py-4 border border-gray-300 text-left text-gray-800 rounded-lg"
+                                                    />
+                                                </td>
+                                                <td className="align-top">
+                                                    <input
+                                                        type="number"
+                                                        value={row.unitPrice}
+                                                        onChange={(e) => updateRow(row.key, "unitPrice", e.target.value)}
+                                                        disabled={restrictedMode}
+                                                        className="w-full bg-transparent px-3 py-4 border border-gray-300 text-left text-gray-800 rounded-lg"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-4 text-left border border-gray-100 bg-[#F8F9FA] text-gray-800 flex items-center font-bold rounded-lg">
+                                                    {formatCurrency(lineTotal, "")}
+                                                </td>
+
+                                                {/* Delete button */}
+                                                {!restrictedMode && (
+                                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button type="button" onClick={() => removeRow(row.key)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                                            <Trash size={20} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </tr>
+
+                                            {/* Tax Row */}
+                                            {hasTax ? (
+                                                <tr className="group relative mb-3 grid grid-cols-7 gap-4 items-center">
+                                                    <td className="col-span-4 flex justify-end items-center pr-4 font-bold text-gray-800">
+                                                        Tax
+                                                    </td>
+                                                    <td className="col-span-1">
+                                                        <select
+                                                            value={taxCategory}
+                                                            onChange={(e) => handleCategoryChange(e.target.value)}
+                                                            disabled={restrictedMode}
+                                                            className="w-full bg-white px-3 py-4 border border-gray-300 text-gray-800 rounded-lg outline-none font-medium cursor-pointer"
+                                                        >
+                                                            <option value="vat">VAT</option>
+                                                            <option value="exempt">Exempt</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="col-span-1">
+                                                        {taxCategory === "vat" && (
+                                                            <select
+                                                                value={taxRate}
+                                                                onChange={(e) => handleRateChange(e.target.value)}
+                                                                disabled={restrictedMode}
+                                                                className="w-full bg-white px-3 py-4 border border-gray-300 text-gray-800 rounded-lg outline-none font-medium cursor-pointer"
+                                                            >
+                                                                <option value="16">16%</option>
+                                                                <option value="8">8%</option>
+                                                                <option value="0">0%</option>
+                                                            </select>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-3 py-4 text-left border border-gray-100 bg-[#F8F9FA] text-gray-800 flex items-center font-bold rounded-lg">
+                                                        {formatCurrency(taxAmount, "")}
+                                                    </td>
+
+                                                    {/* Delete button for Tax Row */}
+                                                    {!restrictedMode && (
+                                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button type="button" onClick={() => updateRow(row.key, "taxType", "no_tax")} className="text-gray-400 hover:text-red-500 transition-colors">
+                                                                <Trash size={20} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </tr>
+                                            ) : !restrictedMode ? (
+                                                <tr className="mb-3 grid grid-cols-7 gap-4">
+                                                    <td className="col-span-7 flex justify-end">
+                                                        <button type="button" onClick={() => updateRow(row.key, "taxType", "vat_16")} className="text-priori-purple text-sm font-bold hover:underline">
+                                                            + Add Tax
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </Fragment>
                                     );
                                 })}
                             </tbody>
                         </table>
-                    </div>
 
-                    {!restrictedMode && (
-                        <button
-                            type="button"
-                            onClick={addRow}
-                            className="flex items-center gap-2 px-5 py-2.5 border border-priori-purple text-priori-purple text-[16px] font-medium rounded-lg hover:bg-purple-50 transition-colors w-max"
-                        >
-                            <Plus size={16} /> Add an Item
-                        </button>
-                    )}
-                </div>
+                        {!restrictedMode && (
+                            <Button variant="outline" onClick={addRow} className="w-max">
+                                <Plus size={20} /> Add an Item
+                            </Button>
+                        )}
 
-                {/* Subtotals */}
-                <div className="px-8 flex justify-end">
-                    <div className="w-80">
-                        <div className="flex justify-between items-center mb-6 text-gray-800">
-                            <span className="text-[16px] font-bold ">Subtotal</span>
-                            <span className="text-[16px]">{formatCurrency(totals.subtotal, "")}</span>
+
+                        {/* Subtotals */}
+                        <div className="w-full flex justify-end">
+                            <div className="min-w-80 flex flex-col gap-4 text-gray-800">
+                                {/* Subtotal */}
+                                <div className="flex justify-between items-center font-bold">
+                                    <span>Subtotal</span>
+                                    <span>{formatCurrency(totals.subtotal, "")}</span>
+                                </div>
+
+                                {/* Discount Row */}
+                                {!restrictedMode && discountType === null ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setDiscountType("percentage")}
+                                        className="text-priori-purple font-bold text-left hover:underline flex items-center"
+                                    >
+                                        + Add a discount
+                                    </button>
+                                ) : (discountType !== null) ? (
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold">Discount</span>
+                                            <select
+                                                value={discountType}
+                                                onChange={(e) => setDiscountType(e.target.value as "amount" | "percentage")}
+                                                disabled={restrictedMode}
+                                                className="bg-transparent border border-gray-300 rounded-lg px-3 py-3 text-sm outline-none cursor-pointer"
+                                            >
+                                                <option value="percentage">%</option>
+                                                <option value="amount">$</option>
+                                            </select>
+                                            <input
+                                                type="number"
+                                                value={discountValue}
+                                                onChange={(e) => setDiscountValue(e.target.value)}
+                                                disabled={restrictedMode}
+                                                className="w-16 bg-transparent border border-gray-300 rounded-lg px-3 py-3 text-sm outline-none text-center"
+                                                placeholder="0"
+                                            />
+                                            {!restrictedMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDiscountType(null); setDiscountValue(""); }}
+                                                    className="text-gray-400 hover:text-red-500 ml-1"
+                                                >
+                                                    <Trash size={16} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <span>-{formatCurrency(totals.discountAmount, "")}</span>
+                                    </div>
+                                ) : null}
+
+                                <div className="h-px bg-purple-25 w-full opacity-50" />
+
+                                {/* VAT Row */}
+                                <div className="flex justify-between items-center text-gray-800">
+                                    <span>VAT</span>
+                                    <span>{formatCurrency(totals.taxTotal, "")}</span>
+                                </div>
+
+                                <div className="h-px bg-purple-25 w-full opacity-50" />
+
+                                {/* Total Due */}
+                                <div className="flex justify-between items-center font-bold text-[16px] text-gray-900 mt-1">
+                                    <span>Total Due</span>
+                                    <span>{formatCurrency(totals.totalDue, "")}</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex justify-between items-center mb-6 font-bold">
-                            <span className="text-[16px] ">Total Due</span>
-                            <span className="text-[16px] ">{formatCurrency(totals.totalDue, "")}</span>
-                        </div>
-                        <div className="h-px bg-gray-300 w-full mt-6" />
                     </div>
                 </div>
 
@@ -462,6 +747,12 @@ export function InvoiceForm({
                 >
                     <Save size={18} /> Save &amp; Continue
                 </button>
+                {/* Add Customer Modal */}
+                <AddCustomerModal
+                    isOpen={showAddCustomerModal}
+                    onClose={() => setShowAddCustomerModal(false)}
+                    onCustomerAdded={handleCustomerAdded}
+                />
             </div>
         </div>
     );
