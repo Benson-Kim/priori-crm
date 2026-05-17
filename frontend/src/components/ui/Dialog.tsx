@@ -91,7 +91,7 @@ export function Dialog({
                 {cancelLabel}
               </Button>
               <Button
-                variant={variant === "danger" ? "primary" : "primary"}
+                variant={variant === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
                 loading={isLoading}
                 className="p-4 leading-7.5 font-sans"

@@ -1,11 +1,10 @@
-import { getCustomer, getCustomers, type CustomerSummary } from "@/lib/customerApi";
+import { COMPANY_INFO } from "@/constants";
 import type { InvoiceCreatePayload, InvoiceResponse, LineItemPayload } from "@/lib/invoiceApi";
-import { formatCurrency } from "@/lib/utils";
-import { ChevronDown, CircleUserRound, Image as ImageIcon, Plus, Save, Search, SquarePen, Trash } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { AddCustomerModal } from "../invoices/AddCustomerModal";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
+import { Image as ImageIcon, Plus, Save, SquarePen, Trash } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
+import { CustomerSelector } from "../customers/CustomerSelector";
 
 interface InvoiceFormProps {
     initialData?: InvoiceResponse;
@@ -41,95 +40,14 @@ function calcLineTotal(qty: string, price: string): number {
     return q * p;
 }
 
-interface CustomerDropdownProps {
-    onClose: () => void;
-    onAddNew: () => void;
-    searchQuery: string;
-    onSearchChange: (value: string) => void;
-    customers: CustomerSummary[];
-    onSelectCustomer: (customer: CustomerSummary) => void;
-}
-
-function CustomerDropdown({
-    onClose,
-    onAddNew,
-    searchQuery,
-    onSearchChange,
-    customers,
-    onSelectCustomer,
-}: CustomerDropdownProps) {
-    const [isFocused, setIsFocused] = useState(false);
-
-    return (
-        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto right-0">
-            <Button
-                variant="outline"
-                onClick={() => {
-                    onClose();
-                    onAddNew();
-                }}
-                className="w-full text-[20px] mb-6"
-            >
-                <Plus size={20} /> Add New Customer
-            </Button>
-            <div className="border-b border-gray-100 flex flex-col gap-2 mb-2">
-                <span className="capitalize font-bold text-gray-800 leading-8">Search Existing Customer</span>
-                <div className="[&>div>div]:focus-within:!bg-white transition-all duration-100">
-                    <Input
-                        type="text"
-                        placeholder="Search"
-                        value={searchQuery}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        suffix={isFocused ? <Search size={20} /> : <ChevronDown size={20} />}
-                    />
-                </div>
-            </div>
-
-            {customers.length === 0 ? (
-                <p className="px-3 py-4 text-gray-400 text-center">No customers found</p>
-            ) : (
-                customers.map((c, index) => (
-                    <button
-                        key={c.id}
-                        type="button"
-                        className={`w-full text-left px-3 py-4 ${index === 0 ? 'font-bold' : 'font-normal'} text-gray-700 hover:bg-error-50 flex items-center gap-2`}
-                        onClick={() => onSelectCustomer(c)}
-                    >
-                        <CircleUserRound size={24} stroke="#475467" />
-                        <span className={`block text-[14px] text-gray-800 `}>
-                            {c.display_name} ({c.phone})
-                        </span>
-                    </button>
-                ))
-            )}
-        </div>
-    );
-}
 
 export function InvoiceForm({
     initialData,
     onSave,
     isLoading,
-    //  onCancel, 
     restrictedMode = false
 }: Readonly<InvoiceFormProps>) {
     const [customerId, setCustomerId] = useState(initialData?.customer_id || "");
-    const [customerSearch, setCustomerSearch] = useState("");
-    const [customers, setCustomers] = useState<CustomerSummary[]>([]);
-    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-    const [selectedCustomerName, setSelectedCustomerName] = useState(initialData?.customer?.display_name || "");
-    const [selectedCustomerDetails, setSelectedCustomerDetails] = useState<{
-        address?: string;
-        phone: string;
-        email: string;
-    } | null>(initialData?.customer ? {
-        address: initialData.customer.address,
-        phone: initialData.customer.phone,
-        email: initialData.customer.email,
-    } : null);
-    const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
 
     const today = new Date().toISOString().split("T")[0];
     const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -165,18 +83,7 @@ export function InvoiceForm({
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const fetchCustomers = useCallback(async () => {
-        try {
-            const data = await getCustomers({ search: customerSearch, status: "active", per_page: 20 });
-            setCustomers(data.items);
-        } catch (err) {
-            console.error("[InvoiceForm] Customer search failed:", err);
-        }
-    }, [customerSearch]);
 
-    useEffect(() => {
-        if (showCustomerDropdown) fetchCustomers();
-    }, [showCustomerDropdown, fetchCustomers]);
 
     const totals = useMemo(() => {
         let subtotal = 0;
@@ -208,46 +115,7 @@ export function InvoiceForm({
         );
     };
 
-    const selectCustomer = async (c: CustomerSummary) => {
-        setCustomerId(c.id);
-        setSelectedCustomerName(c.display_name);
-        setShowCustomerDropdown(false);
-        setCustomerSearch("");
 
-        // Fetch full customer details
-        try {
-            const customerData = await getCustomer(c.id);
-            setSelectedCustomerDetails({
-                address: customerData.customer.address || undefined,
-                phone: customerData.customer.phone,
-                email: customerData.customer.email,
-            });
-        } catch (err) {
-            console.error("[InvoiceForm] Failed to fetch customer details:", err);
-            // Fallback to summary data
-            setSelectedCustomerDetails({
-                phone: c.phone,
-                email: c.email,
-            });
-        }
-    };
-
-    const handleCustomerAdded = async (newCustomerId: string, customerName: string) => {
-        setCustomerId(newCustomerId);
-        setSelectedCustomerName(customerName);
-
-        // Fetch full customer details
-        try {
-            const customerData = await getCustomer(newCustomerId);
-            setSelectedCustomerDetails({
-                address: customerData.customer.address || undefined,
-                phone: customerData.customer.phone,
-                email: customerData.customer.email,
-            });
-        } catch (err) {
-            console.error("[InvoiceForm] Failed to fetch new customer details:", err);
-        }
-    };
 
     const handleSubmit = async () => {
         const newErrors: Record<string, string> = {};
@@ -292,17 +160,7 @@ export function InvoiceForm({
         await onSave(payload);
     };
 
-    // Helper to format date like "30th Mar 2026"
-    const formatDisplayDate = (dString: string) => {
-        if (!dString) return "";
-        const d = new Date(dString);
-        if (isNaN(d.getTime())) return dString;
-        const day = d.getDate();
-        const suffix = ["th", "st", "nd", "rd"][(day % 10 > 3 || Math.floor(day % 100 / 10) === 1) ? 0 : day % 10];
-        const month = d.toLocaleString('en-US', { month: 'short' });
-        const year = d.getFullYear();
-        return `${day}${suffix} ${month} ${year}`;
-    };
+
 
     return (
         <div className="flex flex-col gap-6 font-sans">
@@ -323,10 +181,10 @@ export function InvoiceForm({
 
                         {/* Company Info */}
                         <div className="flex flex-col gap-1 text-gray-800">
-                            <h3 className="font-bold text-base mb-1">Priori Technologies</h3>
-                            <p className="text-sm">P.O Box 124,90600</p>
-                            <p className="text-sm">+254712345678</p>
-                            <p className="text-sm mb-1">priori@techmail.com</p>
+                            <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
+                            <p className="text-sm">{COMPANY_INFO.address}</p>
+                            <p className="text-sm">{COMPANY_INFO.phone}</p>
+                            <p className="text-sm mb-1">{COMPANY_INFO.email}</p>
                             <button type="button" className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline w-fit">
                                 Update <SquarePen size={20} />
                             </button>
@@ -335,72 +193,19 @@ export function InvoiceForm({
                         {/* Invoice To */}
                         <div className="flex flex-col gap-1">
                             <h2 className="text-[22px] font-black text-gray-800 tracking-wider mb-1 uppercase">INVOICE</h2>
-                            <p className="text-sm text-gray-500 mb-1">To</p>
-
-                            {restrictedMode ? (
-                                <div className="flex flex-col gap-1">
-                                    <p className="text-[16px] font-bold text-priori-purple">{selectedCustomerName || customerId}</p>
-                                    {selectedCustomerDetails && (
-                                        <>
-                                            {selectedCustomerDetails.address && (
-                                                <p className="text-sm text-gray-600">{selectedCustomerDetails.address}</p>
-                                            )}
-                                            <p className="text-sm text-gray-600">{selectedCustomerDetails.phone}</p>
-                                            <p className="text-sm text-gray-600">{selectedCustomerDetails.email}</p>
-                                        </>
-                                    )}
-                                </div>
-                            ) : customerId && selectedCustomerDetails ? (
-                                <div className="flex flex-col gap-1">
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
-                                            onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
-                                        >
-                                            {selectedCustomerName} <SquarePen size={18} />
-                                        </button>
-
-                                        {showCustomerDropdown && (
-                                            <CustomerDropdown
-                                                onClose={() => setShowCustomerDropdown(false)}
-                                                onAddNew={() => setShowAddCustomerModal(true)}
-                                                searchQuery={customerSearch}
-                                                onSearchChange={setCustomerSearch}
-                                                customers={customers}
-                                                onSelectCustomer={selectCustomer}
-                                            />
-                                        )}
-                                    </div>
-                                    {selectedCustomerDetails.address && (
-                                        <p className="text-sm text-gray-600">{selectedCustomerDetails.address}</p>
-                                    )}
-                                    <p className="text-sm text-gray-600">{selectedCustomerDetails.phone}</p>
-                                    <p className="text-sm text-gray-600">{selectedCustomerDetails.email}</p>
-                                </div>
-                            ) : (
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left"
-                                        onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
-                                    >
-                                        Add / Select Customer <SquarePen size={18} />
-                                    </button>
-
-                                    {showCustomerDropdown && (
-                                        <CustomerDropdown
-                                            onClose={() => setShowCustomerDropdown(false)}
-                                            onAddNew={() => setShowAddCustomerModal(true)}
-                                            searchQuery={customerSearch}
-                                            onSearchChange={setCustomerSearch}
-                                            customers={customers}
-                                            onSelectCustomer={selectCustomer}
-                                        />
-                                    )}
-                                    {errors.customer && <p className="text-xs text-red-500 mt-1">{errors.customer}</p>}
-                                </div>
-                            )}
+                            <CustomerSelector
+                                label="To"
+                                initialCustomerId={initialData?.customer_id}
+                                initialCustomerName={initialData?.customer?.display_name}
+                                initialCustomerDetails={initialData?.customer ? {
+                                    address: initialData.customer.address || undefined,
+                                    phone: initialData.customer.phone,
+                                    email: initialData.customer.email,
+                                } : null}
+                                onChange={(id) => setCustomerId(id)}
+                                restrictedMode={restrictedMode}
+                                error={errors.customer}
+                            />
                         </div>
                     </div>
                 </div>
@@ -747,12 +552,7 @@ export function InvoiceForm({
                 >
                     <Save size={18} /> Save &amp; Continue
                 </button>
-                {/* Add Customer Modal */}
-                <AddCustomerModal
-                    isOpen={showAddCustomerModal}
-                    onClose={() => setShowAddCustomerModal(false)}
-                    onCustomerAdded={handleCustomerAdded}
-                />
+
             </div>
         </div>
     );
