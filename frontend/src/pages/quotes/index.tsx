@@ -1,176 +1,276 @@
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Dropdown } from "@/components/ui/Dropdown";
+import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
-import { formatCurrency } from "@/lib/utils";
-import { Ban, CheckCircle, Eye, Plus, Trash } from "lucide-react";
-import { useState } from "react";
-
-interface Customer {
-    id: string;
-    number: number;
-    name: string;
-    email: string;
-    phone: string;
-    balance: number;
-    status: "Active" | "Inactive";
-}
-
-const CUSTOMERS_DATA: Customer[] = [
-    { id: "1", number: 1, name: "VDAB Plug KE", email: "vdabpliugke.com", phone: "0700 000 000", balance: 0, status: "Active" },
-    { id: "2", number: 2, name: "Visionary Tech", email: "visionarytech@email.com", phone: "0900 222 222", balance: 5000, status: "Active" },
-    { id: "3", number: 3, name: "Visionary Tech", email: "bontis.com", phone: "0700 000 000", balance: 0, status: "Inactive" },
-    { id: "4", number: 4, name: "Majesty Collect", email: "majestyco@email.com", phone: "0700 000 000", balance: 0, status: "Active" },
-    { id: "5", number: 5, name: "Bon Tonies", email: "bontis.com", phone: "0700 000 000", balance: 0, status: "Inactive" },
-    { id: "6", number: 6, name: "Frank Mueke", email: "frankmueke@email.com", phone: "0700 000 000", balance: 0, status: "Inactive" },
-    { id: "7", number: 7, name: "Harmony Designs", email: "harmony@email.com", phone: "0800 111 111", balance: 0, status: "Active" },
-    { id: "8", number: 8, name: "Aurora Innovations", email: "aurora@email.com", phone: "0700 333 333", balance: 0, status: "Active" },
-    { id: "9", number: 9, name: "Aurora Innovations", email: "aurora@email.com", phone: "0700 333 333", balance: 0, status: "Active" },
-    { id: "10", number: 10, name: "Aurora Innovations", email: "aurora@email.com", phone: "0700 333 333", balance: 0, status: "Active" },
-];
-
-const TABS = [
-    { key: "all", label: "All", count: 160 },
-    { key: "active", label: "Active", count: 100 },
-    { key: "inactive", label: "Inactive", count: 60 },
-];
+import {
+    approveQuote,
+    deleteQuote,
+    getQuoteCounts,
+    getQuotes,
+    type QuoteStatusCounts,
+    type QuoteSummary,
+} from "@/lib/quoteApi";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { CheckCircle, Download, Eye, Plus, Trash } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function QuotesPage() {
     const [activeTab, setActiveTab] = useState("all");
     const [search, setSearch] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const [perPage, setPerPage] = useState(10);
+    const [quotes, setQuotes] = useState<QuoteSummary[]>([]);
+    const [totalPages, setTotalPages] = useState(1);
+    const [counts, setCounts] = useState<QuoteStatusCounts>({
+        all: 0, draft: 0, sent: 0, approved: 0, invoiced: 0, expired: 0,
+    });
+    const [isLoading, setIsLoading] = useState(true);
+    const navigate = useNavigate();
 
-    const handleAction = (action: string, customer: Customer) => {
-        console.log(`${action} customer:`, customer.name);
+    const fetchQuotes = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const statusMap: Record<string, string | undefined> = {
+                all: undefined,
+                invoiced: "invoiced",
+                draft: "draft",
+                sent: "sent",
+                approved: "approved",
+            };
+            const data = await getQuotes({
+                page: currentPage,
+                per_page: perPage,
+                status: statusMap[activeTab],
+                search: search || undefined,
+            });
+            setQuotes(data.items);
+            setTotalPages(data.total_pages);
+        } catch (err) {
+            console.error("[QuotesPage] Failed to fetch quotes:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [currentPage, perPage, activeTab, search]);
+
+    const fetchCounts = useCallback(async () => {
+        try {
+            const data = await getQuoteCounts();
+            setCounts(data);
+        } catch (err) {
+            console.error("[QuotesPage] Failed to fetch counts:", err);
+        }
+    }, []);
+
+    useEffect(() => { fetchQuotes(); }, [fetchQuotes]);
+    useEffect(() => { fetchCounts(); }, [fetchCounts]);
+    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+
+    const handleApprove = async (quote: QuoteSummary) => {
+        try {
+            await approveQuote(quote.id);
+            fetchQuotes();
+            fetchCounts();
+        } catch (err) {
+            console.error("[QuotesPage] Approve failed:", err);
+        }
     };
+
+    const handleDelete = async (quote: QuoteSummary) => {
+        if (!confirm("Are you sure you want to delete this quote?")) return;
+        try {
+            await deleteQuote(quote.id);
+            fetchQuotes();
+            fetchCounts();
+        } catch (err) {
+            console.error("[QuotesPage] Delete failed:", err);
+        }
+    };
+
+    const getActions = (quote: QuoteSummary): DropdownItem[] => {
+        const isDraft = quote.status.toLowerCase() === "draft";
+        const canApprove =
+            ["sent", "draft"].includes(quote.status.toLowerCase()) && !quote.is_expired;
+
+        const actions: DropdownItem[] = [
+            {
+                key: "view",
+                label: "View",
+                icon: <Eye size={16} />,
+                onClick: () => navigate(`/quotes/${quote.id}`),
+            },
+        ];
+
+        if (canApprove) {
+            actions.push({
+                key: "approve",
+                label: "Approve",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleApprove(quote),
+            });
+        }
+
+        if (isDraft) {
+            actions.push({
+                key: "delete",
+                label: "Delete",
+                icon: <Trash size={16} />,
+                danger: true,
+                onClick: () => handleDelete(quote),
+            });
+        }
+
+        return actions;
+    };
+
+    const getStatusBadge = (item: QuoteSummary) => {
+        if (item.is_expired) {
+            return <Badge variant="expired">Expired</Badge>;
+        }
+        const status = item.status.toLowerCase() as
+            | "invoiced" | "approved" | "sent" | "draft";
+        const labelMap: Record<string, string> = {
+            invoiced: "Invoiced",
+            approved: "Approved",
+            sent: "Sent",
+            draft: "Draft",
+        };
+        return <Badge variant={status}>{labelMap[status] ?? item.status}</Badge>;
+    };
+
+    const TABS = [
+        { key: "all", label: "All", count: counts.all },
+        { key: "invoiced", label: "Invoiced", count: counts.invoiced },
+        { key: "draft", label: "Draft", count: counts.draft },
+        { key: "sent", label: "Sent", count: counts.sent },
+        { key: "approved", label: "Approved", count: counts.approved },
+    ];
 
     const columns = [
         {
             key: "number",
-            header: "#.",
-            render: (item: Customer) => <span className="text-content-primary ">{item.number}.</span>,
-            className: "w-[50px]",
+            header: "#",
+            render: (_item: QuoteSummary, index: number) => (
+                <span className="text-gray-600">{(currentPage - 1) * perPage + index + 1}.</span>
+            ),
+            className: "w-[60px]",
         },
         {
-            key: "name",
+            key: "customer_name",
             header: "Customer Name",
-            render: (item: Customer) => <span className=" text-content-primary">{item.name}</span>,
+            render: (item: QuoteSummary) => (
+                <span
+                    className="font-medium text-gray-800 max-w-[200px] truncate block"
+                    title={item.customer_name}
+                >
+                    {item.customer_name}
+                </span>
+            ),
         },
         {
-            key: "email",
-            header: "Email",
-            render: (item: Customer) => <span className="text-gray-500">{item.email}</span>,
+            key: "quote_number",
+            header: "Quote ID",
+            render: (item: QuoteSummary) => (
+                <span
+                    className="text-gray-500 max-w-[150px] truncate block"
+                    title={item.quote_number}
+                >
+                    {item.quote_number}
+                </span>
+            ),
         },
         {
-            key: "phone",
-            header: "Phone",
-            render: (item: Customer) => <span className="text-content-primary">{item.phone}</span>,
+            key: "transaction_date",
+            header: "Date",
+            render: (item: QuoteSummary) => (
+                <span className="text-gray-800 font-medium">{formatDate(item.transaction_date)}</span>
+            ),
         },
         {
-            key: "balance",
-            header: "Balance",
-            render: (item: Customer) => <span className="text-gray-500">{formatCurrency(item.balance, 'Ksh')}</span>,
+            key: "total_due",
+            header: "Amount",
+            render: (item: QuoteSummary) => (
+                <span className="text-gray-600">{formatCurrency(item.total_due, item.currency)}</span>
+            ),
         },
         {
             key: "status",
             header: "Status",
-            render: (item: Customer) => (
-                <Badge variant={item.status.toLowerCase() as "active" | "inactive"}>
-                    {item.status}
-                </Badge>
-            ),
+            render: (item: QuoteSummary) => getStatusBadge(item),
         },
         {
             key: "actions",
             header: "Actions",
             className: "w-[120px]",
-            render: (item: Customer) => (
-                <Dropdown
-                    items={[
-                        {
-                            key: "view",
-                            label: "View",
-                            icon: <Eye size={16} />,
-                            onClick: () => handleAction("View", item),
-                        },
-                        {
-                            key: "activate",
-                            label: "Activate",
-                            icon: <CheckCircle size={16} />,
-                            onClick: () => handleAction("Activate", item),
-                        },
-                        {
-                            key: "deactivate",
-                            label: "Deactivate",
-                            icon: <Ban size={16} />,
-                            onClick: () => handleAction("Deactivate", item),
-                        },
-                        {
-                            key: "delete",
-                            label: "Delete",
-                            icon: <Trash size={16} />,
-                            danger: true,
-                            onClick: () => handleAction("Delete", item),
-                        },
-                    ]}
-                    className=""
-                />
+            render: (item: QuoteSummary) => (
+                <Dropdown items={getActions(item)} />
             ),
         },
     ];
 
     return (
-        <div className="flex flex-col h-full space-y-4">
-            {/* Top Card / Container */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col min-h-0 flex-1">
+        <div className="flex flex-col h-full space-y-6 font-sans">
+
+            {/* Top Action Bar */}
+            <div className="flex justify-end mt-4">
+                <Button variant="outline-secondary">
+                    <Download size={20} /> Export Excel
+                </Button>
+            </div>
+
+            {/* Main Table Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
 
                 {/* Actions Bar */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border border-white rounded-lg">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}
                         onTabChange={setActiveTab}
                     />
-
-                    <div className="flex items-center gap-6 w-full sm:w-auto">
+                    <div className="flex items-center gap-4 w-full xl:w-auto">
                         <SearchInput
-                            placeholder="Search Customer"
+                            placeholder="Search quotes"
                             value={search}
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
-                        <Button className="bg-priori-purple hover:bg-priori-purple/90 text-white rounded-lg font-normal whitespace-nowrap px-4 py-3 flex items-center gap-2">
-                            <Plus size={14} />
-                            Add Customer
+                        <Button variant="primary" onClick={() => navigate("/quotes/add")}>
+                            <Plus size={16} /> Add Quote
                         </Button>
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="flex-1 overflow-auto min-h-0 rounded-b-lg border border-white">
-                    <Table
-                        columns={columns}
-                        data={CUSTOMERS_DATA}
-                        rowKey={(item) => item.id}
-                    />
+                {/* Table Area */}
+                <div className="overflow-x-auto rounded-b-lg border border-white">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-40 text-gray-400">
+                            Loading quotes...
+                        </div>
+                    ) : (
+                        <Table
+                            columns={columns}
+                            data={quotes}
+                            rowKey={(item) => item.id}
+                            emptyMessage="No quotes found."
+                        />
+                    )}
                 </div>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination Footer */}
             <div className="py-3 px-4 border border-gray-200 mt-auto bg-white rounded-2xl ">
                 <Pagination
                     currentPage={currentPage}
-                    totalPages={9}
+                    totalPages={totalPages}
                     perPage={perPage}
                     onPageChange={setCurrentPage}
                     onPerPageChange={setPerPage}
                 />
             </div>
-
         </div>
     );
 }

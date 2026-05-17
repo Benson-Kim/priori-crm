@@ -221,6 +221,13 @@ class Customer(Base):
         lazy="dynamic",
     )
 
+    quotes = relationship(
+        "Quote",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
     def __repr__(self) -> str:
         """String representation for debugging."""
         if self.customer_type == CustomerType.BUSINESS:

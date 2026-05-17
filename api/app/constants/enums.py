@@ -71,3 +71,12 @@ class DiscountType(StrEnum):
     
     AMOUNT = "amount"        # Fixed amount
     PERCENTAGE = "percentage" # Percentage of subtotal
+
+
+class QuoteStatus(StrEnum):
+    """Quote status values."""
+    DRAFT = "draft"
+    SENT = "sent"
+    APPROVED = "approved"
+    INVOICED = "invoiced"
+    EXPIRED = "expired"

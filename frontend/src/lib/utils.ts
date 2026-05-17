@@ -84,6 +84,20 @@ export const formatDate = (dateString: string) => {
   });
 };
 
+/**
+ * Format a date string as "30 Mar 2026" — used in form date display fields.
+ * Produces a zero-padded day with abbreviated month and 4-digit year.
+ */
+export const formatDisplayDate = (dateString: string): string => {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = d.getDate().toString().padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
 export function formatCurrency(
   amount: number,
   currency: string = "KES"

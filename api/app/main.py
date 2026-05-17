@@ -19,7 +19,9 @@ from app.modules.customers.models import Customer  # noqa: F401
 from app.modules.invoices.models import Invoice  # noqa: F401
 from app.modules.customers.router import router as customers_router
 from app.modules.invoices.router import router as invoices_router
+from app.modules.quotes.router import router as quotes_router
 from app.modules.health.router import router as health_router
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -85,6 +87,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(auth_router, prefix=f"{api_prefix}/auth", tags=["Auth"])
     app.include_router(customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"])
     app.include_router(invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"])
+    app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
 
     logger.info(
        "Registered routers: %s",

@@ -13,3 +13,10 @@ export const PAGINATION_DEFAULTS = {
 
 export const OTP_LENGTH = 6;
 export const OTP_EXPIRY_SECONDS = 300; // 5 minutes
+
+export const COMPANY_INFO = {
+  name: "Priori Technologies",
+  address: "P.O Box 124, 90600",
+  phone: "+254712345678",
+  email: "priori@techmail.com",
+} as const;
