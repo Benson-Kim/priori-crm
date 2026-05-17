@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/Button";
+import { FilterTabs } from "@/components/ui/FilterTabs";
 import {
     getInvoiceCounts,
     getInvoices,
@@ -5,6 +7,7 @@ import {
     type InvoiceStatusCounts,
     type InvoiceSummary,
 } from "@/lib/invoiceApi";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import {
     CheckCircle,
     ChevronDown,
@@ -15,7 +18,7 @@ import {
     Plus,
     Search,
 } from "lucide-react";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -37,14 +40,13 @@ function useOnClickOutside(ref: React.RefObject<HTMLElement | null>, handler: (e
     }, [ref, handler]);
 }
 
-// Custom Action Dropdown perfectly matching Figma
 function ActionDropdown({ invoice, onApprove }: { invoice: InvoiceSummary, onApprove: (i: InvoiceSummary) => void }) {
     const [open, setOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const navigate = useNavigate();
     const containerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    
+
     useOnClickOutside(containerRef, (e) => {
         // Also check if click is outside the portal
         if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) {
@@ -57,7 +59,6 @@ function ActionDropdown({ invoice, onApprove }: { invoice: InvoiceSummary, onApp
         e.stopPropagation();
         if (!open && containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
-            // Position right-aligned to the button
             setCoords({ top: rect.bottom + 8, left: rect.right - 128 }); // 128px is w-32
         }
         setOpen(!open);
@@ -65,27 +66,27 @@ function ActionDropdown({ invoice, onApprove }: { invoice: InvoiceSummary, onApp
 
     return (
         <div className="relative" ref={containerRef}>
-            <button 
-                onClick={toggle} 
+            <button
+                onClick={toggle}
                 className="text-priori-purple flex items-center gap-1 hover:underline text-[14px]"
             >
                 Actions <ChevronDown size={14} />
             </button>
             {open && createPortal(
-                <div 
+                <div
                     ref={dropdownRef}
                     style={{ top: coords.top, left: coords.left }}
                     className="fixed w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] overflow-hidden flex flex-col"
                 >
-                    <button 
-                        onClick={() => navigate(`/invoices/${invoice.id}`)} 
+                    <button
+                        onClick={() => navigate(`/invoices/${invoice.id}`)}
                         className="flex items-center justify-between px-3 py-2.5 bg-priori-purple text-white hover:bg-priori-purple/90 text-sm font-medium transition-colors"
                     >
                         <div className="flex items-center gap-2"><Eye size={16} /> View</div>
                         <ChevronRight size={14} />
                     </button>
-                    <button 
-                        onClick={() => { onApprove(invoice); setOpen(false); }} 
+                    <button
+                        onClick={() => { onApprove(invoice); setOpen(false); }}
                         className="flex items-center gap-2 px-3 py-2.5 bg-white text-gray-700 hover:bg-gray-50 text-sm transition-colors"
                     >
                         <CheckCircle size={16} className="text-gray-400" /> Approve
@@ -176,58 +177,33 @@ export default function InvoicesPage() {
         return <span className="text-gray-500 font-medium">Draft</span>;
     };
 
-    const renderAmount = (amount: number, currency: string) => {
-        const sym = currency === "KES" ? "Ksh" : currency;
-        return `${sym} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
-
-    // Format Date specific to Figma (e.g. "07 Mar 2026")
-    const formatDisplayDate = (dString: string) => {
-        if (!dString) return "";
-        const d = new Date(dString);
-        if (isNaN(d.getTime())) return dString;
-        const day = d.getDate().toString().padStart(2, '0');
-        const month = d.toLocaleString('en-US', { month: 'short' });
-        const year = d.getFullYear();
-        return `${day} ${month} ${year}`;
-    };
-
     return (
         <div className="flex flex-col h-full space-y-6 font-sans">
-            
+
             {/* Top Action Bar (Export Excel) */}
             <div className="flex justify-end mt-4">
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg bg-white text-[14px] text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                    <Download size={16} /> Export Excel
-                </button>
+                <Button variant="outline-secondary" className="">
+                    <Download size={20} /> Export Excel
+                </Button>
             </div>
 
             {/* Main Table Card */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col min-h-0 flex-1">
-                
+
                 {/* Header / Tabs / Search / Add */}
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center p-5 gap-4 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                        {TABS.map(tab => (
-                            <button 
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key)}
-                                className={`px-4 py-2 font-medium text-[15px] flex items-center gap-1 rounded-lg transition-colors ${
-                                    activeTab === tab.key 
-                                    ? "bg-purple-50 text-priori-purple" 
-                                    : "text-gray-500 hover:text-gray-800"
-                                }`}
-                            >
-                                {tab.label} ({tab.count})
-                            </button>
-                        ))}
-                    </div>
+
+                    <FilterTabs
+                        tabs={TABS}
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                    />
 
                     <div className="flex items-center gap-4 w-full xl:w-auto">
                         <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 placeholder="Search invoices"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
@@ -275,10 +251,10 @@ export default function InvoicesPage() {
                                             {item.invoice_number}
                                         </td>
                                         <td className="px-4 py-4 text-gray-800 font-medium">
-                                            {formatDisplayDate(item.transaction_date)}
+                                            {formatDate(item.transaction_date)}
                                         </td>
                                         <td className="px-4 py-4 text-gray-600">
-                                            {renderAmount(item.total_due, item.currency)}
+                                            {formatCurrency(item.total_due, item.currency)}
                                         </td>
                                         <td className="px-4 py-4">
                                             {getStatusElement(item)}
@@ -298,8 +274,8 @@ export default function InvoicesPage() {
                     <div className="flex items-center gap-2">
                         <span>Show</span>
                         <div className="relative">
-                            <select 
-                                value={perPage} 
+                            <select
+                                value={perPage}
                                 onChange={e => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
                                 className="appearance-none border border-purple-100 bg-purple-50 text-priori-purple rounded px-3 py-1.5 outline-none font-medium text-[13px] pr-8 cursor-pointer"
                             >
@@ -313,47 +289,46 @@ export default function InvoicesPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                        <button 
+                        <button
                             disabled={currentPage === 1}
                             onClick={() => setCurrentPage(c => c - 1)}
                             className="p-1.5 text-gray-400 hover:text-priori-purple disabled:opacity-30 disabled:hover:text-gray-400 transition-colors"
                         >
                             <ChevronLeft size={16} />
                         </button>
-                        
+
                         <div className="flex items-center gap-1 mx-2">
                             {Array.from({ length: totalPages }).map((_, i) => {
                                 const p = i + 1;
                                 const isCurrent = currentPage === p;
                                 // Simple logic to show a few pages around current, plus first and last
                                 const show = p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1);
-                                
+
                                 if (show) {
                                     return (
                                         <button
                                             key={p}
                                             onClick={() => setCurrentPage(p)}
-                                            className={`w-8 h-8 rounded text-[13px] font-medium flex items-center justify-center transition-colors ${
-                                                isCurrent 
-                                                ? "border border-priori-purple text-priori-purple bg-white" 
+                                            className={`w-8 h-8 rounded text-[13px] font-medium flex items-center justify-center transition-colors ${isCurrent
+                                                ? "border border-priori-purple text-priori-purple bg-white"
                                                 : "text-gray-600 hover:bg-gray-100"
-                                            }`}
+                                                }`}
                                         >
                                             {p}
                                         </button>
                                     );
                                 }
-                                
+
                                 // Show ellipses
                                 if (p === currentPage - 2 || p === currentPage + 2) {
                                     return <span key={p} className="w-8 text-center text-gray-400">...</span>;
                                 }
-                                
+
                                 return null;
                             })}
                         </div>
 
-                        <button 
+                        <button
                             disabled={currentPage === totalPages || totalPages === 0}
                             onClick={() => setCurrentPage(c => c + 1)}
                             className="p-1.5 text-gray-400 hover:text-priori-purple disabled:opacity-30 disabled:hover:text-gray-400 transition-colors"
