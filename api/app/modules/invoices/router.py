@@ -1,0 +1,490 @@
+"""Invoice API endpoints with comprehensive documentation."""
+import logging
+from datetime import date, timedelta
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
+
+from app.common.dependencies import InvoiceServiceDep
+from app.common.pagination import PaginatedResponse, PaginationParams
+from app.modules.invoices.schemas import (
+    InvoiceCalculationResponse,
+    InvoiceCreate,
+    InvoiceDetailResponse,
+    InvoiceDuplicateResponse,
+    InvoiceFilterParams,
+    InvoiceLineItemCreate,
+    InvoiceMarkSentRequest,
+    InvoiceResponse,
+    InvoiceSendRequest,
+    InvoiceSendResponse,
+    InvoiceStatusCounts,
+    InvoiceStatisticsResponse,
+    InvoiceSummary,
+    InvoiceUpdate,
+    PaymentCreate,
+    PaymentResponse,
+)
+from app.modules.invoices.service import InvoiceService
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+# CREATE
+
+@router.post(
+    "",
+    response_model=InvoiceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new invoice",
+    description="Create a new invoice with line items and automatic calculations.",
+    responses={
+        201: {"description": "Invoice created successfully"},
+        400: {"description": "Invalid request data or customer inactive"},
+        404: {"description": "Customer not found"},
+        409: {"description": "Invoice number conflict (retried automatically)"},
+    },
+)
+def create_invoice(
+    body: InvoiceCreate,
+    service: InvoiceServiceDep,
+    # TODO: Add current user dependency when auth module exists
+    # current_user: CurrentUser,
+) -> InvoiceResponse:
+    """
+    Create a new invoice.
+    """
+    # user_id = current_user.id if current_user else None
+    user_id = None  # TODO: Replace with actual user ID
+    
+    invoice = service.create(body, user_id=user_id)
+    return InvoiceResponse.model_validate(invoice)
+
+
+# READ
+
+@router.get(
+    "",
+    response_model=PaginatedResponse[InvoiceSummary],
+    summary="List invoices",
+    description="Get paginated list of invoices with filtering and search.",
+    responses={
+        200: {"description": "List of invoices"},
+        400: {"description": "Invalid query parameters"},
+    },
+)
+def list_invoices(
+    service: InvoiceServiceDep,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
+    status: Annotated[
+        str | None,
+        Query(description="Filter by status: draft, sent, partial, paid, overdue, canceled"),
+    ] = None,
+    customer_id: Annotated[
+        UUID | None,
+        Query(description="Filter by customer ID", alias="customerId"),
+    ] = None,
+    date_from: Annotated[
+        date | None,
+        Query(description="Filter invoices from this date (transaction_date)", alias="dateFrom"),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Filter invoices up to this date (transaction_date)", alias="dateTo"),
+    ] = None,
+    due_date_from: Annotated[
+        date | None,
+        Query(description="Filter by due date range start", alias="dueDateFrom"),
+    ] = None,
+    due_date_to: Annotated[
+        date | None,
+        Query(description="Filter by due date range end", alias="dueDateTo"),
+    ] = None,
+    search: Annotated[
+        str | None,
+        Query(description="Search invoice number, reference, or customer name"),
+    ] = None,
+) -> PaginatedResponse[InvoiceSummary]:
+    """
+    List invoices with pagination and filtering.
+    """
+    params = PaginationParams(page=page, per_page=per_page)
+    
+    filters = InvoiceFilterParams(
+        status=status,
+        customer_id=customer_id,
+        date_from=date_from,
+        date_to=date_to,
+        due_date_from=due_date_from,
+        due_date_to=due_date_to,
+        search=search,
+    )
+    
+    return service.list_invoices(params, filters)
+
+
+@router.get(
+    "/counts",
+    response_model=InvoiceStatusCounts,
+    summary="Get invoice status counts",
+    description="Get count of invoices grouped by status for dashboard displays.",
+    responses={
+        200: {"description": "Invoice counts by status"},
+    },
+)
+def get_invoice_counts(
+    service: InvoiceServiceDep,
+    customer_id: Annotated[
+        UUID | None,
+        Query(description="Filter by customer ID", alias="customerId"),
+    ] = None,
+) -> InvoiceStatusCounts:
+    """
+    Get invoice counts grouped by status.
+    """
+    return service.get_status_counts(customer_id)
+
+
+# CALCULATIONS
+
+@router.post(
+    "/calculate",
+    response_model=InvoiceCalculationResponse,
+    summary="Calculate invoice totals",
+    description="Calculate totals without saving (preview for frontend).",
+    responses={
+        200: {"description": "Calculated totals"},
+        400: {"description": "Invalid line items or discount"},
+    },
+)
+def calculate_invoice_totals(
+    line_items: list[InvoiceLineItemCreate],
+    discount_type: Annotated[str | None, Query()] = None,
+    discount_amount: Annotated[float | None, Query()] = None,
+    discount_percentage: Annotated[float | None, Query()] = None,
+) -> InvoiceCalculationResponse:
+    """
+    Calculate invoice totals without saving.
+    """
+    from decimal import Decimal
+    from app.constants.enums import DiscountType
+    
+    # Convert discount parameters
+    dt = DiscountType(discount_type) if discount_type else None
+    da = Decimal(str(discount_amount)) if discount_amount else None
+    dp = Decimal(str(discount_percentage)) if discount_percentage else None
+    
+    return InvoiceService.calculate_totals(line_items, dt, da, dp)
+
+
+@router.get(
+    "/export/excel",
+    summary="Export invoices to Excel",
+    description="Export filtered invoices to Excel spreadsheet.",
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}},
+        },
+        501: {"description": "Excel export not yet implemented"},
+    },
+)
+def export_invoices_to_excel(
+    service: InvoiceServiceDep,
+    status: Annotated[str | None, Query()] = None,
+    customer_id: Annotated[UUID | None, Query(alias="customerId")] = None,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+    include_line_items: Annotated[
+        bool,
+        Query(alias="includeLineItems", description="Include line items in separate sheet")
+    ] = False,
+) -> StreamingResponse:
+    """
+    Export invoices to Excel.
+    """
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=501,
+        detail="Excel export not yet implemented"
+    )
+
+
+# STATISTICS & ANALYTICS (Bonus)
+
+@router.get(
+    "/stats/summary",
+    summary="Get invoice statistics",
+    description="Get aggregated invoice statistics for dashboard.",
+    responses={
+        200: {"description": "Invoice statistics"},
+    },
+)
+def get_invoice_statistics(
+    service: InvoiceServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> InvoiceStatisticsResponse:
+    """
+    Get invoice statistics for dashboard.
+    """
+    stats = service.get_invoice_statistics(date_from, date_to)
+    return InvoiceStatisticsResponse(**stats)
+
+
+@router.get(
+    "/number/{invoice_number}",
+    response_model=InvoiceResponse,
+    summary="Get invoice by number",
+    description="Retrieve invoice by invoice number (e.g., INV-20240707-001).",
+    responses={
+        200: {"description": "Invoice details"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def get_invoice_by_number(
+    invoice_number: str,
+    service: InvoiceServiceDep,
+) -> InvoiceResponse:
+    """
+    Get invoice by invoice number.
+    """
+    invoice = service.get_by_number(invoice_number)
+    return InvoiceResponse.model_validate(invoice)
+
+
+# DUPLICATE
+
+@router.post(
+    "/{invoice_id}/duplicate",
+    response_model=InvoiceDuplicateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Duplicate invoice",
+    description="Create a copy of an invoice as a new DRAFT.",
+    responses={
+        201: {"description": "Invoice duplicated successfully"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def duplicate_invoice(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+    # TODO: current_user: CurrentUser,
+) -> InvoiceDuplicateResponse:
+    """
+    Duplicate an existing invoice.
+    """
+    # user_id = current_user.id if current_user else None
+    user_id = None  # TODO: Replace with actual user ID
+    
+    duplicate = service.duplicate_invoice(invoice_id, user_id)
+    return InvoiceDuplicateResponse.model_validate(duplicate)
+
+# GET BY ID  
+
+@router.get(
+    "/{invoice_id}",
+    response_model=InvoiceResponse,
+    summary="Get invoice details",
+    description="Retrieve complete invoice information with line items and payments.",
+    responses={
+        200: {"description": "Invoice details"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def get_invoice(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+) -> InvoiceResponse:
+    """
+    Get detailed invoice information by ID.
+    """
+    invoice = service.get_by_id(invoice_id)
+    return InvoiceResponse.model_validate(invoice)
+
+# UPDATE
+
+@router.put(
+    "/{invoice_id}",
+    response_model=InvoiceResponse,
+    summary="Update invoice",
+    description="Update invoice details (restrictions apply based on status).",
+    responses={
+        200: {"description": "Invoice updated successfully"},
+        400: {"description": "Invoice not editable or validation failed"},
+        404: {"description": "Invoice not found"},
+        409: {"description": "Version conflict (concurrent edit detected)"},
+    },
+)
+def update_invoice(
+    invoice_id: UUID,
+    body: InvoiceUpdate,
+    service: InvoiceServiceDep,
+    expected_version: Annotated[
+        int | None,
+        Query(description="Expected version number for optimistic locking"),
+    ] = None,
+) -> InvoiceResponse:
+    """
+    Update an existing invoice.
+    """
+    invoice = service.update(invoice_id, body, expected_version)
+    return InvoiceResponse.model_validate(invoice)
+
+
+# ACTIONS
+
+@router.post(
+    "/{invoice_id}/mark-sent",
+    response_model=InvoiceResponse,
+    summary="Mark invoice as sent",
+    description="Change invoice status from DRAFT to SENT without sending email.",
+    responses={
+        200: {"description": "Invoice marked as sent"},
+        400: {"description": "Invoice not in DRAFT status"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def mark_invoice_as_sent(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+    body: InvoiceMarkSentRequest | None = None,
+) -> InvoiceResponse:
+    """
+    Mark invoice as sent (without actually sending email).
+    """
+    sent_at = body.sent_at if body else None
+    invoice = service.mark_as_sent(invoice_id, sent_at)
+    return InvoiceResponse.model_validate(invoice)
+
+
+@router.post(
+    "/{invoice_id}/send",
+    response_model=InvoiceSendResponse,
+    summary="Send invoice via email",
+    description="Send invoice to customer via email with PDF attachment.",
+    responses={
+        200: {"description": "Invoice sent successfully"},
+        400: {"description": "Invoice canceled or customer has no email"},
+        404: {"description": "Invoice not found"},
+        502: {"description": "Email delivery failed"},
+    },
+)
+def send_invoice(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+    body: InvoiceSendRequest | None = None,
+) -> InvoiceSendResponse:
+    """
+    Send invoice via email.
+    """
+    request_data = body or InvoiceSendRequest()
+    
+    result = service.send_invoice(
+        invoice_id,
+        to_email=request_data.to_email,
+        subject=request_data.subject,
+        body=request_data.body,
+        attach_pdf=request_data.attach_pdf,
+    )
+    
+    return InvoiceSendResponse(**result)
+
+
+@router.post(
+    "/{invoice_id}/payments",
+    response_model=PaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record payment",
+    description="Record a payment against an invoice and update balance.",
+    responses={
+        201: {"description": "Payment recorded successfully"},
+        400: {"description": "Payment amount exceeds balance or invoice is DRAFT/CANCELED"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def record_payment(
+    invoice_id: UUID,
+    body: PaymentCreate,
+    service: InvoiceServiceDep,
+    # TODO: current_user: CurrentUser,
+) -> PaymentResponse:
+    """
+    Record a payment against an invoice.
+    """
+    # user_id = current_user.id if current_user else None
+    user_id = None  # TODO: Replace with actual user ID
+    
+    payment = service.record_payment(invoice_id, body, user_id)
+    return PaymentResponse.model_validate(payment)
+
+
+@router.post(
+    "/{invoice_id}/cancel",
+    response_model=InvoiceResponse,
+    summary="Cancel invoice",
+    description="Cancel an invoice (terminal state - irreversible).",
+    responses={
+        200: {"description": "Invoice canceled successfully"},
+        400: {"description": "Invoice already canceled"},
+        404: {"description": "Invoice not found"},
+    },
+)
+def cancel_invoice(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+) -> InvoiceResponse:
+    """
+    Cancel an invoice.
+    """
+    invoice = service.cancel_invoice(invoice_id)
+    return InvoiceResponse.model_validate(invoice)
+
+
+# PDF & EXPORT
+
+@router.get(
+    "/{invoice_id}/pdf",
+    summary="Download invoice as PDF",
+    description="Generate and download invoice PDF.",
+    responses={
+        200: {
+            "description": "PDF file",
+            "content": {"application/pdf": {}},
+        },
+        404: {"description": "Invoice not found"},
+        501: {"description": "PDF generation not yet implemented"},
+    },
+)
+def download_invoice_pdf(
+    invoice_id: UUID,
+    service: InvoiceServiceDep,
+) -> StreamingResponse:
+    """
+    Generate and download invoice as PDF.
+    """
+    invoice = service.get_by_id(invoice_id)
+    
+    # TODO: Implement actual PDF generation
+    # pdf_data = service.generate_pdf(invoice_id)
+    
+    # For now, return not implemented
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=501,
+        detail="PDF generation not yet implemented"
+    )
+    
+    # Future implementation:
+    # return StreamingResponse(
+    #     io.BytesIO(pdf_data),
+    #     media_type="application/pdf",
+    #     headers={
+    #         "Content-Disposition": f'attachment; filename="Invoice_{invoice.invoice_reference}.pdf"'
+    #     }
+    # )

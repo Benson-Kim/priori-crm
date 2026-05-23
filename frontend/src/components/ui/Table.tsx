@@ -35,7 +35,6 @@ export function Table<T>({
                 className={cn(
                   "p-3 text-left text-base font-bold text-content-primary",
                   "bg-gray-50 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg",
-                  "",
                   col.className
                 )}
               >
@@ -49,7 +48,7 @@ export function Table<T>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-12 text-center text-sm text-content-secondary "
+                className="px-4 py-12 text-center text-content-secondary "
               >
                 {emptyMessage}
               </td>

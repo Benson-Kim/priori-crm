@@ -11,12 +11,13 @@ interface SelectOption {
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
-  options: SelectOption[];
+  options: ReadonlyArray<SelectOption>;
   placeholder?: string;
+  wrapperClassName?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, options, placeholder, className, id, ...props }, ref) => {
+  ({ label, error, options, placeholder, className, wrapperClassName, id, ...props }, ref) => {
     const selectId = id || label?.toLowerCase().replace(/\s+/g, "-");
 
     return (
@@ -34,7 +35,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             "flex items-center w-full py-4 px-3 gap-3 rounded-lg border bg-gray-50 transition-all",
             error
               ? "border-red-300 focus-within:border-red-500 focus-within:ring-red-100"
-              : "border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10"
+              : "border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10",
+            wrapperClassName
           )}
         >
           <select

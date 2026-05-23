@@ -51,13 +51,13 @@ services:
       - prioritech_network
 
   ui:
-    build: ./ui
+    build: ./frontend
     ports:
       - "5173:5173"
     depends_on:
       - api
     volumes:
-      - ./ui:/app
+      - ./frontend:/app
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
 

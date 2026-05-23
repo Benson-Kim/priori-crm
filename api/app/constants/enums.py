@@ -37,10 +37,72 @@ class TransactionType(StrEnum):
 
 
 class InvoiceStatus(StrEnum):
-    """Invoice payment status."""
+    """Invoice lifecycle status with strict state machine."""
+    
+    DRAFT = "draft"          # Created but not sent
+    SENT = "sent"            # Sent to customer, awaiting payment
+    PARTIAL = "partial"      # Partially paid
+    PAID = "paid"            # Fully paid
+    OVERDUE = "overdue"      # Past due date, unpaid
+    CANCELED = "canceled"    # Voided/cancelled (immutable)
 
+
+class PaymentMethod(StrEnum):
+    """Payment method types."""
+    
+    CASH = "cash"
+    BANK_TRANSFER = "bank_transfer"
+    CHECK = "check"
+    CARD = "card"
+    MOBILE_MONEY = "mobile_money"
+    OTHER = "other"
+
+
+class TaxType(StrEnum):
+    """Tax types for invoice line items."""
+    
+    VAT_16 = "vat_16"        # 16% VAT (Kenya standard)
+    VAT_8 = "vat_8"          # 8% VAT (Kenya petroleum/fuel)
+    VAT_0 = "vat_0"          # 0% VAT (zero-rated)
+    EXEMPT = "exempt"        # Exempt from VAT
+    NO_TAX = "no_tax"        # No tax
+
+
+class DiscountType(StrEnum):
+    """Discount calculation types."""
+    
+    AMOUNT = "amount"        # Fixed amount
+    PERCENTAGE = "percentage" # Percentage of subtotal
+
+
+class QuoteStatus(StrEnum):
+    """Quote status values."""
     DRAFT = "draft"
-    PENDING = "pending"
+    SENT = "sent"
+    APPROVED = "approved"
+    INVOICED = "invoiced"
+    EXPIRED = "expired"
+
+class VendorStatus(StrEnum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+class PayableTransactionStatus(StrEnum):
     PAID = "paid"
+    PENDING = "pending"
     OVERDUE = "overdue"
-    CANCELLED = "cancelled"
+
+class ExpenseStatus(StrEnum):
+    """Expense lifecycle states."""
+    PENDING = "pending"
+    PAID    = "paid"
+    OVERDUE = "overdue"
+    CANCELED = "canceled"
+
+
+class DocumentSource(StrEnum):
+    """Upload context for ExpenseDocument.source."""
+    FORM          = "form"
+    VIEW          = "view"
+    PAYMENT_MODAL = "payment_modal"

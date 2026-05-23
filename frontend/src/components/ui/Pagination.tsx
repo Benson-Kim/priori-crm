@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { PAGINATION_DEFAULTS } from "@/constants";
+import { PAGINATION_DEFAULTS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 interface PaginationProps {
@@ -32,7 +32,6 @@ export function Pagination({
       <div className="flex items-center gap-2 text-base text-content-secondary ">
         <span>Show</span>
         <div className="bg-pink-25 p-2 rounded-lg border border-gray-200 text-base cursor-pointer">
-
           <select
             value={perPage}
             onChange={(e) => onPerPageChange(Number(e.target.value))}

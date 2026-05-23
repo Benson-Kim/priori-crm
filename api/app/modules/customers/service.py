@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
+from app.lib.config import settings
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
@@ -28,6 +29,9 @@ from app.modules.customers.schemas import (
     StatementSummary,
     StatementTransaction,
 )
+from app.modules.invoices.models import Invoice, InvoiceStatus, Payment
+from app.modules.invoices.schemas import InvoiceResponse
+from app.modules.quotes.models import Quote, QuoteStatus
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +187,7 @@ class CustomerService:
         """Get counts of customers by status."""
         try:
             results = (
-                self._db.query(Customer.status, func.count(Customer.id).label("count"),)
+                self._db.query(Customer.status, func.count(Customer.id).label("count"))
                 .group_by(Customer.status)
                 .all()
             )
@@ -339,19 +343,18 @@ class CustomerService:
                         field="balance"
                     )
                 
-                # TODO: Check for open quotes when Quote module exists
-                # open_quotes = self._db.query(Quote).filter(
-                #     Quote.customer_id == customer_id,
-                #     Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
-                # ).count()
-                # if open_quotes > 0:
-                #     raise BadRequestException(
-                #         detail=(
-                #             f"Customer has {open_quotes} open quote(s). "
-                #             "Please finalize or cancel quotes before deactivating."
-                #         ),
-                #         field="quotes"
-                #     )
+                open_quotes = self._db.query(Quote).filter(
+                    Quote.customer_id == customer_id,
+                    Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
+                ).count()
+                if open_quotes > 0:
+                    raise BadRequestException(
+                        detail=(
+                            f"Customer has {open_quotes} open quote(s). "
+                            "Please finalize or cancel quotes before deactivating."
+                        ),
+                        field="quotes"
+                    )
             
             # Store previous status for logging
             previous_status = customer.status
@@ -386,41 +389,41 @@ class CustomerService:
             warnings: list[str] = []
             associated_records: dict[str, int] = {}
             
-            # TODO: Check invoices when Invoice module exists
-            # invoice_count = self._db.query(Invoice).filter(
-            #     Invoice.customer_id == customer_id
-            # ).count()
-            # associated_records["invoices"] = invoice_count
-            # if invoice_count > 0:
-            #     unpaid_count = self._db.query(Invoice).filter(
-            #         Invoice.customer_id == customer_id,
-            #         Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.OVERDUE])
-            #     ).count()
-            #     warnings.append(
-            #         f"{invoice_count} invoice(s) associated with this customer "
-            #         f"({unpaid_count} unpaid)"
-            #     )
+            # Check invoices
+            invoice_count = self._db.query(Invoice).filter(
+                Invoice.customer_id == customer_id
+            ).count()
+            associated_records["invoices"] = invoice_count
+            if invoice_count > 0:
+                unpaid_count = self._db.query(Invoice).filter(
+                    Invoice.customer_id == customer_id,
+                    Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.OVERDUE])
+                ).count()
+                warnings.append(
+                    f"{invoice_count} invoice(s) associated with this customer "
+                    f"({unpaid_count} unpaid)"
+                )
             
-            # TODO: Check quotes when Quote module exists
-            # quote_count = self._db.query(Quote).filter(
-            #     Quote.customer_id == customer_id
-            # ).count()
-            # associated_records["quotes"] = quote_count
-            # if quote_count > 0:
-            #     open_quotes = self._db.query(Quote).filter(
-            #         Quote.customer_id == customer_id,
-            #         Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
-            #     ).count()
-            #     warnings.append(
-            #         f"{quote_count} quote(s) associated with this customer "
-            #         f"({open_quotes} still open)"
-            #     )
+            # Check quotes
+            quote_count = self._db.query(Quote).filter(
+                Quote.customer_id == customer_id
+            ).count()
+            associated_records["quotes"] = quote_count
+            if quote_count > 0:
+                open_quotes = self._db.query(Quote).filter(
+                    Quote.customer_id == customer_id,
+                    Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
+                ).count()
+                warnings.append(
+                    f"{quote_count} quote(s) associated with this customer "
+                    f"({open_quotes} still open)"
+                )
             
-            # TODO: Check payments when Payment module exists
-            # payment_count = self._db.query(Payment).join(Invoice).filter(
-            #     Invoice.customer_id == customer_id
-            # ).count()
-            # associated_records["payments"] = payment_count
+            # Check payments
+            payment_count = self._db.query(Payment).join(Invoice).filter(
+                Invoice.customer_id == customer_id
+            ).count()
+            associated_records["payments"] = payment_count
             
             # Check outstanding balance
             if customer.balance > 0:
@@ -491,14 +494,8 @@ class CustomerService:
             
             if hard_delete:
                 # HARD DELETE - Permanent removal
-                # TODO: Handle foreign key constraints when Invoice/Quote modules exist
-                # Options:
-                # 1. CASCADE: Delete all related invoices/quotes (destructive)
-                # 2. SET NULL: Set customer_id to NULL in related records (orphan records)
-                # 3. RESTRICT: Block deletion if related records exist (current behavior)
-                
-                # For now, delete the customer record
-                # Database foreign keys will either cascade or raise an error
+                # The customer FK on invoices uses RESTRICT, so check_delete_eligibility
+                # must gate this path. If force=True the caller accepts the risk.
                 self._db.delete(customer)
                 delete_type = "hard"
                 
@@ -605,69 +602,80 @@ class CustomerService:
             raise DatabaseException("Failed to batch update customers") from e
 
     def get_financial_summary(self, customer_id: uuid.UUID) -> FinancialSummary:
-        """Calculate financial summary for customer overview."""
+        """
+        Calculate financial summary for customer overview.
+        """
         try:
-            
-            customer = self.get_by_id(customer_id)
-            
-            # TODO: Replace with actual invoice queries when Invoice module exists
-            # For now, return zeros
-            return FinancialSummary(
-                total_unpaid=Decimal("0.00"),
-                overdue=Decimal("0.00"),
-                total_invoiced=Decimal("0.00"),
-                total_paid=Decimal("0.00"),
+            today = date.today()
+
+            row = (
+                self._db.query(
+                    # Total unpaid: balance on sent + overdue invoices
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    Invoice.status.in_([
+                                        InvoiceStatus.SENT,
+                                        InvoiceStatus.OVERDUE,
+                                    ]),
+                                    Invoice.balance_due,
+                                ),
+                                else_=Decimal("0.00"),
+                            )
+                        ),
+                        Decimal("0.00"),
+                    ).label("total_unpaid"),
+                    # Overdue: balance on invoices past due date
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    and_(
+                                        Invoice.status == InvoiceStatus.OVERDUE,
+                                        Invoice.due_date < today,
+                                    ),
+                                    Invoice.balance_due,
+                                ),
+                                else_=Decimal("0.00"),
+                            )
+                        ),
+                        Decimal("0.00"),
+                    ).label("overdue"),
+                    # Total invoiced (all time, all statuses)
+                    func.coalesce(
+                        func.sum(Invoice.total_due),
+                        Decimal("0.00"),
+                    ).label("total_invoiced"),
+                    # Total paid
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    Invoice.status == InvoiceStatus.PAID,
+                                    Invoice.total_due,
+                                ),
+                                else_=Decimal("0.00"),
+                            )
+                        ),
+                        Decimal("0.00"),
+                    ).label("total_paid"),
+                )
+                .filter(Invoice.customer_id == customer_id)
+                .one()
             )
-            
-            # FUTURE IMPLEMENTATION (uncomment when Invoice module exists):
-            # from app.modules.invoices.models import Invoice, InvoiceStatus
-            #
-            # invoices = self._db.query(Invoice).filter(Invoice.customer_id == customer_id)
-            #
-            # total_unpaid = (
-            #     invoices
-            #     .filter(Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.OVERDUE]))
-            #     .with_entities(func.sum(Invoice.balance))
-            #     .scalar() or Decimal("0.00")
-            # )
-            
-            # # Overdue amount (past due date)
-            # overdue = (
-            #     invoices
-            #     .filter(
-            #         Invoice.status == InvoiceStatus.OVERDUE,
-            #         Invoice.due_date < datetime.now(UTC)
-            #     )
-            #     .with_entities(func.sum(Invoice.balance))
-            #     .scalar() or Decimal("0.00")
-            # )
-            
-            # # Total invoiced (all time)
-            # total_invoiced = (
-            #     invoices
-            #     .with_entities(func.sum(Invoice.total))
-            #     .scalar() or Decimal("0.00")
-            # )
-            
-            # # Total paid (all time)
-            # total_paid = (
-            #     invoices
-            #     .filter(Invoice.status == InvoiceStatus.PAID)
-            #     .with_entities(func.sum(Invoice.total))
-            #     .scalar() or Decimal("0.00")
-            # )
-            
-            # return FinancialSummary(
-            #     total_unpaid=total_unpaid,
-            #     overdue=overdue,
-            #     total_invoiced=total_invoiced,
-            #     total_paid=total_paid,
-            # )
-            
+
+            return FinancialSummary(
+                total_unpaid=Decimal(str(row.total_unpaid)),
+                overdue=Decimal(str(row.overdue)),
+                total_invoiced=Decimal(str(row.total_invoiced)),
+                total_paid=Decimal(str(row.total_paid)),
+            )
+
         except NotFoundException:
             raise
         except SQLAlchemyError as e:
-            logger.exception(f"Error calculating financial summary for {customer_id}")
+            logger.exception("Error calculating financial summary for %s", customer_id)
             raise DatabaseException("Failed to calculate financial summary") from e
 
     def get_invoices(
@@ -675,44 +683,36 @@ class CustomerService:
         customer_id: uuid.UUID,
         params: PaginationParams,
         status_filter: str | None = None,
-    ) -> PaginatedResponse:  # noqa: F821
-    # ) -> PaginatedResponse["InvoiceResponse"]:  # noqa: F821
+    ) -> PaginatedResponse[InvoiceResponse]:
         """ Get paginated invoices for a customer. """
         try:
             # Verify customer exists
             self.get_by_id(customer_id)
-
-            # from app.modules.invoices.models import Invoice
-            # from app.modules.invoices.schemas import InvoiceResponse
             
-            # query = (
-            #     self._db.query(Invoice)
-            #     .filter(Invoice.customer_id == customer_id)
-            # )
-            
-            # # Apply status filter
-            # if status_filter and status_filter != "all":
-            #     query = query.filter(Invoice.status == status_filter)
-            
-            # # Get total
-            # total = query.count()
-            
-            # # Apply pagination and sorting
-            # invoices = (
-            #     query
-            #     .order_by(Invoice.created_at.desc())
-            #     .offset(params.offset)
-            #     .limit(params.limit)
-            #     .all()
-            # )
-            
-            # items = [InvoiceResponse.model_validate(inv) for inv in invoices]
-            
-            # return PaginatedResponse.create(items=items, total=total, params=params)
-            raise NotImplementedError(
-                "Invoice module not yet implemented. "
-                "This endpoint will be available after Invoice module is created."
+            query = (
+                self._db.query(Invoice)
+                .filter(Invoice.customer_id == customer_id)
             )
+            
+            # Apply status filter
+            if status_filter and status_filter != "all":
+                query = query.filter(Invoice.status == status_filter)
+            
+            # Get total
+            total = query.count()
+            
+            # Apply pagination and sorting
+            invoices = (
+                query
+                .order_by(Invoice.created_at.desc())
+                .offset(params.offset)
+                .limit(params.per_page)
+                .all()
+            )
+            
+            items = [InvoiceResponse.model_validate(inv) for inv in invoices]
+            
+            return PaginatedResponse.create(items=items, total=total, params=params)
             
         except NotFoundException:
             raise
@@ -731,125 +731,107 @@ class CustomerService:
              # Verify customer exists
             customer = self.get_by_id(customer_id)
 
+            # Calculate opening balance (all transactions before period_start)
+            opening_balance = self._calculate_balance_at_date(customer_id, period_start)
+
+            # Get all invoices in period
+            period_invoices = (
+                self._db.query(Invoice)
+                .filter(
+                    Invoice.customer_id == customer_id,
+                    Invoice.transaction_date >= period_start,
+                    Invoice.transaction_date <= period_end,
+                )
+                .order_by(Invoice.transaction_date)
+                .all()
+            )
+
+            # Get all payments in period
+            period_payments = (
+                self._db.query(Payment)
+                .join(Invoice)
+                .filter(
+                    Invoice.customer_id == customer_id,
+                    Payment.payment_date >= period_start,
+                    Payment.payment_date <= period_end,
+                )
+                .order_by(Payment.payment_date)
+                .all()
+            )
+
+            # Build transaction ledger
+            transactions: list[StatementTransaction] = []
+            running_balance = opening_balance
+
+            # Add opening balance row
+            transactions.append(
+                StatementTransaction(
+                    date=period_start,
+                    description="Opening Balance",
+                    amount=opening_balance,
+                    payment=Decimal("0.00"),
+                    balance=opening_balance,
+                )
+            )
+
+            # Merge invoices and payments chronologically
+            all_transactions = sorted(
+                [("invoice", inv) for inv in period_invoices] +
+                [("payment", pmt) for pmt in period_payments],
+                key=lambda x: x[1].transaction_date if x[0] == "invoice" else x[1].payment_date
+            )
+
+            invoiced_amount = Decimal("0.00")
+            amount_paid = Decimal("0.00")
+
+            for trans_type, trans in all_transactions:
+                if trans_type == "invoice":
+                    running_balance += trans.total_due
+                    invoiced_amount += trans.total_due
+
+                    transactions.append(
+                        StatementTransaction(
+                            date=trans.transaction_date,
+                            description=f"Invoice {trans.invoice_number}",
+                            amount=trans.total_due,
+                            payment=Decimal("0.00"),
+                            balance=running_balance,
+                        )
+                    )
+
+                else:  # payment
+                    running_balance -= trans.amount
+                    amount_paid += trans.amount
+
+                    transactions.append(
+                        StatementTransaction(
+                            date=trans.payment_date,
+                            description=(
+                                f"Payment Received — {customer.currency} {trans.amount} "
+                                f"for {trans.invoice.invoice_number}"
+                            ),
+                            amount=Decimal("0.00"),
+                            payment=trans.amount,
+                            balance=running_balance,
+                        )
+                    )
+
+            summary = StatementSummary(
+                opening_balance=opening_balance,
+                invoiced_amount=invoiced_amount,
+                amount_paid=amount_paid,
+                balance_due=running_balance,
+            )
+
             return CustomerStatement(
                 customer=CustomerResponse.model_validate(customer),
                 period_start=period_start,
                 period_end=period_end,
-                summary=StatementSummary(
-                    opening_balance=Decimal("0.00"),
-                    invoiced_amount=Decimal("0.00"),
-                    amount_paid=Decimal("0.00"),
-                    balance_due=Decimal("0.00"),
-                ),
-                transactions=[],
+                summary=summary,
+                transactions=transactions,
                 generated_at=datetime.now(UTC),
             )
 
-            # from app.modules.invoices.models import Invoice
-            # from app.modules.payments.models import Payment
-            
-            # # Calculate opening balance (all transactions before period_start)
-            # opening_balance = self._calculate_balance_at_date(
-            #     customer_id,
-            #     period_start
-            # )
-            
-            # # Get all invoices in period
-            # period_invoices = (
-            #     self._db.query(Invoice)
-            #     .filter(
-            #         Invoice.customer_id == customer_id,
-            #         Invoice.invoice_date >= period_start,
-            #         Invoice.invoice_date <= period_end,
-            #     )
-            #     .order_by(Invoice.invoice_date)
-            #     .all()
-            # )
-            
-            # # Get all payments in period
-            # period_payments = (
-            #     self._db.query(Payment)
-            #     .join(Invoice)
-            #     .filter(
-            #         Invoice.customer_id == customer_id,
-            #         Payment.payment_date >= period_start,
-            #         Payment.payment_date <= period_end,
-            #     )
-            #     .order_by(Payment.payment_date)
-            #     .all()
-            # )
-            
-            # # Build transaction ledger
-            # transactions: list[StatementTransaction] = []
-            # running_balance = opening_balance
-            
-            # # Add opening balance row
-            # transactions.append(
-            #     StatementTransaction(
-            #         date=period_start,
-            #         description="Opening Balance",
-            #         amount=opening_balance,
-            #         payment=Decimal("0.00"),
-            #         balance=opening_balance,
-            #     )
-            # )
-            
-            # # Merge invoices and payments chronologically
-            # all_transactions = sorted(
-            #     [("invoice", inv) for inv in period_invoices] +
-            #     [("payment", pmt) for pmt in period_payments],
-            #     key=lambda x: x[1].invoice_date if x[0] == "invoice" else x[1].payment_date
-            # )
-            
-            # invoiced_amount = Decimal("0.00")
-            # amount_paid = Decimal("0.00")
-            
-            # for trans_type, trans in all_transactions:
-            #     if trans_type == "invoice":
-            #         running_balance += trans.total
-            #         invoiced_amount += trans.total
-                    
-            #         transactions.append(
-            #             StatementTransaction(
-            #                 date=trans.invoice_date,
-            #                 description=f"Invoice {trans.invoice_number}",
-            #                 amount=trans.total,
-            #                 payment=Decimal("0.00"),
-            #                 balance=running_balance,
-            #             )
-            #         )
-                    
-            #     else:  # payment
-            #         running_balance -= trans.amount
-            #         amount_paid += trans.amount
-                    
-            #         transactions.append(
-            #             StatementTransaction(
-            #                 date=trans.payment_date,
-            #                 description=f"Payment Received — KES {trans.amount} for {trans.invoice.invoice_number}",
-            #                 amount=Decimal("0.00"),
-            #                 payment=trans.amount,
-            #                 balance=running_balance,
-            #             )
-            #         )
-            
-            # # Build summary
-            # summary = StatementSummary(
-            #     opening_balance=opening_balance,
-            #     invoiced_amount=invoiced_amount,
-            #     amount_paid=amount_paid,
-            #     balance_due=running_balance,
-            # )
-            
-            # return CustomerStatement(
-            #     customer=CustomerResponse.model_validate(customer),
-            #     period_start=period_start,
-            #     period_end=period_end,
-            #     summary=summary,
-            #     transactions=transactions,
-            #     generated_at=datetime.now(UTC),
-            # )
-            
         except NotFoundException:
             raise
         except SQLAlchemyError as e:
@@ -861,31 +843,26 @@ class CustomerService:
         customer_id: uuid.UUID,
         as_of_date: date,
     ) -> Decimal:
-        """Calculate customer balance as of a specific date."""
-        return 0
-        # from app.modules.invoices.models import Invoice
-        # from app.modules.payments.models import Payment
-        
-        # # Sum all invoices before date
-        # invoiced = (
-        #     self._db.query(func.sum(Invoice.total))
-        #     .filter(
-        #         Invoice.customer_id == customer_id,
-        #         Invoice.invoice_date < as_of_date,
-        #     )
-        #     .scalar() or Decimal("0.00")
-        # )
-        
-        # # Sum all payments before date
-        # paid = (
-        #     self._db.query(func.sum(Payment.amount))
-        #     .join(Invoice)
-        #     .filter(
-        #         Invoice.customer_id == customer_id,
-        #         Payment.payment_date < as_of_date,
-        #     )
-        #     .scalar() or Decimal("0.00")
-        # )
-        
-        # return invoiced - paid
-        return Decimal("0.00")
+        """Calculate customer balance as of a specific date (invoiced - paid)."""
+        # Sum all invoice totals before date
+        invoiced = (
+            self._db.query(func.sum(Invoice.total_due))
+            .filter(
+                Invoice.customer_id == customer_id,
+                Invoice.transaction_date < as_of_date,
+            )
+            .scalar() or Decimal("0.00")
+        )
+
+        # Sum all payments before date
+        paid = (
+            self._db.query(func.sum(Payment.amount))
+            .join(Invoice)
+            .filter(
+                Invoice.customer_id == customer_id,
+                Payment.payment_date < as_of_date,
+            )
+            .scalar() or Decimal("0.00")
+        )
+
+        return Decimal(str(invoiced)) - Decimal(str(paid))

@@ -1,6 +1,22 @@
 import { cn, formatDelta } from "@/lib/utils";
 
-type BadgeVariant = "active" | "inactive" | "delta-positive" | "delta-negative";
+export type BadgeVariant =
+  | "active"
+  | "inactive"
+  | "delta-positive"
+  | "delta-negative"
+  // Invoice status variants
+  | "draft"
+  | "sent"
+  | "paid"
+  | "partial"
+  | "overdue"
+  | "canceled"
+  | "pending"
+  // Quote status variants
+  | "approved"
+  | "invoiced"
+  | "expired";
 
 interface BadgeProps {
   variant: BadgeVariant;
@@ -13,9 +29,21 @@ const variantStyles: Record<BadgeVariant, string> = {
   active: "text-success font-medium",
   inactive: "text-warning font-medium",
   "delta-positive":
-    "bg-success/10 text-success text-xs font-medium px-2 py-0.5 rounded-full",
+    "text-success font-medium px-2 py-0.5 rounded-full",
   "delta-negative":
-    "bg-danger/10 text-danger text-xs font-medium px-2 py-0.5 rounded-full",
+    "text-danger font-medium px-2 py-0.5 rounded-full",
+  // Invoice statuses
+  draft: "text-gray-500 font-medium px-2.5 py-1 rounded-full",
+  sent: "text-status-sent font-medium px-2.5 py-1 rounded-full",
+  paid: "text-status-paid font-medium px-2.5 py-1 rounded-full",
+  partial: "text-amber-700 font-medium px-2.5 py-1 rounded-full",
+  overdue: "text-error-600 font-medium px-2.5 py-1 rounded-full",
+  canceled: "text-gray-400 font-medium px-2.5 py-1 rounded-full",
+  pending: "text-warning font-medium px-2.5 py-1 rounded-full",
+  // Quote statuses
+  approved: "text-teal-700 font-medium px-2.5 py-1 rounded-full",
+  invoiced: "text-status-paid font-medium px-2.5 py-1 rounded-full",
+  expired: "text-orange-600 font-medium px-2.5 py-1 rounded-full",
 };
 
 export function Badge({ variant, children, value, className }: Readonly<BadgeProps>) {

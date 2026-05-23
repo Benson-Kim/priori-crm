@@ -40,3 +40,36 @@ def get_customer_service(db: DbSession):
 
 
 CustomerServiceDep = Annotated["CustomerService", Depends(get_customer_service)]  # noqa: F821
+
+def get_invoice_service(db: DbSession):
+    """Provide a InvoiceService scoped to the current request session."""
+    from app.modules.invoices.service import InvoiceService
+    return InvoiceService(db)
+
+
+InvoiceServiceDep = Annotated["InvoiceService", Depends(get_invoice_service)]  # noqa: F821
+
+
+def get_quote_service(db: DbSession):
+    """Provide a QuoteService scoped to the current request session."""
+    from app.modules.quotes.service import QuoteService
+    return QuoteService(db)
+
+
+QuoteServiceDep = Annotated["QuoteService", Depends(get_quote_service)]  # noqa: F821
+
+def get_expense_service(db: DbSession) -> "ExpenseService":
+    """Provide an ExpenseService scoped to the current request session."""
+    from app.modules.expenses.service import ExpenseService
+    return ExpenseService(db)
+
+
+ExpenseServiceDep = Annotated["ExpenseService", Depends(get_expense_service)]
+
+def get_vendor_service(db: DbSession):
+    """Provide a VendorService scoped to the current request session."""
+    from app.modules.vendors.service import VendorService
+    return VendorService(db)
+
+
+VendorServiceDep = Annotated["VendorService", Depends(get_vendor_service)]
