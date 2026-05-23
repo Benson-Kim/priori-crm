@@ -1,0 +1,453 @@
+"""
+Vendor API endpoints.
+"""
+
+import logging
+from datetime import date
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Query, status
+
+from app.common.dependencies import VendorServiceDep
+from app.common.pagination import PaginatedResponse, PaginationParams
+from app.modules.vendors.schemas import (
+    ContactSearchResponse,
+    VendorCreate,
+    VendorDeleteResponse,
+    VendorDuplicateCheckResponse,
+    VendorFilterParams,
+    VendorOperationResponse,
+    VendorPayablesSummary,
+    VendorResponse,
+    VendorStatusCounts,
+    VendorSummary,
+    VendorTransactionFilterParams,
+    VendorTransactionSummary,
+    VendorUpdate,
+    VendorStatement,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+# CREATE
+
+@router.post(
+    "",
+    response_model=VendorResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new vendor",
+    description=(
+        "Create a new vendor record. Covers both modal paths: "
+        "new from scratch (contactId omitted) and from existing contact "
+        "(contactId provided). All fields except vendorName are optional."
+    ),
+    responses={
+        201: {"description": "Vendor created successfully"},
+        400: {"description": "Validation failed (e.g. blank vendor name, invalid email)"},
+        404: {"description": "Linked contact not found (when contactId is supplied)"},
+        409: {"description": "A vendor with this email already exists"},
+    },
+)
+def create_vendor(
+    body: VendorCreate,
+    service: VendorServiceDep,
+    # TODO: current_user: CurrentUser when auth module ships
+) -> VendorResponse:
+    """Create a vendor."""
+    user_id = None  # TODO: Replace with current_user.id
+    vendor = service.create(body, user_id=user_id)
+    return VendorResponse.model_validate(vendor)
+
+
+# LIST
+
+@router.get(
+    "",
+    response_model=PaginatedResponse[VendorSummary],
+    summary="List vendors",
+    description=(
+        "Paginated, searchable list of vendors. "
+        "Maps to the Vendors list view. "
+        "Filter by status to drive the All / Active / Inactive tab bar."
+    ),
+    responses={
+        200: {"description": "Paginated vendor list"},
+    },
+)
+def list_vendors(
+    service: VendorServiceDep,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[
+        int,
+        Query(ge=1, le=100, description="Rows per page (default: 10)"),
+    ] = 10,
+    status_filter: Annotated[
+        str | None,
+        Query(
+            alias="status",
+            description="Filter by status: 'active' | 'inactive'. Omit for all.",
+        ),
+    ] = None,
+    search: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Search across vendor name, email, and phone. "
+                "Maps to the search bar on the list view."
+            )
+        ),
+    ] = None,
+) -> PaginatedResponse[VendorSummary]:
+    """List vendors with pagination, status filtering, and search."""
+    params = PaginationParams(page=page, per_page=per_page)
+    filters = VendorFilterParams(status=status_filter, search=search)
+    return service.list_vendors(params, filters)
+
+
+# STATUS COUNTS
+
+@router.get(
+    "/counts",
+    response_model=VendorStatusCounts,
+    summary="Get vendor status counts",
+    description=(
+        "Returns counts for each filter tab: All, Active, Inactive. "
+        "Used to render the live-updating counts in the tab bar"
+    ),
+    responses={
+        200: {"description": "Vendor counts by status"},
+    },
+)
+def get_vendor_counts(service: VendorServiceDep) -> VendorStatusCounts:
+    """Get vendor counts grouped by status."""
+    return service.get_status_counts()
+
+
+# CONTACT SEARCH
+
+@router.get(
+    "/contacts/search",
+    response_model=ContactSearchResponse,
+    summary="Search existing contacts for vendor modal",
+    description=(
+        "Searches CRM contacts by name, phone, or email. "
+        "Powers the 'Search Existing Vendor' dropdown in the Add Vendor modal "
+        "Returns contacts not yet linked to a vendor."
+    ),
+    responses={
+        200: {"description": "Matching contacts"},
+        400: {"description": "Query string too short"},
+    },
+)
+def search_contacts(
+    service: VendorServiceDep,
+    q: Annotated[
+        str,
+        Query(
+            min_length=1,
+            max_length=100,
+            description="Search term (name, phone, or email)",
+        ),
+    ],
+    limit: Annotated[
+        int,
+        Query(ge=1, le=50, description="Maximum results to return"),
+    ] = 20,
+) -> ContactSearchResponse:
+    """
+    Search contacts for the Add Vendor modal search dropdown.
+    """
+    return service.search_contacts(query=q, limit=limit)
+
+
+# DUPLICATE EMAIL CHECK
+
+@router.get(
+    "/check-email",
+    response_model=VendorDuplicateCheckResponse,
+    summary="Check for duplicate vendor email",
+    description=(
+        "Real-time duplicate email check — called on-blur from the email field "
+        "in the Add / Edit Vendor modal "
+        "Returns is_duplicate=true with the existing vendor's name and ID "
+        "so the frontend can offer a 'View existing record?' prompt."
+    ),
+    responses={
+        200: {"description": "Duplicate check result"},
+    },
+)
+def check_email_duplicate(
+    service: VendorServiceDep,
+    email: Annotated[
+        str,
+        Query(description="Email address to check"),
+    ],
+    exclude_vendor_id: Annotated[
+        UUID | None,
+        Query(
+            alias="excludeVendorId",
+            description="Vendor ID to exclude (pass when editing an existing vendor)",
+        ),
+    ] = None,
+) -> VendorDuplicateCheckResponse:
+    """
+    Check whether a vendor with the given email already exists.
+    """
+    result = service.check_email_duplicate(email, exclude_vendor_id)
+    return VendorDuplicateCheckResponse(**result)
+
+
+# GET BY ID
+
+@router.get(
+    "/{vendor_id}",
+    response_model=VendorResponse,
+    summary="Get vendor details",
+    description=(
+        "Retrieve the complete vendor record with computed payables aggregates. "
+        "Powers the vendor detail view Overview tab"
+    ),
+    responses={
+        200: {"description": "Vendor details"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+) -> VendorResponse:
+    """Get a vendor by ID."""
+    vendor = service.get_by_id(vendor_id)
+    return VendorResponse.model_validate(vendor)
+
+
+# UPDATE 
+
+@router.put(
+    "/{vendor_id}",
+    response_model=VendorResponse,
+    summary="Update vendor",
+    description=(
+        "Partial update — only supplied fields are written. "
+        "Pass X-Expected-Version header for optimistic locking."
+    ),
+    responses={
+        200: {"description": "Vendor updated successfully"},
+        400: {"description": "Validation failed"},
+        404: {"description": "Vendor not found"},
+        409: {"description": "Version conflict or duplicate email"},
+    },
+)
+def update_vendor(
+    vendor_id: UUID,
+    body: VendorUpdate,
+    service: VendorServiceDep,
+    expected_version: Annotated[
+        int | None,
+        Query(
+            alias="expectedVersion",
+            description=(
+                "Current version number for optimistic locking. "
+                "If provided and the vendor has been updated since you loaded it, "
+                "the request is rejected with HTTP 409."
+            ),
+        ),
+    ] = None,
+    # TODO: current_user: CurrentUser,
+) -> VendorResponse:
+    """Update an existing vendor."""
+    user_id = None  # TODO: Replace with current_user.id
+    vendor = service.update(vendor_id, body, user_id=user_id, expected_version=expected_version)
+    return VendorResponse.model_validate(vendor)
+
+
+# DELETE 
+
+@router.delete(
+    "/{vendor_id}",
+    response_model=VendorDeleteResponse,
+    summary="Delete vendor",
+    description=(
+        "Permanently delete a vendor. "
+        "Blocked if the vendor has any open (pending or overdue) transactions — "
+        "The caller should show the Delete Confirmation modal "
+        "before calling this endpoint."
+    ),
+    responses={
+        200: {"description": "Vendor deleted successfully"},
+        400: {"description": "Vendor has open transactions — deletion blocked"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def delete_vendor(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    # TODO: current_user: CurrentUser — only Manager/Owner can delete 
+) -> VendorDeleteResponse:
+    """
+    Permanently delete a vendor.
+    """
+    user_id = None  # TODO: Replace with current_user.id
+    result = service.delete(vendor_id, user_id=user_id)
+    return VendorDeleteResponse(**result)
+
+
+# ACTIVATE 
+
+@router.post(
+    "/{vendor_id}/activate",
+    response_model=VendorResponse,
+    summary="Activate vendor",
+    description=(
+        "Set vendor status to active. "
+        "Allowed only when current status is inactive. "
+        "No confirmation modal required — action is always reversible."
+    ),
+    responses={
+        200: {"description": "Vendor activated"},
+        400: {"description": "Vendor is already active"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def activate_vendor(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    # TODO: current_user: CurrentUser,
+) -> VendorResponse:
+    """Activate a vendor """
+    user_id = None  # TODO: Replace with current_user.id
+    vendor = service.activate(vendor_id, user_id=user_id)
+    return VendorResponse.model_validate(vendor)
+
+
+# DEACTIVATE 
+
+@router.post(
+    "/{vendor_id}/deactivate",
+    response_model=VendorResponse,
+    summary="Deactivate vendor",
+    description=(
+        "Set vendor status to inactive. "
+        "Allowed only when current status is active. "
+        "Reversible — no confirmation modal "
+        "Historical transactions and detail view remain accessible."
+    ),
+    responses={
+        200: {"description": "Vendor deactivated"},
+        400: {"description": "Vendor is already inactive"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def deactivate_vendor(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    # TODO: current_user: CurrentUser,
+) -> VendorResponse:
+    """Deactivate a vendor."""
+    user_id = None  # TODO: Replace with current_user.id
+    vendor = service.deactivate(vendor_id, user_id=user_id)
+    return VendorResponse.model_validate(vendor)
+
+
+# TRANSACTION LIST 
+
+@router.get(
+    "/{vendor_id}/transactions",
+    response_model=PaginatedResponse[VendorTransactionSummary],
+    summary="Get vendor transaction list",
+    description=(
+        "Paginated list of all expenses and bills linked to this vendor. "
+        "Includes computed days_overdue and status_display fields."
+    ),
+    responses={
+        200: {"description": "Paginated transaction list"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_transactions(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+    status_filter: Annotated[
+        str | None,
+        Query(
+            alias="status",
+            description=(
+                "Filter by transaction status: 'paid' | 'pending' | 'overdue'. "
+            ),
+        ),
+    ] = None,
+) -> PaginatedResponse[VendorTransactionSummary]:
+    """
+    Get the paginated transaction list for a vendor.
+    """
+    params = PaginationParams(page=page, per_page=per_page)
+    filters = VendorTransactionFilterParams(status=status_filter)
+    return service.get_vendor_transactions(vendor_id, params, filters)
+
+
+# PAYABLES SUMMARY 
+
+@router.get(
+    "/{vendor_id}/payables",
+    response_model=VendorPayablesSummary,
+    summary="Get vendor payables summary",
+    description=(
+        "Returns the Total Unpaid and Overdue amounts for the two summary cards "
+        "Values are always computed fresh — never cached on the vendor row."
+    ),
+    responses={
+        200: {"description": "Payables summary"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_payables(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+) -> VendorPayablesSummary:
+    """
+    Get the payables summary cards
+    """
+    return service.get_payables_summary(vendor_id)
+
+# STATEMENT
+
+@router.get(
+    "/{vendor_id}/statement",
+    response_model=VendorStatement,
+    summary="Generate vendor statement",
+    description="Generates a statement of account for a specific period.",
+    responses={
+        200: {"description": "Vendor statement"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_statement(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[
+        date,
+        Query(
+            alias="period_start",
+            description="Start date for the statement period",
+        ),
+    ],
+    period_end: Annotated[
+        date,
+        Query(
+            alias="period_end",
+            description="End date for the statement period",
+        ),
+    ],
+) -> VendorStatement:
+    """Generate a vendor statement for the given period."""
+    return service.generate_statement(
+        vendor_id=vendor_id,
+        period_start=period_start,
+        period_end=period_end,
+    )

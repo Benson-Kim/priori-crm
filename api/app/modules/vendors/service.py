@@ -1,0 +1,1073 @@
+"""
+Vendor business logic.
+"""
+
+from __future__ import annotations
+
+from app.constants.enums import Currency
+from dataclasses import dataclass
+
+import logging
+import uuid
+from datetime import date
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import and_, case, func, or_, literal_column
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.common.exceptions import (
+    BadRequestException,
+    ConflictException,
+    DatabaseException,
+    NotFoundException,
+)
+from app.common.pagination import PaginatedResponse, PaginationParams
+from app.constants.enums import VendorStatus
+from app.modules.vendors.models import Vendor
+from app.modules.vendors.schemas import (
+    ContactSearchResponse,
+    ContactSearchResult,
+    VendorCreate,
+    VendorFilterParams,
+    VendorPayablesSummary,
+    VendorResponse,
+    VendorDetailResponse,
+    VendorStatusCounts,
+    VendorSummary,
+    VendorTransactionFilterParams,
+    VendorTransactionSummary,
+    VendorUpdate,
+    VendorStatement,
+    VendorStatementSummary,
+    VendorStatementTransaction,
+)
+
+logger = logging.getLogger(__name__)
+
+OPEN_PAYABLE_STATUSES = ("pending", "overdue", "partial", "sent")
+CLOSED_PAYABLE_STATUSES = ("paid", "canceled", "cancelled")
+
+
+class VendorService:
+    """
+    Service layer for all vendor operations.
+    """
+
+    ALLOWED_TRANSITIONS: dict[str, list[str]] = {
+        VendorStatus.ACTIVE:   [VendorStatus.INACTIVE],
+        VendorStatus.INACTIVE: [VendorStatus.ACTIVE],
+    }
+
+    def __init__(self, db: Session) -> None:
+        self._db = db
+
+    # Internal Helpers
+
+    def _transition(self, vendor: Vendor, new_status: str) -> None:
+        """
+        Validate and apply a status transition
+        """
+        current = vendor.status
+        allowed = self.ALLOWED_TRANSITIONS.get(current, [])
+        if new_status not in allowed:
+            raise BadRequestException(
+                detail=(
+                    f"Cannot transition vendor from '{current}' to '{new_status}'. "
+                    f"Allowed transitions: {allowed or 'none (terminal state)'}"
+                ),
+                field="status",
+            )
+        vendor.status = new_status
+        vendor.version += 1
+
+    def _get_vendor_or_404(self, vendor_id: uuid.UUID) -> Vendor:
+        """
+        Fetch a vendor by primary key.
+        """
+        vendor = self._db.query(Vendor).filter(Vendor.id == vendor_id).first()
+        if not vendor:
+            raise NotFoundException(
+                detail=f"Vendor with ID '{vendor_id}' not found",
+                resource="vendor",
+            )
+        return vendor
+
+    def _compute_payables_for_vendor(self, vendor_id: uuid.UUID) -> dict[str, Decimal]:
+        """
+        Compute total_unpaid and overdue_total for a single vendor.
+
+        IMPORTANT: If the Expense / Bill models are not yet available,
+        this method returns zeros — it never raises. The caller should
+        treat zeros as 'no outstanding transactions' rather than an error.
+        """
+        try:
+            from app.modules.expenses.models import Expense  # noqa: F401
+            # from app.modules.bills.models import Bill        # noqa: F401
+        except ImportError:
+            # Expense / Bill modules not yet available — return safe defaults
+            logger.debug(
+                "Expense/Bill modules not importable; payables will be zero for vendor %s",
+                vendor_id,
+            )
+            return {
+                "total_unpaid": Decimal("0.00"),
+                "overdue_total": Decimal("0.00"),
+            }
+
+        try:
+            expense_rows = (
+                self._db.query(
+                    Expense.balance_due.label("balance"),
+                    Expense.status.label("status"),
+                )
+                .filter(Expense.vendor_id == vendor_id)
+            )
+            # bill_rows = (
+            #     self._db.query(
+            #         Bill.balance.label("balance"),
+            #         Bill.status.label("status"),
+            #     )
+            #     .filter(Bill.vendor_id == vendor_id)
+            # )
+
+            # union_q = expense_rows.union_all(bill_rows).subquery()
+            union_q = expense_rows.subquery()
+
+            row = self._db.query(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                union_q.c.status.in_(["pending", "overdue"]),
+                                union_q.c.balance,
+                            ),
+                            else_=Decimal("0.00"),
+                        )
+                    ),
+                    Decimal("0.00"),
+                ).label("total_unpaid"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                union_q.c.status == "overdue",
+                                union_q.c.balance,
+                            ),
+                            else_=Decimal("0.00"),
+                        )
+                    ),
+                    Decimal("0.00"),
+                ).label("overdue_total"),
+            ).one()
+
+            return {
+                "total_unpaid": Decimal(str(row.total_unpaid)),
+                "overdue_total": Decimal(str(row.overdue_total)),
+            }
+
+        except SQLAlchemyError as e:
+            logger.exception("Error computing payables for vendor %s", vendor_id)
+            raise DatabaseException("Failed to compute vendor payables") from e
+
+    def _compute_payables_bulk(
+        self, vendor_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, Decimal]:
+        """
+        Compute total_unpaid (payables) for a list of vendors.
+        """
+        if not vendor_ids:
+            return {}
+
+        try:
+            from app.modules.expenses.models import Expense  # noqa: F401
+            # from app.modules.bills.models import Bill        # noqa: F401
+        except ImportError:
+            return {vid: Decimal("0.00") for vid in vendor_ids}
+
+        try:
+            expense_rows = (
+                self._db.query(
+                    Expense.vendor_id.label("vendor_id"),
+                    Expense.balance_due.label("balance"),
+                    Expense.status.label("status"),
+                )
+                .filter(
+                    Expense.vendor_id.in_(vendor_ids),
+                    Expense.status.in_(["pending", "overdue"]),
+                )
+            )
+            # bill_rows = (
+            #     self._db.query(
+            #         Bill.vendor_id.label("vendor_id"),
+            #         Bill.balance.label("balance"),
+            #         Bill.status.label("status"),
+            #     )
+            #     .filter(
+            #         Bill.vendor_id.in_(vendor_ids),
+            #         Bill.status.in_(["pending", "overdue"]),
+            #     )
+            # )
+
+            # union_q = expense_rows.union_all(bill_rows).subquery()
+            union_q = expense_rows.subquery()
+
+            rows = (
+                self._db.query(
+                    union_q.c.vendor_id,
+                    func.coalesce(func.sum(union_q.c.balance), Decimal("0.00")).label(
+                        "total_unpaid"
+                    ),
+                )
+                .group_by(union_q.c.vendor_id)
+                .all()
+            )
+
+            return {
+                row.vendor_id: Decimal(str(row.total_unpaid)) for row in rows
+            }
+
+        except SQLAlchemyError as e:
+            logger.exception("Error computing bulk payables")
+            raise DatabaseException("Failed to compute vendor payables") from e
+
+    def _check_duplicate_email(
+        self,
+        email: str | None,
+        exclude_vendor_id: uuid.UUID | None = None,
+    ) -> Vendor | None:
+        """
+        Return an existing vendor with the same email, or None.
+        """
+        if not email:
+            return None
+        query = self._db.query(Vendor).filter(
+            Vendor.email == email.lower().strip()
+        )
+        if exclude_vendor_id:
+            query = query.filter(Vendor.id != exclude_vendor_id)
+        return query.first()
+
+    def _has_open_transactions(self, vendor_id: uuid.UUID) -> bool:
+        """
+        Return True if the vendor has any pending or overdue transactions.
+
+        """
+        try:
+            from app.modules.expenses.models import Expense
+            # from app.modules.bills.models import Bill
+        except ImportError:
+            # If these modules don't exist yet, we cannot confirm open
+            # transactions, so we conservatively allow the delete.
+            return False
+
+        try:
+            expense_count = (
+                self._db.query(func.count(Expense.id))
+                .filter(
+                    Expense.vendor_id == vendor_id,
+                    Expense.status.in_(["pending", "overdue"]),
+                )
+                .scalar()
+            ) or 0
+
+            bill_count = 0
+
+            # bill_count = (
+            #     self._db.query(func.count(Bill.id))
+            #     .filter(
+            #         Bill.vendor_id == vendor_id,
+            #         Bill.status.in_(["pending", "overdue"]),
+            #     )
+            #     .scalar()
+            # ) or 0
+
+            return (expense_count + bill_count) > 0
+
+        except SQLAlchemyError as e:
+            logger.exception("Error checking open transactions for vendor %s", vendor_id)
+            raise DatabaseException("Failed to check vendor transactions") from e
+
+    def _attach_payables(
+        self,
+        vendor: Vendor,
+        payables: dict[str, Decimal] | None = None,
+    ) -> Vendor:
+        """
+        Dynamically attach computed payables to the ORM model for serialization
+        by the router's VendorResponse schema.
+        """
+        if payables is None:
+            payables = self._compute_payables_for_vendor(vendor.id)
+        
+        vendor.payables = payables["total_unpaid"]
+        vendor.total_unpaid = payables["total_unpaid"]
+        vendor.overdue_total = payables["overdue_total"]
+        return vendor
+
+    # CREATE 
+
+    def create(
+        self,
+        data: VendorCreate,
+        user_id: uuid.UUID | None = None,
+    ) -> Vendor:
+        """
+        Create a new vendor record.
+        """
+        # Duplicate email guard
+        if data.email:
+            existing = self._check_duplicate_email(data.email)
+            if existing:
+                raise ConflictException(
+                    detail=(
+                        f"A vendor with this email already exists: "
+                        f"'{existing.vendor_name}' (ID: {existing.id}). "
+                        f"Would you like to view the existing record?"
+                    ),
+                )
+
+        # If contact_id is provided, verify the contact exists
+        if data.contact_id:
+            self._verify_contact_exists(data.contact_id)
+
+        try:
+            vendor = Vendor(
+                vendor_name=data.vendor_name.strip(),
+                address=data.address,
+                email=data.email if data.email else None,
+                country=data.country,
+                phone_primary=data.phone_primary,
+                phone_secondary=data.phone_secondary,
+                website=data.website,
+                currency=data.currency.upper() if data.currency else Currency.KES,
+                vat_number=data.vat_number,
+                tax_id_pin=data.tax_id_pin,
+                notes=data.notes,
+                status=VendorStatus.ACTIVE,
+                contact_id=data.contact_id,
+                created_by=user_id,
+                version=1,
+            )
+            self._db.add(vendor)
+            self._db.flush()
+
+            logger.info(
+                "Created vendor: %s",
+                vendor.vendor_name,
+                extra={
+                    "vendor_id": str(vendor.id),
+                    "status": vendor.status,
+                    "contact_id": str(data.contact_id) if data.contact_id else None,
+                    "created_by": str(user_id) if user_id else None,
+                    "creation_path": "from_existing_contact" if data.contact_id else "new",
+                },
+            )
+
+            return self._attach_payables(vendor)
+
+        except IntegrityError as e:
+            self._db.rollback()
+            if "uq_vendors_email_not_null" in str(e.orig):
+                raise ConflictException(
+                    "A vendor with this email already exists."
+                ) from e
+            raise ConflictException(
+                "Vendor data violates database constraints."
+            ) from e
+        except SQLAlchemyError as e:
+            logger.exception("Database error creating vendor")
+            raise DatabaseException("Failed to create vendor") from e
+
+    # READ
+
+    def get_by_id(self, vendor_id: uuid.UUID) -> Vendor:
+        """
+        Retrieve a single vendor
+        """
+        try:
+            vendor = self._get_vendor_or_404(vendor_id)
+            return self._attach_payables(vendor)
+        except NotFoundException:
+            raise
+        except SQLAlchemyError as e:
+            logger.exception("Database error retrieving vendor %s", vendor_id)
+            raise DatabaseException("Vendor details could not be loaded. Please try again.") from e
+
+    def list_vendors(
+        self,
+        params: PaginationParams,
+        filters: VendorFilterParams | None = None,
+    ) -> PaginatedResponse[VendorSummary]:
+        """
+        Return a paginated, filtered list of vendors.
+        """
+        try:
+            query = self._db.query(Vendor)
+
+            #  Apply filters
+            if filters:
+                if filters.status:
+                    query = query.filter(Vendor.status == filters.status)
+
+                if filters.search:
+                    term = f"%{filters.search}%"
+                    query = query.filter(
+                        or_(
+                            Vendor.vendor_name.ilike(term),
+                            Vendor.email.ilike(term),
+                            Vendor.phone_primary.ilike(term),
+                            Vendor.phone_secondary.ilike(term),
+                        )
+                    )
+
+            total = query.count()
+
+            vendors = (
+                query
+                .order_by(Vendor.vendor_name.asc())
+                .offset(params.offset)
+                .limit(params.per_page)
+                .all()
+            )
+
+            # Batch payables lookup 
+            vendor_ids = [v.id for v in vendors]
+            payables_map = self._compute_payables_bulk(vendor_ids)
+
+            items = [
+                VendorSummary(
+                    id=v.id,
+                    vendor_name=v.vendor_name,
+                    email=v.email,
+                    phone_primary=v.phone_primary,
+                    status=v.status,
+                    currency=v.currency,
+                    payables=payables_map.get(v.id, Decimal("0.00")),
+                    created_at=v.created_at,
+                )
+                for v in vendors
+            ]
+
+            logger.debug(
+                "Listed %d vendors (page %d, total %d)",
+                len(items),
+                params.page,
+                total,
+                extra={
+                    "page": params.page,
+                    "per_page": params.per_page,
+                    "total": total,
+                    "filters": filters.model_dump() if filters else None,
+                },
+            )
+
+            return PaginatedResponse.create(items=items, total=total, params=params)
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error listing vendors")
+            raise DatabaseException("Failed to list vendors") from e
+
+    def get_status_counts(self) -> VendorStatusCounts:
+        """
+        Get all vendor counts.
+        """
+        try:
+            rows = (
+                self._db.query(
+                    Vendor.status,
+                    func.count(Vendor.id).label("cnt"),
+                )
+                .group_by(Vendor.status)
+                .all()
+            )
+
+            counts: dict[str, int] = {row.status: row.cnt for row in rows}
+            active = counts.get(VendorStatus.ACTIVE, 0)
+            inactive = counts.get(VendorStatus.INACTIVE, 0)
+
+            return VendorStatusCounts(
+                all=active + inactive,
+                active=active,
+                inactive=inactive,
+            )
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error getting vendor status counts")
+            raise DatabaseException("Failed to get vendor status counts") from e
+
+    def get_vendor_transactions(
+        self,
+        vendor_id: uuid.UUID,
+        params: PaginationParams,
+        filters: VendorTransactionFilterParams | None = None,
+    ) -> PaginatedResponse[VendorTransactionSummary]:
+        """
+        Return a paginated, optionally filtered list of all expenses and bills
+        """
+        # Confirm vendor exists first so we return 404, not an empty list
+        self._get_vendor_or_404(vendor_id)
+
+        try:
+            from app.modules.expenses.models import Expense
+            # from app.modules.bills.models import Bill
+        except ImportError:
+            logger.debug(
+                "Expense/Bill modules unavailable; returning empty transaction list"
+            )
+            return PaginatedResponse.create(items=[], total=0, params=params)
+
+        try:
+            # Build UNION ALL subquery
+            expense_q = (
+                self._db.query(
+                    Expense.id.label("id"),
+                    literal_column("'expense'").label("transaction_type"),
+                    Expense.expense_number.label("ref_no"),
+                    Expense.expense_date.label("date"),
+                    Expense.total_due.label("amount"),
+                    Expense.balance_due.label("balance"),
+                    Expense.status.label("status"),
+                    Expense.due_date.label("due_date"),
+                )
+                .filter(Expense.vendor_id == vendor_id)
+            )
+
+            # bill_q = (
+            #     self._db.query(
+            #         Bill.id.label("id"),
+            #         literal_column("'bill'").label("transaction_type"),
+            #         Bill.ref_no.label("ref_no"),
+            #         Bill.transaction_date.label("date"),
+            #         Bill.total_amount.label("amount"),
+            #         Bill.balance.label("balance"),
+            #         Bill.status.label("status"),
+            #         Bill.due_date.label("due_date"),
+            #     )
+            #     .filter(Bill.vendor_id == vendor_id)
+            # )
+
+            # union_q = expense_q.union_all(bill_q).subquery()
+            union_q = expense_q.subquery()
+
+            count_q = self._db.query(func.count()).select_from(union_q)
+            data_q = self._db.query(union_q)
+
+            # Apply status filter 
+            if filters and filters.status:
+                count_q = count_q.filter(union_q.c.status == filters.status)
+                data_q = data_q.filter(union_q.c.status == filters.status)
+
+            total = count_q.scalar() or 0
+
+            rows = (
+                data_q
+                .order_by(union_q.c.date.desc())
+                .offset(params.offset)
+                .limit(params.per_page)
+                .all()
+            )
+
+            items = [
+                VendorTransactionSummary(
+                    id=row.id,
+                    transaction_type=row.transaction_type,
+                    ref_no=row.ref_no,
+                    date=row.date,
+                    amount=Decimal(str(row.amount)),
+                    balance=Decimal(str(row.balance)),
+                    status=row.status,
+                    due_date=row.due_date,
+                )
+                for row in rows
+            ]
+
+            return PaginatedResponse.create(items=items, total=total, params=params)
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error retrieving transactions for vendor %s", vendor_id)
+            raise DatabaseException("Failed to retrieve vendor transactions") from e
+
+    def get_payables_summary(self, vendor_id: uuid.UUID) -> VendorPayablesSummary:
+        """
+        Return the payables summary 
+        """
+        vendor = self._get_vendor_or_404(vendor_id)
+        payables = self._compute_payables_for_vendor(vendor_id)
+        return VendorPayablesSummary(
+            total_unpaid=payables["total_unpaid"],
+            overdue_total=payables["overdue_total"],
+            currency=vendor.currency,
+        )
+
+    def get_detail(self, vendor_id: uuid.UUID) -> VendorDetailResponse:
+        """Get vendor detail — single payables computation shared across response objects."""
+        vendor = self._get_vendor_or_404(vendor_id)
+        payables = self._compute_payables_for_vendor(vendor_id)
+        vendor_response = self._build_vendor_response(vendor, payables=payables)
+        transactions_count = self.get_transactions_count(vendor_id)
+
+        return VendorDetailResponse(
+            vendor=vendor_response,
+            payables_summary=VendorPayablesSummary(
+                total_unpaid=payables["total_unpaid"],
+                overdue_total=payables["overdue_total"],
+                currency=vendor.currency,
+            ),
+            transaction_count=transactions_count,
+            next_actions=[],
+        )
+
+    # UPDATE 
+
+    def update(
+        self,
+        vendor_id: uuid.UUID,
+        data: VendorUpdate,
+        user_id: uuid.UUID | None = None,
+        expected_version: int | None = None,
+    ) -> Vendor:
+        """
+        Partial update of a vendor record.
+        """
+        try:
+            vendor = self._get_vendor_or_404(vendor_id)
+
+            if expected_version is not None and vendor.version != expected_version:
+                raise ConflictException(
+                    detail=(
+                        f"Vendor has been modified by another user. "
+                        f"Expected version {expected_version}, "
+                        f"current version {vendor.version}. "
+                        f"Please refresh and try again."
+                    )
+                )
+
+            update_data = data.model_dump(exclude_unset=True)
+            if not update_data:
+                return self._attach_payables(vendor)
+
+            # Duplicate email check for the new email
+            if "email" in update_data and update_data["email"]:
+                existing = self._check_duplicate_email(
+                    update_data["email"],
+                    exclude_vendor_id=vendor_id,
+                )
+                if existing:
+                    raise ConflictException(
+                        detail=(
+                            f"A vendor with this email already exists: "
+                            f"'{existing.vendor_name}'."
+                        )
+                    )
+
+            # Apply field updates
+            for field, value in update_data.items():
+                setattr(vendor, field, value)
+
+            vendor.updated_by = user_id
+            vendor.version += 1
+
+            self._db.flush()
+
+            logger.info(
+                "Updated vendor: %s",
+                vendor.vendor_name,
+                extra={
+                    "vendor_id": str(vendor.id),
+                    "updated_fields": list(update_data.keys()),
+                    "new_version": vendor.version,
+                    "updated_by": str(user_id) if user_id else None,
+                },
+            )
+
+            return self._attach_payables(vendor)
+
+        except (NotFoundException, ConflictException):
+            raise
+        except IntegrityError as e:
+            self._db.rollback()
+            if "uq_vendors_email_not_null" in str(e.orig):
+                raise ConflictException(
+                    "A vendor with this email already exists."
+                ) from e
+            raise ConflictException("Vendor update violates database constraints.") from e
+        except SQLAlchemyError as e:
+            logger.exception("Database error updating vendor %s", vendor_id)
+            raise DatabaseException("Vendor could not be saved. Please try again.") from e
+
+    # STATUS TRANSITIONS
+
+    def activate(
+        self,
+        vendor_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+    ) -> Vendor:
+        """
+        Set vendor status to active.
+        """
+        try:
+            vendor = self._get_vendor_or_404(vendor_id)
+            self._transition(vendor, VendorStatus.ACTIVE)
+            vendor.updated_by = user_id
+            self._db.flush()
+
+            logger.info(
+                "Activated vendor: %s",
+                vendor.vendor_name,
+                extra={"vendor_id": str(vendor.id), "updated_by": str(user_id) if user_id else None},
+            )
+
+            return self._attach_payables(vendor)
+
+        except (NotFoundException, BadRequestException):
+            raise
+        except SQLAlchemyError as e:
+            logger.exception("Database error activating vendor %s", vendor_id)
+            raise DatabaseException("Failed to activate vendor") from e
+
+    def deactivate(
+        self,
+        vendor_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+    ) -> Vendor:
+        """
+        Set vendor status to inactive.
+        """
+        try:
+            vendor = self._get_vendor_or_404(vendor_id)
+            self._transition(vendor, VendorStatus.INACTIVE)
+            vendor.updated_by = user_id
+            self._db.flush()
+
+            logger.info(
+                "Deactivated vendor: %s",
+                vendor.vendor_name,
+                extra={"vendor_id": str(vendor.id), "updated_by": str(user_id) if user_id else None},
+            )
+
+            return self._attach_payables(vendor)
+
+        except (NotFoundException, BadRequestException):
+            raise
+        except SQLAlchemyError as e:
+            logger.exception("Database error deactivating vendor %s", vendor_id)
+            raise DatabaseException("Failed to deactivate vendor") from e
+
+    #  DELETE 
+
+    def delete(
+        self,
+        vendor_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """
+        Permanently delete a vendor record.
+        """
+        try:
+            vendor = self._get_vendor_or_404(vendor_id)
+
+            #  Open-transaction guard 
+            if self._has_open_transactions(vendor_id):
+                raise BadRequestException(
+                    detail=(
+                        "This vendor has open transactions. "
+                        "Please resolve all outstanding balances before deleting."
+                    ),
+                    field="vendor_id",
+                )
+
+            vendor_name = vendor.vendor_name
+            self._db.delete(vendor)
+            self._db.flush()
+
+            logger.warning(
+                "Deleted vendor: %s",
+                vendor_name,
+                extra={
+                    "vendor_id": str(vendor_id),
+                    "deleted_by": str(user_id) if user_id else None,
+                },
+            )
+
+            return {
+                "vendor_id": vendor_id,
+                "message": "Vendor deleted successfully",
+            }
+
+        except (NotFoundException, BadRequestException):
+            raise
+        except SQLAlchemyError as e:
+            logger.exception("Database error deleting vendor %s", vendor_id)
+            raise DatabaseException("Failed to delete vendor") from e
+
+    # CONTACT SEARCH
+
+    def search_contacts(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> ContactSearchResponse:
+        """
+        Search CRM contacts by name or phone for the modal Path B dropdown.
+
+        Returns contacts that do NOT already have a vendor record linked to
+        them (to prevent duplicate mappings). If the Contacts module is not
+        yet importable, returns an empty result set gracefully.
+        """
+        try:
+            from app.modules.contacts.models import Contact  # noqa: F401
+        except ImportError:
+            logger.debug("Contacts module not importable; search returns empty")
+            return ContactSearchResponse(results=[], total=0)
+
+        try:
+            # Exclude contacts that are already mapped to a vendor
+            existing_contact_ids = (
+                self._db.query(Vendor.contact_id)
+                .filter(Vendor.contact_id.isnot(None))
+                .subquery()
+            )
+
+            term = f"%{query.strip()}%"
+            contacts = (
+                self._db.query(Contact)
+                .filter(
+                    Contact.id.notin_(existing_contact_ids),
+                    or_(
+                        Contact.full_name.ilike(term),
+                        Contact.phone_primary.ilike(term),
+                        Contact.email.ilike(term),
+                    ),
+                )
+                .order_by(Contact.full_name.asc())
+                .limit(limit)
+                .all()
+            )
+
+            results = [
+                ContactSearchResult(
+                    id=c.id,
+                    full_name=c.full_name,
+                    email=c.email,
+                    phone_primary=c.phone_primary,
+                    address=c.address,
+                    country=c.country,
+                    website=getattr(c, "website", None),
+                    vat_number=getattr(c, "vat_number", None),
+                )
+                for c in contacts
+            ]
+
+            return ContactSearchResponse(results=results, total=len(results))
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error searching contacts")
+            raise DatabaseException("Failed to search contacts") from e
+
+    # DUPLICATE CHECK
+
+    def check_email_duplicate(
+        self,
+        email: str,
+        exclude_vendor_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """
+        Real-time duplicate email check for the frontend 
+        """
+        existing = self._check_duplicate_email(email, exclude_vendor_id)
+        if existing:
+            return {
+                "exists": True,
+                "vendor": VendorSummary.model_validate(existing),
+                "message": (
+                    f"A vendor with this email already exists: '{existing.vendor_name}'. "
+                    f"Would you like to view the existing record?"
+                ),
+            }
+        return {
+            "exists": False,
+            "vendor": None,
+            "message": None,
+        }
+
+    # PRIVATE UTILITIES 
+
+    def _verify_contact_exists(self, contact_id: uuid.UUID) -> None:
+        """
+        Verify that a CRM Contact with the given ID exists.
+        """
+        try:
+            from app.modules.contacts.models import Contact
+        except ImportError:
+            return
+
+        contact = self._db.query(Contact).filter(Contact.id == contact_id).first()
+        if not contact:
+            raise NotFoundException(
+                detail=f"Contact with ID '{contact_id}' not found",
+                resource="contact",
+            )
+
+
+
+    def get_transactions_count(self, vendor_id: uuid.UUID) -> int:
+        """Count the total number of transactions for a vendor."""
+        try:
+            from app.modules.expenses.models import Expense
+        except ImportError:
+            return 0
+        
+        return self._db.query(Expense).filter(Expense.vendor_id == vendor_id).count()
+
+    def generate_statement(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> VendorStatement:
+        """Generate a statement of accounts for a vendor."""
+        vendor = self.get_by_id(vendor_id)
+        
+        try:
+            from app.modules.expenses.models import Expense, ExpensePayment
+        except ImportError:
+            return VendorStatement(
+                vendor=vendor,
+                period_start=period_start,
+                period_end=period_end,
+                summary=VendorStatementSummary(
+                    opening_balance=Decimal("0.00"),
+                    invoiced_amount=Decimal("0.00"),
+                    amount_paid=Decimal("0.00"),
+                    balance_due=Decimal("0.00"),
+                ),
+                transactions=[],
+            )
+
+        opening_balance = self._calculate_balance_at_date(vendor_id, period_start)
+
+        period_expenses = (
+            self._db.query(Expense)
+            .filter(
+                Expense.vendor_id == vendor_id,
+                Expense.expense_date >= period_start,
+                Expense.expense_date <= period_end,
+            )
+            .order_by(Expense.expense_date)
+            .all()
+        )
+
+        period_payments = (
+            self._db.query(ExpensePayment)
+            .join(Expense)
+            .filter(
+                Expense.vendor_id == vendor_id,
+                ExpensePayment.payment_date >= period_start,
+                ExpensePayment.payment_date <= period_end,
+            )
+            .order_by(ExpensePayment.payment_date)
+            .all()
+        )
+
+        transactions: list[VendorStatementTransaction] = []
+        running_balance = opening_balance
+
+        transactions.append(
+            VendorStatementTransaction(
+                date=period_start,
+                description="Opening Balance",
+                amount=opening_balance,
+                payment=Decimal("0.00"),
+                balance=opening_balance,
+            )
+        )
+
+        all_transactions = sorted(
+            [("expense", exp) for exp in period_expenses] +
+            [("payment", pmt) for pmt in period_payments],
+            key=lambda x: x[1].expense_date if x[0] == "expense" else x[1].payment_date
+        )
+
+        invoiced_amount = Decimal("0.00")
+        amount_paid = Decimal("0.00")
+
+        for trans_type, trans in all_transactions:
+            if trans_type == "expense":
+                running_balance += trans.total_due
+                invoiced_amount += trans.total_due
+
+                transactions.append(
+                    VendorStatementTransaction(
+                        date=trans.expense_date,
+                        description=f"Expense {trans.expense_number}",
+                        amount=trans.total_due,
+                        payment=Decimal("0.00"),
+                        balance=running_balance,
+                    )
+                )
+
+            else:  # payment
+                running_balance -= trans.amount
+                amount_paid += trans.amount
+
+                transactions.append(
+                    VendorStatementTransaction(
+                        date=trans.payment_date,
+                        description=(
+                            f"Payment Made — {vendor.currency} {trans.amount} "
+                            f"for {trans.expense.expense_number}"
+                        ),
+                        amount=Decimal("0.00"),
+                        payment=trans.amount,
+                        balance=running_balance,
+                    )
+                )
+
+        summary = VendorStatementSummary(
+            opening_balance=opening_balance,
+            invoiced_amount=invoiced_amount,
+            amount_paid=amount_paid,
+            balance_due=running_balance,
+        )
+
+        return VendorStatement(
+            vendor=vendor,
+            period_start=period_start,
+            period_end=period_end,
+            summary=summary,
+            transactions=transactions,
+        )
+
+    def _calculate_balance_at_date(
+        self,
+        vendor_id: uuid.UUID,
+        as_of_date: date,
+    ) -> Decimal:
+        """Calculate vendor balance as of a specific date (invoiced - paid)."""
+        try:
+            from app.modules.expenses.models import Expense, ExpensePayment
+        except ImportError:
+            return Decimal("0.00")
+            
+        invoiced = (
+            self._db.query(func.sum(Expense.total_due))
+            .filter(
+                Expense.vendor_id == vendor_id,
+                Expense.expense_date < as_of_date,
+            )
+            .scalar() or Decimal("0.00")
+        )
+
+        paid = (
+            self._db.query(func.sum(ExpensePayment.amount))
+            .join(Expense)
+            .filter(
+                Expense.vendor_id == vendor_id,
+                ExpensePayment.payment_date < as_of_date,
+            )
+            .scalar() or Decimal("0.00")
+        )
+
+        return Decimal(str(invoiced)) - Decimal(str(paid))
