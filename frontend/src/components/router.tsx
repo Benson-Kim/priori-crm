@@ -1,13 +1,26 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
-
-import CustomersPage from "@/pages/customers";
-import AddCustomerPage from "@/pages/customers/add";
-import EditCustomerPage from "@/pages/customers/edit";
-import CustomerDetailsPage from "@/pages/customers/detail";
-import InvoicesPage from "@/pages/invoices";
 import ProductsPage from "@/pages/products";
-import QuotesPage from "@/pages/quotes";
+import ExpensesPage from "@/pages/purchases/expenses";
+import AddExpensePage from "@/pages/purchases/expenses/add";
+import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
+import EditExpensePage from "@/pages/purchases/expenses/edit";
+import VendorsPage from "@/pages/purchases/vendors";
+import VendorDetailPage from "@/pages/purchases/vendors/detail";
+import CustomersPage from "@/pages/sales/customers";
+import AddCustomerPage from "@/pages/sales/customers/add";
+import CustomerDetailsPage from "@/pages/sales/customers/detail";
+import EditCustomerPage from "@/pages/sales/customers/edit";
+import InvoicesPage from "@/pages/sales/invoices";
+import AddInvoicePage from "@/pages/sales/invoices/add";
+import { InvoiceDetailPage } from "@/pages/sales/invoices/detail";
+import EditInvoicePage from "@/pages/sales/invoices/edit";
+import QuotesPage from "@/pages/sales/quotes";
+import AddQuotePage from "@/pages/sales/quotes/add";
+import QuoteDetailPage from "@/pages/sales/quotes/detail";
+import EditQuotePage from "@/pages/sales/quotes/edit";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import DefaultLayout from "./layout/default-layout";
+
+
 
 const routes = [
     {
@@ -47,7 +60,7 @@ const routes = [
                         handle: {
                             header: {
                                 title: "Customer Profile",
-                                description: "Detailed overview of customer information and history.",
+                                description: "Take a closer look at your customers.",
                             },
                         },
                     },
@@ -65,23 +78,93 @@ const routes = [
             },
             {
                 path: "quotes",
-                element: <QuotesPage />,
-                handle: {
-                    header: {
-                        title: "Quotes",
-                        description: "Effortlessly handle your billing and quotes here.",
+                children: [
+                    {
+                        index: true,
+                        element: <QuotesPage />,
+                        handle: {
+                            header: {
+                                title: "Quotes",
+                                description: "Effortlessly handle your billing and quotes here.",
+                            },
+                        },
                     },
-                },
+                    {
+                        path: "add",
+                        element: <AddQuotePage />,
+                        handle: {
+                            header: {
+                                title: "Create New Quote",
+                                description: "Effortlessly add your quotes here.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <QuoteDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Quote Detail",
+                                description: "View complete quote information.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id/edit",
+                        element: <EditQuotePage />,
+                        handle: {
+                            header: {
+                                title: "Edit Quote",
+                                description: "Update quote details.",
+                            },
+                        },
+                    },
+                ],
             },
             {
                 path: "invoices",
-                element: <InvoicesPage />,
-                handle: {
-                    header: {
-                        title: "Invoices",
-                        description: "Effortlessly handle your billing and invoices here.",
+                children: [
+                    {
+                        index: true,
+                        element: <InvoicesPage />,
+                        handle: {
+                            header: {
+                                title: "Invoices",
+                                description: "Effortlessly handle your billing and invoices here.",
+                            },
+                        },
                     },
-                },
+                    {
+                        path: "add",
+                        element: <AddInvoicePage />,
+                        handle: {
+                            header: {
+                                title: "Create New Invoice",
+                                description: "Effortlessly add your invoices here.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <InvoiceDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Invoice Detail",
+                                description: "View complete invoice information.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id/edit",
+                        element: <EditInvoicePage />,
+                        handle: {
+                            header: {
+                                title: "Edit Invoice",
+                                description: "Update invoice details.",
+                            },
+                        },
+                    },
+                ],
             },
             {
                 path: "products",
@@ -92,6 +175,76 @@ const routes = [
                         description: "Manage your catalog of products and services.",
                     },
                 },
+            },
+            {
+                path: "vendors",
+                children: [
+                    {
+                        index: true,
+                        element: <VendorsPage />,
+                        handle: {
+                            header: {
+                                title: "Vendors",
+                                description: "Manage your suppliers and expenses.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <VendorDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Vendor Detail",
+                                description: "View complete vendor information.",
+                            },
+                        },
+                    },
+                ],
+            },
+            {
+                path: "expenses",
+                children: [
+                    {
+                        index: true,
+                        element: <ExpensesPage />,
+                        handle: {
+                            header: {
+                                title: "Expenses",
+                                description: "Manage your expenses.",
+                            },
+                        },
+                    },
+                    {
+                        path: "new",
+                        element: <AddExpensePage />,
+                        handle: {
+                            header: {
+                                title: "Create New Expense",
+                                description: "Effortlessly add your expenses here.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id",
+                        element: <ExpensesDetailPage />,
+                        handle: {
+                            header: {
+                                title: "Expense Detail",
+                                description: "View complete expense information.",
+                            },
+                        },
+                    },
+                    {
+                        path: ":id/edit",
+                        element: <EditExpensePage />,
+                        handle: {
+                            header: {
+                                title: "Edit Expense",
+                                description: "Update expense details.",
+                            },
+                        },
+                    },
+                ],
             },
         ],
     },

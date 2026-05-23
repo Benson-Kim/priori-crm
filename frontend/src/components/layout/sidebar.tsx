@@ -69,7 +69,7 @@ export function Sidebar() {
                                     className={cn(
                                         "flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors",
                                         isGroupActive(item.children)
-                                            ? "text-priori-purple font-semibold"
+                                            ? "text-priori-purple font-semibold bg-white/50"
                                             : "text-gray-600 hover:bg-white/50"
                                     )}
                                 >

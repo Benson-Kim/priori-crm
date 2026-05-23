@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { OTP_LENGTH } from "@/constants";
 import { cn } from "@/lib/utils";
+import { OTP_LENGTH } from "@/lib/constants";
 
 interface OTPInputProps {
   length?: number;

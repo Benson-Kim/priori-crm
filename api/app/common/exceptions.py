@@ -152,6 +152,35 @@ def register_exception_handlers(app: FastAPI) -> None:
         
         return JSONResponse(status_code=exc.status_code, content=response_data)
 
+    from fastapi.exceptions import RequestValidationError
+    from pydantic import ValidationError
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """Handle FastAPI request validation errors."""
+        request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+        
+        logger.warning(
+            "Request validation error",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "method": request.method,
+                "errors": exc.errors(),
+            },
+        )
+        
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "error": "Validation failed",
+                "error_code": "VALIDATION_ERROR",
+                "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "request_id": request_id,
+                "details": {"errors": exc.errors()},
+            },
+        )
+
     @app.exception_handler(IntegrityError)
     async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
         """Handle database integrity constraint violations."""

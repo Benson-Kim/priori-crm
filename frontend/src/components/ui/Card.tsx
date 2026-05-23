@@ -19,7 +19,6 @@ export function Card({ children, className, padding = "md" }: Readonly<CardProps
     <div
       className={cn(
         "bg-gray-300 rounded-md shadow-sm border border-border/50",
-        " ",
         paddingStyles[padding],
         className
       )}

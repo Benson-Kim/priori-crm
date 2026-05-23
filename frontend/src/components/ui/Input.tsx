@@ -13,10 +13,11 @@ interface InputProps
   error?: string;
   prefix?: ReactNode;
   suffix?: ReactNode;
+  wrapperClassName?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ error, prefix, suffix, className, ...props }, ref) => {
+  ({ error, prefix, suffix, className, wrapperClassName, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5 w-full">
         <div
@@ -24,7 +25,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             `flex items-center w-full py-4 px-3 gap-3 rounded-lg border bg-gray-50 transition-all`,
             error
               ? `border-red-300 focus-within:border-red-500 focus-within:ring-red-100`
-              : `border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10`
+              : `border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10`,
+            wrapperClassName
           )}
         >
           {prefix && (
