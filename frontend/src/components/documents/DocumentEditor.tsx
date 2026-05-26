@@ -13,6 +13,7 @@ import {
   COMPANY_INFO,
   CURRENCY_OPTIONS,
   DEFAULT_DUE_DATE_DAYS,
+  type CurrencyOption,
 } from "@/lib/constants";
 import { formatDisplayDate } from "@/lib/utils";
 import { Save, SquarePen } from "lucide-react";
@@ -44,7 +45,7 @@ export interface DocumentPayload {
   customerId: string;
   transactionDate: string;
   dueDate: string;
-  currency: string;
+  currency: CurrencyOption;
   rfqNumber?: string;
   notes?: string;
   discountType?: "amount" | "percentage";
@@ -64,7 +65,7 @@ export interface DocumentInitialData {
   };
   transactionDate?: string;
   dueDate?: string;
-  currency?: string;
+  currency?: CurrencyOption;
   rfqNumber?: string;
   notes?: string;
   discountType?: "amount" | "percentage" | null;
@@ -362,7 +363,9 @@ export function DocumentEditor({
                     />
                     <select
                       value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
+                      onChange={(e) =>
+                        setCurrency(e.target.value as CurrencyOption)
+                      }
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     >
                       {CURRENCY_OPTIONS.map((c) => (

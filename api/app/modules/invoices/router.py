@@ -208,10 +208,31 @@ def export_invoices_to_excel(
     """
     Export invoices to Excel.
     """
-    from fastapi import HTTPException
-    raise HTTPException(
-        status_code=501,
-        detail="Excel export not yet implemented"
+    import io
+    from app.common.excel import ExcelExporter
+    from app.common.pagination import PaginationParams
+    from app.lib.config import settings
+
+    filters = InvoiceFilterParams(
+        status=status,
+        customer_id=customer_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
+    result = service.list_invoices(params, filters)
+
+    # Fetch full ORM objects for line items if needed
+    invoices = [service.get_by_id(item.id) for item in result.items] if include_line_items else result.items
+
+    exporter = ExcelExporter()
+    xlsx_bytes = exporter.export_invoices(invoices, include_line_items=include_line_items)
+
+    filename = f"Invoices_{date.today().strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -468,23 +489,15 @@ def download_invoice_pdf(
     """
     Generate and download invoice as PDF.
     """
+    import io
+
+    pdf_data = service.generate_pdf(invoice_id)
     invoice = service.get_by_id(invoice_id)
-    
-    # TODO: Implement actual PDF generation
-    # pdf_data = service.generate_pdf(invoice_id)
-    
-    # For now, return not implemented
-    from fastapi import HTTPException
-    raise HTTPException(
-        status_code=501,
-        detail="PDF generation not yet implemented"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="Invoice_{invoice.invoice_reference}.pdf"'
+        },
     )
-    
-    # Future implementation:
-    # return StreamingResponse(
-    #     io.BytesIO(pdf_data),
-    #     media_type="application/pdf",
-    #     headers={
-    #         "Content-Disposition": f'attachment; filename="Invoice_{invoice.invoice_reference}.pdf"'
-    #     }
-    # )
