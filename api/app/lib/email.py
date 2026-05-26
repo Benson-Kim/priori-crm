@@ -147,4 +147,34 @@ class EmailService:
         </html>
         """
 
+    def send_document_email(
+        self,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        body_html: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Send a transactional document email (invoice, quote, statement).
+
+        In development mode without SES credentials, the email is logged
+        but not actually dispatched.
+        """
+        if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
+            logger.warning(
+                "DEV MODE — email to %s not sent (SES not configured). Subject: %s",
+                recipient,
+                subject,
+            )
+            return {"MessageId": "dev-mode-skipped", "recipient": recipient}
+
+        html = body_html or f"<pre>{body_text}</pre>"
+        return self._send(
+            recipient=recipient,
+            subject=subject,
+            body_html=html,
+            body_text=body_text,
+        )
+
+
 email_service = EmailService()

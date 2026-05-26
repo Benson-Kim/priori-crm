@@ -234,8 +234,32 @@ def export_expenses_to_excel(
     date_to:       Annotated[date | None, Query(alias="dateTo")]      = None,
     is_recurring:  Annotated[bool | None, Query(alias="isRecurring")] = None,
 ) -> StreamingResponse:
-    from fastapi import HTTPException
-    raise HTTPException(status_code=501, detail="Excel export not yet implemented")
+    import io
+    from app.common.excel import ExcelExporter
+    from app.common.pagination import PaginationParams
+    from app.lib.config import settings
+
+    filters = ExpenseFilterParams(
+        status=filter_status,
+        vendor_id=vendor_id,
+        date_from=date_from,
+        date_to=date_to,
+        is_recurring=is_recurring,
+    )
+    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
+    result = service.list_expenses(params, filters)
+
+    expenses = [service.get_by_id(item.id) for item in result.items]
+
+    exporter = ExcelExporter()
+    xlsx_bytes = exporter.export_expenses(expenses)
+
+    filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get(

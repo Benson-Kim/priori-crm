@@ -174,7 +174,32 @@ def export_quotes_to_excel(
     ] = False,
 ) -> StreamingResponse:
     """Export quotes to Excel."""
-    raise HTTPException(status_code=501, detail="Excel export not yet implemented")
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.common.excel import ExcelExporter
+    from app.common.pagination import PaginationParams
+    from app.lib.config import settings
+
+    filters = QuoteFilterParams(
+        status=status,
+        customer_id=customer_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
+    result = service.list_quotes(params, filters)
+
+    quotes = [service.get_by_id(item.id) for item in result.items] if include_line_items else result.items
+
+    exporter = ExcelExporter()
+    xlsx_bytes = exporter.export_quotes(quotes, include_line_items=include_line_items)
+
+    filename = f"Quotes_{date.today().strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get(
@@ -421,14 +446,16 @@ def delete_quote(quote_id: UUID, service: QuoteServiceDep) -> None:
 )
 def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
     """Generate and download quote as PDF."""
-    service.get_by_id(quote_id)  # validate exists
-    raise HTTPException(status_code=501, detail="PDF generation not implemented")
+    import io
+    from fastapi.responses import StreamingResponse
 
-    # Future implementation:
-    # return StreamingResponse(
-    #     io.BytesIO(pdf_data),
-    #     media_type="application/pdf",
-    #     headers={
-    #         "Content-Disposition": f'attachment; filename="Quote_{quote.quote_reference}.pdf"'
-    #     }
-    # )
+    pdf_data = service.generate_pdf(quote_id)
+    quote = service.get_by_id(quote_id)
+
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="Quote_{quote.quote_reference}.pdf"'
+        },
+    )

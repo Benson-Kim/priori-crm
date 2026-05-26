@@ -719,15 +719,13 @@ class InvoiceService:
         email_subject = subject or self._generate_email_subject(invoice)
         email_body = body or self._generate_email_body(invoice)
 
-        # TODO: Generate PDF if attach_pdf is True
-        # TODO: Send email via email service
-            # from app.lib.email import email_service
-            # email_service.send_invoice_email(
-            #     recipient=recipient,
-            #     subject=email_subject,
-            #     body=email_body,
-            #     pdf_attachment=pdf_data,
-            # )
+        # Dispatch email
+        from app.lib.email import email_service
+        email_service.send_document_email(
+            recipient=recipient,
+            subject=email_subject,
+            body_text=email_body,
+        )
 
         # Mark as sent if currently draft
         sent_at = datetime.now(UTC)
@@ -1053,12 +1051,12 @@ Best regards,
 {settings.APP_NAME}
 """
 
-    # PDF GENERATION (Placeholder)
+    # PDF GENERATION
 
     def generate_pdf(self, invoice_id: uuid.UUID) -> bytes:
-        """Generate PDF for invoice. TODO: Implement with WeasyPrint or ReportLab."""
-        self.get_by_id(invoice_id)
-        raise NotImplementedError(
-            "PDF generation not yet implemented. "
-            "Will use WeasyPrint or ReportLab."
-        )
+        """Generate PDF for invoice using ReportLab."""
+        from app.common.pdf import DocumentPDFGenerator
+
+        invoice = self.get_by_id(invoice_id)
+        generator = DocumentPDFGenerator()
+        return generator.generate_invoice_pdf(invoice)

@@ -623,8 +623,13 @@ class QuoteService:
         email_subject = subject or self._generate_email_subject(quote)
         email_body   = body   or self._generate_email_body(quote)
 
-        # TODO: Generate PDF if attach_pdf is True
-        # TODO: Send email via email service
+        # Dispatch email
+        from app.lib.email import email_service
+        email_service.send_document_email(
+            recipient=recipient,
+            subject=email_subject,
+            body_text=email_body,
+        )
 
         sent_at = datetime.now(UTC)
         if quote.status == QuoteStatus.DRAFT:
@@ -1099,16 +1104,12 @@ Best regards,
 {settings.APP_NAME}
 """
 
-    # PDF GENERATION (Placeholder)
+    # PDF GENERATION
 
     def generate_pdf(self, quote_id: uuid.UUID) -> bytes:
-        """
-        Generate PDF for quote.
+        """Generate PDF for quote using ReportLab."""
+        from app.common.pdf import DocumentPDFGenerator
 
-        TODO: Implement with WeasyPrint or ReportLab.
-        """
-        self.get_by_id(quote_id)  # validate exists
-        raise NotImplementedError(
-            "PDF generation not yet implemented. "
-            "Will use WeasyPrint or ReportLab."
-        )
+        quote = self.get_by_id(quote_id)
+        generator = DocumentPDFGenerator()
+        return generator.generate_quote_pdf(quote)
