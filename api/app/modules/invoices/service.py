@@ -15,7 +15,8 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
-from app.common.financial import calculate_discount, calculate_line_item
+from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
+from app.common.reference import ReferenceGenerator
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DiscountType, InvoiceStatus, TaxType
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
@@ -73,12 +74,9 @@ class InvoiceService:
         invoice.status = new_status
         invoice.version += 1
 
-    def _advisory_lock(self, key: str) -> None:
-        """Acquire a PostgreSQL transaction-scoped advisory lock."""
-        self._db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-            {"key": key},
-        )
+    def _ref_gen(self) -> ReferenceGenerator:
+        """Lazy accessor for the shared reference generator."""
+        return ReferenceGenerator(self._db)
 
     # CREATE
 
@@ -105,26 +103,8 @@ class InvoiceService:
                 field="customer_id"
             )
 
-        line_items_data: list[dict] = []
-        subtotal = Decimal("0.00")
-        tax_total = Decimal("0.00")
-
-        for idx, item_data in enumerate(data.line_items, start=1):
-            line_total, tax_amount = calculate_line_item(
-                item_data.quantity, item_data.unit_price, item_data.tax_type
-            )
-            line_items_data.append({
-                "line_number": idx,
-                "item_name": item_data.item_name,
-                "description": item_data.description,
-                "quantity": item_data.quantity,
-                "unit_price": item_data.unit_price,
-                "line_total": line_total,
-                "tax_type": item_data.tax_type,
-                "tax_amount": tax_amount,
-            })
-            subtotal += line_total
-            tax_total += tax_amount
+        line_items_data = build_line_items(data.line_items)
+        subtotal, tax_total = sum_line_totals(line_items_data)
 
         discount_value = calculate_discount(
             subtotal, data.discount_type, data.discount_amount, data.discount_percentage
@@ -592,36 +572,11 @@ class InvoiceService:
             ).delete()
 
             line_items_raw: list[dict] = update_data.pop("line_items")
-            subtotal = Decimal("0.00")
-            tax_total = Decimal("0.00")
+            line_items_data = build_line_items(line_items_raw)
+            subtotal, tax_total = sum_line_totals(line_items_data)
 
-            for idx, item in enumerate(line_items_raw, start=1):
-                # Validate required fields
-                if not all(k in item for k in ("item_name", "quantity", "unit_price", "description", "tax_type")):
-                    raise BadRequestException(
-                        detail="Line item missing required fields",
-                        field="line_items"
-                    )
-
-                quantity   = Decimal(str(item["quantity"]))
-                unit_price = Decimal(str(item["unit_price"]))
-                line_total, tax_amount = calculate_line_item(quantity, unit_price, item["tax_type"])
-
-                line_item = InvoiceLineItem(
-                    invoice_id=invoice.id,
-                    line_number=idx,
-                    item_name=item["item_name"],
-                    description=item["description"],
-                    quantity=quantity,
-                    unit_price=unit_price,
-                    line_total=line_total,
-                    tax_type=item["tax_type"],
-                    tax_amount=tax_amount,
-                )
-                self._db.add(line_item)
-
-                subtotal += line_total
-                tax_total += tax_amount
+            for item in line_items_data:
+                self._db.add(InvoiceLineItem(invoice_id=invoice.id, **item))
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
@@ -947,20 +902,17 @@ class InvoiceService:
         tax_total = Decimal("0.00")
         calculated_items = []
 
-        for item in line_items:
-            line_total, tax_amount = calculate_line_item(
-                item.quantity, item.unit_price, item.tax_type
-            )
-            subtotal  += line_total
-            tax_total += tax_amount
+        built_items = build_line_items(line_items)
+        subtotal, tax_total = sum_line_totals(built_items)
+        for item in built_items:
             calculated_items.append({
-                "item_name":   item.item_name,
-                "description": item.description,
-                "quantity":    float(item.quantity),
-                "unit_price":  float(item.unit_price),
-                "line_total":  float(line_total),
-                "tax_type":    item.tax_type,
-                "tax_amount":  float(tax_amount),
+                "item_name":   item["item_name"],
+                "description": item["description"],
+                "quantity":    float(item["quantity"]),
+                "unit_price":  float(item["unit_price"]),
+                "line_total":  float(item["line_total"]),
+                "tax_type":    item["tax_type"],
+                "tax_amount":  float(item["tax_amount"]),
             })
 
         discount_value = calculate_discount(subtotal, discount_type, discount_amount, discount_percentage)
@@ -1004,22 +956,26 @@ class InvoiceService:
             )
 
     def _generate_invoice_number(self) -> str:
-        """Generate a unique invoice number with advisory lock."""
-        today = date.today()
-        prefix = f"INV-{today.strftime('%Y%m%d')}"
-        self._advisory_lock(f"invoice_number_{prefix}")
-        count = (
-            self._db.query(func.count(Invoice.id))
-            .filter(Invoice.invoice_number.like(f"{prefix}%"))
-            .scalar()
+        """Generate a unique invoice number via ReferenceGenerator."""
+        return self._ref_gen().generate(
+            model=Invoice,
+            column=Invoice.invoice_number,
+            prefix="INV",
+            lock_key="invoice_number",
+            width=3,
+            use_date_scope=True,
         )
-        return f"{prefix}-{count + 1:03d}"
 
     def _generate_invoice_reference(self) -> str:
-        """Generate a unique invoice reference with advisory lock."""
-        self._advisory_lock("invoice_reference_gen")
-        count = self._db.query(func.count(Invoice.id)).scalar()
-        return f"IN-{count + 1:04d}"
+        """Generate a unique invoice reference via ReferenceGenerator."""
+        return self._ref_gen().generate(
+            model=Invoice,
+            column=Invoice.invoice_reference,
+            prefix="IN",
+            lock_key="invoice_reference_gen",
+            width=4,
+            use_date_scope=False,
+        )
 
     # Public aliases for cross-module use (e.g., QuoteService.convert_to_invoice)
     def generate_invoice_number(self) -> str:

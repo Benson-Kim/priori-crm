@@ -1,6 +1,7 @@
 """
 Expense business logic — service layer.
 """
+from app.common.reference import ReferenceGenerator
 import logging
 import uuid
 from datetime import UTC, date, datetime
@@ -17,7 +18,8 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
-from app.common.financial import calculate_line_item
+
+from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DocumentSource, ExpenseStatus
 from app.modules.expenses.models import (
@@ -63,12 +65,9 @@ class ExpenseService:
 
     # Internal helpers
 
-    def _advisory_lock(self, key: str) -> None:
-        """Transaction-scoped PostgreSQL advisory lock."""
-        self._db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-            {"key": key},
-        )
+    def _ref_gen(self) -> ReferenceGenerator:
+        """Lazy accessor for the shared reference generator."""
+        return ReferenceGenerator(self._db)
 
     def _transition(self, expense: Expense, new_status: ExpenseStatus) -> None:
         """
@@ -87,85 +86,42 @@ class ExpenseService:
         expense.status = new_status
         expense.version += 1
 
+
     def _generate_expense_number(self) -> str:
-        """
-        EXP-YYYYMMDD-NNN — sortable, date-scoped.
-        Advisory lock prevents concurrent transactions reading the same count.
-        UniqueConstraint + retry loop is the safety net.
-        """
-        today = date.today()
-        prefix = f"EXP-{today.strftime('%Y%m%d')}"
-        self._advisory_lock(f"expense_number_{prefix}")
-        count = (
-            self._db.query(func.count(Expense.id))
-            .filter(Expense.expense_number.like(f"{prefix}%"))
-            .scalar()
+        """Generate a unique expense number via ReferenceGenerator."""
+        return self._ref_gen().generate(
+            model=Expense,
+            column=Expense.expense_number,
+            prefix="EXP",
+            lock_key="expense_number",
+            width=3,
+            use_date_scope=True,
         )
-        return f"{prefix}-{count + 1:03d}"
 
     def _generate_expense_reference(self) -> str:
-        """
-        EXP-NNNN — short human-facing reference.
-
-        Uses MAX(numeric suffix) instead of COUNT(*) to prevent reference
-        reuse after deletions.  Global advisory lock serialises concurrent
-        transactions.
-        """
-        self._advisory_lock("expense_reference_gen")
-
-        max_suffix = (
-            self._db.query(
-                func.max(
-                    func.cast(
-                        func.substring(Expense.expense_reference, 5),  # strip "EXP-"
-                        Integer,
-                    )
-                )
-            ).scalar()
-        ) or 0
-
-        return f"EXP-{max_suffix + 1:04d}"
+        """Generate a unique expense reference via ReferenceGenerator."""
+        return self._ref_gen().generate(
+            model=Expense,
+            column=Expense.expense_reference,
+            prefix="EXP",
+            lock_key="expense_reference_gen",
+            width=4,
+            use_date_scope=False,
+            use_max_strategy=True,
+            strip_prefix_len=4
+        )
 
     @staticmethod
     def _build_line_items(
         raw_items: list[ExpenseLineItemCreate],
     ) -> list[dict]:
-        """
-        Validate and calculate each line item from Pydantic model instances.
-
-        Accepts only ExpenseLineItemCreate instances — the update path
-        converts model_dump() dicts back to ExpenseLineItemCreate before
-        calling this method, ensuring consistent type handling.
-
-        Returns a list of dicts ready for ORM model construction.
-        """
-        result: list[dict] = []
-        for idx, item in enumerate(raw_items, start=1):
-            line_total, tax_amount = calculate_line_item(
-                item.quantity, item.unit_price, item.tax_type
-            )
-            result.append({
-                "line_number": idx,
-                "item_name":   item.item_name,
-                "description": item.description,
-                "quantity":    item.quantity,
-                "unit_price":  item.unit_price,
-                "line_total":  line_total,
-                "tax_type":    item.tax_type,
-                "tax_amount":  tax_amount,
-            })
-        return result
+        """Delegate to the shared build_line_items helper in common/financial.py."""
+        return build_line_items(raw_items)
 
     @staticmethod
     def _sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
-        """Return (subtotal, tax_total) from pre-calculated line dicts."""
-        subtotal  = sum(
-            (item["line_total"] for item in line_items_data), Decimal("0.00")
-        )
-        tax_total = sum(
-            (item["tax_amount"] for item in line_items_data), Decimal("0.00")
-        )
-        return subtotal, tax_total
+        """Delegate to the shared sum_line_totals helper in common/financial.py."""
+        return sum_line_totals(line_items_data)
 
     # CREATE
 
@@ -741,11 +697,10 @@ class ExpenseService:
         paid_at: datetime | None = None,
     ) -> Expense:
         """
-        Quick-action: set status to PAID.
+        Quick-action: set status to PAID with a full audit trail.
 
-        Does NOT create an ExpensePayment record — this is the intentional
-        lightweight path. Teams requiring a full audit trail must use
-        record_payment() instead.
+        Creates an ExpensePayment record for the remaining balance_due
+        so that the audit trail is complete
 
         Uses SELECT FOR UPDATE to prevent TOCTOU race with concurrent
         record_payment() calls on the same expense row.
@@ -763,7 +718,21 @@ class ExpenseService:
             )
 
         self._transition(expense, ExpenseStatus.PAID)
-        expense.paid_at = paid_at or datetime.now(UTC)
+
+        settlement_amount = expense.balance_due
+        now = paid_at or datetime.now(UTC)
+
+        # Create audit-trail payment record
+        payment = ExpensePayment(
+            expense_id=expense.id,
+            amount=settlement_amount,
+            payment_date=now.date() if isinstance(now, datetime) else now,
+            reference=f"AUTO-SETTLE-{expense.expense_reference}",
+            notes="Full settlement via mark_as_paid quick action",
+        )
+        self._db.add(payment)
+
+        expense.paid_at = now
         expense.amount_paid = expense.total_due
         expense.balance_due = Decimal("0.00")
         self._db.flush()
@@ -773,6 +742,7 @@ class ExpenseService:
             extra={
                 "expense_id": str(expense.id),
                 "paid_at":    str(expense.paid_at),
+                "payment_amount": str(settlement_amount),
             },
         )
         return expense

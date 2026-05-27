@@ -5,7 +5,7 @@ Customer API endpoints.
 import logging
 from datetime import date, timedelta
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -21,8 +21,6 @@ from app.modules.customers.schemas import (
     CustomerSummary,
     CustomerUpdate,
     FinancialSummary,
-    MockInvoice,
-    MockStatement,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,23 +28,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-
-_MOCK_INVOICES = [
-    MockInvoice(id=uuid4(), invoice_number="INV-20240709", amount=2300.00, balance=2300.00, status="Overdue (2 days)", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240709", amount=3750.00, balance=2300.00, status="Sent", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240709", amount=3750.00, balance=2300.00, status="Paid", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240709", amount=3750.00, balance=2300.00, status="Canceled", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240711", amount=1900.00, balance=2300.00, status="Overdue (2 days)", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240713", amount=3150.00, balance=2300.00, status="Sent", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240714", amount=2500.00, balance=2300.00, status="Overdue (2 days)", date="07 Mar 2026"),
-    MockInvoice(id=uuid4(), invoice_number="INV-20240714", amount=2500.00, balance=2300.00, status="Sent", date="07 Mar 2026"),
-]
-
-_MOCK_STATEMENTS = [
-    MockStatement(id=uuid4(), period="01-01-2024 To 31-12-2024", opening_balance=70704.00, invoiced_amount=0.00, amount_paid=70704.00, balance_due=0.00),
-    MockStatement(id=uuid4(), period="01-01-2025 To 31-12-2025", opening_balance=140408.00, invoiced_amount=0.00, amount_paid=140408.00, balance_due=0.00),
-    MockStatement(id=uuid4(), period="01-01-2026 To 14-05-2026", opening_balance=205004.00, invoiced_amount=0.00, amount_paid=205004.00, balance_due=0.00),
-]
 
 
 
@@ -123,15 +104,44 @@ def get_customer(
     customer_id: UUID,
     service: CustomerServiceDep,
 ) -> CustomerDetailResponse:
-    """Get a single customer by ID, including mock invoices and statements."""
+    """Get a single customer by ID with real invoices and statement."""
     customer = service.get_by_id(customer_id)
     financial = service.get_financial_summary(customer_id)
+
+    # Fetch recent invoices (first page, 5 items)
+    recent_invoices_page = service.get_customer_invoices(
+        customer_id,
+        PaginationParams(page=1, per_page=5),
+    )
+    recent_invoices = [
+        {
+            "id": str(inv.id),
+            "invoice_number": inv.invoice_number,
+            "invoice_reference": inv.invoice_reference,
+            "amount": float(inv.total_due),
+            "balance": float(inv.balance_due),
+            "status": inv.status,
+            "date": inv.transaction_date.strftime("%d %b %Y"),
+        }
+        for inv in recent_invoices_page.items
+    ]
+
+    # Generate current-year statement
+    today = date.today()
+    try:
+        statement = service.generate_statement(
+            customer_id,
+            period_start=date(today.year, 1, 1),
+            period_end=today,
+        )
+    except Exception:
+        statement = None
 
     return CustomerDetailResponse(
         customer=CustomerResponse.model_validate(customer),
         financial_summary=financial,
-        invoices=_MOCK_INVOICES,
-        statements=_MOCK_STATEMENTS,
+        recent_invoices=recent_invoices,
+        statement=statement,
     )
 
 

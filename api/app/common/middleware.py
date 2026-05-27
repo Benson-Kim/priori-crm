@@ -2,7 +2,7 @@
 import logging
 import time
 import uuid
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
 from typing import Callable
 
@@ -77,11 +77,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple in-memory rate limiting (use Redis in production)."""
+    """
+    In-memory rate limiting with LRU-bounded client cache.
+    Uses OrderedDict capped at MAX_CLIENTS entries;
+    the least-recently-seen client is evicted when the cap is reached.
+    """
+
+    MAX_CLIENTS = 1024
 
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
-        self.requests: dict[str, list[datetime]] = defaultdict(list)
+        self.requests: OrderedDict[str, list[datetime]] = OrderedDict()
         self.window = timedelta(minutes=1)
         self.max_requests = settings.RATE_LIMIT_PER_MINUTE
 
@@ -89,17 +95,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Check rate limit and process request."""
         if not settings.RATE_LIMIT_ENABLED:
             return await call_next(request)
-        
+
         # Use client IP as identifier (use user ID in production)
         client_id = request.client.host if request.client else "unknown"
         now = datetime.now()
-        
-        # Clean old requests
-        self.requests[client_id] = [
-            req_time for req_time in self.requests[client_id]
-            if now - req_time < self.window
-        ]
-        
+
+        # Prune expired timestamps for this client
+        if client_id in self.requests:
+            self.requests[client_id] = [
+                req_time for req_time in self.requests[client_id]
+                if now - req_time < self.window
+            ]
+            # Move to end (most-recently-seen)
+            self.requests.move_to_end(client_id)
+        else:
+            self.requests[client_id] = []
+
+        # Evict oldest client if cache is full
+        while len(self.requests) > self.MAX_CLIENTS:
+            self.requests.popitem(last=False)
+
         # Check rate limit
         if len(self.requests[client_id]) >= self.max_requests:
             logger.warning(
@@ -111,8 +126,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 },
             )
             raise RateLimitException(retry_after=60)
-        
+
         # Record this request
         self.requests[client_id].append(now)
-        
+
         return await call_next(request)

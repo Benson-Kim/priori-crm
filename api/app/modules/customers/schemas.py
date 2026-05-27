@@ -246,35 +246,13 @@ class FinancialSummary(BaseModel):
     )
 
 
-class MockInvoice(BaseModel):
-    """Mock invoice for customer detail view."""
-
-    id: UUID
-    invoice_number: str
-    amount: Decimal
-    balance: Decimal
-    status: str
-    date: str
-
-
-class MockStatement(BaseModel):
-    """Mock statement for customer detail view."""
-
-    id: UUID
-    period: str
-    opening_balance: Decimal
-    invoiced_amount: Decimal
-    amount_paid: Decimal
-    balance_due: Decimal
-
-
 class CustomerDetailResponse(BaseModel):
-    """Single customer with mock invoices and statements."""
+    """Single customer with invoices and statements."""
 
     customer: CustomerResponse
     financial_summary: FinancialSummary
-    invoices: list[MockInvoice] = Field(default_factory=list)
-    statements: list[MockStatement] = Field(default_factory=list)
+    recent_invoices: list[dict] = Field(default_factory=list, description="Recent 5 invoices")
+    statement: "CustomerStatement | None" = Field(default=None, description="Current period statement")
 
 
 class StatementTransaction(BaseModel):

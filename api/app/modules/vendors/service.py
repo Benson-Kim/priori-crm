@@ -24,6 +24,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.constants.enums import VendorStatus
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import (
@@ -929,7 +930,7 @@ class VendorService:
     ) -> VendorStatement:
         """Generate a statement of accounts for a vendor."""
         vendor = self.get_by_id(vendor_id)
-        
+
         try:
             from app.modules.expenses.models import Expense, ExpensePayment
         except ImportError:
@@ -971,65 +972,51 @@ class VendorService:
             .all()
         )
 
-        transactions: list[VendorStatementTransaction] = []
-        running_balance = opening_balance
-
-        transactions.append(
-            VendorStatementTransaction(
-                date=period_start,
-                description="Opening Balance",
-                amount=opening_balance,
-                payment=Decimal("0.00"),
-                balance=opening_balance,
+        # Build entries for the shared generator
+        debits = [
+            DebitEntry(
+                date=exp.expense_date,
+                description=f"Expense {exp.expense_number}",
+                amount=exp.total_due,
             )
+            for exp in period_expenses
+        ]
+        credits = [
+            CreditEntry(
+                date=pmt.payment_date,
+                description=(
+                    f"Payment Made — {vendor.currency} {pmt.amount} "
+                    f"for {pmt.expense.expense_number}"
+                ),
+                amount=pmt.amount,
+            )
+            for pmt in period_payments
+        ]
+
+        # Delegate to shared StatementGenerator
+        txns, summary_data = StatementGenerator.generate(
+            opening_balance=opening_balance,
+            period_start=period_start,
+            debits=debits,
+            credits=credits,
         )
 
-        all_transactions = sorted(
-            [("expense", exp) for exp in period_expenses] +
-            [("payment", pmt) for pmt in period_payments],
-            key=lambda x: x[1].expense_date if x[0] == "expense" else x[1].payment_date
-        )
-
-        invoiced_amount = Decimal("0.00")
-        amount_paid = Decimal("0.00")
-
-        for trans_type, trans in all_transactions:
-            if trans_type == "expense":
-                running_balance += trans.total_due
-                invoiced_amount += trans.total_due
-
-                transactions.append(
-                    VendorStatementTransaction(
-                        date=trans.expense_date,
-                        description=f"Expense {trans.expense_number}",
-                        amount=trans.total_due,
-                        payment=Decimal("0.00"),
-                        balance=running_balance,
-                    )
-                )
-
-            else:  # payment
-                running_balance -= trans.amount
-                amount_paid += trans.amount
-
-                transactions.append(
-                    VendorStatementTransaction(
-                        date=trans.payment_date,
-                        description=(
-                            f"Payment Made — {vendor.currency} {trans.amount} "
-                            f"for {trans.expense.expense_number}"
-                        ),
-                        amount=Decimal("0.00"),
-                        payment=trans.amount,
-                        balance=running_balance,
-                    )
-                )
+        transactions = [
+            VendorStatementTransaction(
+                date=t["date"],
+                description=t["description"],
+                amount=t["amount"],
+                payment=t["payment"],
+                balance=t["balance"],
+            )
+            for t in txns
+        ]
 
         summary = VendorStatementSummary(
-            opening_balance=opening_balance,
-            invoiced_amount=invoiced_amount,
-            amount_paid=amount_paid,
-            balance_due=running_balance,
+            opening_balance=summary_data["opening_balance"],
+            invoiced_amount=summary_data["invoiced_amount"],
+            amount_paid=summary_data["amount_paid"],
+            balance_due=summary_data["balance_due"],
         )
 
         return VendorStatement(
