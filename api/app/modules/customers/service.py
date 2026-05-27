@@ -16,6 +16,7 @@ from app.common.exceptions import (
 )
 from app.lib.config import settings
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
 from app.modules.customers.schemas import (
@@ -759,68 +760,51 @@ class CustomerService:
                 .all()
             )
 
-            # Build transaction ledger
-            transactions: list[StatementTransaction] = []
-            running_balance = opening_balance
-
-            # Add opening balance row
-            transactions.append(
-                StatementTransaction(
-                    date=period_start,
-                    description="Opening Balance",
-                    amount=opening_balance,
-                    payment=Decimal("0.00"),
-                    balance=opening_balance,
+            # Build entries for the shared generator
+            debits = [
+                DebitEntry(
+                    date=inv.transaction_date,
+                    description=f"Invoice {inv.invoice_number}",
+                    amount=inv.total_due,
                 )
+                for inv in period_invoices
+            ]
+            credits = [
+                CreditEntry(
+                    date=pmt.payment_date,
+                    description=(
+                        f"Payment Received — {customer.currency} {pmt.amount} "
+                        f"for {pmt.invoice.invoice_number}"
+                    ),
+                    amount=pmt.amount,
+                )
+                for pmt in period_payments
+            ]
+
+            # Delegate to shared StatementGenerator
+            txns, summary_data = StatementGenerator.generate(
+                opening_balance=opening_balance,
+                period_start=period_start,
+                debits=debits,
+                credits=credits,
             )
 
-            # Merge invoices and payments chronologically
-            all_transactions = sorted(
-                [("invoice", inv) for inv in period_invoices] +
-                [("payment", pmt) for pmt in period_payments],
-                key=lambda x: x[1].transaction_date if x[0] == "invoice" else x[1].payment_date
-            )
-
-            invoiced_amount = Decimal("0.00")
-            amount_paid = Decimal("0.00")
-
-            for trans_type, trans in all_transactions:
-                if trans_type == "invoice":
-                    running_balance += trans.total_due
-                    invoiced_amount += trans.total_due
-
-                    transactions.append(
-                        StatementTransaction(
-                            date=trans.transaction_date,
-                            description=f"Invoice {trans.invoice_number}",
-                            amount=trans.total_due,
-                            payment=Decimal("0.00"),
-                            balance=running_balance,
-                        )
-                    )
-
-                else:  # payment
-                    running_balance -= trans.amount
-                    amount_paid += trans.amount
-
-                    transactions.append(
-                        StatementTransaction(
-                            date=trans.payment_date,
-                            description=(
-                                f"Payment Received — {customer.currency} {trans.amount} "
-                                f"for {trans.invoice.invoice_number}"
-                            ),
-                            amount=Decimal("0.00"),
-                            payment=trans.amount,
-                            balance=running_balance,
-                        )
-                    )
+            transactions = [
+                StatementTransaction(
+                    date=t["date"],
+                    description=t["description"],
+                    amount=t["amount"],
+                    payment=t["payment"],
+                    balance=t["balance"],
+                )
+                for t in txns
+            ]
 
             summary = StatementSummary(
-                opening_balance=opening_balance,
-                invoiced_amount=invoiced_amount,
-                amount_paid=amount_paid,
-                balance_due=running_balance,
+                opening_balance=summary_data["opening_balance"],
+                invoiced_amount=summary_data["invoiced_amount"],
+                amount_paid=summary_data["amount_paid"],
+                balance_due=summary_data["balance_due"],
             )
 
             return CustomerStatement(

@@ -10,7 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables with validation."""
 
-    # Application
+    # API Keys
+    MOCK_PAYMENT_GATEWAY_KEY: str = "mock-key-for-dev"
     APP_NAME: str = "Priori Technologies"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
