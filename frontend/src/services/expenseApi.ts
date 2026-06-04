@@ -71,6 +71,7 @@ export interface ExpenseResponse {
   created_at: string;
   updated_at: string;
   paid_at: string | null;
+  version: number;
   vendor: VendorSummary;
   line_items: ExpenseLineItem[];
   payments: ExpensePayment[];
@@ -177,8 +178,18 @@ export function createExpense(data: ExpenseCreatePayload) {
   return apiPost<ExpenseResponse>("expenses", data);
 }
 
-export function updateExpense(id: string, data: ExpenseUpdatePayload) {
-  return apiPut<ExpenseResponse>(`expenses/${id}`, data);
+export function updateExpense(
+  id: string,
+  data: ExpenseUpdatePayload,
+  expectedVersion?: number
+) {
+  // The expenses router reads the version from the `expectedVersion` query
+  // alias (P-9 / EXP-FE-4).
+  const path =
+    expectedVersion != null
+      ? `expenses/${id}?expectedVersion=${expectedVersion}`
+      : `expenses/${id}`;
+  return apiPut<ExpenseResponse>(path, data);
 }
 
 export function deleteExpense(id: string) {

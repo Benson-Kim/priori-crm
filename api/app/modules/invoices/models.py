@@ -72,6 +72,10 @@ class Invoice(Base):
             name="ck_invoices_balance_non_negative",
         ),
         CheckConstraint(
+            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            name="ck_invoices_valid_currency",
+        ),
+        CheckConstraint(
             "(discount_type = 'amount' AND discount_percentage IS NULL) OR "
             "(discount_type = 'percentage' AND discount_amount IS NULL) OR "
             "(discount_type IS NULL AND discount_amount IS NULL AND discount_percentage IS NULL)",
@@ -308,12 +312,14 @@ class Invoice(Base):
 
     @property
     def is_overdue(self) -> bool:
-        """Check if invoice is past due date."""
-        from datetime import date
-        return (
-            not self.is_paid and
-            self.status != InvoiceStatus.CANCELED and
-            self.due_date < date.today()
+        """Check if invoice is past due date (centralized predicate, V-DRY-4)."""
+        from app.common.financial import check_is_overdue
+        # is_paid also covers balance_due <= 0, which the status-only predicate
+        # cannot see, so keep it as an additional guard.
+        return not self.is_paid and check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
         )
 
     @property

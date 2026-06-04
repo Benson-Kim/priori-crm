@@ -15,6 +15,7 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
+from app.common.database import assert_version
 from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
 from app.common.reference import ReferenceGenerator
 from app.common.pagination import PaginatedResponse, PaginationParams
@@ -105,6 +106,22 @@ class InvoiceService:
                 field="customer_id"
             )
 
+        # Single-currency-per-customer (P-11): a customer holds exactly one
+        # currency and balance summing assumes it. Reject a document whose
+        # currency was *explicitly* set to something other than the
+        # customer's; otherwise pin it to the customer's currency (the
+        # schema default must not silently override it).
+        if "currency" in data.model_fields_set and data.currency != customer.currency:
+            raise BadRequestException(
+                detail=(
+                    f"Invoice currency '{data.currency}' does not match the "
+                    f"customer's currency '{customer.currency}'. A customer "
+                    "can only transact in a single currency."
+                ),
+                field="currency",
+            )
+        invoice_currency = customer.currency
+
         line_items_data = build_line_items(data.line_items)
         subtotal, tax_total = sum_line_totals(line_items_data)
 
@@ -126,7 +143,7 @@ class InvoiceService:
                     customer_id=data.customer_id,
                     transaction_date=data.transaction_date,
                     due_date=data.due_date,
-                    currency=data.currency,
+                    currency=invoice_currency,
                     status=InvoiceStatus.DRAFT,
                     subtotal=subtotal,
                     discount_type=data.discount_type,
@@ -534,13 +551,10 @@ class InvoiceService:
                 field="status"
             )
 
-        if expected_version is not None and invoice.version != expected_version:
-            raise ConflictException(
-                detail=(
-                    f"Invoice has been modified by another user. "
-                    f"Expected version {expected_version}, current version {invoice.version}"
-                )
-            )
+        # Atomic optimistic-lock guard (P-9): locks the row and compares the
+        # version under the lock, so concurrent edits conflict instead of
+        # silently overwriting.
+        assert_version(self._db, Invoice, invoice_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True)
 
@@ -624,6 +638,11 @@ class InvoiceService:
         invoice.version += 1
 
         self._db.flush()
+
+        # An edit that changed the balance of a non-DRAFT invoice must resync
+        # the denormalized Customer.balance in the same unit of work (V-DI-6).
+        if recompute_balance and invoice.status != InvoiceStatus.DRAFT:
+            self._update_customer_balance(invoice.customer_id)
 
         logger.info(
             f"Updated invoice: {invoice.invoice_number}",
@@ -919,6 +938,10 @@ class InvoiceService:
 
         self._db.flush()
 
+        # Canceling removes this invoice from the customer's outstanding
+        # balance; resync in the same unit of work so it cannot drift (V-DI-6).
+        self._update_customer_balance(invoice.customer_id)
+
         logger.warning(
             f"Canceled invoice: {invoice.invoice_number}",
             extra={"invoice_id": str(invoice.id)}
@@ -994,6 +1017,51 @@ class InvoiceService:
                 "Updated customer balance to %s", outstanding,
                 extra={"customer_id": str(customer_id)},
             )
+
+    # NIGHTLY SCHEDULER
+
+    def bulk_transition_overdue(self) -> int:
+        """
+        Bulk-update past-due, unpaid invoices to OVERDUE.
+
+        Mirrors ExpenseService.bulk_transition_overdue. Matches SENT and
+        PARTIAL invoices whose due_date has passed and that still carry an
+        outstanding balance — the same predicate used by the overdue stats
+        SQL (check_is_overdue semantics: a non-terminal, past-due document).
+        Uses synchronize_session=False and expire_all so subsequent reads
+        reflect the new status. Returns the number of rows transitioned.
+        """
+        try:
+            today = date.today()
+
+            updated = (
+                self._db.query(Invoice)
+                .filter(
+                    Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL]),
+                    Invoice.due_date < today,
+                    Invoice.balance_due > 0,
+                )
+                .update(
+                    {
+                        Invoice.status: InvoiceStatus.OVERDUE,
+                        Invoice.version: Invoice.version + 1,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            self._db.flush()
+            self._db.expire_all()
+
+            logger.info(
+                "Bulk transitioned %d invoices to OVERDUE",
+                updated,
+                extra={"count": updated, "as_of": str(today)},
+            )
+            return updated
+
+        except SQLAlchemyError as e:
+            logger.exception("Error in bulk overdue transition")
+            raise DatabaseException("Failed to transition overdue invoices") from e
 
     def _generate_invoice_number(self) -> str:
         """Generate a unique invoice number via ReferenceGenerator."""

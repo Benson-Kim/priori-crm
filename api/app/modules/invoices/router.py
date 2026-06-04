@@ -7,7 +7,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import InvoiceServiceDep, require_role
+from app.common.dependencies import (
+    InvoiceServiceDep,
+    require_role,
+    verify_internal_secret,
+)
 from app.constants.enums import UserRole
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.invoices.schemas import (
@@ -492,3 +496,26 @@ def download_invoice_pdf(
             "Content-Disposition": f'attachment; filename="Invoice_{invoice.invoice_reference}.pdf"'
         },
     )
+
+
+# SCHEDULER  (internal — hidden from public OpenAPI docs)
+
+
+@router.post(
+    "/internal/transition-overdue",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+    summary="Nightly overdue transition (internal)",
+    description=(
+        "Bulk-transitions past-due, unpaid SENT/PARTIAL invoices to OVERDUE. "
+        "Called by the nightly scheduler. Requires the X-Internal-Secret "
+        "header; not a public client endpoint."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
+)
+def trigger_invoice_overdue_transition(service: InvoiceServiceDep) -> dict:
+    updated = service.bulk_transition_overdue()
+    return {
+        "transitioned": updated,
+        "message": f"{updated} invoice(s) transitioned to OVERDUE",
+    }

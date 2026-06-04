@@ -19,6 +19,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 
+from app.common.database import assert_version
 from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DocumentSource, ExpenseStatus
@@ -602,14 +603,9 @@ class ExpenseService:
                 field="status",
             )
 
-        if expected_version is not None and expense.version != expected_version:
-            raise ConflictException(
-                detail=(
-                    f"Expense has been modified by another user. "
-                    f"Expected version {expected_version}, "
-                    f"current version {expense.version}."
-                )
-            )
+        # Atomic optimistic-lock guard (P-9): locks the row and compares the
+        # version under the lock, replacing the non-atomic Python compare.
+        assert_version(self._db, Expense, expense_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True, mode="python")
 

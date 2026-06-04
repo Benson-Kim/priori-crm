@@ -17,6 +17,7 @@ from sqlalchemy import and_, case, func, or_, literal_column
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.common.database import assert_version
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
@@ -618,15 +619,10 @@ class VendorService:
         try:
             vendor = self._get_vendor_or_404(vendor_id)
 
-            if expected_version is not None and vendor.version != expected_version:
-                raise ConflictException(
-                    detail=(
-                        f"Vendor has been modified by another user. "
-                        f"Expected version {expected_version}, "
-                        f"current version {vendor.version}. "
-                        f"Please refresh and try again."
-                    )
-                )
+            # Atomic optimistic-lock guard: locks the row and compares the
+            # version, replacing the previous non-atomic Python compare that
+            # allowed silent last-write-wins (P-9 / VEND-BE-3).
+            assert_version(self._db, Vendor, vendor_id, expected_version)
 
             update_data = data.model_dump(exclude_unset=True)
             if not update_data:

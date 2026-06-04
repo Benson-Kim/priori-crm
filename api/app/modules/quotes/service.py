@@ -115,6 +115,20 @@ class QuoteService:
                 field="customer_id",
             )
 
+        # Single-currency-per-customer (P-11): reject a quote whose currency
+        # was explicitly set to something other than the customer's; else
+        # pin it to the customer's currency.
+        if "currency" in data.model_fields_set and data.currency != customer.currency:
+            raise BadRequestException(
+                detail=(
+                    f"Quote currency '{data.currency}' does not match the "
+                    f"customer's currency '{customer.currency}'. A customer "
+                    "can only transact in a single currency."
+                ),
+                field="currency",
+            )
+        quote_currency = customer.currency
+
         line_items_data = build_line_items(data.line_items)
         subtotal, tax_total = sum_line_totals(line_items_data)
 
@@ -135,7 +149,7 @@ class QuoteService:
                     customer_id=data.customer_id,
                     transaction_date=data.transaction_date,
                     due_date=data.due_date,
-                    currency=data.currency,
+                    currency=quote_currency,
                     status=QuoteStatus.DRAFT,
                     subtotal=subtotal,
                     discount_type=data.discount_type,
@@ -995,6 +1009,51 @@ class QuoteService:
         except SQLAlchemyError as e:
             logger.exception("Database error calculating quote statistics")
             raise DatabaseException("Failed to calculate statistics") from e
+
+    # NIGHTLY SCHEDULER
+
+    def bulk_transition_expired(self) -> int:
+        """
+        Bulk-update past-due DRAFT/SENT quotes to EXPIRED.
+
+        Mirrors the expense/invoice overdue jobs. Matches the model
+        is_expired predicate: a quote that is neither APPROVED nor INVOICED
+        and whose due_date has passed. Stamps expired_at and bumps version
+        once. Uses synchronize_session=False and expire_all so subsequent
+        reads reflect the new status. Returns the number of rows transitioned.
+        """
+        try:
+            now = datetime.now(UTC)
+            today = now.date()
+
+            updated = (
+                self._db.query(Quote)
+                .filter(
+                    Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT]),
+                    Quote.due_date < today,
+                )
+                .update(
+                    {
+                        Quote.status: QuoteStatus.EXPIRED,
+                        Quote.expired_at: now,
+                        Quote.version: Quote.version + 1,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            self._db.flush()
+            self._db.expire_all()
+
+            logger.info(
+                "Bulk transitioned %d quotes to EXPIRED",
+                updated,
+                extra={"count": updated, "as_of": str(today)},
+            )
+            return updated
+
+        except SQLAlchemyError as e:
+            logger.exception("Error in bulk expired transition")
+            raise DatabaseException("Failed to transition expired quotes") from e
 
     def _generate_quote_number(self) -> str:
         """Generate a unique quote number via ReferenceGenerator."""

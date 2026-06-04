@@ -53,19 +53,31 @@ def normalize_phone(phone: str, country: str | None = None) -> str:
     # Strip everything except digits
     digits = re.sub(r"[^\d]", "", cleaned[1:] if had_plus else cleaned)
 
-    # Normalize to E.164
-    if had_plus and digits:
+    if not digits:
+        raise ValueError(f"Invalid phone number: '{phone}'. No digits found.")
+
+    # Expected national-number length per dial code (E.164 subscriber digits).
+    national_len = {"254": 9, "1": 10, "91": 10, "44": 10}.get(dial_code)
+
+    # Normalize to E.164 from a known shape only. The previous catch-all
+    # `else` prefixed arbitrary input with the dial code, coercing malformed
+    # numbers into valid-looking E.164 (W-6); reject those instead.
+    if had_plus:
+        # Caller supplied a full international number; trust the digits as-is.
         normalized = f"+{digits}"
     elif digits.startswith(dial_code):
         normalized = f"+{digits}"
     elif digits.startswith("0"):
         normalized = f"+{dial_code}{digits[1:]}"
-    elif len(digits) == 9 and dial_code == "254":
-        normalized = f"+{dial_code}{digits}"
-    elif len(digits) == 10 and dial_code in ("1", "91"):
+    elif national_len is not None and len(digits) == national_len:
         normalized = f"+{dial_code}{digits}"
     else:
-        normalized = f"+{dial_code}{digits}"
+        raise ValueError(
+            f"Invalid phone number: '{phone}'. "
+            f"Expected format for {country or 'KE'}: "
+            f"+{dial_code}XXXXXXXXX, a local number starting 0, "
+            f"or the {national_len}-digit national number."
+        )
 
     if not re.match(r"^\+[1-9]\d{7,14}$", normalized):
         raise ValueError(
