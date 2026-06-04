@@ -60,8 +60,10 @@ class ExpenseService:
         ExpenseStatus.PAID:    [],   # terminal
     }
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, current_user=None) -> None:
         self._db = db
+        self._current_user = current_user
+        self._actor_id = getattr(current_user, "id", None)
 
     # Internal helpers
 
@@ -691,6 +693,51 @@ class ExpenseService:
 
     # STATUS TRANSITIONS
 
+    def _apply_payment(
+        self,
+        expense: Expense,
+        amount: Decimal,
+        payment_date,
+        *,
+        reference: str | None = None,
+        notes: str | None = None,
+        document_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+        paid_at: datetime | None = None,
+    ) -> ExpensePayment:
+        """Apply a payment to an already-locked expense and settle if covered.
+
+        Single source of truth for both record_payment and mark_as_paid (P-8):
+        creates the audit-trail ExpensePayment, advances amount_paid /
+        balance_due, transitions to PAID when the balance is cleared, and
+        bumps ``version`` exactly once. The caller must have already loaded
+        ``expense`` with ``with_for_update()`` and validated status/amount.
+        """
+        payment = ExpensePayment(
+            expense_id=expense.id,
+            amount=amount,
+            payment_date=payment_date,
+            reference=reference,
+            notes=notes,
+            document_id=document_id,
+            recorded_by=user_id,
+        )
+        self._db.add(payment)
+
+        expense.amount_paid += amount
+        expense.balance_due = expense.total_due - expense.amount_paid
+
+        if expense.balance_due <= Decimal("0.00"):
+            # Full settlement. Set status directly (not via _transition) so the
+            # single version bump below is the only increment for this op.
+            expense.status = ExpenseStatus.PAID
+            expense.balance_due = Decimal("0.00")
+            expense.paid_at = paid_at or datetime.now(UTC)
+
+        expense.version += 1
+        self._db.flush()
+        return payment
+
     def mark_as_paid(
         self,
         expense_id: uuid.UUID,
@@ -717,25 +764,23 @@ class ExpenseService:
                 resource="expense",
             )
 
-        self._transition(expense, ExpenseStatus.PAID)
+        if expense.status == ExpenseStatus.PAID:
+            raise BadRequestException(
+                detail="Expense is already paid",
+                field="status",
+            )
 
-        settlement_amount = expense.balance_due
         now = paid_at or datetime.now(UTC)
+        settlement_amount = expense.balance_due
 
-        # Create audit-trail payment record
-        payment = ExpensePayment(
-            expense_id=expense.id,
+        self._apply_payment(
+            expense,
             amount=settlement_amount,
             payment_date=now.date() if isinstance(now, datetime) else now,
             reference=f"AUTO-SETTLE-{expense.expense_reference}",
             notes="Full settlement via mark_as_paid quick action",
+            paid_at=now,
         )
-        self._db.add(payment)
-
-        expense.paid_at = now
-        expense.amount_paid = expense.total_due
-        expense.balance_due = Decimal("0.00")
-        self._db.flush()
 
         logger.info(
             "Marked expense as paid: %s", expense.expense_reference,
@@ -790,28 +835,15 @@ class ExpenseService:
                 field="amount",
             )
 
-        payment = ExpensePayment(
-            expense_id=expense.id,
+        payment = self._apply_payment(
+            expense,
             amount=data.amount,
             payment_date=data.payment_date,
             reference=data.reference,
             notes=data.notes,
             document_id=document_id,
-            recorded_by=user_id,
+            user_id=user_id,
         )
-        self._db.add(payment)
-
-        expense.amount_paid += data.amount
-        expense.balance_due  = expense.total_due - expense.amount_paid
-
-        if expense.balance_due <= 0:
-            # Full settlement — set status directly to avoid double version bump
-            # from _transition(); version is bumped once below.
-            expense.status  = ExpenseStatus.PAID
-            expense.paid_at = datetime.now(UTC)
-
-        expense.version += 1
-        self._db.flush()
 
         logger.info(
             "Recorded payment for expense %s", expense.expense_reference,
@@ -952,22 +984,54 @@ class ExpenseService:
                     },
                 )
             else:
+                # Capture storage keys before the cascading DB delete so we
+                # can purge the underlying files and avoid orphans (P-13).
+                storage_keys = [doc.storage_key for doc in expense.documents]
+
                 self._db.delete(expense)
+                self._db.flush()
+
+                self._purge_storage_objects(storage_keys)
+
                 logger.info(
                     "Hard-deleted expense: %s",
                     expense.expense_reference,
                     extra={
                         "expense_id": str(expense.id),
                         "had_payments": False,
+                        "purged_objects": len(storage_keys),
                     },
                 )
-            
+                return had_payments
+
             self._db.flush()
             return had_payments
 
         except SQLAlchemyError as exc:
             logger.exception("Error deleting expense %s", expense_id)
             raise DatabaseException("Failed to delete expense") from exc
+
+    @staticmethod
+    def _purge_storage_objects(storage_keys: list[str]) -> None:
+        """Best-effort delete of stored objects after a hard delete (P-13).
+
+        Storage failures are logged, not raised: the DB record is already
+        gone, so a missed file is a reconciliation concern, not a request
+        failure. A periodic sweep should reconcile any stragglers.
+        """
+        from app.lib.storage import storage_service
+
+        for key in storage_keys:
+            if storage_service.delete_file(key):
+                logger.info(
+                    "Purged orphaned storage object",
+                    extra={"storage_key": key},
+                )
+            else:
+                logger.warning(
+                    "Failed to purge storage object — orphan may remain",
+                    extra={"storage_key": key},
+                )
 
     # DUPLICATE
 

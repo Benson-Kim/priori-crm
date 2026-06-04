@@ -6,11 +6,12 @@ from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
 from typing import Callable
 
-from fastapi import Request, Response
+from fastapi import Request, Response, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from app.common.exceptions import RateLimitException
+from app.common.security import decode_access_token
 from app.lib.config import settings
 
 logger = logging.getLogger(__name__)
@@ -85,19 +86,64 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     MAX_CLIENTS = 1024
 
+    # Probe endpoints that must never be throttled: a burst of load-balancer
+    # or uptime checks would otherwise flap the service. Matched as path
+    # suffixes so the API prefix (e.g. /api/v1) does not need hardcoding.
+    EXEMPT_PATH_SUFFIXES = ("/health", "/health/detailed", "/ping")
+
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         self.requests: OrderedDict[str, list[datetime]] = OrderedDict()
         self.window = timedelta(minutes=1)
         self.max_requests = settings.RATE_LIMIT_PER_MINUTE
 
+    def _is_exempt(self, path: str) -> bool:
+        """Health/ping probes bypass the limiter."""
+        return path.endswith(self.EXEMPT_PATH_SUFFIXES)
+
+    def _client_identity(self, request: Request) -> str:
+        """Resolve a stable per-client bucket key.
+
+        Order of preference:
+        1. Authenticated user (JWT `sub`) - survives shared/proxy IPs.
+        2. First hop of X-Forwarded-For, but only when explicitly trusted
+           (behind a known proxy); the header is otherwise spoofable.
+        3. Raw socket IP.
+        """
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+            if token:
+                try:
+                    from fastapi.security import HTTPAuthorizationCredentials
+
+                    payload = decode_access_token(
+                        HTTPAuthorizationCredentials(
+                            scheme="Bearer", credentials=token
+                        )
+                    )
+                    sub = payload.get("sub")
+                    if sub:
+                        return f"user:{sub}"
+                except Exception:
+                    # Invalid/expired token: fall through to IP-based identity.
+                    pass
+
+        if settings.RATE_LIMIT_TRUST_FORWARDED_FOR:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            if forwarded:
+                first_hop = forwarded.split(",")[0].strip()
+                if first_hop:
+                    return f"ip:{first_hop}"
+
+        return f"ip:{request.client.host if request.client else 'unknown'}"
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Check rate limit and process request."""
-        if not settings.RATE_LIMIT_ENABLED:
+        if not settings.RATE_LIMIT_ENABLED or self._is_exempt(request.url.path):
             return await call_next(request)
 
-        # Use client IP as identifier (use user ID in production)
-        client_id = request.client.host if request.client else "unknown"
+        client_id = self._client_identity(request)
         now = datetime.now()
 
         # Prune expired timestamps for this client
@@ -125,7 +171,32 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "requests_count": len(self.requests[client_id]),
                 },
             )
-            raise RateLimitException(retry_after=60)
+            # Return the response directly rather than raising: a
+            # BaseHTTPMiddleware runs outside the AppException handler, so
+            # raising here would surface as an unhandled 500 and drop the
+            # tracing headers (W-1/W-2/W-3). The Retry-After header lets
+            # compliant clients back off correctly.
+            request_id = getattr(request.state, "request_id", "unknown")
+            retry_after = 60
+            # Stamp tracing headers directly: depending on middleware order
+            # this early return may not pass back through the request-ID /
+            # logging middleware, so a throttled response must carry them
+            # itself (W-2/W-3).
+            headers = {
+                "Retry-After": str(retry_after),
+                "X-Request-ID": request_id,
+            }
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers=headers,
+                content={
+                    "error": "Rate limit exceeded",
+                    "error_code": "RateLimitException",
+                    "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
+                    "request_id": request_id,
+                    "details": {"retry_after": retry_after},
+                },
+            )
 
         # Record this request
         self.requests[client_id].append(now)

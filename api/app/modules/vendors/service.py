@@ -34,7 +34,6 @@ from app.modules.vendors.schemas import (
     VendorFilterParams,
     VendorPayablesSummary,
     VendorResponse,
-    VendorDetailResponse,
     VendorStatusCounts,
     VendorSummary,
     VendorTransactionFilterParams,
@@ -61,8 +60,10 @@ class VendorService:
         VendorStatus.INACTIVE: [VendorStatus.ACTIVE],
     }
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, current_user=None) -> None:
         self._db = db
+        self._current_user = current_user
+        self._actor_id = getattr(current_user, "id", None)
 
     # Internal Helpers
 
@@ -602,24 +603,6 @@ class VendorService:
             currency=vendor.currency,
         )
 
-    def get_detail(self, vendor_id: uuid.UUID) -> VendorDetailResponse:
-        """Get vendor detail — single payables computation shared across response objects."""
-        vendor = self._get_vendor_or_404(vendor_id)
-        payables = self._compute_payables_for_vendor(vendor_id)
-        vendor_response = self._build_vendor_response(vendor, payables=payables)
-        transactions_count = self.get_transactions_count(vendor_id)
-
-        return VendorDetailResponse(
-            vendor=vendor_response,
-            payables_summary=VendorPayablesSummary(
-                total_unpaid=payables["total_unpaid"],
-                overdue_total=payables["overdue_total"],
-                currency=vendor.currency,
-            ),
-            transaction_count=transactions_count,
-            next_actions=[],
-        )
-
     # UPDATE 
 
     def update(
@@ -912,15 +895,6 @@ class VendorService:
             )
 
 
-
-    def get_transactions_count(self, vendor_id: uuid.UUID) -> int:
-        """Count the total number of transactions for a vendor."""
-        try:
-            from app.modules.expenses.models import Expense
-        except ImportError:
-            return 0
-        
-        return self._db.query(Expense).filter(Expense.vendor_id == vendor_id).count()
 
     def generate_statement(
         self,

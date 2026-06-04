@@ -160,10 +160,15 @@ class VendorCreate(VendorBase):
 
 
 class VendorUpdate(VendorBase):
-    """Schema for editing an existing vendor profile."""
+    """Schema for editing an existing vendor profile.
+
+    `status` is intentionally NOT editable here (P-8): lifecycle changes must
+    go through the dedicated activate/deactivate endpoints so the
+    `_transition()` state machine and version bump are enforced. Allowing a
+    plain PUT to set status would bypass ALLOWED_TRANSITIONS.
+    """
 
     contact_id: UUID | None = Field(None, alias="contactId")
-    status: VendorStatus | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -346,17 +351,6 @@ class VendorStatement(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
-class VendorDetailResponse(BaseModel):
-    """
-    Complete vendor detail response, including payables summary.
-    """
-    vendor: VendorResponse
-    payables_summary: VendorPayablesSummary
-    transaction_count: int = Field(alias="transactionCount")
-    next_actions: list[str] = Field(default_factory=list, alias="nextActions")
-
-    model_config = {"populate_by_name": True}
 
 class VendorFilterParams(BaseModel):
     """Query parameters for the vendor list endpoint."""

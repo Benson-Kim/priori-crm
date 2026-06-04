@@ -56,8 +56,10 @@ class InvoiceService:
         InvoiceStatus.CANCELED: [],
     }
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, current_user=None) -> None:
         self._db = db
+        self._current_user = current_user
+        self._actor_id = getattr(current_user, "id", None)
 
     def _transition(self, invoice: Invoice, new_status: InvoiceStatus) -> None:
         """Enforce ALLOWED_TRANSITIONS and bump version atomically."""
@@ -582,7 +584,11 @@ class InvoiceService:
             update_data["tax_total"] = tax_total
 
         # Recalculate totals if discount or subtotal changed
-        if any(k in update_data for k in ["subtotal", "discount_type", "discount_amount", "discount_percentage"]):
+        recompute_balance = any(
+            k in update_data
+            for k in ["subtotal", "discount_type", "discount_amount", "discount_percentage"]
+        )
+        if recompute_balance:
             subtotal = update_data.get("subtotal", invoice.subtotal)
             tax_total = update_data.get("tax_total", invoice.tax_total)
 
@@ -594,6 +600,18 @@ class InvoiceService:
 
             total_due = subtotal - discount_value + tax_total
             balance_due = total_due - invoice.amount_paid
+
+            # Never let an edit drive the balance negative (INV-BE-7) — that
+            # would violate the balance_due >= 0 CHECK and surface as a 500.
+            if balance_due < Decimal("0.00"):
+                raise BadRequestException(
+                    detail=(
+                        f"Cannot reduce the invoice total below the amount already "
+                        f"paid ({invoice.currency} {invoice.amount_paid}). "
+                        f"Remove or reduce payments first."
+                    ),
+                    field="line_items",
+                )
 
             update_data["total_due"] = total_due
             update_data["balance_due"] = balance_due
@@ -712,8 +730,23 @@ class InvoiceService:
         Updates invoice status based on balance:
         - If amount_paid >= total_due → PAID
         - If amount_paid > 0 and < total_due → PARTIAL
+
+        Uses SELECT FOR UPDATE to prevent the TOCTOU race where two concurrent
+        payments both pass the overpay check and overpay the invoice
+        (V-REL-3 / INV-BE-3). Mirrors the locking pattern in send_invoice.
         """
-        invoice = self.get_by_id(invoice_id)
+        invoice = (
+            self._db.query(Invoice)
+            .options(joinedload(Invoice.customer))
+            .filter(Invoice.id == invoice_id)
+            .with_for_update()
+            .first()
+        )
+        if not invoice:
+            raise NotFoundException(
+                detail=f"Invoice with ID '{invoice_id}' not found",
+                resource="invoice",
+            )
 
         # Validate invoice status
         if invoice.status == InvoiceStatus.DRAFT:
@@ -755,14 +788,16 @@ class InvoiceService:
         invoice.amount_paid += data.amount
         invoice.balance_due = invoice.total_due - invoice.amount_paid
 
-        # Update status based on new balance
+        # Update status based on new balance, routed through the state machine
+        # so ALLOWED_TRANSITIONS is enforced and the version bump is owned in
+        # one place (INV-BE-3). _transition increments invoice.version.
         if invoice.balance_due <= 0:
-            invoice.status = InvoiceStatus.PAID
+            self._transition(invoice, InvoiceStatus.PAID)
             invoice.paid_at = datetime.now(UTC)
         elif invoice.amount_paid > 0:
-            invoice.status = InvoiceStatus.PARTIAL
-
-        invoice.version += 1
+            self._transition(invoice, InvoiceStatus.PARTIAL)
+        else:
+            invoice.version += 1
 
         self._db.flush()
 
@@ -837,7 +872,11 @@ class InvoiceService:
                         "Duplicated invoice %s → %s",
                         original.invoice_number, duplicate.invoice_number,
                     )
-                    return duplicate
+                    return InvoiceDuplicateResponse(
+                        original_invoice_id=original.id,
+                        new_invoice_id=duplicate.id,
+                        new_invoice_number=duplicate.invoice_number,
+                    )
 
                 except IntegrityError as exc:
                     sp.rollback()
@@ -874,8 +913,9 @@ class InvoiceService:
                 field="status"
             )
 
-        invoice.status = InvoiceStatus.CANCELED
-        invoice.version += 1
+        # Route through the state machine so ALLOWED_TRANSITIONS is enforced
+        # and the version bump is owned in one place (V-REL-2 / INV-BE-2).
+        self._transition(invoice, InvoiceStatus.CANCELED)
 
         self._db.flush()
 

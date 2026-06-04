@@ -1,9 +1,20 @@
 /**
  * Base API client for all HTTP communication.
+ *
+ * Every request carries the bearer access token. On a 401 the client attempts
+ * a single token refresh via /auth/refresh and retries the original request;
+ * if the refresh fails the tokens are cleared and the user is sent to login
+ * (LIB-FE-1, AUTH-FE-2).
  */
 
 import { appConfig } from "@/lib/constants";
 import type { PaginatedApiResponse } from "@/lib/types";
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+} from "@/lib/auth-storage";
 
 export class ApiError extends Error {
   status: number;
@@ -12,6 +23,98 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+function buildUrl(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined | null>
+): string {
+  const url = new URL(path, appConfig.apiUrl);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    });
+  }
+  return url.toString();
+}
+
+function withAuthHeaders(headers: HeadersInit = {}): Headers {
+  const result = new Headers(headers);
+  const token = getAccessToken();
+  if (token) {
+    result.set("Authorization", `Bearer ${token}`);
+  }
+  return result;
+}
+
+// Single-flight refresh: concurrent 401s share one refresh request.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return false;
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch(buildUrl("auth/refresh"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (!response.ok) {
+          return false;
+        }
+        const data = await response.json().catch(() => null);
+        if (!data?.access_token) {
+          return false;
+        }
+        setAccessToken(data.access_token);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  return refreshPromise;
+}
+
+function redirectToLogin(): void {
+  clearTokens();
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
+}
+
+/**
+ * Perform a fetch with bearer auth and a one-time 401 -> refresh -> retry.
+ */
+async function authedFetch(
+  url: string,
+  init: RequestInit,
+  allowRetry = true
+): Promise<Response> {
+  const response = await fetch(url, {
+    ...init,
+    headers: withAuthHeaders(init.headers),
+  });
+
+  if (response.status === 401 && allowRetry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      return authedFetch(url, init, false);
+    }
+    redirectToLogin();
+  }
+
+  return response;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -52,20 +155,12 @@ export async function apiGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ): Promise<T> {
-  const url = new URL(path, appConfig.apiUrl);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-  const response = await fetch(url.toString());
+  const response = await authedFetch(buildUrl(path, params), { method: "GET" });
   return handleResponse<T>(response);
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(new URL(path, appConfig.apiUrl).toString(), {
+  const response = await authedFetch(buildUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -74,7 +169,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(new URL(path, appConfig.apiUrl).toString(), {
+  const response = await authedFetch(buildUrl(path), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -83,10 +178,41 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const response = await fetch(new URL(path, appConfig.apiUrl).toString(), {
-    method: "DELETE",
+  const response = await authedFetch(buildUrl(path), { method: "DELETE" });
+  return handleResponse<T>(response);
+}
+
+/**
+ * Upload one or more files (and optional fields) as multipart/form-data
+ * through the shared client so the request carries auth and refresh on 401
+ * (LIB-FE-4, EXP-FE-2). Do NOT set Content-Type manually — the browser sets
+ * the multipart boundary.
+ */
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const response = await authedFetch(buildUrl(path), {
+    method: "POST",
+    body: formData,
   });
   return handleResponse<T>(response);
+}
+
+/**
+ * Download a binary resource (PDF, Excel, document) through the shared client
+ * so it carries auth and refresh on 401 (LIB-FE-4, EXP-FE-2).
+ */
+export async function apiDownload(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined | null>
+): Promise<Blob> {
+  const response = await authedFetch(buildUrl(path, params), { method: "GET" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(
+      body.detail || body.error || response.statusText || "Download failed",
+      response.status
+    );
+  }
+  return response.blob();
 }
 
 export function flattenPaginated<T>(raw: PaginatedApiResponse<T>) {

@@ -8,7 +8,10 @@ from jose import JWTError, jwt
 from app.common.exceptions import UnauthorizedException
 from app.lib.config import settings
 
-bearer_scheme = HTTPBearer()
+# auto_error=False so a missing/malformed Authorization header surfaces as our
+# own UnauthorizedException (401 in the app envelope) instead of FastAPI's bare
+# HTTPException 403 (SH-BE-6).
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -42,9 +45,11 @@ def create_refresh_token(subject: str) -> str:
 
 
 def decode_access_token(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:
     """Decode and validate a JWT access token from the Authorization header."""
+    if credentials is None or not credentials.credentials:
+        raise UnauthorizedException("Authentication required.")
     try:
         payload = jwt.decode(
             credentials.credentials,

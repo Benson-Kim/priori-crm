@@ -3,7 +3,7 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, field_validator
+from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     MOCK_PAYMENT_GATEWAY_KEY: str = "mock-key-for-dev"
     APP_NAME: str = "Priori Technologies"
     APP_VERSION: str = "1.0.0"
-    ENVIRONMENT: Literal["development", "staging", "production"] = "development"
+    ENVIRONMENT: Literal["development", "test", "staging", "production"] = "development"
     DEBUG: bool = Field(default=False)
     
     # API
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = "af-south-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    SES_SENDER_EMAIL: str
+    SES_SENDER_EMAIL: str = "noreply@example.com"
     SES_MAX_RETRIES: int = Field(default=3, ge=1, le=5)
     
     # CORS
@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
+    # Only trust X-Forwarded-For for client identity when the app sits
+    # behind a known, trusted reverse proxy. The header is client-spoofable
+    # when exposed directly, so it stays off by default (W-5).
+    RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
     
     # Monitoring
     SENTRY_DSN: str = ""
@@ -55,6 +59,16 @@ class Settings(BaseSettings):
     # Batch Processing
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
+
+    # File Storage (P-13)
+    # Root directory all uploaded objects are confined to. StorageService
+    # resolves every key under this path and refuses anything that escapes it.
+    UPLOAD_DIR: str = "uploads"
+
+    # Internal machine-to-machine secret (P-13). Protects internal endpoints
+    # such as the nightly overdue-transition job. Empty by default so internal
+    # endpoints fail closed (refused) until a secret is explicitly configured.
+    INTERNAL_API_SECRET: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -87,6 +101,33 @@ class Settings(BaseSettings):
         if not str(v).startswith(("postgresql://", "postgresql+psycopg2://")):
             raise ValueError("DATABASE_URL must be a valid PostgreSQL URL")
         return v
+
+    @model_validator(mode="after")
+    def validate_production_hardening(self) -> "Settings":
+        """Fail fast on insecure configuration in production (LIB-OPS-2)."""
+        if self.ENVIRONMENT != "production":
+            return self
+
+        errors: list[str] = []
+
+        if self.DEBUG:
+            errors.append("DEBUG must be False in production")
+
+        if not self.AWS_ACCESS_KEY_ID or not self.AWS_SECRET_ACCESS_KEY:
+            errors.append("AWS SES credentials are required in production")
+
+        if not self.SES_SENDER_EMAIL or self.SES_SENDER_EMAIL == "noreply@example.com":
+            errors.append("SES_SENDER_EMAIL must be configured in production")
+
+        if self.MOCK_PAYMENT_GATEWAY_KEY == "mock-key-for-dev":
+            errors.append("MOCK_PAYMENT_GATEWAY_KEY must not use the development default in production")
+
+        if errors:
+            raise ValueError(
+                "Insecure production configuration: " + "; ".join(errors)
+            )
+
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:

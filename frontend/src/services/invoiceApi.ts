@@ -182,8 +182,15 @@ export function recordPayment(id: string, data: PaymentCreatePayload) {
   return apiPost<Payment>(`invoices/${id}/payments`, data);
 }
 
+export interface InvoiceDuplicateResponse {
+  original_invoice_id: string;
+  new_invoice_id: string;
+  new_invoice_number: string;
+  message: string;
+}
+
 export function duplicateInvoice(id: string) {
-  return apiPost<InvoiceResponse>(`invoices/${id}/duplicate`, {});
+  return apiPost<InvoiceDuplicateResponse>(`invoices/${id}/duplicate`, {});
 }
 
 export function cancelInvoice(id: string) {

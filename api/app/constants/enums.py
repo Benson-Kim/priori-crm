@@ -2,6 +2,24 @@
 from enum import StrEnum
 
 
+class UserRole(StrEnum):
+    """Authorization roles for application users.
+
+    ADMIN can perform any action. MANAGER may perform destructive and
+    financial operations (hard-delete, record-payment, approve, convert).
+    MEMBER may perform ordinary create/update operations only.
+    """
+
+    ADMIN = "admin"
+    MANAGER = "manager"
+    MEMBER = "member"
+
+    @property
+    def is_privileged(self) -> bool:
+        """Whether this role may perform destructive/financial actions."""
+        return self in (UserRole.ADMIN, UserRole.MANAGER)
+
+
 class CustomerStatus(StrEnum):
     """Customer account status."""
 
