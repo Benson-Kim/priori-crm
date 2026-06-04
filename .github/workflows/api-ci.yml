@@ -52,5 +52,7 @@ jobs:
         run: pytest -v --tb=short
         env:
           DATABASE_URL: postgresql://priori:test_password@localhost:5432/prioritech_test
-          JWT_SECRET_KEY: ci-test-secret-key
+          DATABASE_URL: postgresql+psycopg2://priori:test_password@localhost:5432/prioritech_test
+          JWT_SECRET_KEY: ci-test-secret-key-at-least-32-characters-long
+          SES_SENDER_EMAIL: noreply@ci.example.com
           ENVIRONMENT: test

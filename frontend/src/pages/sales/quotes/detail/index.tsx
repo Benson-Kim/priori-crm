@@ -66,7 +66,7 @@ export default function QuoteDetailPage() {
         } catch (err) {
             console.error("[QuoteDetail] Duplicate failed:", err);
             setError(
-                err instanceof Error ? err.message : "Failed to duplicate invoice"
+                err instanceof Error ? err.message : "Failed to duplicate quote"
             );
         }
     };

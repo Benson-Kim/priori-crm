@@ -4,10 +4,11 @@ from datetime import date, timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import InvoiceServiceDep
+from app.common.dependencies import InvoiceServiceDep, require_role
+from app.constants.enums import UserRole
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
@@ -52,16 +53,11 @@ router = APIRouter()
 def create_invoice(
     body: InvoiceCreate,
     service: InvoiceServiceDep,
-    # TODO: Add current user dependency when auth module exists
-    # current_user: CurrentUser,
 ) -> InvoiceResponse:
     """
     Create a new invoice.
     """
-    # user_id = current_user.id if current_user else None
-    user_id = None  # TODO: Replace with actual user ID
-    
-    invoice = service.create(body, user_id=user_id)
+    invoice = service.create(body, user_id=service._actor_id)
     return InvoiceResponse.model_validate(invoice)
 
 
@@ -295,16 +291,11 @@ def get_invoice_by_number(
 def duplicate_invoice(
     invoice_id: UUID,
     service: InvoiceServiceDep,
-    # TODO: current_user: CurrentUser,
 ) -> InvoiceDuplicateResponse:
     """
     Duplicate an existing invoice.
     """
-    # user_id = current_user.id if current_user else None
-    user_id = None  # TODO: Replace with actual user ID
-    
-    duplicate = service.duplicate_invoice(invoice_id, user_id)
-    return InvoiceDuplicateResponse.model_validate(duplicate)
+    return service.duplicate_invoice(invoice_id, service._actor_id)
 
 # GET BY ID  
 
@@ -426,22 +417,20 @@ def send_invoice(
     responses={
         201: {"description": "Payment recorded successfully"},
         400: {"description": "Payment amount exceeds balance or invoice is DRAFT/CANCELED"},
+        403: {"description": "Insufficient role to record payments"},
         404: {"description": "Invoice not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def record_payment(
     invoice_id: UUID,
     body: PaymentCreate,
     service: InvoiceServiceDep,
-    # TODO: current_user: CurrentUser,
 ) -> PaymentResponse:
     """
     Record a payment against an invoice.
     """
-    # user_id = current_user.id if current_user else None
-    user_id = None  # TODO: Replace with actual user ID
-    
-    payment = service.record_payment(invoice_id, body, user_id)
+    payment = service.record_payment(invoice_id, body, service._actor_id)
     return PaymentResponse.model_validate(payment)
 
 
@@ -453,8 +442,10 @@ def record_payment(
     responses={
         200: {"description": "Invoice canceled successfully"},
         400: {"description": "Invoice already canceled"},
+        403: {"description": "Insufficient role to cancel invoices"},
         404: {"description": "Invoice not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def cancel_invoice(
     invoice_id: UUID,

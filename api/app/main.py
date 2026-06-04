@@ -70,11 +70,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     
-    app.add_middleware(RequestIDMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
-    
+    # Middleware executes in reverse order of registration: the last one
+    # added is the outermost. Register the rate limiter first so the
+    # logging (X-Response-Time) and request-ID (X-Request-ID) middleware
+    # wrap it and a throttled 429 still unwinds back through them with full
+    # tracing headers (W-2/W-3).
     if settings.RATE_LIMIT_ENABLED:
         app.add_middleware(RateLimitMiddleware)
+
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIDMiddleware)
 
     app.add_middleware(
         CORSMiddleware,

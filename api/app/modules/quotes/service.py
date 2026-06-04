@@ -64,8 +64,10 @@ class QuoteService:
         QuoteStatus.EXPIRED:  [QuoteStatus.SENT],
     }
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, current_user=None) -> None:
         self._db = db
+        self._current_user = current_user
+        self._actor_id = getattr(current_user, "id", None)
 
     # -------------------------------------------------------------------
     # Internal helpers

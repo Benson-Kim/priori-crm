@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.common.middleware import RateLimitMiddleware
-from app.common.exceptions import RateLimitException
 
 
 def _make_request(client_ip: str = "127.0.0.1", path: str = "/api/test"):
@@ -98,8 +97,13 @@ class TestRateLimiterEnforcement:
     """Rate limit is enforced when enabled."""
 
     @patch("app.common.middleware.settings")
-    def test_exceeding_limit_raises(self, mock_settings):
-        """Requests beyond max_requests within the window raise RateLimitException."""
+    def test_exceeding_limit_returns_429_with_retry_after(self, mock_settings):
+        """Requests beyond max_requests return a clean 429 with Retry-After (W-1).
+
+        The middleware must NOT raise: a BaseHTTPMiddleware runs outside the
+        AppException handler, so raising would surface as a 500. It returns a
+        JSONResponse directly instead.
+        """
         mock_settings.RATE_LIMIT_ENABLED = True
         mock_settings.RATE_LIMIT_PER_MINUTE = 3
 
@@ -115,12 +119,34 @@ class TestRateLimiterEnforcement:
                 mw.dispatch(req, call_next)
             )
 
-        # Next request should be rate-limited
+        # Next request should be rate-limited with a 429 response, not raised
         req = _make_request(client_ip=client_ip)
-        with pytest.raises(RateLimitException):
-            asyncio.get_event_loop().run_until_complete(
-                mw.dispatch(req, call_next)
-            )
+        response = asyncio.get_event_loop().run_until_complete(
+            mw.dispatch(req, call_next)
+        )
+
+        assert response.status_code == 429
+        assert response.headers["Retry-After"] == "60"
+
+    @patch("app.common.middleware.settings")
+    def test_throttled_request_does_not_call_downstream(self, mock_settings):
+        """A throttled request must short-circuit before call_next."""
+        mock_settings.RATE_LIMIT_ENABLED = True
+        mock_settings.RATE_LIMIT_PER_MINUTE = 1
+
+        app = MagicMock()
+        mw = RateLimitMiddleware(app)
+        call_next = _make_call_next()
+        client_ip = "10.0.0.2"
+
+        req = _make_request(client_ip=client_ip)
+        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        assert call_next.await_count == 1
+
+        # Second request is throttled; downstream must not be invoked again.
+        req = _make_request(client_ip=client_ip)
+        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        assert call_next.await_count == 1
 
 
 class TestRateLimiterDisabled:

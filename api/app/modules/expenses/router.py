@@ -2,19 +2,22 @@
 Expense API endpoints — Purchases module.
 """
 import logging
-import os
 import secrets
-import shutil
 from datetime import date, datetime
-from pathlib import PurePosixPath
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status, UploadFile, File, Form, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import ExpenseServiceDep
+from app.common.dependencies import (
+    ExpenseServiceDep,
+    require_role,
+    verify_internal_secret,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.uploads import validate_upload
+from app.constants.enums import UserRole
 from app.lib.storage import storage_service
 from app.modules.expenses.schemas import (
     ExpenseCalculationResponse,
@@ -34,26 +37,6 @@ from app.modules.expenses.schemas import (
 from app.modules.expenses.service import ExpenseService
 
 logger = logging.getLogger(__name__)
-
-# Upload security constants
-MAX_UPLOAD_SIZE_BYTES = 10_485_760  # 10 MB
-ALLOWED_MIME_TYPES = frozenset({
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "text/plain",
-    "text/csv",
-})
-ALLOWED_EXTENSIONS = frozenset({
-    ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp",
-    ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv",
-})
 
 router = APIRouter()
 
@@ -83,8 +66,7 @@ def create_expense(
     body: ExpenseCreate,
     service: ExpenseServiceDep,
 ) -> ExpenseResponse:
-    user_id = None   # TODO: replace with current_user.id when auth exists
-    expense = service.create(body, user_id=user_id)
+    expense = service.create(body, user_id=service._actor_id)
     return ExpenseResponse.model_validate(expense)
 
 
@@ -353,14 +335,15 @@ def update_expense(
     ),
     responses={
         204: {"description": "Expense deleted"},
+        403: {"description": "Insufficient role to delete expenses"},
         404: {"description": "Expense not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def delete_expense(
     expense_id: UUID,
     service: ExpenseServiceDep,
 ) -> None:
-    # had_payments returned for future role-gate enforcement
     service.delete(expense_id)
 
 
@@ -405,16 +388,17 @@ def mark_expense_as_paid(
     responses={
         201: {"description": "Payment recorded"},
         400: {"description": "Amount exceeds balance or expense already paid"},
+        403: {"description": "Insufficient role to record payments"},
         404: {"description": "Expense not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def record_expense_payment(
     expense_id: UUID,
     body: ExpensePaymentCreate,
     service: ExpenseServiceDep,
 ) -> ExpensePaymentResponse:
-    user_id = None   # TODO: replace with current_user.id
-    payment = service.record_payment(expense_id, body, user_id=user_id)
+    payment = service.record_payment(expense_id, body, user_id=service._actor_id)
     return ExpensePaymentResponse.model_validate(payment)
 
 
@@ -437,8 +421,7 @@ def duplicate_expense(
     expense_id: UUID,
     service: ExpenseServiceDep,
 ) -> ExpenseResponse:
-    user_id = None   # TODO: replace with current_user.id
-    duplicate = service.duplicate(expense_id, user_id=user_id)
+    duplicate = service.duplicate(expense_id, user_id=service._actor_id)
     return ExpenseResponse.model_validate(duplicate)
 
 
@@ -490,50 +473,22 @@ def attach_expense_document(
     source: str = Form("form"),
 ) -> ExpenseDocumentResponse:
     from app.constants.enums import DocumentSource
-    user_id = None   # TODO: replace with current_user.id
+    user_id = service._actor_id
     doc_source = DocumentSource(source)
 
-    raw_filename = file.filename or "unnamed_file"
-    safe_basename = PurePosixPath(raw_filename).name   # strips ../
-    if not safe_basename or safe_basename.startswith("."):
-        safe_basename = "unnamed_file"
-
-    _, ext = os.path.splitext(safe_basename)
-    ext_lower = ext.lower()
-    if ext_lower not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"File type '{ext_lower}' is not allowed. "
-                f"Accepted: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
-            ),
-        )
+    # Confirm the expense exists (and is owned by the authenticated tenant)
+    # before touching storage — raises NotFoundException otherwise.
+    service.get_by_id(expense_id)
 
     mime_type = file.content_type or "application/octet-stream"
-    if mime_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"MIME type '{mime_type}' is not allowed. "
-                "Upload a PDF, image, or office document."
-            ),
-        )
 
-    file.file.seek(0, 2)  # seek to end
-    file_size_bytes = file.file.tell()
-    file.file.seek(0)     # reset
-
-    if file_size_bytes > MAX_UPLOAD_SIZE_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"File size ({file_size_bytes / 1_048_576:.1f} MB) exceeds "
-                f"the {MAX_UPLOAD_SIZE_BYTES / 1_048_576:.0f} MB limit."
-            ),
-        )
-
-    if file_size_bytes == 0:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    # Single source of truth for the upload attack surface (V-DRY-3):
+    # sanitize name → extension → MIME → size → magic-byte content sniff.
+    # Rejects e.g. HTML/executables mislabeled as image/png. Leaves the
+    # stream rewound to 0, ready to persist.
+    safe_basename, _ext, file_size_bytes = validate_upload(
+        file.file, file.filename or "unnamed_file", mime_type
+    )
 
     unique_prefix = secrets.token_hex(8)
     filename = f"{unique_prefix}_{safe_basename}"
@@ -555,32 +510,41 @@ def attach_expense_document(
 
 @router.get(
     "/{expense_id}/documents/{document_id}/download",
-    summary="Get document download info",
+    summary="Download an expense document",
     description=(
-        "Returns document metadata. Pre-signed URL generation is a TODO "
-        "pending storage service integration."
+        "Stream a document attached to an expense. Requires authentication; "
+        "the document must belong to the given expense. The file is served "
+        "through a path-confined storage handle — never a raw client-supplied "
+        "path — so storage keys cannot be used for arbitrary file reads."
     ),
     responses={
-        200: {"description": "Document metadata"},
+        200: {"description": "Document file stream"},
+        401: {"description": "Authentication required"},
         404: {"description": "Document not found on this expense"},
-        501: {"description": "Pre-signed URL generation not yet implemented"},
     },
 )
 def get_expense_document_download(
     expense_id: UUID,
     document_id: UUID,
     service: ExpenseServiceDep,
-):
+) -> StreamingResponse:
+    # Ownership: get_document is scoped to (expense_id, document_id) and the
+    # service itself depends on CurrentUser, so an unauthenticated caller is
+    # rejected before this point and UUID enumeration cannot leak other PII.
     document = service.get_document(expense_id, document_id)
-    if not storage_service.file_exists(document.storage_key):
-        raise HTTPException(
-            status_code=404,
-            detail="File not found on server",
-        )
-    return FileResponse(
-        path=document.storage_key,
-        filename=document.filename,
+
+    # open_file resolves the stored key under base_dir and asserts containment
+    # (raises NotFoundException if missing, BadRequestException on traversal).
+    file_handle = storage_service.open_file(document.storage_key)
+
+    return StreamingResponse(
+        file_handle,
         media_type=document.mime_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{document.filename}"'
+            )
+        },
     )
 
 
@@ -628,8 +592,10 @@ def delete_expense_document(
     summary="Nightly overdue transition (internal)",
     description=(
         "Bulk-transitions PENDING expenses past their due_date to OVERDUE. "
-        "Called by the nightly scheduler. Not a public client endpoint."
+        "Called by the nightly scheduler. Requires the X-Internal-Secret "
+        "header; not a public client endpoint."
     ),
+    dependencies=[Depends(verify_internal_secret)],
 )
 def trigger_overdue_transition(service: ExpenseServiceDep) -> dict:
     updated = service.bulk_transition_overdue()

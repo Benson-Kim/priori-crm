@@ -39,8 +39,10 @@ logger = logging.getLogger(__name__)
 class CustomerService:
     """Handles customer CRUD business logic."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, current_user=None) -> None:
         self._db = db
+        self._current_user = current_user
+        self._actor_id = getattr(current_user, "id", None)
 
     # Create
 
@@ -97,10 +99,13 @@ class CustomerService:
 
     # Read One
 
-    def get_by_id(self, customer_id: uuid.UUID) -> Customer:
+    def get_by_id(self, customer_id: uuid.UUID, include_deleted: bool = False) -> Customer:
         """Get a customer by ID or raise 404."""
         try:
-            customer = self._db.query(Customer).filter(Customer.id == customer_id).first()
+            query = self._db.query(Customer).filter(Customer.id == customer_id)
+            if not include_deleted:
+                query = query.filter(Customer.status != CustomerStatus.DELETED)
+            customer = query.first()
             if customer is None:
                 raise NotFoundException(
                     detail=f"Customer with ID '{customer_id}' not found",
@@ -132,6 +137,11 @@ class CustomerService:
                 except ValueError:
                     raise BadRequestException(detail=f"Invalid status: {status}", field="status")
             
+            else:
+                # Default list (no explicit status / 'all') hides soft-deleted
+                # customers. Surfacing them requires status=deleted.
+                query = query.filter(Customer.status != CustomerStatus.DELETED)
+             
             if search:
                 search_term = f"%{search}%"
                 query = query.filter(

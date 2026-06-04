@@ -5,12 +5,12 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import QuoteServiceDep
+from app.common.dependencies import QuoteServiceDep, require_role
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType
+from app.constants.enums import DiscountType, UserRole
 from app.modules.quotes.schemas import (
     QuoteApproveRequest,
     QuoteCalculationResponse,
@@ -50,8 +50,7 @@ router = APIRouter()
 )
 def create_quote(body: QuoteCreate, service: QuoteServiceDep) -> QuoteResponse:
     """Create a new quote."""
-    user_id = None  # TODO: Replace with current user
-    quote = service.create(body, user_id=user_id)
+    quote = service.create(body, user_id=service._actor_id)
     return QuoteResponse.model_validate(quote)
 
 
@@ -257,8 +256,7 @@ def duplicate_quote(
     service: QuoteServiceDep,
 ) -> QuoteDuplicateResponse:
     """Duplicate an existing quote as a new DRAFT."""
-    user_id = None  # TODO: Replace with current user
-    duplicate = service.duplicate_quote(quote_id, user_id)
+    duplicate = service.duplicate_quote(quote_id, service._actor_id)
     return QuoteDuplicateResponse(
         original_quote_id=quote_id,
         new_quote_id=duplicate.id,
@@ -378,8 +376,10 @@ def send_quote(
     responses={
         200: {"description": "Quote approved successfully"},
         400: {"description": "Quote not in SENT/DRAFT status or is expired"},
+        403: {"description": "Insufficient role to approve quotes"},
         404: {"description": "Quote not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def approve_quote(
     quote_id: UUID,
@@ -388,8 +388,7 @@ def approve_quote(
 ) -> QuoteResponse:
     """Approve a quote."""
     approved_at = body.approved_at if body else None
-    user_id = None  # TODO: Replace with current user
-    quote = service.approve_quote(quote_id, approved_at, user_id)
+    quote = service.approve_quote(quote_id, approved_at, service._actor_id)
     return QuoteResponse.model_validate(quote)
 
 
@@ -402,16 +401,17 @@ def approve_quote(
     responses={
         201: {"description": "Quote converted to invoice successfully"},
         400: {"description": "Quote cannot be converted (not approved, expired, or already converted)"},
+        403: {"description": "Insufficient role to convert quotes"},
         404: {"description": "Quote not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def convert_quote_to_invoice(
     quote_id: UUID,
     service: QuoteServiceDep,
 ) -> QuoteConvertToInvoiceResponse:
     """Convert an approved quote to an invoice."""
-    user_id = None  # TODO: Replace with current user
-    result = service.convert_to_invoice(quote_id, user_id)
+    result = service.convert_to_invoice(quote_id, service._actor_id)
     return QuoteConvertToInvoiceResponse(**result)
 
 

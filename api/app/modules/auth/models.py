@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.common.database import Base
+from app.constants.enums import UserRole
 
 
 class User(Base):
@@ -19,6 +20,12 @@ class User(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     avatar_url = Column(String(500), nullable=True)
+    role = Column(
+        String(20),
+        nullable=False,
+        default=UserRole.MEMBER,
+        server_default=UserRole.MEMBER.value,
+    )
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(

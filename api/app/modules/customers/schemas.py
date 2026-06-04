@@ -16,7 +16,7 @@ from app.common.validators import (
     normalize_phone,
     validate_country_code,
 )
-from app.constants.enums import Currency, CustomerStatus, CustomerType
+from app.constants.enums import Currency, CustomerType
 
 
 # Request Schemas
@@ -137,7 +137,9 @@ class CustomerUpdate(BaseModel):
     province: str | None = None
     city: str | None = None
     postal_code: str | None = Field(None, alias="postalCode")
-    status: CustomerStatus | None = None
+    # `status` is intentionally NOT editable here (P-8): lifecycle changes must
+    # go through the dedicated activate/deactivate endpoints so the state
+    # machine is enforced. A plain PUT must not be able to deactivate/delete.
 
     @field_validator(
         "company_name", "website", "vat_number",

@@ -90,7 +90,7 @@ export function InvoiceDetailPage() {
         if (!invoice) return;
         try {
             const dup = await duplicateInvoice(invoice.id);
-            navigate(`/invoices/${dup.id}/edit`);
+            navigate(`/invoices/${dup.new_invoice_id}/edit`);
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : "Failed to duplicate invoice"

@@ -9,7 +9,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.common.dependencies import CustomerServiceDep
+from app.common.dependencies import CurrentUser, CustomerServiceDep
+from app.common.exceptions import DatabaseException, ForbiddenException, NotFoundException
+from app.constants.enums import UserRole
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.customers.schemas import (
     CustomerCreate,
@@ -109,7 +111,7 @@ def get_customer(
     financial = service.get_financial_summary(customer_id)
 
     # Fetch recent invoices (first page, 5 items)
-    recent_invoices_page = service.get_customer_invoices(
+    recent_invoices_page = service.get_invoices(
         customer_id,
         PaginationParams(page=1, per_page=5),
     )
@@ -134,7 +136,13 @@ def get_customer(
             period_start=date(today.year, 1, 1),
             period_end=today,
         )
-    except Exception:
+    except (NotFoundException, DatabaseException):
+        # Only tolerate expected, narrow failures here so the detail view
+        # still renders without a statement. Unexpected errors must
+        # propagate to the global exception handlers (CUST-BE-2).
+        logger.exception(
+            "Failed to generate statement for customer %s", customer_id
+        )
         statement = None
 
     return CustomerDetailResponse(
@@ -247,6 +255,7 @@ def check_customer_delete_eligibility(
 def delete_customer(
     customer_id: UUID,
     service: CustomerServiceDep,
+    current_user: CurrentUser,
     hard_delete: Annotated[
         bool,
         Query(description="Permanently delete record (default: False = soft delete)"),
@@ -257,6 +266,12 @@ def delete_customer(
     ] = False,
 ) -> CustomerDeleteResponse:
     """Delete a customer (soft delete by default)."""
+    # Destructive hard-delete is restricted to privileged roles (AUTH-BE-4).
+    if hard_delete and not UserRole(current_user.role).is_privileged:
+        raise ForbiddenException(
+            detail="You do not have permission to permanently delete customers.",
+            required_permission="admin/manager",
+        )
     result = service.delete(customer_id, hard_delete=hard_delete, force=force)
 
     return CustomerDeleteResponse(

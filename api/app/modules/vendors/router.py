@@ -7,10 +7,11 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
-from app.common.dependencies import VendorServiceDep
+from app.common.dependencies import VendorServiceDep, require_role
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.constants.enums import UserRole
 from app.modules.vendors.schemas import (
     ContactSearchResponse,
     VendorCreate,
@@ -55,11 +56,9 @@ router = APIRouter()
 def create_vendor(
     body: VendorCreate,
     service: VendorServiceDep,
-    # TODO: current_user: CurrentUser when auth module ships
 ) -> VendorResponse:
     """Create a vendor."""
-    user_id = None  # TODO: Replace with current_user.id
-    vendor = service.create(body, user_id=user_id)
+    vendor = service.create(body, user_id=service._actor_id)
     return VendorResponse.model_validate(vendor)
 
 
@@ -257,11 +256,9 @@ def update_vendor(
             ),
         ),
     ] = None,
-    # TODO: current_user: CurrentUser,
 ) -> VendorResponse:
     """Update an existing vendor."""
-    user_id = None  # TODO: Replace with current_user.id
-    vendor = service.update(vendor_id, body, user_id=user_id, expected_version=expected_version)
+    vendor = service.update(vendor_id, body, user_id=service._actor_id, expected_version=expected_version)
     return VendorResponse.model_validate(vendor)
 
 
@@ -280,19 +277,19 @@ def update_vendor(
     responses={
         200: {"description": "Vendor deleted successfully"},
         400: {"description": "Vendor has open transactions — deletion blocked"},
+        403: {"description": "Insufficient role to delete vendors"},
         404: {"description": "Vendor not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def delete_vendor(
     vendor_id: UUID,
     service: VendorServiceDep,
-    # TODO: current_user: CurrentUser — only Manager/Owner can delete 
 ) -> VendorDeleteResponse:
     """
     Permanently delete a vendor.
     """
-    user_id = None  # TODO: Replace with current_user.id
-    result = service.delete(vendor_id, user_id=user_id)
+    result = service.delete(vendor_id, user_id=service._actor_id)
     return VendorDeleteResponse(**result)
 
 
@@ -316,11 +313,9 @@ def delete_vendor(
 def activate_vendor(
     vendor_id: UUID,
     service: VendorServiceDep,
-    # TODO: current_user: CurrentUser,
 ) -> VendorResponse:
     """Activate a vendor """
-    user_id = None  # TODO: Replace with current_user.id
-    vendor = service.activate(vendor_id, user_id=user_id)
+    vendor = service.activate(vendor_id, user_id=service._actor_id)
     return VendorResponse.model_validate(vendor)
 
 
@@ -345,11 +340,9 @@ def activate_vendor(
 def deactivate_vendor(
     vendor_id: UUID,
     service: VendorServiceDep,
-    # TODO: current_user: CurrentUser,
 ) -> VendorResponse:
     """Deactivate a vendor."""
-    user_id = None  # TODO: Replace with current_user.id
-    vendor = service.deactivate(vendor_id, user_id=user_id)
+    vendor = service.deactivate(vendor_id, user_id=service._actor_id)
     return VendorResponse.model_validate(vendor)
 
 

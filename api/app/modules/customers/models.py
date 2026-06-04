@@ -224,7 +224,11 @@ class Customer(Base):
     quotes = relationship(
         "Quote",
         back_populates="customer",
-        cascade="all, delete-orphan",
+        # Non-destructive cascade to match `invoices` and the DB-level
+        # FK ondelete=RESTRICT on Quote.customer_id. A destructive
+        # "all, delete-orphan" here would silently wipe quote history on
+        # customer hard-delete (V-DI-2 / CUST-DBA-1 / QT-DBA-1).
+        cascade="save-update, merge",
         lazy="select",
     )
 
