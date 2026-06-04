@@ -65,6 +65,10 @@ class Quote(Base):
             name="ck_quotes_total_non_negative",
         ),
         CheckConstraint(
+            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            name="ck_quotes_valid_currency",
+        ),
+        CheckConstraint(
             "(discount_type = 'amount' AND discount_percentage IS NULL) OR "
             "(discount_type = 'percentage' AND discount_amount IS NULL) OR "
             "(discount_type IS NULL AND discount_amount IS NULL AND discount_percentage IS NULL)",
@@ -305,10 +309,12 @@ class Quote(Base):
 
     @property
     def is_expired(self) -> bool:
-        """Check if quote is past due date."""
-        return (
-            self.status not in [QuoteStatus.APPROVED, QuoteStatus.INVOICED] and
-            self.due_date < date.today()
+        """Check if quote is past due date (centralized predicate, V-DRY-4)."""
+        from app.common.financial import check_is_overdue
+        return check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={QuoteStatus.APPROVED, QuoteStatus.INVOICED},
         )
 
     @property

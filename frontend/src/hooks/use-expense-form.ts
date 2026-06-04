@@ -89,7 +89,7 @@ export function useExpenseForm(expenseId?: string): UseExpenseFormReturn {
                     })),
                     notes: payload.notes,
                 };
-                await updateExpense(expenseId, updatePayload);
+                await updateExpense(expenseId, updatePayload, initialData.version);
             } else {
                 const expense = await createExpense(expensePayload);
                 expenseIdToNavigate = expense.id;

@@ -48,6 +48,10 @@ class Vendor(Base):
             "char_length(trim(vendor_name)) > 0",
             name="ck_vendors_name_non_empty",
         ),
+        CheckConstraint(
+            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            name="ck_vendors_valid_currency",
+        ),
 
         Index("ix_vendors_status_name", "status", "vendor_name"),
         Index("ix_vendors_email", "email"),

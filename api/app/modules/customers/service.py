@@ -49,10 +49,13 @@ class CustomerService:
     def create(self, data: CustomerCreate) -> Customer:
         """Create a new customer."""
         try:
-            existing = self._db.query(Customer).filter(Customer.email == data.email).first()
+            # Case-insensitive identity: store and compare emails lowercased
+            # so 'Alpha@x.com' and 'alpha@x.com' are one customer (CUST-DBA-2).
+            email = data.email.strip().lower()
+            existing = self._db.query(Customer).filter(Customer.email == email).first()
             if existing:
                 raise ConflictException(
-                    detail=f"Customer with email '{data.email}' already exists",
+                    detail=f"Customer with email '{email}' already exists",
                     field="email",
                 )
 
@@ -61,7 +64,7 @@ class CustomerService:
                 company_name=data.company_name,
                 first_name=data.first_name,
                 last_name=data.last_name,
-                email=data.email,
+                email=email,
                 phone=data.phone,
                 website=data.website,
                 vat_number=data.vat_number,
@@ -233,6 +236,11 @@ class CustomerService:
             
             if not update_data:
                 return customer
+
+            # Normalize email to lowercase before conflict check + persist
+            # (CUST-DBA-2).
+            if "email" in update_data and update_data["email"] is not None:
+                update_data["email"] = update_data["email"].strip().lower()
 
             # Check for email conflict if email is being updated
             if "email" in update_data and update_data["email"] != customer.email:
@@ -406,9 +414,16 @@ class CustomerService:
             ).count()
             associated_records["invoices"] = invoice_count
             if invoice_count > 0:
+                # PARTIAL invoices still carry an outstanding balance and must
+                # count as unpaid, otherwise a partially-paid customer looks
+                # safe to hard-delete (VER-NEW-2).
                 unpaid_count = self._db.query(Invoice).filter(
                     Invoice.customer_id == customer_id,
-                    Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.OVERDUE])
+                    Invoice.status.in_([
+                        InvoiceStatus.SENT,
+                        InvoiceStatus.PARTIAL,
+                        InvoiceStatus.OVERDUE,
+                    ])
                 ).count()
                 warnings.append(
                     f"{invoice_count} invoice(s) associated with this customer "
@@ -558,59 +573,6 @@ class CustomerService:
         except SQLAlchemyError as e:
             logger.exception(f"Database error deleting customer {customer_id}")
             raise DatabaseException("Failed to delete customer") from e
-
-    def batch_update_status(
-        self, 
-        customer_ids: list[uuid.UUID], 
-        new_status: CustomerStatus,
-    ) -> int:
-        """Batch update customer status"""
-        if len(customer_ids) == 0:
-            return 0
-
-        if len(customer_ids) > settings.BATCH_SIZE:
-            raise BadRequestException(
-                detail=(
-                    f"Batch size {len(customer_ids)} exceeds maximum "
-                    f"of {settings.BATCH_SIZE}. Split into smaller batches."
-                ),
-                field="customer_ids",
-            )
-
-        try:
-            result = (
-                self._db.query(Customer)
-                .filter(Customer.id.in_(customer_ids))
-                .update(
-                    {Customer.status: new_status},
-                    synchronize_session=False,
-                )
-            )
-
-            if result != len(customer_ids):
-                logger.warning(
-                    "Batch update affected %d rows but %d IDs were provided "
-                    "(some IDs may not exist)",
-                    result,
-                    len(customer_ids),
-                )
-
-            self._db.flush()
-
-            logger.info(
-                f"Batch updated {result} customers to status '{new_status}'",
-                extra={
-                    "customer_ids": [str(cid) for cid in customer_ids],
-                    "new_status": new_status,
-                    "count": result,
-                },
-            )
-
-            return result
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error in batch status update")
-            raise DatabaseException("Failed to batch update customers") from e
 
     def get_financial_summary(self, customer_id: uuid.UUID) -> FinancialSummary:
         """
@@ -838,12 +800,15 @@ class CustomerService:
         as_of_date: date,
     ) -> Decimal:
         """Calculate customer balance as of a specific date (invoiced - paid)."""
-        # Sum all invoice totals before date
+        # Sum invoice totals before date, excluding DRAFT/CANCELED so the
+        # opening balance matches _update_customer_balance and the persisted
+        # Customer.balance (VER-NEW-3).
         invoiced = (
             self._db.query(func.sum(Invoice.total_due))
             .filter(
                 Invoice.customer_id == customer_id,
                 Invoice.transaction_date < as_of_date,
+                Invoice.status.notin_([InvoiceStatus.CANCELED, InvoiceStatus.DRAFT]),
             )
             .scalar() or Decimal("0.00")
         )

@@ -46,20 +46,34 @@ export function generateRowKey(): string {
 }
 
 /**
- * Calculate line total: quantity × unit price.
+ * Round a monetary value to 2 decimal places using ROUND_HALF_UP.
+ *
+ * Single source of truth for money rounding on the frontend. Mirrors the
+ * backend policy in api/app/common/financial.quantize_money so preview
+ * totals always equal the persisted/PDF totals for the same input
+ * (SH-FE-1 / P-3). Uses an epsilon nudge to defend against binary-float
+ * representation errors (e.g. 1.005) before half-up rounding.
+ */
+export function roundMoney(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Calculate line total: quantity × unit price (quantized to 2 dp).
  */
 export function calcLineTotal(qty: string, price: string): number {
   const q = parseFloat(qty) || 0;
   const p = parseFloat(price) || 0;
-  return parseFloat((q * p).toFixed(2));
+  return roundMoney(q * p);
 }
 
 /**
- * Calculate tax amount for a line item.
+ * Calculate tax amount for a line item (quantized to 2 dp).
  */
 export function calcTaxAmount(lineTotal: number, taxType: string): number {
   const rate = TAX_RATES[taxType] ?? 0;
-  return parseFloat((lineTotal * rate).toFixed(2));
+  return roundMoney(lineTotal * rate);
 }
 
 /**
@@ -79,23 +93,21 @@ export function calculateTotals(
     taxTotal += calcTaxAmount(lineTotal, item.taxType);
   }
 
-  subtotal = parseFloat(subtotal.toFixed(2));
-  taxTotal = parseFloat(taxTotal.toFixed(2));
+  // Line values are already quantized; re-round the sums to settle any
+  // binary-float accumulation error.
+  subtotal = roundMoney(subtotal);
+  taxTotal = roundMoney(taxTotal);
 
   const discountValueNum = parseFloat(discountValue) || 0;
   let discountAmount = 0;
 
   if (discountType === "amount") {
-    discountAmount = Math.min(discountValueNum, subtotal);
+    discountAmount = roundMoney(Math.min(discountValueNum, subtotal));
   } else if (discountType === "percentage") {
-    discountAmount = parseFloat(
-      (subtotal * (discountValueNum / 100)).toFixed(2)
-    );
+    discountAmount = roundMoney(subtotal * (discountValueNum / 100));
   }
 
-  const totalDue = parseFloat(
-    (subtotal - discountAmount + taxTotal).toFixed(2)
-  );
+  const totalDue = roundMoney(subtotal - discountAmount + taxTotal);
 
   return { subtotal, taxTotal, discountAmount, totalDue };
 }

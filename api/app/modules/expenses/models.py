@@ -79,6 +79,10 @@ class Expense(Base):
             "balance_due >= 0",
             name="ck_expenses_balance_due_non_negative",
         ),
+        CheckConstraint(
+            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            name="ck_expenses_valid_currency",
+        ),
         # Query-path indexes 
         Index("ix_expenses_vendor_status",   "vendor_id", "status"),
         Index("ix_expenses_status_due_date", "status",    "due_date"),

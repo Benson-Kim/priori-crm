@@ -32,7 +32,7 @@ class ReferenceGenerator:
         lock_key: str,
         width: int = 3,
         use_date_scope: bool = True,
-        use_max_strategy: bool = False,
+        use_max_strategy: bool = True,
         strip_prefix_len: int | None = None,
     ) -> str:
         """
@@ -46,11 +46,14 @@ class ReferenceGenerator:
             width: Zero-pad width for the numeric suffix.
             use_date_scope: If True, produces PREFIX-YYYYMMDD-NNN format.
                             If False, produces PREFIX-NNNN format.
-            use_max_strategy: If True, uses MAX(numeric_suffix) instead of
-                              COUNT(*) to prevent reuse after deletions.
+            use_max_strategy: Default True. Uses MAX(numeric_suffix)+1, which
+                              never reuses a number after the latest record is
+                              deleted. Set False only to fall back to the
+                              legacy COUNT(*) strategy (P-4).
             strip_prefix_len: Number of leading characters to strip when
                               extracting the numeric suffix for MAX strategy.
-                              Required when use_max_strategy=True.
+                              Optional: when omitted it is derived from the
+                              full prefix (PREFIX-YYYYMMDD- or PREFIX-).
 
         Returns:
             The next reference string (e.g. "INV-20260527-003").
@@ -60,6 +63,21 @@ class ReferenceGenerator:
             full_prefix = f"{prefix}-{today.strftime('%Y%m%d')}"
             self._advisory_lock(f"{lock_key}_{full_prefix}")
 
+            if use_max_strategy:
+                # Numeric suffix follows "PREFIX-YYYYMMDD-".
+                offset = strip_prefix_len if strip_prefix_len is not None else len(full_prefix) + 1
+                max_suffix = (
+                    self._db.query(
+                        func.max(
+                            func.cast(func.substring(column, offset + 1), Integer)
+                        )
+                    )
+                    .filter(column.like(f"{full_prefix}%"))
+                    .scalar()
+                ) or 0
+                return f"{full_prefix}-{max_suffix + 1:0{width}d}"
+
+            # Legacy COUNT strategy (opt-out only).
             count = (
                 self._db.query(func.count(model.id))
                 .filter(column.like(f"{full_prefix}%"))
@@ -71,14 +89,13 @@ class ReferenceGenerator:
         self._advisory_lock(lock_key)
 
         if use_max_strategy:
-            if strip_prefix_len is None:
-                raise ValueError("strip_prefix_len is required for MAX strategy")
-
+            # Numeric suffix follows "PREFIX-".
+            offset = strip_prefix_len if strip_prefix_len is not None else len(prefix) + 1
             max_suffix = (
                 self._db.query(
                     func.max(
                         func.cast(
-                            func.substring(column, strip_prefix_len + 1),
+                            func.substring(column, offset + 1),
                             Integer,
                         )
                     )
@@ -86,6 +103,6 @@ class ReferenceGenerator:
             ) or 0
             return f"{prefix}-{max_suffix + 1:0{width}d}"
 
-        # COUNT strategy (default for global references)
+        # Legacy COUNT strategy (opt-out only).
         count = self._db.query(func.count(model.id)).scalar()
         return f"{prefix}-{count + 1:0{width}d}"

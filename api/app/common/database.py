@@ -80,6 +80,49 @@ def receive_handle_error(exception_context: Any) -> None:
     )
 
 
+def assert_version(
+    db: Session,
+    model: type,
+    record_id: Any,
+    expected_version: int | None,
+) -> None:
+    """Atomically assert a row is still at ``expected_version`` (P-9).
+
+    Re-selects the row's version column ``WITH FOR UPDATE`` so concurrent
+    updaters serialize on the row: the second updater blocks until the first
+    commits, then observes the bumped version and is rejected. This replaces
+    the non-atomic "load without lock, compare in Python" check that allowed
+    silent last-write-wins.
+
+    No-op when ``expected_version`` is None (caller opted out of the check).
+    Raises ConflictException (HTTP 409) on mismatch.
+
+    Note: the row-level lock is a PostgreSQL guarantee; on the SQLite test
+    fallback FOR UPDATE is a no-op, but the version comparison still holds.
+    """
+    if expected_version is None:
+        return
+
+    # Local import avoids a circular import (exceptions imports config only).
+    from app.common.exceptions import ConflictException
+
+    current_version = (
+        db.query(model.version)
+        .filter(model.id == record_id)
+        .with_for_update()
+        .scalar()
+    )
+
+    if current_version is not None and current_version != expected_version:
+        raise ConflictException(
+            detail=(
+                f"This record has been modified by another user "
+                f"(expected version {expected_version}, current version "
+                f"{current_version}). Please refresh and try again."
+            ),
+        )
+
+
 def get_db() -> Generator[Session, None, None]:
     """
     Dependency that provides a database session.

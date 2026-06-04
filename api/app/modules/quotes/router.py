@@ -8,7 +8,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import QuoteServiceDep, require_role
+from app.common.dependencies import (
+    QuoteServiceDep,
+    require_role,
+    verify_internal_secret,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DiscountType, UserRole
 from app.modules.quotes.schemas import (
@@ -459,3 +463,26 @@ def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
             "Content-Disposition": f'attachment; filename="Quote_{quote.quote_reference}.pdf"'
         },
     )
+
+
+# SCHEDULER  (internal — hidden from public OpenAPI docs)
+
+
+@router.post(
+    "/internal/transition-expired",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+    summary="Nightly expired transition (internal)",
+    description=(
+        "Bulk-transitions past-due DRAFT/SENT quotes to EXPIRED and stamps "
+        "expired_at. Called by the nightly scheduler. Requires the "
+        "X-Internal-Secret header; not a public client endpoint."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
+)
+def trigger_quote_expired_transition(service: QuoteServiceDep) -> dict:
+    updated = service.bulk_transition_expired()
+    return {
+        "transitioned": updated,
+        "message": f"{updated} quote(s) transitioned to EXPIRED",
+    }
