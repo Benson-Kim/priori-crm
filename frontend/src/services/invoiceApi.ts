@@ -2,7 +2,7 @@
  * Invoice API service.
  */
 
-import { apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import { apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
 
 
@@ -195,4 +195,28 @@ export function duplicateInvoice(id: string) {
 
 export function cancelInvoice(id: string) {
   return apiPost<InvoiceResponse>(`invoices/${id}/cancel`, {});
+}
+
+/** Download the invoice PDF (GET /invoices/{id}/pdf). Returns a Blob to save. */
+export function downloadInvoicePdf(id: string) {
+  return apiDownload(`invoices/${id}/pdf`);
+}
+
+export interface InvoiceSendPayload {
+  toEmail?: string;
+  subject?: string;
+  body?: string;
+  attachPdf?: boolean;
+}
+
+export interface InvoiceSendResult {
+  invoice_id: string;
+  sent_to: string;
+  sent_at: string;
+  message: string;
+}
+
+/** Send the invoice by email (POST /invoices/{id}/send). */
+export function sendInvoice(id: string, data: InvoiceSendPayload = {}) {
+  return apiPost<InvoiceSendResult>(`invoices/${id}/send`, data);
 }

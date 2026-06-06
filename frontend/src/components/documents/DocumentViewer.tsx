@@ -3,9 +3,9 @@
  * Used for detail pages and PDF preview.
  */
 
-import { COMPANY_INFO } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { DocumentTotalsPanel } from "./layout/document-totals";
 import { buildVatLabel, type DocumentTotals } from "./utils";
 
@@ -71,21 +71,9 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
       {/*  Top Section  */}
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Logo */}
-          <div className="flex flex-col items-start gap-3">
-            <img
-              src="/Logo Priori.svg"
-              alt="Priori logo"
-              className="aspect-150/44 w-37.5"
-            />
-          </div>
-
-          {/* Company Info */}
-          <div className="flex flex-col gap-1 text-gray-800">
-            <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
-            <p className="text-sm">{COMPANY_INFO.address}</p>
-            <p className="text-sm">{COMPANY_INFO.phone}</p>
-            <p className="text-sm">{COMPANY_INFO.email}</p>
+          {/* Owner identity (logo + company block) — single source of truth. */}
+          <div className="md:col-span-2">
+            <DocumentOwnerHeader />
           </div>
 
           {/* Document To */}

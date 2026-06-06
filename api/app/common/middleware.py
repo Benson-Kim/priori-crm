@@ -2,8 +2,6 @@
 import logging
 import time
 import uuid
-from collections import OrderedDict, defaultdict
-from datetime import datetime, timedelta
 from typing import Callable
 
 from fastapi import Request, Response, status
@@ -11,6 +9,10 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.common.rate_limit_store import (
+    InMemoryRateLimitStore,
+    build_rate_limit_store,
+)
 from app.common.security import decode_access_token
 from app.lib.config import settings
 
@@ -77,11 +79,44 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach standard security headers to every response (MW-SEC-1).
+
+    Sets nosniff, frame denial, a conservative referrer policy and CSP, and
+    — outside development — HSTS. Applied as the outermost middleware so the
+    headers are present even on error and throttled responses.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        # API serves JSON, never embeds; deny framing and inline content.
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'",
+        )
+        # HSTS only when not in development (staging/production run over TLS).
+        if settings.ENVIRONMENT != "development":
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    In-memory rate limiting with LRU-bounded client cache.
-    Uses OrderedDict capped at MAX_CLIENTS entries;
-    the least-recently-seen client is evicted when the cap is reached.
+    Per-client request throttling over a pluggable counter backend (W-4).
+
+    The window is owned by a RateLimitStore: an in-memory LRU-bounded
+    sliding window per process (default), or a shared Redis fixed window so
+    the limit is not multiplied by worker/instance count under scaling. This
+    class keeps client-identity resolution, exempt paths, and the clean
+    429 + Retry-After response; counting is delegated to the store.
     """
 
     MAX_CLIENTS = 1024
@@ -91,11 +126,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     # suffixes so the API prefix (e.g. /api/v1) does not need hardcoding.
     EXEMPT_PATH_SUFFIXES = ("/health", "/health/detailed", "/ping")
 
+    WINDOW_SECONDS = 60
+
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
-        self.requests: OrderedDict[str, list[datetime]] = OrderedDict()
-        self.window = timedelta(minutes=1)
         self.max_requests = settings.RATE_LIMIT_PER_MINUTE
+        # Pluggable counter backend (W-4): per-process in-memory by default,
+        # or a shared Redis window when RATE_LIMIT_BACKEND=redis.
+        self._store = build_rate_limit_store(
+            backend=settings.RATE_LIMIT_BACKEND,
+            redis_url=settings.REDIS_URL,
+            max_clients=self.MAX_CLIENTS,
+        )
+
+    @property
+    def requests(self):
+        """Backward-compatible view of the in-memory window (tests/metrics).
+
+        Only meaningful for the in-memory backend; empty mapping otherwise.
+        """
+        if isinstance(self._store, InMemoryRateLimitStore):
+            return self._store.requests
+        return {}
 
     def _is_exempt(self, path: str) -> bool:
         """Health/ping probes bypass the limiter."""
@@ -144,31 +196,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_id = self._client_identity(request)
-        now = datetime.now()
 
-        # Prune expired timestamps for this client
-        if client_id in self.requests:
-            self.requests[client_id] = [
-                req_time for req_time in self.requests[client_id]
-                if now - req_time < self.window
-            ]
-            # Move to end (most-recently-seen)
-            self.requests.move_to_end(client_id)
-        else:
-            self.requests[client_id] = []
+        # The store owns the window accounting (per-process or shared Redis).
+        result = self._store.hit(
+            client_id, self.max_requests, self.WINDOW_SECONDS
+        )
 
-        # Evict oldest client if cache is full
-        while len(self.requests) > self.MAX_CLIENTS:
-            self.requests.popitem(last=False)
-
-        # Check rate limit
-        if len(self.requests[client_id]) >= self.max_requests:
+        if not result.allowed:
             logger.warning(
                 f"Rate limit exceeded for {client_id}",
                 extra={
                     "client_id": client_id,
                     "path": request.url.path,
-                    "requests_count": len(self.requests[client_id]),
+                    "backend": settings.RATE_LIMIT_BACKEND,
                 },
             )
             # Return the response directly rather than raising: a
@@ -177,7 +217,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             # tracing headers (W-1/W-2/W-3). The Retry-After header lets
             # compliant clients back off correctly.
             request_id = getattr(request.state, "request_id", "unknown")
-            retry_after = 60
+            retry_after = result.retry_after or self.WINDOW_SECONDS
             # Stamp tracing headers directly: depending on middleware order
             # this early return may not pass back through the request-ID /
             # logging middleware, so a throttled response must carry them
@@ -197,8 +237,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "details": {"retry_after": retry_after},
                 },
             )
-
-        # Record this request
-        self.requests[client_id].append(now)
 
         return await call_next(request)

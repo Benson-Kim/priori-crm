@@ -121,3 +121,12 @@ def get_vendor_service(db: DbSession, current_user: CurrentUser):
 
 
 VendorServiceDep = Annotated["VendorService", Depends(get_vendor_service)]
+
+
+def get_owner_service(db: DbSession, current_user: CurrentUser):
+    """Provide an OwnerService scoped to the current request and acting user."""
+    from app.modules.owner.service import OwnerService
+    return OwnerService(db, current_user=current_user)
+
+
+OwnerServiceDep = Annotated["OwnerService", Depends(get_owner_service)]  # noqa: F821

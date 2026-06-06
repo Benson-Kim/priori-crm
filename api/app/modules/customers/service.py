@@ -15,6 +15,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.lib.config import settings
+from app.common.search import build_search_clause
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.constants.enums import CustomerStatus
@@ -146,15 +147,15 @@ class CustomerService:
                 query = query.filter(Customer.status != CustomerStatus.DELETED)
              
             if search:
-                search_term = f"%{search}%"
-                query = query.filter(
-                    or_(
-                        Customer.first_name.ilike(search_term),
-                        Customer.last_name.ilike(search_term),
-                        Customer.email.ilike(search_term),
-                        Customer.company_name.ilike(search_term),
-                    )
+                search_clause = build_search_clause(
+                    search,
+                    Customer.first_name,
+                    Customer.last_name,
+                    Customer.email,
+                    Customer.company_name,
                 )
+                if search_clause is not None:
+                    query = query.filter(search_clause)
 
             total = query.count()
 

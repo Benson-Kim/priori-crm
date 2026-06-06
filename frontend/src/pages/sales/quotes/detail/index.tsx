@@ -1,12 +1,15 @@
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
+import { SendQuoteModal } from "@/components/modals/SendQuoteModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { saveBlob } from "@/lib/utils";
 import {
     approveQuote,
     convertQuoteToInvoice,
     deleteQuote,
+    downloadQuotePdf,
     duplicateQuote,
     getQuote,
     markQuoteAsSent,
@@ -31,6 +34,7 @@ export default function QuoteDetailPage() {
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showSendModal, setShowSendModal] = useState(false);
 
     const fetchQuote = useCallback(async () => {
         if (!id) return;
@@ -92,6 +96,16 @@ export default function QuoteDetailPage() {
         }
     };
 
+    const handleDownloadPdf = async () => {
+        if (!quote) return;
+        try {
+            const blob = await downloadQuotePdf(quote.id);
+            saveBlob(blob, `Quote_${quote.quote_reference}.pdf`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download PDF");
+        }
+    };
+
     const handleConvertToInvoice = async () => {
         if (!quote) return;
         try {
@@ -138,7 +152,7 @@ export default function QuoteDetailPage() {
     if (status === "draft") {
         actions.push({ key: "mark-sent", label: "Mark as Sent", icon: <CheckCircle size={16} />, onClick: handleMarkSent });
     }
-    actions.push({ key: "send", label: "Send", icon: <Send size={16} />, onClick: () => alert("Email sending — coming soon") });
+    actions.push({ key: "send", label: "Send", icon: <Send size={16} />, onClick: () => setShowSendModal(true) });
 
     if (["draft", "sent"].includes(status) && !quote.is_expired) {
         actions.push({ key: "approve", label: "Approve", icon: <CheckCircle size={16} />, onClick: handleApprove });
@@ -148,7 +162,7 @@ export default function QuoteDetailPage() {
         actions.push({ key: "convert", label: "Convert to Invoice", icon: <FileText size={16} />, onClick: handleConvertToInvoice });
     }
 
-    actions.push({ key: "pdf", label: "Download PDF", icon: <Download size={16} />, onClick: () => alert("PDF generation — coming soon") });
+    actions.push({ key: "pdf", label: "Download PDF", icon: <Download size={16} />, onClick: handleDownloadPdf });
     actions.push({ key: "duplicate", label: "Duplicate", icon: <Copy size={16} />, onClick: handleDuplicate });
 
     if (status === "draft") {
@@ -221,6 +235,17 @@ export default function QuoteDetailPage() {
                     </Button>
                 )}
             </div>
+
+            {/* Send Quote Modal */}
+            <SendQuoteModal
+                isOpen={showSendModal}
+                onClose={() => setShowSendModal(false)}
+                quote={quote}
+                onSuccess={() => {
+                    setShowSendModal(false);
+                    fetchQuote();
+                }}
+            />
         </div>
     );
 }

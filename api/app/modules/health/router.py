@@ -1,10 +1,11 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
 from app.common.database import check_database_connection, get_pool_status
+from app.common.dependencies import verify_internal_secret
 from app.lib.config import settings
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def health_check() -> HealthResponse:
         status="healthy",
         version=settings.APP_VERSION,
         environment=settings.ENVIRONMENT,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
     )
 
 
@@ -58,7 +59,12 @@ def health_check() -> HealthResponse:
     "/health/detailed",
     response_model=DetailedHealthResponse,
     summary="Detailed health check",
-    description="Comprehensive health check including database connectivity.",
+    description=(
+        "Comprehensive health check including database connectivity and "
+        "connection-pool internals. Requires the internal machine-to-machine "
+        "secret (MW-SEC-3) since it exposes infrastructure details."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
 )
 def detailed_health_check() -> DetailedHealthResponse:
     """
@@ -76,7 +82,7 @@ def detailed_health_check() -> DetailedHealthResponse:
         status="healthy" if db_connected else "degraded",
         version=settings.APP_VERSION,
         environment=settings.ENVIRONMENT,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         database={
             "connected": db_connected,
             "type": "postgresql",

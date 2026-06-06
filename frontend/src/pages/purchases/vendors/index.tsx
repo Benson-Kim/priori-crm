@@ -18,7 +18,7 @@ import {
     type VendorSummary,
 } from "@/services/vendorApi";
 import { VendorModal } from "@/components/modals/VendorModal";
-import { Ban, CheckCircle, Download, Eye, Pencil, Plus, Trash } from "lucide-react";
+import { Ban, CheckCircle, Eye, Pencil, Plus, Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -232,13 +232,6 @@ export default function VendorsPage() {
 
     return (
         <div className="flex flex-col h-full space-y-4 font-sans">
-            {/* Top Action Bar */}
-            <div className="flex justify-end mt-4">
-                <Button variant="outline-secondary">
-                    <Download size={20} /> Export Excel
-                </Button>
-            </div>
-
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
                     {error}

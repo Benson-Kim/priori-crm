@@ -8,7 +8,7 @@ import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table } from "@/components/ui/Table";
-import { COMPANY_INFO } from "@/lib/constants";
+import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
 import {
   getVendor,
@@ -480,24 +480,9 @@ export default function VendorDetailPage() {
           ) : statement ? (
             <>
               <div className="p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start">
-                  <div className="flex flex-col items-start gap-3">
-                    <img
-                      src="/Logo Priori.svg"
-                      alt="Priori logo"
-                      className="aspect-150/44 w-37.5"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1 text-gray-800">
-                    <h3 className="font-bold text-base mb-1">
-                      {COMPANY_INFO.name}
-                    </h3>
-                    <p className="text-sm">{COMPANY_INFO.address}</p>
-                    <p className="text-sm">{COMPANY_INFO.phone}</p>
-                    <p className="text-sm">{COMPANY_INFO.email}</p>
-                  </div>
-                </div>
+                {/* Owner identity (logo + company block) — single source of
+                    truth, snapshot-backed on issued documents (VEND-FE-2). */}
+                <DocumentOwnerHeader />
 
                 <div className="flex flex-col md:flex-row justify-between items-start py-6">
                   <div className="flex flex-col gap-1">

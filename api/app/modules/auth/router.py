@@ -1,6 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.common.dependencies import DbSession
+from app.common.dependencies import DbSession, verify_internal_secret
 from app.modules.auth.schemas import (
     LoginRequest,
     MessageResponse,
@@ -43,3 +43,20 @@ def refresh_token(body: RefreshTokenRequest, db: DbSession):
     auth_service = AuthService(db)
     new_access_token = auth_service.refresh_access_token(body.refresh_token)
     return RefreshResponse(access_token=new_access_token)
+
+
+@router.post(
+    "/internal/purge-otps",
+    response_model=MessageResponse,
+    include_in_schema=False,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def purge_otps(db: DbSession):
+    """Internal: delete used/expired OTP rows (AUTH-DBA-2).
+
+    Protected by the internal machine-to-machine secret; intended to be
+    called by a scheduler. Mirrors the expenses overdue-transition trigger.
+    """
+    auth_service = AuthService(db)
+    deleted = auth_service.purge_expired_otps()
+    return MessageResponse(message=f"Purged {deleted} expired/used OTP rows.")

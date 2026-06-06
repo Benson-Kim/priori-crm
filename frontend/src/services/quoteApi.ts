@@ -2,7 +2,14 @@
  * Quote API service.
  */
 
-import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import {
+  apiDelete,
+  apiDownload,
+  apiGet,
+  apiPost,
+  apiPut,
+  flattenPaginated,
+} from "@/lib/api";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
 
 
@@ -183,4 +190,28 @@ export function duplicateQuote(id: string) {
 
 export function deleteQuote(id: string) {
   return apiDelete<void>(`quotes/${id}`);
+}
+
+export interface QuoteSendPayload {
+  toEmail?: string;
+  subject?: string;
+  body?: string;
+  attachPdf?: boolean;
+}
+
+export interface QuoteSendResult {
+  quote_id: string;
+  sent_to: string;
+  sent_at: string;
+  message: string;
+}
+
+/** Send the quote by email (POST /quotes/{id}/send). Backend exists (QT-FE-2). */
+export function sendQuote(id: string, data: QuoteSendPayload = {}) {
+  return apiPost<QuoteSendResult>(`quotes/${id}/send`, data);
+}
+
+/** Download the quote PDF (GET /quotes/{id}/pdf). Returns a Blob to save. */
+export function downloadQuotePdf(id: string) {
+  return apiDownload(`quotes/${id}/pdf`);
 }

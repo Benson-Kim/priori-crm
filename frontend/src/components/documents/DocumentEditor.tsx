@@ -10,13 +10,13 @@
 import { CustomerSelector } from "@/components/modals/CustomerSelector";
 import { Button } from "@/components/ui/Button";
 import {
-  COMPANY_INFO,
   CURRENCY_OPTIONS,
   DEFAULT_DUE_DATE_DAYS,
   type CurrencyOption,
 } from "@/lib/constants";
 import { formatDisplayDate } from "@/lib/utils";
 import { Save, SquarePen } from "lucide-react";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { useMemo, useState } from "react";
 import { Divider } from "../ui/Divider";
 import { DocumentTotalsPanel } from "./layout/document-totals";
@@ -232,33 +232,10 @@ export function DocumentEditor({
         {/* Top Section */}
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Logo */}
-            <div className="flex flex-col items-start gap-3">
-              <img
-                src="/Logo Priori.svg"
-                alt="Priori logo"
-                className="aspect-150/44 w-37.5"
-              />
-              <button
-                type="button"
-                className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline"
-              >
-                Update <SquarePen size={20} />
-              </button>
-            </div>
-
-            {/* Company Info */}
-            <div className="flex flex-col gap-1 text-gray-800">
-              <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
-              <p className="text-sm">{COMPANY_INFO.address}</p>
-              <p className="text-sm">{COMPANY_INFO.phone}</p>
-              <p className="text-sm mb-1">{COMPANY_INFO.email}</p>
-              <button
-                type="button"
-                className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline w-fit"
-              >
-                Update <SquarePen size={20} />
-              </button>
+            {/* Owner identity (logo + company block) — single source of
+                truth, wired "Update" controls (S-1 / V-DRY-1 / V-SOLID-4). */}
+            <div className="md:col-span-2">
+              <DocumentOwnerHeader editable={!restrictedMode} />
             </div>
 
             {/* Document To (Customer Selector) */}

@@ -131,3 +131,25 @@ export function formatDelta(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}%`;
 }
+
+/**
+ * Save a fetched Blob to the user's device under `filename`.
+ *
+ * Centralises the createObjectURL -> temporary anchor -> revokeObjectURL
+ * dance so binary downloads (PDFs, attached documents) actually land on disk
+ * instead of being fetched and discarded (EXP-FE-1). The object URL is always
+ * revoked, even if the click throws.
+ */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

@@ -1,6 +1,7 @@
 import logging
-from typing import Any
 from datetime import datetime
+from functools import lru_cache
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -18,28 +19,31 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """AWS SES email client for sending transactional emails."""
+    """AWS SES email client for sending transactional emails.
+
+    The boto3 SES client is built lazily on first use (LIB-BE-3) so importing
+    this module never requires AWS configuration; retries and the dev-mode
+    skip both live on ``_send`` so every send path benefits (LIB-BE-1/BE-2).
+    """
 
     def __init__(self) -> None:
-        """Initialize SES client with AWS credentials."""
-        self._client = boto3.client(
-            "ses",
-            region_name=settings.AWS_REGION,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID or None,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY or None,
-        )
+        self._client_instance = None
         self._sender = settings.SES_SENDER_EMAIL
 
-    @retry(
-        stop=stop_after_attempt(settings.SES_MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(ClientError),
-        reraise=True,
-    )
+    @property
+    def _client(self):
+        """Lazily construct (and cache) the boto3 SES client."""
+        if self._client_instance is None:
+            self._client_instance = boto3.client(
+                "ses",
+                region_name=settings.AWS_REGION,
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID or None,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY or None,
+            )
+        return self._client_instance
 
     def send_otp(self, recipient: str, otp_code: str) -> dict[str, Any]:
         """Send a 6-digit OTP code to the given email address."""
-        
         subject = f"{settings.APP_NAME} — Verification Code"
         body_html = self._build_otp_html(otp_code)
         body_text = (
@@ -54,6 +58,28 @@ class EmailService:
             body_text=body_text,
         )
 
+    def send_document_email(
+        self,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        body_html: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a transactional document email (invoice, quote, statement)."""
+        html = body_html or f"<pre>{body_text}</pre>"
+        return self._send(
+            recipient=recipient,
+            subject=subject,
+            body_html=html,
+            body_text=body_text,
+        )
+
+    @retry(
+        stop=stop_after_attempt(settings.SES_MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ClientError),
+        reraise=True,
+    )
     def _send(
         self,
         recipient: str,
@@ -61,7 +87,20 @@ class EmailService:
         body_html: str,
         body_text: str,
     ) -> dict[str, Any]:
-        """Send an email via AWS SES."""
+        """Send an email via AWS SES.
+
+        In development without SES credentials the send is logged and
+        skipped (LIB-BE-2) so local flows never fail on missing AWS config.
+        Transient SES ``ClientError``s are retried (LIB-BE-1).
+        """
+        if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
+            logger.warning(
+                "DEV MODE — email to %s not sent (SES not configured). Subject: %s",
+                recipient,
+                subject,
+            )
+            return {"MessageId": "dev-mode-skipped", "recipient": recipient}
+
         try:
             response = self._client.send_email(
                 Source=self._sender,
@@ -74,7 +113,7 @@ class EmailService:
                     },
                 },
             )
-            
+
             logger.info(
                 "Email sent successfully",
                 extra={
@@ -83,13 +122,13 @@ class EmailService:
                     "subject": subject,
                 },
             )
-            
+
             return response
-            
+
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_message = e.response.get("Error", {}).get("Message", str(e))
-            
+
             logger.error(
                 "SES email delivery failed",
                 exc_info=e,
@@ -99,7 +138,7 @@ class EmailService:
                     "error_message": error_message,
                 },
             )
-            
+
             raise EmailDeliveryException(
                 detail=f"Failed to send email: {error_message}",
                 recipient=recipient,
@@ -115,7 +154,7 @@ class EmailService:
             f'background:#fff;color:#1A1A2E;">{d}</span>'
             for d in otp_code
         )
-        
+
         return f"""
         <!DOCTYPE html>
         <html>
@@ -147,34 +186,23 @@ class EmailService:
         </html>
         """
 
-    def send_document_email(
-        self,
-        recipient: str,
-        subject: str,
-        body_text: str,
-        body_html: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Send a transactional document email (invoice, quote, statement).
 
-        In development mode without SES credentials, the email is logged
-        but not actually dispatched.
-        """
-        if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
-            logger.warning(
-                "DEV MODE — email to %s not sent (SES not configured). Subject: %s",
-                recipient,
-                subject,
-            )
-            return {"MessageId": "dev-mode-skipped", "recipient": recipient}
-
-        html = body_html or f"<pre>{body_text}</pre>"
-        return self._send(
-            recipient=recipient,
-            subject=subject,
-            body_html=html,
-            body_text=body_text,
-        )
+@lru_cache
+def get_email_service() -> EmailService:
+    """Return a process-wide EmailService (SES client built lazily on use)."""
+    return EmailService()
 
 
-email_service = EmailService()
+class _EmailServiceProxy:
+    """Backward-compatible module-level proxy.
+
+    Existing call sites do ``from app.lib.email import email_service`` and
+    call methods on it. This proxy defers to the cached instance so no SES
+    client is constructed at import time (LIB-BE-3) while keeping that API.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_email_service(), name)
+
+
+email_service = _EmailServiceProxy()

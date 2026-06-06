@@ -219,11 +219,14 @@ def export_invoices_to_excel(
         date_from=date_from,
         date_to=date_to,
     )
-    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
-    result = service.list_invoices(params, filters)
 
-    # Fetch full ORM objects for line items if needed
-    invoices = [service.get_by_id(item.id) for item in result.items] if include_line_items else result.items
+    # Batch-load full ORM rows (customer eager-joined; line items via
+    # selectinload when requested) instead of one get_by_id per row (P-5).
+    invoices = service.list_for_export(
+        filters,
+        include_line_items=include_line_items,
+        limit=settings.BATCH_SIZE,
+    )
 
     exporter = ExcelExporter()
     xlsx_bytes = exporter.export_invoices(invoices, include_line_items=include_line_items)

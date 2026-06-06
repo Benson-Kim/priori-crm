@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    # Explicit allow-lists rather than "*" (MW-SEC-2). Comma-separated so
+    # they can be tuned per environment without code changes.
+    CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
+    # Explicit method/header allow-lists (MW-SEC-2). Wildcards with
+    # allow_credentials are overly permissive, so we pin them per env.
+    CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-Request-ID"
     
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -51,6 +59,11 @@ class Settings(BaseSettings):
     # behind a known, trusted reverse proxy. The header is client-spoofable
     # when exposed directly, so it stays off by default (W-5).
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
+    # Counter backend (W-4). "memory" is per-process (fine for a single
+    # worker / local dev); "redis" shares one window across all workers and
+    # instances so the effective limit is not multiplied by the worker count.
+    RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
+    REDIS_URL: str = ""
     
     # Monitoring
     SENTRY_DSN: str = ""
@@ -60,10 +73,22 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
 
-    # File Storage (P-13)
-    # Root directory all uploaded objects are confined to. StorageService
-    # resolves every key under this path and refuses anything that escapes it.
+    # File Storage (P-13 / W3.3)
+    # Root directory all uploaded objects are confined to. The local
+    # StorageService backend resolves every key under this path and refuses
+    # anything that escapes it.
     UPLOAD_DIR: str = "uploads"
+    # Backend selector: "local" (single-node filesystem, default) or "s3"
+    # (S3 / S3-compatible object store, required for horizontal scaling).
+    STORAGE_BACKEND: Literal["local", "s3"] = "local"
+    # S3 backend settings (only used when STORAGE_BACKEND == "s3").
+    S3_BUCKET: str = ""
+    # Falls back to AWS_REGION when unset.
+    S3_REGION: str = ""
+    # Optional endpoint override for S3-compatible stores (MinIO, etc.).
+    S3_ENDPOINT_URL: str = ""
+    # Lifetime (seconds) of presigned download URLs.
+    S3_PRESIGN_EXPIRY: int = Field(default=900, ge=60, le=86400)
 
     # Internal machine-to-machine secret (P-13). Protects internal endpoints
     # such as the nightly overdue-transition job. Empty by default so internal
@@ -122,6 +147,14 @@ class Settings(BaseSettings):
         if self.MOCK_PAYMENT_GATEWAY_KEY == "mock-key-for-dev":
             errors.append("MOCK_PAYMENT_GATEWAY_KEY must not use the development default in production")
 
+        if self.STORAGE_BACKEND == "s3" and not self.S3_BUCKET:
+            errors.append("S3_BUCKET must be configured when STORAGE_BACKEND is 's3'")
+
+        # A multi-worker / horizontally-scaled production deployment must use
+        # the shared Redis window, otherwise the limit is per-process (W-4).
+        if self.RATE_LIMIT_ENABLED and self.RATE_LIMIT_BACKEND == "redis" and not self.REDIS_URL:
+            errors.append("REDIS_URL is required when RATE_LIMIT_BACKEND='redis'")
+
         if errors:
             raise ValueError(
                 "Insecure production configuration: " + "; ".join(errors)
@@ -133,6 +166,26 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS origins into list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def cors_allow_methods_list(self) -> list[str]:
+        """Parse comma-separated allowed CORS methods into a list."""
+        return [m.strip() for m in self.CORS_ALLOW_METHODS.split(",") if m.strip()]
+
+    @property
+    def cors_allow_headers_list(self) -> list[str]:
+        """Parse comma-separated allowed CORS headers into a list."""
+        return [h.strip() for h in self.CORS_ALLOW_HEADERS.split(",") if h.strip()]
+
+    @property
+    def cors_allow_methods_list(self) -> list[str]:
+        """Parse comma-separated allowed CORS methods into a list."""
+        return [m.strip() for m in self.CORS_ALLOW_METHODS.split(",") if m.strip()]
+
+    @property
+    def cors_allow_headers_list(self) -> list[str]:
+        """Parse comma-separated allowed CORS request headers into a list."""
+        return [h.strip() for h in self.CORS_ALLOW_HEADERS.split(",") if h.strip()]
 
     @property
     def is_development(self) -> bool:

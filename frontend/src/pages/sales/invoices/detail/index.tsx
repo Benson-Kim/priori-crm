@@ -14,10 +14,12 @@ import { useConfirm } from "@/hooks/useConfirm";
 import type { InvoiceResponse } from "@/services/invoiceApi";
 import {
     cancelInvoice,
+    downloadInvoicePdf,
     duplicateInvoice,
     getInvoice,
     markAsSent,
 } from "@/services/invoiceApi";
+import { saveBlob } from "@/lib/utils";
 import {
     ArrowLeft,
     Ban,
@@ -112,6 +114,18 @@ export function InvoiceDetailPage() {
         });
     };
 
+    const handleDownloadPdf = async () => {
+        if (!invoice) return;
+        try {
+            const blob = await downloadInvoicePdf(invoice.id);
+            saveBlob(blob, `Invoice_${invoice.invoice_reference}.pdf`);
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to download PDF"
+            );
+        }
+    };
+
     const handlePaymentClose = () => {
         setShowPaymentModal(false);
         if (id) navigate(`/invoices/${id}`, { replace: true });
@@ -181,8 +195,7 @@ export function InvoiceDetailPage() {
         key: "pdf",
         label: "Download PDF",
         icon: <Download size={16} />,
-        onClick: () =>
-            setError("PDF generation is not yet implemented. Coming soon."),
+        onClick: handleDownloadPdf,
     });
 
     actions.push({

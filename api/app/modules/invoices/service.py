@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import (
     BadRequestException,
@@ -16,8 +16,10 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.database import assert_version
+from app.common.document_service import BaseDocumentService
 from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
 from app.common.reference import ReferenceGenerator
+from app.common.search import build_search_clause
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DiscountType, InvoiceStatus, TaxType
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
@@ -39,14 +41,25 @@ from app.modules.invoices.schemas import (
 logger = logging.getLogger(__name__)
 
 
-class InvoiceService:
+class InvoiceService(BaseDocumentService):
     """
     Service layer for invoice operations.
 
     Follows the same atomicity and race-condition contracts as QuoteService.
+    Shared state-machine, reference-retry and email mechanics come from
+    BaseDocumentService; the transition table and reference formats below stay
+    invoice-specific.
     """
 
     MAX_INVOICE_NUMBER_RETRIES = 3
+
+    _document_noun = "invoice"
+    _reference_collision_markers = ("invoice_number", "invoice_reference")
+    _email_terms = {
+        "noun": "invoice",
+        "date_label": "Due date",
+        "closing": "Thank you for your business.",
+    }
 
     ALLOWED_TRANSITIONS: dict[InvoiceStatus, list[InvoiceStatus]] = {
         InvoiceStatus.DRAFT:    [InvoiceStatus.SENT, InvoiceStatus.CANCELED],
@@ -56,30 +69,6 @@ class InvoiceService:
         InvoiceStatus.PAID:     [InvoiceStatus.CANCELED],
         InvoiceStatus.CANCELED: [],
     }
-
-    def __init__(self, db: Session, current_user=None) -> None:
-        self._db = db
-        self._current_user = current_user
-        self._actor_id = getattr(current_user, "id", None)
-
-    def _transition(self, invoice: Invoice, new_status: InvoiceStatus) -> None:
-        """Enforce ALLOWED_TRANSITIONS and bump version atomically."""
-        current = InvoiceStatus(invoice.status)
-        allowed = self.ALLOWED_TRANSITIONS.get(current, [])
-        if new_status not in allowed:
-            raise BadRequestException(
-                detail=(
-                    f"Cannot transition invoice from '{current}' to '{new_status}'. "
-                    f"Allowed: {[s.value for s in allowed] or 'none (terminal state)'}"
-                ),
-                field="status",
-            )
-        invoice.status = new_status
-        invoice.version += 1
-
-    def _ref_gen(self) -> ReferenceGenerator:
-        """Lazy accessor for the shared reference generator."""
-        return ReferenceGenerator(self._db)
 
     # CREATE
 
@@ -178,9 +167,7 @@ class InvoiceService:
             except IntegrityError as e:
                 sp.rollback()
                 last_error = e
-                is_collision = (
-                    "invoice_number" in str(e.orig) or "invoice_reference" in str(e.orig)
-                )
+                is_collision = self._is_reference_collision(e)
                 if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
                     logger.warning("Invoice number collision, retry %d", attempt + 1)
                     continue
@@ -305,16 +292,16 @@ class InvoiceService:
                     query = query.filter(Invoice.due_date <= filters.due_date_to)
                 
                 if filters.search:
-                    search_term = f"%{filters.search}%"
-                    query = query.filter(
-                        or_(
-                            Invoice.invoice_number.ilike(search_term),
-                            Invoice.invoice_reference.ilike(search_term),
-                            Customer.company_name.ilike(search_term),
-                            Customer.first_name.ilike(search_term),
-                            Customer.last_name.ilike(search_term),
-                        )
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Invoice.invoice_number,
+                        Invoice.invoice_reference,
+                        Customer.company_name,
+                        Customer.first_name,
+                        Customer.last_name,
                     )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
 
             total = query.count()
 
@@ -365,6 +352,67 @@ class InvoiceService:
         except SQLAlchemyError as e:
             logger.exception("Database error listing invoices")
             raise DatabaseException("Failed to list invoices") from e
+
+    def list_for_export(
+        self,
+        filters: InvoiceFilterParams | None = None,
+        include_line_items: bool = False,
+        limit: int | None = None,
+    ) -> list[Invoice]:
+        """Return full Invoice ORM rows for Excel export, batch-loaded.
+
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
+        (P-5 / INV-OPS-1): customer is eager-joined for the display name and,
+        when requested, line items are batch-loaded with ``selectinload`` (one
+        extra query for the whole page, not one per row). ``limit`` caps the
+        number of rows materialised in memory.
+        """
+        try:
+            from app.modules.customers.models import Customer
+
+            query = self._db.query(Invoice).join(
+                Customer, Invoice.customer_id == Customer.id
+            ).options(joinedload(Invoice.customer))
+
+            if include_line_items:
+                query = query.options(selectinload(Invoice.line_items))
+
+            if filters:
+                if filters.status:
+                    query = query.filter(Invoice.status == filters.status)
+                if filters.customer_id:
+                    query = query.filter(Invoice.customer_id == filters.customer_id)
+                if filters.date_from:
+                    query = query.filter(Invoice.transaction_date >= filters.date_from)
+                if filters.date_to:
+                    query = query.filter(Invoice.transaction_date <= filters.date_to)
+                if filters.due_date_from:
+                    query = query.filter(Invoice.due_date >= filters.due_date_from)
+                if filters.due_date_to:
+                    query = query.filter(Invoice.due_date <= filters.due_date_to)
+                if filters.search:
+                    from app.common.search import build_search_clause
+
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Invoice.invoice_number,
+                        Invoice.invoice_reference,
+                        Customer.company_name,
+                        Customer.first_name,
+                        Customer.last_name,
+                    )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
+
+            query = query.order_by(Invoice.created_at.desc())
+            if limit is not None:
+                query = query.limit(limit)
+
+            return query.all()
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error loading invoices for export")
+            raise DatabaseException("Failed to load invoices for export") from e
 
     def get_status_counts(self, customer_id: uuid.UUID | None = None) -> InvoiceStatusCounts:
         """Get counts of invoices by status"""
@@ -658,6 +706,20 @@ class InvoiceService:
    
     # STATUS TRANSITIONS & ACTIONS
 
+    def _capture_owner_snapshot(self, invoice: Invoice) -> None:
+        """Stamp an immutable owner-header snapshot the first time issued.
+
+        Idempotent: once set, the snapshot is never replaced, so editing the
+        live owner profile can never re-brand an already-issued invoice
+        (V-DI-4).
+        """
+        if invoice.owner_snapshot_id is not None:
+            return
+        from app.modules.owner.service import OwnerService
+
+        snapshot = OwnerService(self._db).snapshot_current()
+        invoice.owner_snapshot_id = snapshot.id
+
     def mark_as_sent(
         self,
         invoice_id: uuid.UUID,
@@ -667,6 +729,7 @@ class InvoiceService:
         invoice = self.get_by_id(invoice_id)
         self._transition(invoice, InvoiceStatus.SENT)
         invoice.sent_at = sent_at or datetime.now(UTC)
+        self._capture_owner_snapshot(invoice)
         self._db.flush()
         logger.info("Marked invoice as sent: %s", invoice.invoice_number,
                     extra={"invoice_id": str(invoice.id), "sent_at": invoice.sent_at})
@@ -724,6 +787,7 @@ class InvoiceService:
         if invoice.status == InvoiceStatus.DRAFT:
             self._transition(invoice, InvoiceStatus.SENT)
             invoice.sent_at = sent_at
+            self._capture_owner_snapshot(invoice)
             self._db.flush()
 
         logger.info(
@@ -900,9 +964,7 @@ class InvoiceService:
                 except IntegrityError as exc:
                     sp.rollback()
                     last_error = exc
-                    is_collision = (
-                        "invoice_number" in str(exc.orig) or "invoice_reference" in str(exc.orig)
-                    )
+                    is_collision = self._is_reference_collision(exc)
                     if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
                         logger.warning("Collision during duplicate, retry %d", attempt + 1)
                         continue
@@ -1094,33 +1156,26 @@ class InvoiceService:
         """Public wrapper for invoice reference generation."""
         return self._generate_invoice_reference()
 
-    def _generate_email_subject(self, invoice: Invoice) -> str:
-        """Generate email subject for invoice."""
-        from app.lib.config import settings
-        return f"Invoice {invoice.invoice_reference} from {settings.APP_NAME}"
-
-    def _generate_email_body(self, invoice: Invoice) -> str:
-        """Generate plain-text email body for invoice."""
-        from app.lib.config import settings
-        return f"""\
-Dear {invoice.customer.display_name},
-
-Please find attached invoice {invoice.invoice_reference} for {invoice.currency} {invoice.total_due}.
-
-Due date: {invoice.due_date.strftime('%d %B %Y')}
-
-Thank you for your business.
-
-Best regards,
-{settings.APP_NAME}
-"""
-
     # PDF GENERATION
 
     def generate_pdf(self, invoice_id: uuid.UUID) -> bytes:
-        """Generate PDF for invoice using ReportLab."""
+        """Generate PDF for invoice using ReportLab.
+
+        Renders the owner header from the invoice's immutable snapshot when
+        issued, otherwise from the live profile (V-DI-4 / V-SOLID-2).
+        """
         from app.common.pdf import DocumentPDFGenerator
+        from app.modules.owner.models import OwnerProfileSnapshot
+        from app.modules.owner.service import OwnerService
 
         invoice = self.get_by_id(invoice_id)
+
+        owner_service = OwnerService(self._db)
+        if invoice.owner_snapshot_id is not None:
+            source = self._db.get(OwnerProfileSnapshot, invoice.owner_snapshot_id)
+        else:
+            source = owner_service.get_or_create()
+        owner_info = owner_service.to_owner_info(source)
+
         generator = DocumentPDFGenerator()
-        return generator.generate_invoice_pdf(invoice)
+        return generator.generate_invoice_pdf(invoice, owner=owner_info)

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.common.database import assert_version
+from app.common.search import build_search_clause
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
@@ -415,15 +416,15 @@ class VendorService:
                     query = query.filter(Vendor.status == filters.status)
 
                 if filters.search:
-                    term = f"%{filters.search}%"
-                    query = query.filter(
-                        or_(
-                            Vendor.vendor_name.ilike(term),
-                            Vendor.email.ilike(term),
-                            Vendor.phone_primary.ilike(term),
-                            Vendor.phone_secondary.ilike(term),
-                        )
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Vendor.vendor_name,
+                        Vendor.email,
+                        Vendor.phone_primary,
+                        Vendor.phone_secondary,
                     )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
 
             total = query.count()
 
@@ -810,17 +811,19 @@ class VendorService:
                 .subquery()
             )
 
-            term = f"%{query.strip()}%"
+            search_clause = build_search_clause(
+                query,
+                Contact.full_name,
+                Contact.phone_primary,
+                Contact.email,
+            )
+            contact_query = self._db.query(Contact).filter(
+                Contact.id.notin_(existing_contact_ids),
+            )
+            if search_clause is not None:
+                contact_query = contact_query.filter(search_clause)
             contacts = (
-                self._db.query(Contact)
-                .filter(
-                    Contact.id.notin_(existing_contact_ids),
-                    or_(
-                        Contact.full_name.ilike(term),
-                        Contact.phone_primary.ilike(term),
-                        Contact.email.ilike(term),
-                    ),
-                )
+                contact_query
                 .order_by(Contact.full_name.asc())
                 .limit(limit)
                 .all()

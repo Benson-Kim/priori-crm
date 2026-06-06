@@ -266,6 +266,15 @@ class Invoice(Base):
         nullable=True,
         comment="User who created this invoice",
     )
+
+    # Immutable owner-header snapshot captured at issue time (V-DI-4). NULL
+    # for never-issued (DRAFT) invoices, which render from the live profile.
+    owner_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("owner_profile_snapshots.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Owner profile as it was when this invoice was issued",
+    )
     
     # Optimistic Locking
     version: Mapped[int] = mapped_column(

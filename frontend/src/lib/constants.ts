@@ -14,12 +14,10 @@ export const PAGINATION_DEFAULTS = {
 export const OTP_LENGTH = 6;
 export const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 
-export const COMPANY_INFO = {
-  name: "Priori Technologies",
-  address: "P.O Box 124, 90600",
-  phone: "+254712345678",
-  email: "priori@techmail.com",
-} as const;
+// COMPANY_INFO removed (LIB-FE-6 / V-DRY-1): the organisation identity is now
+// data-driven via the owner profile API (services/ownerApi + DocumentOwnerHeader),
+// snapshotted immutably onto issued documents. Do not reintroduce a hardcoded
+// company constant.
 
 export const CURRENCY_OPTIONS = [
   { value: "KES", label: "KES" },
