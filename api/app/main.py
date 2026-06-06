@@ -11,6 +11,7 @@ from app.common.middleware import (
     RateLimitMiddleware,
     RequestIDMiddleware,
     RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
 )
 from app.lib.config import settings
 
@@ -19,11 +20,13 @@ from app.lib.config import settings
 # SQLAlchemy's string-based relationship() references (e.g. "Customer",
 # "Vendor") can always be resolved when the mapper is first configured.
 # Order is: parent tables first, then children that reference them.
+import app.modules.auth.models       # noqa: F401  ← User, OTPCode
 import app.modules.customers.models  # noqa: F401  ← Customer
 import app.modules.invoices.models   # noqa: F401  ← Invoice, Payment
 import app.modules.quotes.models     # noqa: F401  ← Quote
 import app.modules.vendors.models    # noqa: F401  ← Vendor
 import app.modules.expenses.models   # noqa: F401  ← Expense
+import app.modules.owner.models      # noqa: F401  ← OwnerProfile, OwnerProfileSnapshot
 
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
@@ -31,6 +34,7 @@ from app.modules.invoices.router import router as invoices_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.vendors.router import router as vendors_router
 from app.modules.expenses.router import router as expenses_router
+from app.modules.owner.router import router as owner_router
 from app.modules.health.router import router as health_router
 
 
@@ -81,14 +85,20 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
 
+    # Outermost: security headers apply to every response, including error
+    # and throttled (429) paths (MW-SEC-1).
+    app.add_middleware(SecurityHeadersMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list ,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        # Explicit allow-lists instead of "*" (MW-SEC-2): wildcards combined
+        # with credentials are overly permissive.
+        allow_methods=settings.cors_allow_methods_list,
+        allow_headers=settings.cors_allow_headers_list,
         expose_headers=["X-Request-ID", "X-Response-Time"],
-    )   
+    )
 
     register_exception_handlers(app)
     _register_routers(app)
@@ -106,6 +116,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
     app.include_router(expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"])
+    app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
     logger.info(
        "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore

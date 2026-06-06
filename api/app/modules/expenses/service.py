@@ -1,7 +1,6 @@
 """
 Expense business logic — service layer.
 """
-from app.common.reference import ReferenceGenerator
 import logging
 import uuid
 from datetime import UTC, date, datetime
@@ -10,7 +9,7 @@ from typing import Any
 
 from sqlalchemy import Integer, and_, case, func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import (
     BadRequestException,
@@ -20,7 +19,9 @@ from app.common.exceptions import (
 )
 
 from app.common.database import assert_version
+from app.common.document_service import BaseDocumentService
 from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
+from app.common.search import build_search_clause
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DocumentSource, ExpenseStatus
 from app.modules.expenses.models import (
@@ -50,45 +51,25 @@ EXPENSE_EAGER_LOAD_OPTIONS = (
 logger = logging.getLogger(__name__)
 
 
-class ExpenseService:
-    """Service layer for all expense operations."""
+class ExpenseService(BaseDocumentService):
+    """Service layer for all expense operations.
+
+    Shared state-machine and reference-retry mechanics come from
+    BaseDocumentService; the transition table and reference formats below stay
+    expense-specific. Expenses are vendor-facing and send no customer email,
+    so the email mixin methods are unused here.
+    """
 
     MAX_RETRIES = 3
+
+    _document_noun = "expense"
+    _reference_collision_markers = ("expense_number", "expense_reference")
 
     ALLOWED_TRANSITIONS: dict[ExpenseStatus, list[ExpenseStatus]] = {
         ExpenseStatus.PENDING: [ExpenseStatus.PAID, ExpenseStatus.OVERDUE],
         ExpenseStatus.OVERDUE: [ExpenseStatus.PAID],
         ExpenseStatus.PAID:    [],   # terminal
     }
-
-    def __init__(self, db: Session, current_user=None) -> None:
-        self._db = db
-        self._current_user = current_user
-        self._actor_id = getattr(current_user, "id", None)
-
-    # Internal helpers
-
-    def _ref_gen(self) -> ReferenceGenerator:
-        """Lazy accessor for the shared reference generator."""
-        return ReferenceGenerator(self._db)
-
-    def _transition(self, expense: Expense, new_status: ExpenseStatus) -> None:
-        """
-        Enforce ALLOWED_TRANSITIONS and bump version atomically.
-        """
-        current = ExpenseStatus(expense.status)
-        allowed = self.ALLOWED_TRANSITIONS.get(current, [])
-        if new_status not in allowed:
-            raise BadRequestException(
-                detail=(
-                    f"Cannot transition expense from '{current}' to '{new_status}'. "
-                    f"Allowed: {[s.value for s in allowed] or 'none (terminal state)'}"
-                ),
-                field="status",
-            )
-        expense.status = new_status
-        expense.version += 1
-
 
     def _generate_expense_number(self) -> str:
         """Generate a unique expense number via ReferenceGenerator."""
@@ -201,10 +182,7 @@ class ExpenseService:
             except IntegrityError as exc:
                 sp.rollback()
                 last_error = exc
-                is_collision = (
-                    "expense_number"    in str(exc.orig)
-                    or "expense_reference" in str(exc.orig)
-                )
+                is_collision = self._is_reference_collision(exc)
                 if is_collision and attempt < self.MAX_RETRIES:
                     logger.warning(
                         "Expense reference collision — retry %d", attempt + 1
@@ -329,14 +307,14 @@ class ExpenseService:
                     )
 
                 if filters.search:
-                    term = f"%{filters.search}%"
-                    query = query.filter(
-                        or_(
-                            Expense.expense_number.ilike(term),
-                            Expense.expense_reference.ilike(term),
-                            Vendor.vendor_name.ilike(term),
-                        )
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Expense.expense_number,
+                        Expense.expense_reference,
+                        Vendor.vendor_name,
                     )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
 
             total = query.count()
 
@@ -377,14 +355,75 @@ class ExpenseService:
                     "filters":  filters.model_dump() if filters else None,
                 },
             )
-
-            return PaginatedResponse.create(
-                items=items, total=total, params=params
-            )
+            return PaginatedResponse.create(items=items, total=total, params=params)
 
         except SQLAlchemyError as exc:
             logger.exception("Database error listing expenses")
             raise DatabaseException("Failed to list expenses") from exc
+
+    def list_for_export(
+        self,
+        filters: ExpenseFilterParams | None = None,
+        include_line_items: bool = False,
+        limit: int | None = None,
+    ) -> list[Expense]:
+        """Return full Expense ORM rows for Excel export, batch-loaded.
+
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
+        (P-5 / EXP-OPS-1): vendor eager-joined for the display name; line items
+        via ``selectinload`` only when requested. ``limit`` caps rows
+        materialised in memory.
+        """
+        try:
+            from app.modules.vendors.models import Vendor
+
+            query = self._db.query(Expense).join(
+                Vendor, Expense.vendor_id == Vendor.id
+            ).options(joinedload(Expense.vendor))
+
+            if include_line_items:
+                query = query.options(selectinload(Expense.line_items))
+
+            if filters:
+                if filters.status:
+                    query = query.filter(Expense.status == filters.status)
+                else:
+                    query = query.filter(Expense.status != ExpenseStatus.CANCELED)
+                if filters.vendor_id:
+                    query = query.filter(Expense.vendor_id == filters.vendor_id)
+                if filters.date_from:
+                    query = query.filter(Expense.expense_date >= filters.date_from)
+                if filters.date_to:
+                    query = query.filter(Expense.expense_date <= filters.date_to)
+                if filters.due_date_from:
+                    query = query.filter(Expense.due_date >= filters.due_date_from)
+                if filters.due_date_to:
+                    query = query.filter(Expense.due_date <= filters.due_date_to)
+                if filters.is_recurring is not None:
+                    query = query.filter(Expense.is_recurring == filters.is_recurring)
+                if filters.search:
+                    from app.common.search import build_search_clause
+
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Expense.expense_number,
+                        Expense.expense_reference,
+                        Vendor.vendor_name,
+                    )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
+            else:
+                query = query.filter(Expense.status != ExpenseStatus.CANCELED)
+
+            query = query.order_by(Expense.created_at.desc())
+            if limit is not None:
+                query = query.limit(limit)
+
+            return query.all()
+
+        except SQLAlchemyError as exc:
+            logger.exception("Database error loading expenses for export")
+            raise DatabaseException("Failed to load expenses for export") from exc
 
     def get_status_counts(self) -> ExpenseStatusCounts:
         """
@@ -1103,10 +1142,7 @@ class ExpenseService:
                 except IntegrityError as exc:
                     sp.rollback()
                     last_error = exc
-                    is_collision = (
-                        "expense_number"    in str(exc.orig)
-                        or "expense_reference" in str(exc.orig)
-                    )
+                    is_collision = self._is_reference_collision(exc)
                     if is_collision and attempt < self.MAX_RETRIES:
                         logger.warning(
                             "Collision during duplicate — retry %d", attempt + 1

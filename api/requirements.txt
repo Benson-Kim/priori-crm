@@ -20,6 +20,7 @@ botocore==1.43.6
 python-dotenv==1.2.2
 python-json-logger
 tenacity
+redis==5.2.1
 
 reportlab>=4.0
 openpyxl>=3.1

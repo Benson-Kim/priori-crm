@@ -1,7 +1,7 @@
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import type { InvoiceResponse } from "@/services/invoiceApi";
+import { sendInvoice, type InvoiceResponse } from "@/services/invoiceApi";
 import { Send } from "lucide-react";
 import { useState } from "react";
 
@@ -13,16 +13,31 @@ interface SendInvoiceModalProps {
 }
 
 export function SendInvoiceModal({ isOpen, onClose, invoice, onSuccess }: SendInvoiceModalProps) {
-    const [toEmail, setToEmail] = useState("");
+    const [toEmail, setToEmail] = useState(invoice.customer?.email ?? "");
     const [subject, setSubject] = useState(`Invoice ${invoice.invoice_reference} from Priori Technologies`);
     const [body, setBody] = useState(
         `Dear Customer,\n\nPlease find attached Invoice ${invoice.invoice_reference} for the amount of ${invoice.total_due}.\n\nThank you for your business.\n\nPriori Technologies`
     );
+    const [isSending, setIsSending] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSend = () => {
-        console.log("[SendInvoice] Sending:", { toEmail, subject, body });
-        alert("Email sending is not yet implemented. Coming soon!");
-        onSuccess();
+    const handleSend = async () => {
+        setError(null);
+        setIsSending(true);
+        try {
+            await sendInvoice(invoice.id, {
+                toEmail: toEmail || undefined,
+                subject: subject || undefined,
+                body: body || undefined,
+            });
+            onSuccess();
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : "Failed to send invoice"
+            );
+        } finally {
+            setIsSending(false);
+        }
     };
 
     return (
@@ -31,14 +46,16 @@ export function SendInvoiceModal({ isOpen, onClose, invoice, onSuccess }: SendIn
             onClose={onClose}
             title="Send Invoice"
             icon={<Send size={24} />}
-            confirmLabel="Send"
+            confirmLabel={isSending ? "Sending..." : "Send"}
             cancelLabel="Cancel"
             onConfirm={handleSend}
         >
             <div className="space-y-4">
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-                    Email sending is not yet implemented. This is a preview of the interface.
-                </div>
+                {error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                        {error}
+                    </div>
+                )}
                 <div>
                     <Label htmlFor="send-to">To</Label>
                     <Input

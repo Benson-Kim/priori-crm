@@ -1,7 +1,7 @@
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { buildVatLabel } from "./utils";
-import { COMPANY_INFO } from "@/lib/constants";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 
 export interface ExpenseViewerData {
   expenseReference?: string;
@@ -46,24 +46,8 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">
       {/* Top Section */}
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Logo */}
-          <div className="flex flex-col items-start gap-3">
-            <img
-              src="/Logo Priori.svg"
-              alt="Priori logo"
-              className="aspect-150/44 w-37.5"
-            />
-          </div>
-
-          {/* Company Info */}
-          <div className="flex flex-col gap-1 text-gray-800 items-end">
-            <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
-            <p className="text-sm">{COMPANY_INFO.address}</p>
-            <p className="text-sm">{COMPANY_INFO.phone}</p>
-            <p className="text-sm">{COMPANY_INFO.email}</p>
-          </div>
-        </div>
+        {/* Owner identity (logo + company block) — single source of truth. */}
+        <DocumentOwnerHeader />
       </div>
 
       <div className="p-6">

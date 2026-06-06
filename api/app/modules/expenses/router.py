@@ -215,10 +215,13 @@ def export_expenses_to_excel(
     date_from:     Annotated[date | None, Query(alias="dateFrom")]    = None,
     date_to:       Annotated[date | None, Query(alias="dateTo")]      = None,
     is_recurring:  Annotated[bool | None, Query(alias="isRecurring")] = None,
+    include_line_items: Annotated[
+        bool,
+        Query(alias="includeLineItems", description="Include line items in a separate sheet"),
+    ] = False,
 ) -> StreamingResponse:
     import io
     from app.common.excel import ExcelExporter
-    from app.common.pagination import PaginationParams
     from app.lib.config import settings
 
     filters = ExpenseFilterParams(
@@ -228,13 +231,16 @@ def export_expenses_to_excel(
         date_to=date_to,
         is_recurring=is_recurring,
     )
-    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
-    result = service.list_expenses(params, filters)
 
-    expenses = [service.get_by_id(item.id) for item in result.items]
+    # Batch-load full ORM rows instead of one get_by_id per row (P-5).
+    expenses = service.list_for_export(
+        filters,
+        include_line_items=include_line_items,
+        limit=settings.BATCH_SIZE,
+    )
 
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_expenses(expenses)
+    xlsx_bytes = exporter.export_expenses(expenses, include_line_items=include_line_items)
 
     filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
@@ -533,12 +539,13 @@ def get_expense_document_download(
     # rejected before this point and UUID enumeration cannot leak other PII.
     document = service.get_document(expense_id, document_id)
 
-    # open_file resolves the stored key under base_dir and asserts containment
-    # (raises NotFoundException if missing, BadRequestException on traversal).
-    file_handle = storage_service.open_file(document.storage_key)
+    # download_stream serves through a path-confined handle on local storage
+    # and straight from get_object on S3 (raises NotFoundException if missing,
+    # BadRequestException on traversal) — never a raw client-supplied path.
+    file_stream = storage_service.download_stream(document.storage_key)
 
     return StreamingResponse(
-        file_handle,
+        file_stream,
         media_type=document.mime_type,
         headers={
             "Content-Disposition": (

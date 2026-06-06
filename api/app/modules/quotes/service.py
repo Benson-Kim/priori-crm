@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import func, or_, case, and_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import (
     BadRequestException,
@@ -15,8 +15,10 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
+from app.common.document_service import BaseDocumentService
 from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
 from app.common.reference import ReferenceGenerator
+from app.common.search import build_search_clause
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DiscountType, QuoteStatus, TaxType
 from app.modules.quotes.models import Quote, QuoteLineItem
@@ -34,7 +36,7 @@ from app.modules.quotes.schemas import (
 logger = logging.getLogger(__name__)
 
 
-class QuoteService:
+class QuoteService(BaseDocumentService):
     """
     Service layer for quote operations.
 
@@ -55,6 +57,14 @@ class QuoteService:
     # Max retries for number collision (advisory lock makes this very rare)
     MAX_QUOTE_NUMBER_RETRIES = 3
 
+    _document_noun = "quote"
+    _reference_collision_markers = ("quote_number", "quote_reference")
+    _email_terms = {
+        "noun": "quote",
+        "date_label": "Valid until",
+        "closing": "Thank you for considering our proposal.",
+    }
+
     # Formal state machine — enforced via _transition()
     ALLOWED_TRANSITIONS: dict[QuoteStatus, list[QuoteStatus]] = {
         QuoteStatus.DRAFT:    [QuoteStatus.SENT, QuoteStatus.EXPIRED],
@@ -63,40 +73,6 @@ class QuoteService:
         QuoteStatus.INVOICED: [],          # terminal
         QuoteStatus.EXPIRED:  [QuoteStatus.SENT],
     }
-
-    def __init__(self, db: Session, current_user=None) -> None:
-        self._db = db
-        self._current_user = current_user
-        self._actor_id = getattr(current_user, "id", None)
-
-    # -------------------------------------------------------------------
-    # Internal helpers
-    # -------------------------------------------------------------------
-
-    def _transition(self, quote: Quote, new_status: QuoteStatus) -> None:
-        """
-        Enforce ALLOWED_TRANSITIONS and bump version atomically.
-
-        Raises BadRequestException for any invalid transition so callers
-        never need to know the rules themselves (DI-3 fix).
-        """
-        current = QuoteStatus(quote.status)
-        allowed = self.ALLOWED_TRANSITIONS.get(current, [])
-        if new_status not in allowed:
-            raise BadRequestException(
-                detail=(
-                    f"Cannot transition quote from '{current}' to '{new_status}'. "
-                    f"Allowed: {[s.value for s in allowed] or 'none (terminal state)'}"
-                ),
-                field="status",
-            )
-        quote.status = new_status
-        quote.version += 1
-
-    def _ref_gen(self) -> ReferenceGenerator:
-        """Lazy accessor for the shared reference generator."""
-        return ReferenceGenerator(self._db)
-
 
     def create(self, data: QuoteCreate, user_id: uuid.UUID | None = None) -> Quote:
         """Create a new quote with line items and automatic calculations."""
@@ -181,9 +157,7 @@ class QuoteService:
             except IntegrityError as e:
                 sp.rollback()  # only this savepoint rolls back (R-2 fix)
                 last_error = e
-                is_collision = (
-                    "quote_number" in str(e.orig) or "quote_reference" in str(e.orig)
-                )
+                is_collision = self._is_reference_collision(e)
                 if is_collision and attempt < self.MAX_QUOTE_NUMBER_RETRIES:
                     logger.warning("Quote number/reference collision, retry %d", attempt + 1)
                     continue
@@ -311,16 +285,16 @@ class QuoteService:
                     query = query.filter(Quote.due_date <= filters.due_date_to)
                 
                 if filters.search:
-                    search_term = f"%{filters.search}%"
-                    query = query.filter(
-                        or_(
-                            Quote.quote_number.ilike(search_term),
-                            Quote.quote_reference.ilike(search_term),
-                            Customer.first_name.ilike(search_term),
-                            Customer.last_name.ilike(search_term),
-                            Customer.company_name.ilike(search_term),
-                        )
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Quote.quote_number,
+                        Quote.quote_reference,
+                        Customer.first_name,
+                        Customer.last_name,
+                        Customer.company_name,
                     )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
 
             total = query.count()
 
@@ -370,6 +344,65 @@ class QuoteService:
         except SQLAlchemyError as e:
             logger.exception("Database error listing quotes")
             raise DatabaseException("Failed to list quotes") from e
+
+    def list_for_export(
+        self,
+        filters: QuoteFilterParams | None = None,
+        include_line_items: bool = False,
+        limit: int | None = None,
+    ) -> list[Quote]:
+        """Return full Quote ORM rows for Excel export, batch-loaded.
+
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
+        (P-5 / QT-OPS-1): customer eager-joined; line items via ``selectinload``
+        only when requested. ``limit`` caps rows materialised in memory.
+        """
+        try:
+            from app.modules.customers.models import Customer
+
+            query = self._db.query(Quote).join(
+                Customer, Quote.customer_id == Customer.id
+            ).options(joinedload(Quote.customer))
+
+            if include_line_items:
+                query = query.options(selectinload(Quote.line_items))
+
+            if filters:
+                if filters.status:
+                    query = query.filter(Quote.status == filters.status)
+                if filters.customer_id:
+                    query = query.filter(Quote.customer_id == filters.customer_id)
+                if filters.date_from:
+                    query = query.filter(Quote.transaction_date >= filters.date_from)
+                if filters.date_to:
+                    query = query.filter(Quote.transaction_date <= filters.date_to)
+                if filters.due_date_from:
+                    query = query.filter(Quote.due_date >= filters.due_date_from)
+                if filters.due_date_to:
+                    query = query.filter(Quote.due_date <= filters.due_date_to)
+                if filters.search:
+                    from app.common.search import build_search_clause
+
+                    search_clause = build_search_clause(
+                        filters.search,
+                        Quote.quote_number,
+                        Quote.quote_reference,
+                        Customer.first_name,
+                        Customer.last_name,
+                        Customer.company_name,
+                    )
+                    if search_clause is not None:
+                        query = query.filter(search_clause)
+
+            query = query.order_by(Quote.created_at.desc())
+            if limit is not None:
+                query = query.limit(limit)
+
+            return query.all()
+
+        except SQLAlchemyError as e:
+            logger.exception("Database error loading quotes for export")
+            raise DatabaseException("Failed to load quotes for export") from e
 
     def get_status_counts(self) -> QuoteStatusCounts:
         """
@@ -531,6 +564,15 @@ class QuoteService:
     
     # STATUS TRANSITIONS & ACTIONS
     
+    def _capture_owner_snapshot(self, quote: Quote) -> None:
+        """Stamp an immutable owner-header snapshot the first time issued (V-DI-4)."""
+        if quote.owner_snapshot_id is not None:
+            return
+        from app.modules.owner.service import OwnerService
+
+        snapshot = OwnerService(self._db).snapshot_current()
+        quote.owner_snapshot_id = snapshot.id
+
     def mark_as_sent(
         self,
         quote_id: uuid.UUID,
@@ -540,6 +582,7 @@ class QuoteService:
         quote = self.get_by_id(quote_id)
         self._transition(quote, QuoteStatus.SENT)  # enforces state machine (DI-3 fix)
         quote.sent_at = sent_at or datetime.now(UTC)
+        self._capture_owner_snapshot(quote)
         self._db.flush()
         logger.info("Marked quote as sent: %s", quote.quote_number,
                     extra={"quote_id": str(quote.id), "sent_at": quote.sent_at})
@@ -599,6 +642,7 @@ class QuoteService:
         if quote.status == QuoteStatus.DRAFT:
             self._transition(quote, QuoteStatus.SENT)  # enforces state machine (DI-3 fix)
             quote.sent_at = sent_at
+            self._capture_owner_snapshot(quote)
             self._db.flush()
 
         logger.info(
@@ -799,9 +843,7 @@ class QuoteService:
                 except IntegrityError as exc:
                     sp.rollback()  # only this savepoint (R-2 fix)
                     last_error = exc
-                    is_collision = (
-                        "quote_number" in str(exc.orig) or "quote_reference" in str(exc.orig)
-                    )
+                    is_collision = self._is_reference_collision(exc)
                     if is_collision and attempt < self.MAX_QUOTE_NUMBER_RETRIES:
                         logger.warning("Collision during duplicate, retry %d", attempt + 1)
                         continue
@@ -1077,33 +1119,23 @@ class QuoteService:
             use_date_scope=False,
         )
 
-    def _generate_email_subject(self, quote: Quote) -> str:
-        """Generate email subject for a quote."""
-        from app.lib.config import settings
-        return f"Quote {quote.quote_reference} from {settings.APP_NAME}"
-
-    def _generate_email_body(self, quote: Quote) -> str:
-        """Generate plain-text email body for a quote."""
-        from app.lib.config import settings
-        return f"""\
-Dear {quote.customer.display_name},
-
-Please find attached quote {quote.quote_reference} for {quote.currency} {quote.total_due}.
-
-Valid until: {quote.due_date.strftime('%d %B %Y')}
-
-Thank you for considering our proposal.
-
-Best regards,
-{settings.APP_NAME}
-"""
-
     # PDF GENERATION
 
     def generate_pdf(self, quote_id: uuid.UUID) -> bytes:
-        """Generate PDF for quote using ReportLab."""
+        """Generate PDF for quote, rendering the owner header from the quote's
+        immutable snapshot when issued, else the live profile (V-DI-4)."""
         from app.common.pdf import DocumentPDFGenerator
+        from app.modules.owner.models import OwnerProfileSnapshot
+        from app.modules.owner.service import OwnerService
 
         quote = self.get_by_id(quote_id)
+
+        owner_service = OwnerService(self._db)
+        if quote.owner_snapshot_id is not None:
+            source = self._db.get(OwnerProfileSnapshot, quote.owner_snapshot_id)
+        else:
+            source = owner_service.get_or_create()
+        owner_info = owner_service.to_owner_info(source)
+
         generator = DocumentPDFGenerator()
-        return generator.generate_quote_pdf(quote)
+        return generator.generate_quote_pdf(quote, owner=owner_info)

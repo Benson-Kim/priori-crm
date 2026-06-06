@@ -7,6 +7,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { useConfirm } from "@/hooks/useConfirm";
 import type { ExpenseResponse } from "@/services/expenseApi";
 import { deleteExpense, deleteExpenseDocument, downloadExpenseDocument, getExpense, uploadExpenseDocument } from "@/services/expenseApi";
+import { saveBlob } from "@/lib/utils";
 import { ArrowLeft, Ban, CreditCard, Download, PaperclipIcon, Pencil, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -118,7 +119,16 @@ export default function ExpensesDetailPage() {
             confirmLabel: "Download",
             variant: "default",
             onConfirm: async () => {
-                await downloadExpenseDocument(id, docId);
+                try {
+                    const blob = await downloadExpenseDocument(id, docId);
+                    saveBlob(blob, filename);
+                } catch (err) {
+                    setError(
+                        err instanceof Error
+                            ? err.message
+                            : "Failed to download document"
+                    );
+                }
             },
         });
     };
@@ -158,13 +168,6 @@ export default function ExpensesDetailPage() {
             onClick: () => setShowPaymentModal(true),
         });
     }
-
-    actions.push({
-        key: "pdf",
-        label: "Download PDF",
-        icon: <Download size={16} />,
-        onClick: () => setError("PDF generation is not yet implemented. Coming soon."),
-    });
 
     actions.push({
         key: "delete",

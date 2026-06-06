@@ -189,10 +189,13 @@ def export_quotes_to_excel(
         date_from=date_from,
         date_to=date_to,
     )
-    params = PaginationParams(page=1, per_page=settings.BATCH_SIZE)
-    result = service.list_quotes(params, filters)
 
-    quotes = [service.get_by_id(item.id) for item in result.items] if include_line_items else result.items
+    # Batch-load full ORM rows instead of one get_by_id per row (P-5).
+    quotes = service.list_for_export(
+        filters,
+        include_line_items=include_line_items,
+        limit=settings.BATCH_SIZE,
+    )
 
     exporter = ExcelExporter()
     xlsx_bytes = exporter.export_quotes(quotes, include_line_items=include_line_items)

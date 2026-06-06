@@ -1,11 +1,12 @@
 import {
   apiDelete,
+  apiDownload,
   apiGet,
   apiPost,
   apiPut,
+  apiUpload,
   flattenPaginated,
 } from "@/lib/api";
-import { appConfig } from "@/lib/constants";
 import type { PaginatedApiResponse } from "@/lib/types";
 
 // Base models based on API schemas
@@ -218,26 +219,9 @@ export async function uploadExpenseDocument(
 ): Promise<ExpenseDocument> {
   const formData = new FormData();
   formData.append("file", file);
-
-  const response = await fetch(
-    new URL(`expenses/${id}/documents`, appConfig.apiUrl).toString(),
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.detail ||
-        errorData.error ||
-        response.statusText ||
-        "Failed to upload document"
-    );
-  }
-
-  return response.json();
+  // Route through the shared client so the upload carries the bearer token
+  // and the 401 -> refresh -> retry flow (LIB-FE-4 / EXP-FE-2).
+  return apiUpload<ExpenseDocument>(`expenses/${id}/documents`, formData);
 }
 
 export function deleteExpenseDocument(id: string, documentId: string) {
@@ -246,22 +230,13 @@ export function deleteExpenseDocument(id: string, documentId: string) {
   );
 }
 
-export async function downloadExpenseDocument(
+export function downloadExpenseDocument(
   id: string,
   documentId: string
 ): Promise<Blob> {
-  const response = await fetch(
-    new URL(
-      `expenses/${id}/documents/${documentId}/download`,
-      appConfig.apiUrl
-    ).toString()
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to download document");
-  }
-
-  return response.blob();
+  // Shared client adds auth + 401-refresh; returns a Blob the caller saves
+  // via saveBlob (EXP-FE-1).
+  return apiDownload(`expenses/${id}/documents/${documentId}/download`);
 }
 
 export function calculateTotals(data: any) {

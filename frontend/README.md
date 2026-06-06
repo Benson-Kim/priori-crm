@@ -2,6 +2,32 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## API contract (single source of truth)
+
+Response/request types come from the backend OpenAPI schema, not hand-mirrored
+interfaces (which previously drifted and caused the duplicate-response and
+`vendor.phone` bugs — LIB-FE-9).
+
+- Generate the typed schema (backend running, or set `VITE_OPENAPI_URL`):
+
+  ```sh
+  npm run gen:api   # writes src/lib/api-schema.d.ts
+  ```
+
+- Reference generated types via the seam in `src/lib/apiTypes.ts`:
+
+  ```ts
+  import type { Schema } from "@/lib/apiTypes";
+  type InvoiceDuplicateResponse = Schema<"InvoiceDuplicateResponse">;
+  ```
+
+- Which document actions are wired to a live endpoint is declared once in
+  `src/lib/features.ts` (`DOCUMENT_FEATURES`) — UI controls read that map
+  instead of hardcoding availability with `alert("coming soon")` stubs.
+
+The generated `api-schema.d.ts` is not committed; CI should run `gen:api` and
+type-check, or a developer regenerates it after backend contract changes.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

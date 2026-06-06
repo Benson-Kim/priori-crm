@@ -261,6 +261,14 @@ class Quote(Base):
         nullable=True,
         comment="User who approved this quote",
     )
+
+    # Immutable owner-header snapshot captured at issue time (V-DI-4).
+    owner_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("owner_profile_snapshots.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Owner profile as it was when this quote was issued",
+    )
     
     # Optimistic Locking
     version: Mapped[int] = mapped_column(

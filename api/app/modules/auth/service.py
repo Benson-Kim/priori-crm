@@ -2,6 +2,7 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import BadRequestException, NotFoundException, UnauthorizedException
@@ -121,6 +122,32 @@ class AuthService:
         self._db.refresh(user)
         logger.info("Seeded user: %s", email)
         return user
+
+    # Maintenance
+
+    def purge_expired_otps(self, retention_minutes: int = OTP_EXPIRY_MINUTES) -> int:
+        """Delete used or expired OTP rows past the retention window (AUTH-DBA-2).
+
+        Keeps the otp_codes table bounded. Rows are eligible once they are
+        either used or expired *and* older than ``retention_minutes`` (a small
+        grace period so an in-flight verify is never raced). Returns the number
+        of rows deleted.
+        """
+        cutoff = datetime.now(UTC) - timedelta(minutes=retention_minutes)
+        deleted = (
+            self._db.query(OTPCode)
+            .filter(
+                OTPCode.created_at < cutoff,
+                or_(
+                    OTPCode.is_used.is_(True),
+                    OTPCode.expires_at < datetime.now(UTC),
+                ),
+            )
+            .delete(synchronize_session=False)
+        )
+        self._db.commit()
+        logger.info("Purged %d expired/used OTP rows", deleted)
+        return deleted
 
     # Private Helpers
 

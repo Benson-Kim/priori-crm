@@ -197,6 +197,18 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
 }
 
 /**
+ * Multipart PUT variant of apiUpload (e.g. replacing the owner logo) — same
+ * shared-client auth/refresh guarantees; the browser sets the boundary.
+ */
+export async function apiUploadPut<T>(path: string, formData: FormData): Promise<T> {
+  const response = await authedFetch(buildUrl(path), {
+    method: "PUT",
+    body: formData,
+  });
+  return handleResponse<T>(response);
+}
+
+/**
  * Download a binary resource (PDF, Excel, document) through the shared client
  * so it carries auth and refresh on 401 (LIB-FE-4, EXP-FE-2).
  */
