@@ -1,4 +1,5 @@
 """Database configuration with connection pooling and session management."""
+
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -6,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import MetaData, create_engine, event, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import Pool
 
@@ -62,7 +63,9 @@ def receive_connect(dbapi_conn: Any, connection_record: Any) -> None:
 
 
 @event.listens_for(Pool, "checkout")
-def receive_checkout(dbapi_conn: Any, connection_record: Any, connection_proxy: Any) -> None:
+def receive_checkout(
+    dbapi_conn: Any, connection_record: Any, connection_proxy: Any
+) -> None:
     """Log when a connection is checked out from the pool."""
     logger.debug("Connection checked out from pool")
 
@@ -107,10 +110,7 @@ def assert_version(
     from app.common.exceptions import ConflictException
 
     current_version = (
-        db.query(model.version)
-        .filter(model.id == record_id)
-        .with_for_update()
-        .scalar()
+        db.query(model.version).filter(model.id == record_id).with_for_update().scalar()
     )
 
     if current_version is not None and current_version != expected_version:

@@ -50,7 +50,9 @@ export default function QuoteDetailPage() {
         }
     }, [id]);
 
-    useEffect(() => { fetchQuote(); }, [fetchQuote]);
+    useEffect(() => {
+        void (async () => { await fetchQuote(); })();
+    }, [fetchQuote]);
 
     const handleMarkSent = async () => {
         if (!quote) return;
@@ -66,7 +68,7 @@ export default function QuoteDetailPage() {
         if (!quote) return;
         try {
             const dup = await duplicateQuote(quote.id);
-            navigate(`/quotes/${dup.id}/edit`);
+            navigate(`/quotes/${dup.new_quote_id}/edit`);
         } catch (err) {
             console.error("[QuoteDetail] Duplicate failed:", err);
             setError(
@@ -190,13 +192,15 @@ export default function QuoteDetailPage() {
                 data={{
                     documentReference: quote.quote_reference,
                     customerId: quote.customer_id,
-                    customer: quote.customer as any,
+                    customer: quote.customer,
                     transactionDate: quote.transaction_date,
                     dueDate: quote.due_date,
                     currency: quote.currency,
                     rfqNumber: quote.rfq_rfp_number || undefined,
                     notes: quote.notes || undefined,
-                    discountType: quote.discount_type as any,
+                    discountType: (quote.discount_type === "amount" || quote.discount_type === "percentage")
+                        ? quote.discount_type
+                        : null,
                     discountAmount: quote.discount_amount,
                     discountPercentage: quote.discount_percentage,
                     subtotal: quote.subtotal,

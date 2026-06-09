@@ -19,6 +19,12 @@ export const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 // snapshotted immutably onto issued documents. Do not reintroduce a hardcoded
 // company constant.
 
+export const COUNTRY_OPTIONS = [
+  { value: "KE", label: "Kenya" },
+  { value: "UG", label: "Uganda" },
+  { value: "TZ", label: "Tanzania" },
+];
+
 export const CURRENCY_OPTIONS = [
   { value: "KES", label: "KES" },
   { value: "USD", label: "USD" },
@@ -37,7 +43,22 @@ export const TAX_RATES: Record<string, number> = {
   vat_0: 0.0,
   no_tax: 0.0,
   exempt: 0.0,
-} as const;
+};
+
+export async function initTaxRates() {
+  try {
+    const res = await fetch(`${API_URL}taxes`);
+    if (res.ok) {
+      const data = await res.json();
+      for (const key in TAX_RATES) {
+        delete TAX_RATES[key];
+      }
+      Object.assign(TAX_RATES, data);
+    }
+  } catch (err) {
+    console.error("Failed to fetch tax rates from API", err);
+  }
+}
 
 export const TAX_CATEGORY_OPTIONS = [
   { value: "vat", label: "VAT" },

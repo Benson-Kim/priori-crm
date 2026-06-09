@@ -10,7 +10,6 @@ from sqlalchemy import (
     String,
     Text,
     text,
-    func,
 )
 from sqlalchemy.dialects.postgresql import (
     UUID,
@@ -66,9 +65,11 @@ class Customer(Base):
         ),
         # Full-text search index (requires pg_trgm extension)
         Index(
-            'ix_customers_fulltext_search',
-            text("to_tsvector('english', coalesce(company_name, '') || ' ' || coalesce(first_name, '') || ' ' || coalesce(last_name, '') || ' ' || coalesce(email, ''))"),
-            postgresql_using='gin'
+            "ix_customers_fulltext_search",
+            text(
+                "to_tsvector('english', coalesce(company_name, '') || ' ' || coalesce(first_name, '') || ' ' || coalesce(last_name, '') || ' ' || coalesce(email, ''))"
+            ),
+            postgresql_using="gin",
         ),
     )
 
@@ -85,7 +86,7 @@ class Customer(Base):
         index=True,
         comment="Customer type: individual or business",
     )
-    
+
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -101,13 +102,13 @@ class Customer(Base):
         index=True,
         comment="Company name for business customers",
     )
-    
+
     vat_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="VAT/Tax registration number",
     )
-    
+
     website: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
@@ -120,14 +121,14 @@ class Customer(Base):
         index=True,
         comment="Contact person first name",
     )
-    
+
     last_name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
         index=True,
         comment="Contact person last name",
     )
-    
+
     email: Mapped[str] = mapped_column(
         String(255),
         unique=True,
@@ -135,7 +136,7 @@ class Customer(Base):
         index=True,
         comment="Primary email address",
     )
-    
+
     phone: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -149,7 +150,7 @@ class Customer(Base):
         server_default=text("'KES'"),
         comment="Default currency for transactions",
     )
-    
+
     balance: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -163,32 +164,32 @@ class Customer(Base):
         nullable=True,
         comment="Primary address line",
     )
-    
+
     address2: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Secondary address line",
     )
-    
+
     city: Mapped[str] = mapped_column(
         String(100),
         nullable=True,
         index=True,
         comment="City",
     )
-    
+
     province: Mapped[str] = mapped_column(
         String(100),
         nullable=True,
         comment="State/Province/Region",
     )
-    
+
     postal_code: Mapped[str] = mapped_column(
         String(20),
         nullable=True,
         comment="Postal/ZIP code",
     )
-    
+
     country: Mapped[str] = mapped_column(
         String(2),
         nullable=True,
@@ -203,7 +204,7 @@ class Customer(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         comment="Record creation timestamp",
     )
-    
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -229,6 +230,11 @@ class Customer(Base):
         # "all, delete-orphan" here would silently wipe quote history on
         # customer hard-delete (V-DI-2 / CUST-DBA-1 / QT-DBA-1).
         cascade="save-update, merge",
+        # passive_deletes lets the database FK (ondelete=RESTRICT) reject the
+        # delete instead of SQLAlchemy first emitting UPDATE quotes SET
+        # customer_id=NULL (which violates the NOT NULL column). The RESTRICT
+        # then surfaces as a clean IntegrityError on the customers DELETE.
+        passive_deletes="all",
         lazy="select",
     )
 

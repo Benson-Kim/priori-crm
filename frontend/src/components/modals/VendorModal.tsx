@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
+import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
     checkEmailDuplicate,
@@ -15,8 +16,8 @@ import {
 import { vendorSchema, type VendorFormData } from "@/validations/vendorSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Check, Search, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { startTransition, useCallback, useEffect, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { Select } from "../ui/Select";
 
 interface VendorModalProps {
@@ -25,18 +26,6 @@ interface VendorModalProps {
     vendorId?: string | null;
     onSuccess: (id?: string, name?: string) => void;
 }
-
-const countryOptions = [
-    { value: "KE", label: "Kenya" },
-    { value: "UG", label: "Uganda" },
-    { value: "TZ", label: "Tanzania" },
-];
-
-const currencyOptions = [
-    { value: "KES", label: "KES" },
-    { value: "USD", label: "USD" },
-    { value: "EUR", label: "EUR" },
-];
 
 export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModalProps) {
     // Mode can be: 'choice' (initial), 'new' (empty form), 'search' (searching contacts), 'edit' (editing existing vendor)
@@ -59,7 +48,6 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
     const {
         handleSubmit,
         reset,
-        watch,
         control,
         formState: { errors },
     } = useForm<VendorFormData>({
@@ -69,31 +57,14 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             email: "",
             phone_primary: "",
             address: "",
-            country: "KE",
-            currency: "KES",
+            country: COUNTRY_OPTIONS[0].value,
+            currency: CURRENCY_OPTIONS[0].value,
         },
     });
 
-    const emailValue = watch("email");
+    const emailValue = useWatch({ name: "email", control });
 
-    // Initialize state when modal opens
-    useEffect(() => {
-        if (isOpen) {
-            if (vendorId) {
-                setMode('edit');
-                loadVendorData(vendorId);
-            } else {
-                setMode('choice');
-                reset();
-                setSearchQuery("");
-                setSelectedContactId(null);
-                setError(null);
-                setEmailWarning(null);
-            }
-        }
-    }, [isOpen, vendorId, reset]);
-
-    const loadVendorData = async (id: string) => {
+    const loadVendorData = useCallback(async (id: string) => {
         setIsLoading(true);
         try {
             const data = await getVendor(id);
@@ -103,19 +74,40 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                 phone_primary: data.phone_primary || "",
                 phone_secondary: data.phone_secondary || "",
                 address: data.address || "",
-                country: data.country || "KE",
+                country: data.country || COUNTRY_OPTIONS[0].value,
                 website: data.website || "",
                 vat_number: data.vat_number || "",
                 tax_id_pin: data.tax_id_pin || "",
                 notes: data.notes || "",
-                currency: data.currency || "KES",
+                currency: data.currency || CURRENCY_OPTIONS[0].value,
             });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load vendor");
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [reset]);
+
+    // Initialize state when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            startTransition(() => {
+                if (vendorId) {
+                    setMode('edit');
+                } else {
+                    setMode('choice');
+                    reset();
+                    setSearchQuery("");
+                    setSelectedContactId(null);
+                    setError(null);
+                    setEmailWarning(null);
+                }
+            });
+            if (vendorId) {
+                void (async () => { await loadVendorData(vendorId); })();
+            }
+        }
+    }, [isOpen, vendorId, reset, loadVendorData]);
 
     // Handle Contact Search
     useEffect(() => {
@@ -173,10 +165,10 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             email: contact.email || "",
             phone_primary: contact.phone_primary || "",
             address: contact.address || "",
-            country: contact.country || "KE",
+            country: contact.country || COUNTRY_OPTIONS[0].value,
             website: contact.website || "",
             vat_number: contact.vat_number || "",
-            currency: "KES",
+            currency: CURRENCY_OPTIONS[0].value,
         });
         setMode('new');
     };
@@ -392,7 +384,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                                                 <Select
                                                     id="country"
                                                     {...field}
-                                                    options={countryOptions}
+                                                    options={COUNTRY_OPTIONS}
                                                     placeholder="Country"
                                                 />
                                                 {renderFieldError(errors.country)}
@@ -412,7 +404,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                                                 <Select
                                                     id="currency"
                                                     {...field}
-                                                    options={currencyOptions}
+                                                    options={CURRENCY_OPTIONS}
                                                     placeholder="Select currency"
                                                 />
                                                 {renderFieldError(errors.currency)}

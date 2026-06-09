@@ -4,6 +4,7 @@ def test_health_check(client):
     assert response.status_code == 200
 
     data = response.json()
-    assert data["app"] == "Priori Technologies"
-    assert data["version"] == "1.0.188-288"
-    assert "status" in data
+    assert data["status"] == "healthy"
+    assert "version" in data
+    assert "environment" in data
+    assert "timestamp" in data

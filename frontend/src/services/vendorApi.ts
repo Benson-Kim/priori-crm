@@ -1,13 +1,13 @@
 import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
 import type { PaginatedApiResponse } from "@/lib/types";
 
-// Note: VendorStatement interfaces are mirrored from CustomerStatement
 export interface VendorStatement {
   vendor: {
     id: string;
     vendor_name: string;
-    email: string;
-    phone: string;
+    email: string | null;
+    phone_primary: string | null;
+    phone_secondary: string | null;
     currency: string;
   };
   period_start: string;
@@ -82,13 +82,6 @@ export interface VendorPayablesSummary {
   total_unpaid: number;
   overdue_total: number;
   currency: string;
-}
-
-export interface VendorDetailResponse {
-  vendor: Vendor;
-  payables_summary: VendorPayablesSummary;
-  transaction_count: number;
-  next_actions: string[];
 }
 
 export interface VendorTransactionSummary {

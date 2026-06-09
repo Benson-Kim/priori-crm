@@ -44,7 +44,7 @@ export function useInvoiceForm(invoiceId?: string): UseInvoiceFormReturn {
     }, [invoiceId, navigate]);
 
     useEffect(() => {
-        if (invoiceId) fetchInvoice();
+        if (invoiceId) void (async () => { await fetchInvoice(); })();
     }, [invoiceId, fetchInvoice]);
 
     const handleCancel = () => {

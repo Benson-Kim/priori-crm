@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -14,9 +14,8 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
-from app.lib.config import settings
-from app.common.search import build_search_clause
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
@@ -25,8 +24,8 @@ from app.modules.customers.schemas import (
     CustomerResponse,
     CustomerStatement,
     CustomerStatusCounts,
-    CustomerUpdate,
     CustomerSummary,
+    CustomerUpdate,
     FinancialSummary,
     StatementSummary,
     StatementTransaction,
@@ -36,6 +35,7 @@ from app.modules.invoices.schemas import InvoiceResponse
 from app.modules.quotes.models import Quote, QuoteStatus
 
 logger = logging.getLogger(__name__)
+
 
 class CustomerService:
     """Handles customer CRUD business logic."""
@@ -96,14 +96,18 @@ class CustomerService:
             raise
         except IntegrityError as e:
             logger.exception("Database integrity error creating customer")
-            raise ConflictException("Customer data violates database constraints") from e
+            raise ConflictException(
+                "Customer data violates database constraints"
+            ) from e
         except SQLAlchemyError as e:
             logger.exception("Database error creating customer")
             raise DatabaseException("Failed to create customer") from e
 
     # Read One
 
-    def get_by_id(self, customer_id: uuid.UUID, include_deleted: bool = False) -> Customer:
+    def get_by_id(
+        self, customer_id: uuid.UUID, include_deleted: bool = False
+    ) -> Customer:
         """Get a customer by ID or raise 404."""
         try:
             query = self._db.query(Customer).filter(Customer.id == customer_id)
@@ -116,7 +120,7 @@ class CustomerService:
                     resource="customer",
                 )
             return customer
-        
+
         except NotFoundException:
             raise
         except SQLAlchemyError as e:
@@ -139,13 +143,15 @@ class CustomerService:
                 try:
                     query = query.filter(Customer.status == CustomerStatus(status))
                 except ValueError:
-                    raise BadRequestException(detail=f"Invalid status: {status}", field="status")
-            
+                    raise BadRequestException(
+                        detail=f"Invalid status: {status}", field="status"
+                    ) from None
+
             else:
                 # Default list (no explicit status / 'all') hides soft-deleted
                 # customers. Surfacing them requires status=deleted.
                 query = query.filter(Customer.status != CustomerStatus.DELETED)
-             
+
             if search:
                 search_clause = build_search_clause(
                     search,
@@ -181,17 +187,20 @@ class CustomerService:
                 )
                 for c in customers
             ]
-            
+
             logger.debug(
                 f"Listed {len(items)} customers (page {params.page}, total {total})",
                 extra={
-                    "page": params.page, "per_page": params.per_page, "total": total,
-                    "status_filter": status, "search_term": search,
+                    "page": params.page,
+                    "per_page": params.per_page,
+                    "total": total,
+                    "status_filter": status,
+                    "search_term": search,
                 },
             )
-            
+
             return PaginatedResponse.create(items=items, total=total, params=params)
-        
+
         except BadRequestException:
             raise
         except SQLAlchemyError as e:
@@ -206,9 +215,9 @@ class CustomerService:
                 .group_by(Customer.status)
                 .all()
             )
-            counts_dict  = {row_status: count for row_status, count in results}
+            counts_dict = {row_status: count for row_status, count in results}
             total = sum(counts_dict.values())
-            
+
             counts = CustomerStatusCounts(
                 all=total,
                 active=counts_dict.get(CustomerStatus.ACTIVE, 0),
@@ -227,14 +236,13 @@ class CustomerService:
 
     # Update
 
-
     def update(self, customer_id: uuid.UUID, data: CustomerUpdate) -> Customer:
         """Update an existing customer."""
         try:
             customer = self.get_by_id(customer_id)
 
             update_data = data.model_dump(exclude_unset=True)
-            
+
             if not update_data:
                 return customer
 
@@ -248,7 +256,7 @@ class CustomerService:
                 existing = (
                     self._db.query(Customer)
                     .filter(
-                        Customer.email == update_data["email"], 
+                        Customer.email == update_data["email"],
                         Customer.id != customer_id,
                     )
                     .first()
@@ -264,11 +272,12 @@ class CustomerService:
                 setattr(customer, field, value)
 
             self._db.flush()
-            
+
             logger.info(
                 f"Updated customer: {customer.id}",
                 extra={
-                    "customer_id": str(customer.id), "updated_fields": list(update_data.keys()),
+                    "customer_id": str(customer.id),
+                    "updated_fields": list(update_data.keys()),
                 },
             )
 
@@ -289,68 +298,66 @@ class CustomerService:
         """Activate a customer account."""
         try:
             customer = self.get_by_id(customer_id)
-            
+
             # Check if already active (idempotent operation)
             if customer.status == CustomerStatus.ACTIVE:
                 logger.info(
                     f"Customer {customer_id} already active",
-                    extra={"customer_id": str(customer_id)}
+                    extra={"customer_id": str(customer_id)},
                 )
                 return customer
-            
+
             # Prevent activation of deleted customers
             if customer.status == CustomerStatus.DELETED:
                 raise BadRequestException(
                     detail="Cannot activate a deleted customer. Please restore it first.",
-                    field="status"
+                    field="status",
                 )
-            
+
             # Store previous status for logging
             previous_status = customer.status
-            
+
             # Update status to active
             customer.status = CustomerStatus.ACTIVE
             self._db.flush()
-            
+
             logger.info(
                 f"Activated customer: {customer.id}",
                 extra={
                     "customer_id": str(customer.id),
                     "previous_status": previous_status,
-                }
+                },
             )
-            
+
             return customer
-            
+
         except (NotFoundException, BadRequestException):
             raise
         except SQLAlchemyError as e:
             logger.exception(f"Database error activating customer {customer_id}")
             raise DatabaseException("Failed to activate customer") from e
 
-    
     # Deactivate
-    
+
     def deactivate(self, customer_id: uuid.UUID, force: bool = False) -> Customer:
         """Deactivate a customer account."""
         try:
             customer = self.get_by_id(customer_id)
-            
+
             # Check if already inactive (idempotent operation)
             if customer.status == CustomerStatus.INACTIVE:
                 logger.info(
                     f"Customer {customer_id} already inactive",
-                    extra={"customer_id": str(customer_id)}
+                    extra={"customer_id": str(customer_id)},
                 )
                 return customer
-            
+
             # Prevent deactivation of deleted customers
             if customer.status == CustomerStatus.DELETED:
                 raise BadRequestException(
-                    detail="Cannot deactivate a deleted customer",
-                    field="status"
+                    detail="Cannot deactivate a deleted customer", field="status"
                 )
-            
+
             # Validate business rules (unless forced)
             if not force:
                 # Check for outstanding balance
@@ -360,29 +367,33 @@ class CustomerService:
                             f"Customer has outstanding balance of {customer.currency} {customer.balance}. "
                             "Please settle all invoices before deactivating, or use force=true to override."
                         ),
-                        field="balance"
+                        field="balance",
                     )
-                
-                open_quotes = self._db.query(Quote).filter(
-                    Quote.customer_id == customer_id,
-                    Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
-                ).count()
+
+                open_quotes = (
+                    self._db.query(Quote)
+                    .filter(
+                        Quote.customer_id == customer_id,
+                        Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT]),
+                    )
+                    .count()
+                )
                 if open_quotes > 0:
                     raise BadRequestException(
                         detail=(
                             f"Customer has {open_quotes} open quote(s). "
                             "Please finalize or cancel quotes before deactivating."
                         ),
-                        field="quotes"
+                        field="quotes",
                     )
-            
+
             # Store previous status for logging
             previous_status = customer.status
-            
+
             # Update status to inactive
             customer.status = CustomerStatus.INACTIVE
             self._db.flush()
-            
+
             logger.info(
                 f"Deactivated customer: {customer.id}",
                 extra={
@@ -390,11 +401,11 @@ class CustomerService:
                     "previous_status": previous_status,
                     "had_balance": float(customer.balance),
                     "forced": force,
-                }
+                },
             )
-            
+
             return customer
-            
+
         except (NotFoundException, BadRequestException):
             raise
         except SQLAlchemyError as e:
@@ -405,64 +416,79 @@ class CustomerService:
         """Check if customer can be deleted and what related records exist."""
         try:
             customer = self.get_by_id(customer_id)
-            
+
             warnings: list[str] = []
             associated_records: dict[str, int] = {}
-            
+
             # Check invoices
-            invoice_count = self._db.query(Invoice).filter(
-                Invoice.customer_id == customer_id
-            ).count()
+            invoice_count = (
+                self._db.query(Invoice)
+                .filter(Invoice.customer_id == customer_id)
+                .count()
+            )
             associated_records["invoices"] = invoice_count
             if invoice_count > 0:
                 # PARTIAL invoices still carry an outstanding balance and must
                 # count as unpaid, otherwise a partially-paid customer looks
                 # safe to hard-delete (VER-NEW-2).
-                unpaid_count = self._db.query(Invoice).filter(
-                    Invoice.customer_id == customer_id,
-                    Invoice.status.in_([
-                        InvoiceStatus.SENT,
-                        InvoiceStatus.PARTIAL,
-                        InvoiceStatus.OVERDUE,
-                    ])
-                ).count()
+                unpaid_count = (
+                    self._db.query(Invoice)
+                    .filter(
+                        Invoice.customer_id == customer_id,
+                        Invoice.status.in_(
+                            [
+                                InvoiceStatus.SENT,
+                                InvoiceStatus.PARTIAL,
+                                InvoiceStatus.OVERDUE,
+                            ]
+                        ),
+                    )
+                    .count()
+                )
                 warnings.append(
                     f"{invoice_count} invoice(s) associated with this customer "
                     f"({unpaid_count} unpaid)"
                 )
-            
+
             # Check quotes
-            quote_count = self._db.query(Quote).filter(
-                Quote.customer_id == customer_id
-            ).count()
+            quote_count = (
+                self._db.query(Quote).filter(Quote.customer_id == customer_id).count()
+            )
             associated_records["quotes"] = quote_count
             if quote_count > 0:
-                open_quotes = self._db.query(Quote).filter(
-                    Quote.customer_id == customer_id,
-                    Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
-                ).count()
+                open_quotes = (
+                    self._db.query(Quote)
+                    .filter(
+                        Quote.customer_id == customer_id,
+                        Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT]),
+                    )
+                    .count()
+                )
                 warnings.append(
                     f"{quote_count} quote(s) associated with this customer "
                     f"({open_quotes} still open)"
                 )
-            
+
             # Check payments
-            payment_count = self._db.query(Payment).join(Invoice).filter(
-                Invoice.customer_id == customer_id
-            ).count()
+            payment_count = (
+                self._db.query(Payment)
+                .join(Invoice)
+                .filter(Invoice.customer_id == customer_id)
+                .count()
+            )
             associated_records["payments"] = payment_count
-            
+
             # Check outstanding balance
             if customer.balance > 0:
                 warnings.append(
                     f"Customer has outstanding balance: {customer.currency} {customer.balance}"
                 )
-            
+
             # Determine delete eligibility
             # Hard delete is only allowed if there are no warnings
             can_hard_delete = len(warnings) == 0
             can_soft_delete = True  # Soft delete is always allowed
-            
+
             # Build response message
             if can_hard_delete:
                 message = "Customer can be safely deleted. No associated records found."
@@ -473,7 +499,7 @@ class CustomerService:
                     "Soft delete recommended to preserve data integrity."
                 )
                 delete_type = "soft_only"
-            
+
             return {
                 "can_delete": can_soft_delete,
                 "can_hard_delete": can_hard_delete,
@@ -482,31 +508,27 @@ class CustomerService:
                 "associated_records": associated_records,
                 "message": message,
             }
-            
+
         except NotFoundException:
             raise
         except SQLAlchemyError as e:
             logger.exception(f"Error checking delete eligibility for {customer_id}")
             raise DatabaseException("Failed to check delete eligibility") from e
 
-    
     # Delete
 
     def delete(
-        self,
-        customer_id: uuid.UUID,
-        hard_delete: bool = False,
-        force: bool = False
+        self, customer_id: uuid.UUID, hard_delete: bool = False, force: bool = False
     ) -> dict[str, Any]:
         """Delete a customer (soft delete by default)."""
         try:
             customer = self.get_by_id(customer_id)
-            
+
             # Check eligibility if hard delete is requested and not forced
             eligibility: dict[str, Any] = {}
             if hard_delete and not force:
                 eligibility = self.check_delete_eligibility(customer_id)
-                
+
                 if not eligibility["can_hard_delete"]:
                     raise BadRequestException(
                         detail=(
@@ -515,17 +537,37 @@ class CustomerService:
                             "Use soft delete (default) to preserve data, or set force=true to override."
                         )
                     )
-            
+
             # Perform deletion
             deleted_at = datetime.now(UTC)
-            
+
             if hard_delete:
                 # HARD DELETE - Permanent removal
-                # The customer FK on invoices uses RESTRICT, so check_delete_eligibility
-                # must gate this path. If force=True the caller accepts the risk.
-                self._db.delete(customer)
+                # The customer FK on invoices/quotes uses RESTRICT, so
+                # check_delete_eligibility gates this path. If force=True the
+                # caller bypasses that check and the DB-level RESTRICT is the
+                # last line of defence. Isolate the DELETE in a SAVEPOINT so an
+                # FK rejection rolls back only the nested block and surfaces as
+                # a clean BadRequestException, without poisoning the caller's
+                # outer transaction.
+                try:
+                    with self._db.begin_nested():
+                        self._db.delete(customer)
+                        self._db.flush()
+                except IntegrityError as e:
+                    logger.warning(
+                        f"Hard delete blocked by FK constraint: {customer_id}",
+                        extra={"customer_id": str(customer_id)},
+                    )
+                    raise BadRequestException(
+                        detail=(
+                            "Cannot permanently delete customer with associated "
+                            "records (invoices or quotes). Use soft delete to "
+                            "preserve data integrity."
+                        )
+                    ) from e
                 delete_type = "hard"
-                
+
                 logger.warning(
                     f"Hard deleted customer: {customer_id}",
                     extra={
@@ -533,24 +575,24 @@ class CustomerService:
                         "customer_email": customer.email,
                         "customer_name": customer.display_name,
                         "forced": force,
-                    }
+                    },
                 )
             else:
                 # SOFT DELETE - Set status to deleted
                 customer.status = CustomerStatus.DELETED
                 delete_type = "soft"
-                
+
                 logger.info(
                     f"Soft deleted customer: {customer_id}",
                     extra={
                         "customer_id": str(customer_id),
                         "customer_email": customer.email,
                         "customer_name": customer.display_name,
-                    }
+                    },
                 )
 
             self._db.flush()
-            
+
             return {
                 "customer_id": customer_id,
                 "delete_type": delete_type,
@@ -589,10 +631,13 @@ class CustomerService:
                         func.sum(
                             case(
                                 (
-                                    Invoice.status.in_([
-                                        InvoiceStatus.SENT,
-                                        InvoiceStatus.OVERDUE,
-                                    ]),
+                                    Invoice.status.in_(
+                                        [
+                                            InvoiceStatus.SENT,
+                                            InvoiceStatus.PARTIAL,
+                                            InvoiceStatus.OVERDUE,
+                                        ]
+                                    ),
                                     Invoice.balance_due,
                                 ),
                                 else_=Decimal("0.00"),
@@ -658,36 +703,32 @@ class CustomerService:
         params: PaginationParams,
         status_filter: str | None = None,
     ) -> PaginatedResponse[InvoiceResponse]:
-        """ Get paginated invoices for a customer. """
+        """Get paginated invoices for a customer."""
         try:
             # Verify customer exists
             self.get_by_id(customer_id)
-            
-            query = (
-                self._db.query(Invoice)
-                .filter(Invoice.customer_id == customer_id)
-            )
-            
+
+            query = self._db.query(Invoice).filter(Invoice.customer_id == customer_id)
+
             # Apply status filter
             if status_filter and status_filter != "all":
                 query = query.filter(Invoice.status == status_filter)
-            
+
             # Get total
             total = query.count()
-            
+
             # Apply pagination and sorting
             invoices = (
-                query
-                .order_by(Invoice.created_at.desc())
+                query.order_by(Invoice.created_at.desc())
                 .offset(params.offset)
                 .limit(params.per_page)
                 .all()
             )
-            
+
             items = [InvoiceResponse.model_validate(inv) for inv in invoices]
-            
+
             return PaginatedResponse.create(items=items, total=total, params=params)
-            
+
         except NotFoundException:
             raise
         except SQLAlchemyError as e:
@@ -702,7 +743,7 @@ class CustomerService:
     ) -> CustomerStatement:
         """Generate a statement of accounts for a customer."""
         try:
-             # Verify customer exists
+            # Verify customer exists
             customer = self.get_by_id(customer_id)
 
             # Calculate opening balance (all transactions before period_start)
@@ -804,25 +845,16 @@ class CustomerService:
         # Sum invoice totals before date, excluding DRAFT/CANCELED so the
         # opening balance matches _update_customer_balance and the persisted
         # Customer.balance (VER-NEW-3).
-        invoiced = (
-            self._db.query(func.sum(Invoice.total_due))
-            .filter(
-                Invoice.customer_id == customer_id,
-                Invoice.transaction_date < as_of_date,
-                Invoice.status.notin_([InvoiceStatus.CANCELED, InvoiceStatus.DRAFT]),
-            )
-            .scalar() or Decimal("0.00")
-        )
+        invoiced = self._db.query(func.sum(Invoice.total_due)).filter(
+            Invoice.customer_id == customer_id,
+            Invoice.transaction_date < as_of_date,
+            Invoice.status.notin_([InvoiceStatus.CANCELED, InvoiceStatus.DRAFT]),
+        ).scalar() or Decimal("0.00")
 
         # Sum all payments before date
-        paid = (
-            self._db.query(func.sum(Payment.amount))
-            .join(Invoice)
-            .filter(
-                Invoice.customer_id == customer_id,
-                Payment.payment_date < as_of_date,
-            )
-            .scalar() or Decimal("0.00")
-        )
+        paid = self._db.query(func.sum(Payment.amount)).join(Invoice).filter(
+            Invoice.customer_id == customer_id,
+            Payment.payment_date < as_of_date,
+        ).scalar() or Decimal("0.00")
 
         return Decimal(str(invoiced)) - Decimal(str(paid))

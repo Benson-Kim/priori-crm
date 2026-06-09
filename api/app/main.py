@@ -4,7 +4,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.common.database import Base, engine
+# Model registry bootstrap
+# Import every ORM model *before* any router / service so that
+# SQLAlchemy's string-based relationship() references (e.g. "Customer",
+# "Vendor") can always be resolved when the mapper is first configured.
+# Order is: parent tables first, then children that reference them.
+import app.common.reference_sequence
+import app.common.reference_triggers
+import app.modules.auth.models
+import app.modules.customers.models
+import app.modules.expenses.models
+import app.modules.invoices.models
+import app.modules.owner.models
+import app.modules.quotes.models
+import app.modules.vendors.models
+from app.common.database import engine
 from app.common.exceptions import register_exception_handlers
 from app.common.logging import setup_logging
 from app.common.middleware import (
@@ -14,29 +28,14 @@ from app.common.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.lib.config import settings
-
-# ── Model registry bootstrap ───────────────────────────────────────────
-# Import every ORM model *before* any router / service so that
-# SQLAlchemy's string-based relationship() references (e.g. "Customer",
-# "Vendor") can always be resolved when the mapper is first configured.
-# Order is: parent tables first, then children that reference them.
-import app.modules.auth.models       # noqa: F401  ← User, OTPCode
-import app.modules.customers.models  # noqa: F401  ← Customer
-import app.modules.invoices.models   # noqa: F401  ← Invoice, Payment
-import app.modules.quotes.models     # noqa: F401  ← Quote
-import app.modules.vendors.models    # noqa: F401  ← Vendor
-import app.modules.expenses.models   # noqa: F401  ← Expense
-import app.modules.owner.models      # noqa: F401  ← OwnerProfile, OwnerProfileSnapshot
-
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
+from app.modules.expenses.router import router as expenses_router
+from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
+from app.modules.owner.router import router as owner_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.vendors.router import router as vendors_router
-from app.modules.expenses.router import router as expenses_router
-from app.modules.owner.router import router as owner_router
-from app.modules.health.router import router as health_router
-
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -54,6 +53,17 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Verifying database connection")
     # Base.metadata.create_all(bind=engine)  # Removed: using Alembic for migrations
+
+    if settings.RATE_LIMIT_BACKEND == "redis" and settings.REDIS_URL:
+        try:
+            import redis
+
+            r = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=1)
+            r.ping()
+            logger.info("Connected to Redis for rate limiting")
+        except Exception as e:
+            logger.error("Redis connectivity check failed at startup", exc_info=e)
+
     logger.info("API documentation available at /docs")
     yield
     # --- Shutdown ---
@@ -73,7 +83,7 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.is_development else None,
         lifespan=lifespan,
     )
-    
+
     # Middleware executes in reverse order of registration: the last one
     # added is the outermost. Register the rate limiter first so the
     # logging (X-Response-Time) and request-ID (X-Request-ID) middleware
@@ -105,21 +115,29 @@ def create_app() -> FastAPI:
 
     return app
 
+
 def _register_routers(app: FastAPI) -> None:
     """Register all module routers with the API prefix."""
     api_prefix = settings.API_V1_PREFIX
 
     app.include_router(health_router, prefix=api_prefix, tags=["Health"])
     app.include_router(auth_router, prefix=f"{api_prefix}/auth", tags=["Auth"])
-    app.include_router(customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"])
-    app.include_router(invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"])
+    app.include_router(
+        customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"]
+    )
+    app.include_router(
+        invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"]
+    )
     app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
-    app.include_router(expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"])
+    app.include_router(
+        expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"]
+    )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
     logger.info(
-       "Registered routers: %s",
+        "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore
     )
+
 
 app = create_app()

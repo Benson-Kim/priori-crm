@@ -10,6 +10,7 @@ addressed snapshot table that backs immutable historical document headers.
 Chained after the OTP-index migration (e5f6a7b8c9d0) to keep a single linear
 history now that the Wave 3 migrations have merged.
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

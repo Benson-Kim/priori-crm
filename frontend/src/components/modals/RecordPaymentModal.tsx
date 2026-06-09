@@ -3,10 +3,10 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
-import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
+import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
 import { CreditCard } from "lucide-react";
-import { useState, useEffect } from "react";
+import { startTransition, useEffect, useState } from "react";
 
 interface RecordPaymentModalProps {
     isOpen: boolean;
@@ -40,12 +40,14 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
 
     useEffect(() => {
         if (isOpen) {
-            setAmount(String(prefillAmount ?? balanceDue));
-            setPaymentDate(new Date().toISOString().split("T")[0]);
-            setPaymentMethod("bank_transfer");
-            setReference("");
-            setNotes("");
-            setError(null);
+            startTransition(() => {
+                setAmount(String(prefillAmount ?? balanceDue));
+                setPaymentDate(new Date().toISOString().split("T")[0]);
+                setPaymentMethod("bank_transfer");
+                setReference("");
+                setNotes("");
+                setError(null);
+            })
         }
     }, [isOpen, prefillAmount, balanceDue]);
 

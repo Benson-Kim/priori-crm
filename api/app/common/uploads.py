@@ -5,6 +5,7 @@ MIME, size, emptiness, and magic-byte content sniffing. Both the API
 routers and the storage layer consume these helpers so the rules cannot
 drift apart between call sites.
 """
+
 import os
 from typing import BinaryIO
 
@@ -58,8 +59,12 @@ _MAGIC_SIGNATURES: dict[str, tuple[bytes, ...]] = {
     "image/gif": (b"GIF87a", b"GIF89a"),
     "image/webp": (b"RIFF",),  # RIFF....WEBP — prefix + WEBP at offset 8
     # OOXML (docx/xlsx) are PKZIP archives.
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (b"PK\x03\x04",),
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": (b"PK\x03\x04",),
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+        b"PK\x03\x04",
+    ),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": (
+        b"PK\x03\x04",
+    ),
     # Legacy OLE2 compound documents (.doc/.xls).
     "application/msword": (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",),
     "application/vnd.ms-excel": (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",),

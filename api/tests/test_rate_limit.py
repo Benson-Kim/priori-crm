@@ -79,11 +79,16 @@ def test_exceeding_limit_returns_clean_429_with_headers(monkeypatch):
 )
 def test_health_and_ping_are_never_throttled(monkeypatch, path):
     app = _build_app(monkeypatch, limit=1)
+    from app.lib.config import settings
+
+    monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "test-secret")
     client = TestClient(app)
+
+    headers = {"X-Internal-Secret": "test-secret"} if "detailed" in path else {}
 
     # Far exceed the limit; probes must always pass.
     for _ in range(5):
-        resp = client.get(path)
+        resp = client.get(path, headers=headers)
         assert resp.status_code == 200
 
 

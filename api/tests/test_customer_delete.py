@@ -17,12 +17,17 @@ from decimal import Decimal
 import pytest
 
 from app.common.exceptions import BadRequestException, NotFoundException
-from app.constants.enums import Currency, CustomerStatus, CustomerType, QuoteStatus, TaxType
 from app.common.pagination import PaginationParams
+from app.constants.enums import (
+    Currency,
+    CustomerStatus,
+    CustomerType,
+    QuoteStatus,
+    TaxType,
+)
 from app.modules.customers.models import Customer
 from app.modules.customers.service import CustomerService
 from app.modules.quotes.models import Quote, QuoteLineItem
-
 from tests.conftest import USING_POSTGRES
 
 requires_postgres = pytest.mark.skipif(
@@ -111,12 +116,11 @@ def test_hard_delete_with_quotes_is_rejected_and_preserves_history(db):
     quote_id = quote.id
 
     # force=True bypasses the application-level eligibility check, so the
-    # DB-level FK RESTRICT is what must protect the quote history.
+    # DB-level FK RESTRICT is what must protect the quote history. The service
+    # isolates the failing DELETE in a SAVEPOINT, so the session stays usable
+    # afterwards (no outer rollback needed) and the fixtures persist.
     with pytest.raises(BadRequestException):
         service.delete(customer.id, hard_delete=True, force=True)
-        db.flush()
-
-    db.rollback()
 
     surviving = db.query(Quote).filter(Quote.id == quote_id).first()
     assert surviving is not None

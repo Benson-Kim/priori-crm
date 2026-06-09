@@ -15,7 +15,7 @@ def _create_payload(**overrides) -> CustomerCreate:
         company_name="Acme Ltd",
         first_name="Ada",
         last_name="Lovelace",
-        email="ada@acme.test",
+        email="ada@acme.com",
         phone="0712345678",
         address="123 Industrial Area",
         country="KE",
@@ -31,7 +31,7 @@ def test_create_then_get_roundtrip(db):
     svc = CustomerService(db)
     created = svc.create(_create_payload())
     assert created.id is not None
-    assert created.email == "ada@acme.test"
+    assert created.email == "ada@acme.com"
 
     fetched = svc.get_by_id(created.id)
     assert fetched.id == created.id
@@ -40,21 +40,21 @@ def test_create_then_get_roundtrip(db):
 
 def test_create_normalises_email_lowercase(db):
     svc = CustomerService(db)
-    created = svc.create(_create_payload(email="MixedCase@Acme.Test"))
-    assert created.email == "mixedcase@acme.test"
+    created = svc.create(_create_payload(email="MixedCase@Acme.Com"))
+    assert created.email == "mixedcase@acme.com"
 
 
 def test_duplicate_email_rejected_case_insensitive(db):
     svc = CustomerService(db)
-    svc.create(_create_payload(email="dup@acme.test"))
+    svc.create(_create_payload(email="dup@acme.com"))
     with pytest.raises(ConflictException):
-        svc.create(_create_payload(email="DUP@acme.test"))
+        svc.create(_create_payload(email="DUP@acme.com"))
 
 
 def test_list_excludes_soft_deleted_by_default(db):
     svc = CustomerService(db)
-    keep = svc.create(_create_payload(email="keep@acme.test"))
-    gone = svc.create(_create_payload(email="gone@acme.test"))
+    keep = svc.create(_create_payload(email="keep@acme.com"))
+    gone = svc.create(_create_payload(email="gone@acme.com"))
     svc.delete(gone.id)  # soft delete
 
     result = svc.list_customers(PaginationParams(page=1, per_page=50))
@@ -65,7 +65,7 @@ def test_list_excludes_soft_deleted_by_default(db):
 
 def test_get_soft_deleted_raises_by_default(db):
     svc = CustomerService(db)
-    c = svc.create(_create_payload(email="sd@acme.test"))
+    c = svc.create(_create_payload(email="sd@acme.com"))
     svc.delete(c.id)
     with pytest.raises(NotFoundException):
         svc.get_by_id(c.id)
@@ -73,7 +73,7 @@ def test_get_soft_deleted_raises_by_default(db):
 
 def test_update_changes_persisted_fields(db):
     svc = CustomerService(db)
-    c = svc.create(_create_payload(email="upd@acme.test"))
+    c = svc.create(_create_payload(email="upd@acme.com"))
     updated = svc.update(c.id, CustomerUpdate(first_name="Grace"))
     assert updated.first_name == "Grace"
     assert svc.get_by_id(c.id).first_name == "Grace"

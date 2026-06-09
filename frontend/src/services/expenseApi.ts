@@ -30,6 +30,15 @@ export interface ExpenseLineItem {
   tax_amount?: number;
 }
 
+
+export interface ExpenseLineItemPayload {
+  itemName: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxType: string;
+}
+
 export interface ExpenseDocument {
   id: string;
   expense_id: string;
@@ -136,7 +145,7 @@ export interface ExpenseCreatePayload {
   dueDate: string;
   currency: string;
   isRecurring: boolean;
-  lineItems: ExpenseLineItem[];
+  lineItems: ExpenseLineItemPayload[];
   notes?: string | null;
 }
 
@@ -145,7 +154,7 @@ export interface ExpenseUpdatePayload {
   expenseDate?: string;
   dueDate?: string;
   isRecurring?: boolean;
-  lineItems?: ExpenseLineItem[];
+  lineItems?: ExpenseLineItemPayload[];
   notes?: string | null;
 }
 
@@ -184,8 +193,6 @@ export function updateExpense(
   data: ExpenseUpdatePayload,
   expectedVersion?: number
 ) {
-  // The expenses router reads the version from the `expectedVersion` query
-  // alias (P-9 / EXP-FE-4).
   const path =
     expectedVersion != null
       ? `expenses/${id}?expectedVersion=${expectedVersion}`
@@ -194,7 +201,7 @@ export function updateExpense(
 }
 
 export function deleteExpense(id: string) {
-  return apiDelete<{ message: string }>(`expenses/${id}`);
+  return apiDelete<void>(`expenses/${id}`);
 }
 
 export function getExpenseCounts() {
@@ -219,13 +226,11 @@ export async function uploadExpenseDocument(
 ): Promise<ExpenseDocument> {
   const formData = new FormData();
   formData.append("file", file);
-  // Route through the shared client so the upload carries the bearer token
-  // and the 401 -> refresh -> retry flow (LIB-FE-4 / EXP-FE-2).
   return apiUpload<ExpenseDocument>(`expenses/${id}/documents`, formData);
 }
 
 export function deleteExpenseDocument(id: string, documentId: string) {
-  return apiDelete<{ message: string }>(
+  return apiDelete<void>(
     `expenses/${id}/documents/${documentId}`
   );
 }
@@ -234,11 +239,16 @@ export function downloadExpenseDocument(
   id: string,
   documentId: string
 ): Promise<Blob> {
-  // Shared client adds auth + 401-refresh; returns a Blob the caller saves
-  // via saveBlob (EXP-FE-1).
   return apiDownload(`expenses/${id}/documents/${documentId}/download`);
 }
 
-export function calculateTotals(data: any) {
-  return apiPost<any>("expenses/calculate", data);
+export interface ExpenseCalculationResponse {
+  subtotal: number;
+  tax_total: number;
+  total_due: number;
+  line_items: ExpenseLineItem[];
+}
+
+export function calculateTotals(data: ExpenseLineItem[]) {
+  return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
 }

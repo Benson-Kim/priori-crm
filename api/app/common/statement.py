@@ -6,9 +6,12 @@ running balance computations, and ledger presentation into a single
 generic algorithm.  Both CustomerService and VendorService delegate to
 this module rather than reimplementing the same loop.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+
+from app.common.financial import quantize_money
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,13 +70,15 @@ class StatementGenerator:
         running_balance = opening_balance
 
         # Opening balance row
-        transactions.append({
-            "date": period_start,
-            "description": "Opening Balance",
-            "amount": opening_balance,
-            "payment": Decimal("0.00"),
-            "balance": opening_balance,
-        })
+        transactions.append(
+            {
+                "date": period_start,
+                "description": "Opening Balance",
+                "amount": opening_balance,
+                "payment": Decimal("0.00"),
+                "balance": opening_balance,
+            }
+        )
 
         # Tag and merge — debits sort_key=0 so they appear before credits
         # on the same date (invoice first, then payment).
@@ -90,25 +95,29 @@ class StatementGenerator:
 
         for _, _, kind, entry in tagged:
             if kind == "debit":
-                running_balance += entry.amount
-                invoiced_amount += entry.amount
-                transactions.append({
-                    "date": entry.date,
-                    "description": entry.description,
-                    "amount": entry.amount,
-                    "payment": Decimal("0.00"),
-                    "balance": running_balance,
-                })
+                running_balance = quantize_money(running_balance + entry.amount)
+                invoiced_amount = quantize_money(invoiced_amount + entry.amount)
+                transactions.append(
+                    {
+                        "date": entry.date,
+                        "description": entry.description,
+                        "amount": entry.amount,
+                        "payment": Decimal("0.00"),
+                        "balance": running_balance,
+                    }
+                )
             else:
-                running_balance -= entry.amount
-                amount_paid += entry.amount
-                transactions.append({
-                    "date": entry.date,
-                    "description": entry.description,
-                    "amount": Decimal("0.00"),
-                    "payment": entry.amount,
-                    "balance": running_balance,
-                })
+                running_balance = quantize_money(running_balance - entry.amount)
+                amount_paid = quantize_money(amount_paid + entry.amount)
+                transactions.append(
+                    {
+                        "date": entry.date,
+                        "description": entry.description,
+                        "amount": Decimal("0.00"),
+                        "payment": entry.amount,
+                        "balance": running_balance,
+                    }
+                )
 
         summary = {
             "opening_balance": opening_balance,

@@ -10,9 +10,13 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.common.dependencies import CurrentUser, CustomerServiceDep
-from app.common.exceptions import DatabaseException, ForbiddenException, NotFoundException
-from app.constants.enums import UserRole
+from app.common.exceptions import (
+    DatabaseException,
+    ForbiddenException,
+    NotFoundException,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.constants.enums import UserRole
 from app.modules.customers.schemas import (
     CustomerCreate,
     CustomerDeleteCheckResponse,
@@ -28,9 +32,6 @@ from app.modules.customers.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-
 
 
 @router.post(
@@ -68,7 +69,9 @@ def list_customers(
     per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
     status: Annotated[
         str | None,
-        Query(description="Filter by status: all, active, inactive, suspended, deleted"),
+        Query(
+            description="Filter by status: all, active, inactive, suspended, deleted"
+        ),
     ] = None,
     search: Annotated[
         str | None,
@@ -140,9 +143,7 @@ def get_customer(
         # Only tolerate expected, narrow failures here so the detail view
         # still renders without a statement. Unexpected errors must
         # propagate to the global exception handlers (CUST-BE-2).
-        logger.exception(
-            "Failed to generate statement for customer %s", customer_id
-        )
+        logger.exception("Failed to generate statement for customer %s", customer_id)
         statement = None
 
     return CustomerDetailResponse(
@@ -172,6 +173,7 @@ def update_customer(
     customer = service.update(customer_id, body)
     return CustomerResponse.model_validate(customer)
 
+
 @router.post(
     "/{customer_id}/activate",
     status_code=status.HTTP_200_OK,
@@ -199,7 +201,9 @@ def activate_customer(
     description="Change customer status from active to inactive.",
     responses={
         200: {"description": "Customer deactivated successfully"},
-        400: {"description": "Cannot deactivate: customer has outstanding balance or open transactions"},
+        400: {
+            "description": "Cannot deactivate: customer has outstanding balance or open transactions"
+        },
         404: {"description": "Customer not found"},
     },
 )
@@ -214,6 +218,7 @@ def deactivate_customer(
     """Deactivate a customer account."""
     customer = service.deactivate(customer_id, force=force)
     return CustomerResponse.model_validate(customer)
+
 
 @router.get(
     "/{customer_id}/delete-check",
@@ -321,8 +326,8 @@ def get_customer_invoices(
 def generate_customer_statement(
     customer_id: UUID,
     service: CustomerServiceDep,
-    period_start: Annotated[date, Query(description="Period start date")] = None,
-    period_end: Annotated[date, Query(description="Period end date")] = None,
+    period_start: Annotated[date | None, Query(description="Period start date")] = None,
+    period_end: Annotated[date | None, Query(description="Period end date")] = None,
 ):
     """Generate a statement of accounts."""
     # Default to last 12 months

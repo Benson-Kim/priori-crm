@@ -2,52 +2,70 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import (
-    BaseModel, 
-    EmailStr, 
-    Field, 
-    field_validator, 
-    model_validator
-)
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.common.validators import (
     capitalize_location as _capitalize_location,
+)
+from app.common.validators import (
     empty_str_to_none as _empty_str_to_none,
+)
+from app.common.validators import (
     normalize_phone,
     validate_country_code,
 )
 from app.constants.enums import Currency, CustomerType
-
 
 # Request Schemas
 
 
 class CustomerCreate(BaseModel):
     """Request body for creating a new customer."""
-    customer_type: CustomerType = Field(..., description="Customer type", alias="customerType")
+
+    customer_type: CustomerType = Field(
+        ..., description="Customer type", alias="customerType"
+    )
     company_name: str | None = Field(
         None,
         max_length=255,
         description="Company name (required for business customers)",
         alias="companyName",
     )
-    first_name: str = Field(..., min_length=1, max_length=100, description="First name", alias="firstName")
-    last_name: str = Field(..., min_length=1, max_length=100, description="Last name", alias="lastName")
+    first_name: str = Field(
+        ..., min_length=1, max_length=100, description="First name", alias="firstName"
+    )
+    last_name: str = Field(
+        ..., min_length=1, max_length=100, description="Last name", alias="lastName"
+    )
     email: EmailStr = Field(..., description="Email address")
     phone: str = Field(..., description="Phone number in international format")
     website: str | None = Field(None, max_length=500, description="Website URL")
-    vat_number: str | None = Field(None, max_length=50, description="VAT/Tax number", alias="vatNumber")
+    vat_number: str | None = Field(
+        None, max_length=50, description="VAT/Tax number", alias="vatNumber"
+    )
     currency: Currency = Field(default=Currency.KES, description="Default currency")
-    address: str | None = Field(..., min_length=5, description="Primary address")
+    address: str | None = Field(None, min_length=5, description="Primary address")
     address2: str | None = Field(None, description="Secondary address")
-    country: str | None = Field(..., min_length=2, max_length=2, description="ISO country code")
-    province: str | None = Field(..., min_length=2, max_length=100, description="State/Province")
-    city: str | None = Field(..., min_length=2, max_length=100, description="City")
-    postal_code: str | None = Field(..., min_length=3, max_length=20, description="Postal code", alias="postalCode")
+    country: str | None = Field(
+        None, min_length=2, max_length=2, description="ISO country code"
+    )
+    province: str | None = Field(
+        None, min_length=2, max_length=100, description="State/Province"
+    )
+    city: str | None = Field(None, min_length=2, max_length=100, description="City")
+    postal_code: str | None = Field(
+        None, min_length=3, max_length=20, description="Postal code", alias="postalCode"
+    )
 
     @field_validator(
-        "company_name", "website", "vat_number",
-        "address", "address2", "province", "city", "postal_code",
+        "company_name",
+        "website",
+        "vat_number",
+        "address",
+        "address2",
+        "province",
+        "city",
+        "postal_code",
         mode="before",
     )
     @classmethod
@@ -124,7 +142,9 @@ class CustomerUpdate(BaseModel):
 
     customer_type: CustomerType | None = Field(None, alias="customerType")
     company_name: str | None = Field(None, max_length=255, alias="companyName")
-    first_name: str | None = Field(None, min_length=1, max_length=100, alias="firstName")
+    first_name: str | None = Field(
+        None, min_length=1, max_length=100, alias="firstName"
+    )
     last_name: str | None = Field(None, min_length=1, max_length=100, alias="lastName")
     email: EmailStr | None = None
     phone: str | None = None
@@ -142,8 +162,14 @@ class CustomerUpdate(BaseModel):
     # machine is enforced. A plain PUT must not be able to deactivate/delete.
 
     @field_validator(
-        "company_name", "website", "vat_number",
-        "address", "address2", "province", "city", "postal_code",
+        "company_name",
+        "website",
+        "vat_number",
+        "address",
+        "address2",
+        "province",
+        "city",
+        "postal_code",
         mode="before",
     )
     @classmethod
@@ -153,8 +179,10 @@ class CustomerUpdate(BaseModel):
 
     @field_validator("phone")
     @classmethod
-    def validate_phone(cls, v: str, info) -> str:
+    def validate_phone(cls, v: str | None, info) -> str | None:
         """Validate and normalize phone number to E.164 format."""
+        if v is None:
+            return v
         country = info.data.get("country")
         return normalize_phone(v, country)
 
@@ -253,8 +281,12 @@ class CustomerDetailResponse(BaseModel):
 
     customer: CustomerResponse
     financial_summary: FinancialSummary
-    recent_invoices: list[dict] = Field(default_factory=list, description="Recent 5 invoices")
-    statement: "CustomerStatement | None" = Field(default=None, description="Current period statement")
+    recent_invoices: list[dict] = Field(
+        default_factory=list, description="Recent 5 invoices"
+    )
+    statement: "CustomerStatement | None" = Field(
+        default=None, description="Current period statement"
+    )
 
 
 class StatementTransaction(BaseModel):
@@ -275,13 +307,18 @@ class StatementSummary(BaseModel):
     amount_paid: Decimal
     balance_due: Decimal
 
+
 class CustomerDeleteCheckResponse(BaseModel):
     """Pre-delete validation response."""
 
     can_delete: bool = Field(description="Whether soft delete is allowed")
     can_hard_delete: bool = Field(description="Whether hard delete is allowed")
-    delete_type: str = Field(description="Recommended delete type: 'soft_only' | 'hard_allowed'")
-    warnings: list[str] = Field(default_factory=list, description="Warnings about deletion")
+    delete_type: str = Field(
+        description="Recommended delete type: 'soft_only' | 'hard_allowed'"
+    )
+    warnings: list[str] = Field(
+        default_factory=list, description="Warnings about deletion"
+    )
     associated_records: dict[str, int] = Field(
         default_factory=dict, description="Count of related records by type"
     )
@@ -314,8 +351,13 @@ class CustomerDeleteResponse(BaseModel):
     customer_id: UUID = Field(description="ID of the deleted customer")
     delete_type: str = Field(description="Type of deletion performed: 'soft' | 'hard'")
     deleted_at: datetime = Field(description="Timestamp when deletion occurred")
-    warnings: list[str] = Field(default_factory=list, description="Any warnings from the delete operation")
-    associated_records: dict[str, int] = Field(default_factory=dict, description="Count of associated records that were affected")
+    warnings: list[str] = Field(
+        default_factory=list, description="Any warnings from the delete operation"
+    )
+    associated_records: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of associated records that were affected",
+    )
 
     model_config = {
         "json_schema_extra": {

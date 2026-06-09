@@ -4,6 +4,7 @@ These are skipped when the suite runs against SQLite (local pure-logic
 runs). In CI they run against the postgres:16 service so behaviour such as
 row-level locking with `with_for_update()` is actually validated.
 """
+
 import uuid
 
 import pytest
@@ -37,10 +38,7 @@ def test_with_for_update_locks_row(db):
     db.commit()
 
     locked = (
-        db.query(Customer)
-        .filter(Customer.id == customer.id)
-        .with_for_update()
-        .one()
+        db.query(Customer).filter(Customer.id == customer.id).with_for_update().one()
     )
 
     assert locked.id == customer.id

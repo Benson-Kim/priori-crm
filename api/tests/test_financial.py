@@ -4,21 +4,19 @@ Pure-function tests for common/financial.py helpers.
 Covers: get_tax_rate, calculate_line_item, calculate_discount,
 check_is_overdue, calculate_days_overdue.
 """
+
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from app.common.financial import (
     TAX_RATES,
-    calculate_discount,
     calculate_days_overdue,
+    calculate_discount,
     calculate_line_item,
     check_is_overdue,
     get_tax_rate,
 )
 from app.constants.enums import DiscountType, TaxType
-
 
 # get_tax_rate
 
@@ -122,9 +120,7 @@ class TestCalculateDiscount:
 
     def test_amount_type_but_no_value(self):
         """Discount type set but value is None/0 → no discount."""
-        result = calculate_discount(
-            Decimal("500.00"), DiscountType.AMOUNT, None, None
-        )
+        result = calculate_discount(Decimal("500.00"), DiscountType.AMOUNT, None, None)
         assert result == Decimal("0.00")
 
 

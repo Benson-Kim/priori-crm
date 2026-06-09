@@ -4,12 +4,12 @@ Shared financial calculation utilities.
 Single source of truth for tax rates and discount logic used across
 the Invoices, Quotes, and Expenses modules. Any future tax type must be added here only.
 """
+
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from app.constants.enums import DiscountType, TaxType
-
 
 # Money Rounding Policy
 
@@ -30,9 +30,11 @@ def quantize_money(value: Decimal) -> Decimal:
 
 # Line Item Input Protocol
 
+
 @runtime_checkable
 class LineItemInput(Protocol):
     """Structural type for any object with the fields needed to build a line item."""
+
     item_name: str
     description: str
     quantity: Decimal
@@ -40,14 +42,13 @@ class LineItemInput(Protocol):
     tax_type: TaxType | str
 
 
-
 # Tax Rates
 
 
 TAX_RATES: dict[TaxType, Decimal] = {
     TaxType.VAT_16: Decimal("0.16"),
-    TaxType.VAT_8:  Decimal("0.08"),
-    TaxType.VAT_0:  Decimal("0.00"),
+    TaxType.VAT_8: Decimal("0.08"),
+    TaxType.VAT_0: Decimal("0.00"),
     TaxType.EXEMPT: Decimal("0.00"),
     TaxType.NO_TAX: Decimal("0.00"),
 }
@@ -67,7 +68,6 @@ def get_tax_rate(tax_type: TaxType) -> Decimal:
         raise ValueError(f"Unknown tax type: {tax_type!r}") from e
 
 
-
 # Line Item Calculation
 
 
@@ -80,14 +80,14 @@ def calculate_line_item(
     Compute (line_total, tax_amount) for a single line item.
 
     Returns:
-        line_total  = round(quantity × unit_price)
-        tax_amount  = round(line_total × tax_rate)
+        line_total  = round(quantity x unit_price)
+        tax_amount  = round(line_total x tax_rate)
 
     Both values are quantized to 2 dp via the shared money policy so that
     summing line items can never accumulate sub-cent drift (P-3).
     """
     line_total = quantize_money(quantity * unit_price)
-    tax_rate   = get_tax_rate(tax_type)
+    tax_rate = get_tax_rate(tax_type)
     tax_amount = quantize_money(line_total * tax_rate)
     return line_total, tax_amount
 
@@ -111,8 +111,14 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
 
     result: list[dict] = []
     for idx, item in enumerate(raw_items, start=1):
-        # Support both attribute access (Pydantic/dataclass) and dict access
-        _get = item.get if isinstance(item, dict) else lambda k, d=None: getattr(item, k, d)
+        # Support both attribute access (Pydantic/dataclass) and dict access.
+        # Bind `item` as a default arg so the closure captures this iteration's
+        # value rather than the loop variable (B023).
+        _get = (
+            item.get
+            if isinstance(item, dict)
+            else lambda k, d=None, _it=item: getattr(_it, k, d)
+        )
 
         # Validate required fields are present rather than silently coercing a
         # missing value to None (which would TypeError in calculation or
@@ -123,21 +129,23 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
                     f"Line item {idx} is missing required field '{field}'."
                 )
 
-        quantity   = _get("quantity")
+        quantity = _get("quantity")
         unit_price = _get("unit_price")
-        tax_type   = _get("tax_type")
+        tax_type = _get("tax_type")
 
         line_total, tax_amount = calculate_line_item(quantity, unit_price, tax_type)
-        result.append({
-            "line_number":  idx,
-            "item_name":    _get("item_name"),
-            "description":  _get("description"),
-            "quantity":     quantity,
-            "unit_price":   unit_price,
-            "line_total":   line_total,
-            "tax_type":     tax_type,
-            "tax_amount":   tax_amount,
-        })
+        result.append(
+            {
+                "line_number": idx,
+                "item_name": _get("item_name"),
+                "description": _get("description"),
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "line_total": line_total,
+                "tax_type": tax_type,
+                "tax_amount": tax_amount,
+            }
+        )
     return result
 
 
@@ -147,14 +155,9 @@ def sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
 
     Safe on empty lists — returns (Decimal('0.00'), Decimal('0.00')).
     """
-    subtotal = sum(
-        (item["line_total"] for item in line_items_data), Decimal("0.00")
-    )
-    tax_total = sum(
-        (item["tax_amount"] for item in line_items_data), Decimal("0.00")
-    )
+    subtotal = sum((item["line_total"] for item in line_items_data), Decimal("0.00"))
+    tax_total = sum((item["tax_amount"] for item in line_items_data), Decimal("0.00"))
     return subtotal, tax_total
-
 
 
 # Discount Calculation
@@ -181,7 +184,6 @@ def calculate_discount(
     return Decimal("0.00")
 
 
-
 # Overdue Status Calculation
 
 
@@ -203,6 +205,7 @@ def check_is_overdue(
     paid/canceled; quotes use approved/invoiced).
     """
     from datetime import date as dt_date
+
     normalized_terminal = {s.lower() for s in terminal_statuses}
     return status.lower() not in normalized_terminal and due_date < dt_date.today()
 
@@ -217,6 +220,7 @@ def calculate_days_overdue(
     Returns 0 if not overdue.
     """
     from datetime import date as dt_date
+
     if not check_is_overdue(status, due_date, terminal_statuses):
         return 0
     return (dt_date.today() - due_date).days

@@ -3,14 +3,15 @@
  */
 
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
-import { useHeaderOverride } from "@/components/layout/default-layout";
+import { useHeaderOverride } from "@/components/layout/header-context";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { SendInvoiceModal } from "@/components/modals/SendInvoiceModal";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useConfirm } from "@/hooks/useConfirm";
+import { saveBlob } from "@/lib/utils";
 import type { InvoiceResponse } from "@/services/invoiceApi";
 import {
     cancelInvoice,
@@ -19,7 +20,6 @@ import {
     getInvoice,
     markAsSent,
 } from "@/services/invoiceApi";
-import { saveBlob } from "@/lib/utils";
 import {
     ArrowLeft,
     Ban,
@@ -30,7 +30,7 @@ import {
     Pencil,
     Send,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 
@@ -66,12 +66,12 @@ export function InvoiceDetailPage() {
     }, [id]);
 
     useEffect(() => {
-        fetchInvoice();
+        void (async () => { await fetchInvoice(); })();
     }, [fetchInvoice]);
 
     useEffect(() => {
         if (searchParams.get("action") === "record-payment" && invoice) {
-            setShowPaymentModal(true);
+            startTransition(() => { setShowPaymentModal(true); });
         }
     }, [searchParams, invoice]);
 
@@ -233,7 +233,7 @@ export function InvoiceDetailPage() {
                         variant={
                             invoice.is_overdue
                                 ? "overdue"
-                                : (status as any)
+                                : (status as BadgeVariant)
                         }
                     >
                         {invoice.is_overdue

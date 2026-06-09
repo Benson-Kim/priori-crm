@@ -15,13 +15,11 @@ from decimal import Decimal
 
 import pytest
 
-from app.common.pagination import PaginationParams
 from app.constants.enums import Currency, CustomerStatus, InvoiceStatus
 from app.modules.customers.models import Customer
 from app.modules.invoices.models import Invoice, InvoiceLineItem
 from app.modules.invoices.schemas import InvoiceFilterParams
 from app.modules.invoices.service import InvoiceService
-
 from tests.conftest import USING_POSTGRES
 
 pytestmark = pytest.mark.skipif(
@@ -46,7 +44,9 @@ def _customer(db) -> Customer:
     return c
 
 
-def _invoice(db, customer, *, number: str, reference: str, with_line: bool = True) -> Invoice:
+def _invoice(
+    db, customer, *, number: str, reference: str, with_line: bool = True
+) -> Invoice:
     today = date.today()
     inv = Invoice(
         invoice_number=number,

@@ -20,9 +20,7 @@ def login(body: LoginRequest, db: DbSession):
     """Step 1: Validate credentials and send OTP to user's email."""
     auth_service = AuthService(db)
     masked_email = auth_service.login(body.email, body.password)
-    return MessageResponse(
-        message=f"Verification code sent to {masked_email}"
-    )
+    return MessageResponse(message=f"Verification code sent to {masked_email}")
 
 
 @router.post("/verify-otp", response_model=TokenResponse)

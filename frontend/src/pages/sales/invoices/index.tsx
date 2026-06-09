@@ -15,7 +15,7 @@ import {
     type InvoiceSummary,
 } from "@/services/invoiceApi";
 import { CheckCircle, Download, Eye, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function InvoicesPage() {
@@ -64,9 +64,18 @@ export default function InvoicesPage() {
         }
     }, []);
 
-    useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
-    useEffect(() => { fetchCounts(); }, [fetchCounts]);
-    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+    useEffect(() => {
+        void (async () => { await fetchInvoices(); })();
+    }, [fetchInvoices]);
+
+    useEffect(() => {
+        void (async () => { await fetchCounts(); })();
+    }, [fetchCounts]);
+
+    useEffect(() => {
+        startTransition(() => { setCurrentPage(1); });
+    }, [activeTab, search]);
+
 
     const handleApprove = async (invoice: InvoiceSummary) => {
         try {

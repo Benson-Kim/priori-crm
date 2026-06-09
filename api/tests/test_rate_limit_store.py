@@ -61,6 +61,7 @@ def _redis_store_with(fake) -> RedisRateLimitStore:
     store = RedisRateLimitStore.__new__(RedisRateLimitStore)
     store._redis = fake
     store._key_prefix = "ratelimit"
+    store._redis_exc = (ConnectionError, OSError)
     return store
 
 

@@ -25,26 +25,30 @@ class TestTaxRate:
 class TestBuildLineItems:
     def test_missing_required_field_raises(self):
         with pytest.raises(ValueError):
-            build_line_items([
+            build_line_items(
+                [
+                    {
+                        "item_name": "Widget",
+                        "description": "x",
+                        # quantity missing
+                        "unit_price": Decimal("10.00"),
+                        "tax_type": TaxType.NO_TAX,
+                    }
+                ]
+            )
+
+    def test_complete_item_builds(self):
+        built = build_line_items(
+            [
                 {
                     "item_name": "Widget",
                     "description": "x",
-                    # quantity missing
+                    "quantity": Decimal("2"),
                     "unit_price": Decimal("10.00"),
                     "tax_type": TaxType.NO_TAX,
                 }
-            ])
-
-    def test_complete_item_builds(self):
-        built = build_line_items([
-            {
-                "item_name": "Widget",
-                "description": "x",
-                "quantity": Decimal("2"),
-                "unit_price": Decimal("10.00"),
-                "tax_type": TaxType.NO_TAX,
-            }
-        ])
+            ]
+        )
         assert built[0]["line_total"] == Decimal("20.00")
 
 
@@ -85,20 +89,22 @@ class TestDeleteEligibilityPartial:
         db.flush()
 
         today = date.today()
-        db.add(Invoice(
-            invoice_number="INV-PART-1",
-            invoice_reference="IN-PART1",
-            customer_id=customer.id,
-            transaction_date=today,
-            due_date=today + timedelta(days=30),
-            currency=Currency.KES,
-            status=InvoiceStatus.PARTIAL,
-            subtotal=Decimal("100.00"),
-            tax_total=Decimal("0.00"),
-            total_due=Decimal("100.00"),
-            amount_paid=Decimal("40.00"),
-            balance_due=Decimal("60.00"),
-        ))
+        db.add(
+            Invoice(
+                invoice_number="INV-PART-1",
+                invoice_reference="IN-PART1",
+                customer_id=customer.id,
+                transaction_date=today,
+                due_date=today + timedelta(days=30),
+                currency=Currency.KES,
+                status=InvoiceStatus.PARTIAL,
+                subtotal=Decimal("100.00"),
+                tax_total=Decimal("0.00"),
+                total_due=Decimal("100.00"),
+                amount_paid=Decimal("40.00"),
+                balance_due=Decimal("60.00"),
+            )
+        )
         db.flush()
 
         result = CustomerService(db).check_delete_eligibility(customer.id)

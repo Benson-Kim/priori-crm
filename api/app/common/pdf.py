@@ -4,10 +4,11 @@ PDF generation for invoices and quotes using ReportLab.
 Deep module: small interface (generate_invoice_pdf / generate_quote_pdf),
 concentrated implementation behind it.
 """
+
 import io
 import logging
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -151,7 +152,11 @@ class DocumentPDFGenerator:
                     getattr(owner, "address", None),
                     getattr(owner, "email", None),
                     getattr(owner, "phone", None),
-                    (f"Tax PIN: {owner.tax_pin}" if getattr(owner, "tax_pin", None) else None),
+                    (
+                        f"Tax PIN: {owner.tax_pin}"
+                        if getattr(owner, "tax_pin", None)
+                        else None
+                    ),
                     getattr(owner, "website", None),
                 )
                 if line
@@ -220,7 +225,12 @@ class DocumentPDFGenerator:
                     ("FONTSIZE", (0, 0), (-1, 0), 8),
                     # body
                     ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#F9FAFB")],
+                    ),
                     ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
                     ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
                     ("TOPPADDING", (0, 0), (-1, -1), 3),
@@ -231,13 +241,26 @@ class DocumentPDFGenerator:
         elements.append(items_table)
         elements.append(Spacer(1, 6 * mm))
 
-        # totals 
+        # totals
         totals_rows = [["Subtotal", f"{currency} {subtotal:,.2f}"]]
         if discount_type and (discount_amount or discount_percentage):
-            if discount_type == "percentage" and discount_percentage:
-                totals_rows.append([f"Discount ({discount_percentage}%)", f"- {currency} {(subtotal * discount_percentage / 100):,.2f}"])
-            elif discount_amount:
-                totals_rows.append(["Discount", f"- {currency} {discount_amount:,.2f}"])
+            from app.common.financial import calculate_discount
+            from app.constants.enums import DiscountType
+
+            discount_value = calculate_discount(
+                subtotal,
+                DiscountType(discount_type),
+                discount_amount,
+                discount_percentage,
+            )
+            if discount_value:
+                label = (
+                    f"Discount ({discount_percentage}%)"
+                    if discount_type == "percentage" and discount_percentage
+                    else "Discount"
+                )
+                totals_rows.append([label, f"- {currency} {discount_value:,.2f}"])
+
         totals_rows.append(["Tax", f"{currency} {tax_total:,.2f}"])
         totals_rows.append(["Total Due", f"{currency} {total_due:,.2f}"])
         if amount_paid and amount_paid > 0:

@@ -20,7 +20,6 @@ from app.common.reference import ReferenceGenerator
 from app.constants.enums import Currency, CustomerStatus, InvoiceStatus
 from app.modules.customers.models import Customer
 from app.modules.invoices.models import Invoice
-
 from tests.conftest import USING_POSTGRES
 
 pytestmark = pytest.mark.skipif(

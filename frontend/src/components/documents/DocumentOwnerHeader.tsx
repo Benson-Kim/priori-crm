@@ -4,10 +4,10 @@
  * DocumentEditor / DocumentViewer / ExpenseViewer and the vendor statement.
  *
  * In editable mode it exposes the logo upload/remove controls and an edit
- * modal behind the previously-dead "Update" buttons (S-1).
+ * modal behind the previously-dead "Update" buttons.
  */
-import { useRef, useState } from "react";
 import { SquarePen, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { useOwnerProfile } from "@/hooks/useOwnerProfile";
 import { ownerLogoUrl } from "@/services/ownerApi";

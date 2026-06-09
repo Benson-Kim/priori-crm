@@ -4,7 +4,8 @@
  * The single source of truth for the organisation identity printed on
  * documents, replacing the hardcoded COMPANY_INFO constant.
  */
-import { apiDelete, apiGet, apiPut, apiUploadPut, appConfig } from "@/lib/api";
+import { apiDelete, apiGet, apiPut, apiUploadPut } from "@/lib/api";
+import { appConfig } from "@/lib/constants";
 
 export interface OwnerProfile {
   fullName: string;

@@ -117,7 +117,7 @@ export function VendorSelector({
     }, [debouncedSearch]);
 
     useEffect(() => {
-        if (showDropdown) fetchVendors();
+        if (showDropdown) void (async () => { await fetchVendors(); })();
     }, [showDropdown, fetchVendors]);
 
     const selectVendor = async (v: VendorSummary) => {

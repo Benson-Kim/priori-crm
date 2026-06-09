@@ -11,7 +11,9 @@ def test_basic_health_is_public(client):
 
 def test_detailed_health_refused_without_secret(client, monkeypatch):
     # No internal secret configured -> endpoint fails closed.
-    monkeypatch.setattr(config_module.settings, "INTERNAL_API_SECRET", "", raising=False)
+    monkeypatch.setattr(
+        config_module.settings, "INTERNAL_API_SECRET", "", raising=False
+    )
     resp = client.get("/api/v1/health/detailed")
     assert resp.status_code in (401, 403)
 

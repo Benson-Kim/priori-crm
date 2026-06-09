@@ -1,41 +1,42 @@
 """Invoice business logic with complex financial calculations and state machine."""
+
 import logging
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
-from sqlalchemy import and_, case, func, or_, text
+from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import joinedload, lazyload, selectinload
 
+from app.common.database import assert_version
+from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
     DatabaseException,
     NotFoundException,
 )
-from app.common.database import assert_version
-from app.common.document_service import BaseDocumentService
-from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
-from app.common.reference import ReferenceGenerator
-from app.common.search import build_search_clause
+from app.common.financial import (
+    build_line_items,
+    calculate_discount,
+    sum_line_totals,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType, InvoiceStatus, TaxType
+from app.common.search import build_search_clause
+from app.constants.enums import DiscountType, InvoiceStatus
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
-    InvoiceDetailResponse,
     InvoiceDuplicateResponse,
     InvoiceFilterParams,
     InvoiceLineItemCreate,
-    InvoiceResponse,
     InvoiceStatusCounts,
     InvoiceSummary,
     InvoiceUpdate,
     PaymentCreate,
-    PaymentResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,18 +56,31 @@ class InvoiceService(BaseDocumentService):
 
     _document_noun = "invoice"
     _reference_collision_markers = ("invoice_number", "invoice_reference")
-    _email_terms = {
+    _email_terms: ClassVar[dict[str, str]] = {
         "noun": "invoice",
         "date_label": "Due date",
         "closing": "Thank you for your business.",
     }
 
-    ALLOWED_TRANSITIONS: dict[InvoiceStatus, list[InvoiceStatus]] = {
-        InvoiceStatus.DRAFT:    [InvoiceStatus.SENT, InvoiceStatus.CANCELED],
-        InvoiceStatus.SENT:     [InvoiceStatus.PARTIAL, InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.CANCELED],
-        InvoiceStatus.PARTIAL:  [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.CANCELED],
-        InvoiceStatus.OVERDUE:  [InvoiceStatus.PARTIAL, InvoiceStatus.PAID, InvoiceStatus.CANCELED],
-        InvoiceStatus.PAID:     [InvoiceStatus.CANCELED],
+    ALLOWED_TRANSITIONS: ClassVar[dict[InvoiceStatus, list[InvoiceStatus]]] = {
+        InvoiceStatus.DRAFT: [InvoiceStatus.SENT, InvoiceStatus.CANCELED],
+        InvoiceStatus.SENT: [
+            InvoiceStatus.PARTIAL,
+            InvoiceStatus.PAID,
+            InvoiceStatus.OVERDUE,
+            InvoiceStatus.CANCELED,
+        ],
+        InvoiceStatus.PARTIAL: [
+            InvoiceStatus.PAID,
+            InvoiceStatus.OVERDUE,
+            InvoiceStatus.CANCELED,
+        ],
+        InvoiceStatus.OVERDUE: [
+            InvoiceStatus.PARTIAL,
+            InvoiceStatus.PAID,
+            InvoiceStatus.CANCELED,
+        ],
+        InvoiceStatus.PAID: [InvoiceStatus.CANCELED],
         InvoiceStatus.CANCELED: [],
     }
 
@@ -78,21 +92,23 @@ class InvoiceService(BaseDocumentService):
         Uses bounded retry for invoice number collisions.
         """
         # Validate customer exists and is active
-        from app.modules.customers.models import Customer
         from app.constants.enums import CustomerStatus
+        from app.modules.customers.models import Customer
 
-        customer = self._db.query(Customer).filter(Customer.id == data.customer_id).first()
+        customer = (
+            self._db.query(Customer).filter(Customer.id == data.customer_id).first()
+        )
 
         if not customer:
             raise NotFoundException(
                 detail=f"Customer with ID '{data.customer_id}' not found",
-                resource="customer"
+                resource="customer",
             )
 
         if customer.status != CustomerStatus.ACTIVE:
             raise BadRequestException(
                 detail=f"Cannot create invoice for inactive customer: {customer.display_name}",
-                field="customer_id"
+                field="customer_id",
             )
 
         # Single-currency-per-customer (P-11): a customer holds exactly one
@@ -154,7 +170,8 @@ class InvoiceService(BaseDocumentService):
                 sp.commit()
 
                 logger.info(
-                    "Created invoice: %s", invoice.invoice_number,
+                    "Created invoice: %s",
+                    invoice.invoice_number,
                     extra={
                         "invoice_id": str(invoice.id),
                         "customer_id": str(data.customer_id),
@@ -171,9 +188,13 @@ class InvoiceService(BaseDocumentService):
                 if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
                     logger.warning("Invoice number collision, retry %d", attempt + 1)
                     continue
-                raise ConflictException("Invoice data violates database constraints") from e
+                raise ConflictException(
+                    "Invoice data violates database constraints"
+                ) from e
 
-        raise ConflictException("Failed to generate unique invoice number after retries") from last_error
+        raise ConflictException(
+            "Failed to generate unique invoice number after retries"
+        ) from last_error
 
     # READ
 
@@ -198,7 +219,7 @@ class InvoiceService(BaseDocumentService):
             if not invoice:
                 raise NotFoundException(
                     detail=f"Invoice with ID '{invoice_id}' not found",
-                    resource="invoice"
+                    resource="invoice",
                 )
 
             return invoice
@@ -227,8 +248,7 @@ class InvoiceService(BaseDocumentService):
 
             if not invoice:
                 raise NotFoundException(
-                    detail=f"Invoice '{invoice_number}' not found",
-                    resource="invoice"
+                    detail=f"Invoice '{invoice_number}' not found", resource="invoice"
                 )
 
             return invoice
@@ -249,48 +269,45 @@ class InvoiceService(BaseDocumentService):
         """
         try:
             from app.modules.customers.models import Customer
-            
+
             # Base query with customer join for display name
-            query = (
-                self._db.query(
-                    Invoice.id,
-                    Invoice.invoice_number,
-                    Invoice.invoice_reference,
-                    Invoice.customer_id,
-                    Invoice.transaction_date,
-                    Invoice.due_date,
-                    Invoice.status,
-                    Invoice.currency,
-                    Invoice.total_due,
-                    Invoice.balance_due,
-                    Invoice.created_at,
-                    Customer.company_name,
-                    Customer.first_name,
-                    Customer.last_name,
-                )
-                .join(Customer, Invoice.customer_id == Customer.id)
-            )
+            query = self._db.query(
+                Invoice.id,
+                Invoice.invoice_number,
+                Invoice.invoice_reference,
+                Invoice.customer_id,
+                Invoice.transaction_date,
+                Invoice.due_date,
+                Invoice.status,
+                Invoice.currency,
+                Invoice.total_due,
+                Invoice.balance_due,
+                Invoice.created_at,
+                Customer.company_name,
+                Customer.first_name,
+                Customer.last_name,
+            ).join(Customer, Invoice.customer_id == Customer.id)
 
             # Apply filters
             if filters:
                 if filters.status:
                     query = query.filter(Invoice.status == filters.status)
-                
+
                 if filters.customer_id:
                     query = query.filter(Invoice.customer_id == filters.customer_id)
-                
+
                 if filters.date_from:
                     query = query.filter(Invoice.transaction_date >= filters.date_from)
-                
+
                 if filters.date_to:
                     query = query.filter(Invoice.transaction_date <= filters.date_to)
-                
+
                 if filters.due_date_from:
                     query = query.filter(Invoice.due_date >= filters.due_date_from)
-                
+
                 if filters.due_date_to:
                     query = query.filter(Invoice.due_date <= filters.due_date_to)
-                
+
                 if filters.search:
                     search_clause = build_search_clause(
                         filters.search,
@@ -306,8 +323,7 @@ class InvoiceService(BaseDocumentService):
             total = query.count()
 
             results = (
-                query
-                .order_by(Invoice.created_at.desc())
+                query.order_by(Invoice.created_at.desc())
                 .offset(params.offset)
                 .limit(params.per_page)
                 .all()
@@ -319,7 +335,7 @@ class InvoiceService(BaseDocumentService):
                     customer_name = row.company_name
                 else:
                     customer_name = f"{row.first_name} {row.last_name}".strip()
-                
+
                 items.append(
                     InvoiceSummary(
                         id=row.id,
@@ -344,7 +360,7 @@ class InvoiceService(BaseDocumentService):
                     "per_page": params.per_page,
                     "total": total,
                     "filters": filters.model_dump() if filters else None,
-                }
+                },
             )
 
             return PaginatedResponse.create(items=items, total=total, params=params)
@@ -370,9 +386,11 @@ class InvoiceService(BaseDocumentService):
         try:
             from app.modules.customers.models import Customer
 
-            query = self._db.query(Invoice).join(
-                Customer, Invoice.customer_id == Customer.id
-            ).options(joinedload(Invoice.customer))
+            query = (
+                self._db.query(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.id)
+                .options(joinedload(Invoice.customer))
+            )
 
             if include_line_items:
                 query = query.options(selectinload(Invoice.line_items))
@@ -414,7 +432,9 @@ class InvoiceService(BaseDocumentService):
             logger.exception("Database error loading invoices for export")
             raise DatabaseException("Failed to load invoices for export") from e
 
-    def get_status_counts(self, customer_id: uuid.UUID | None = None) -> InvoiceStatusCounts:
+    def get_status_counts(
+        self, customer_id: uuid.UUID | None = None
+    ) -> InvoiceStatusCounts:
         """Get counts of invoices by status"""
         try:
             today = date.today()
@@ -425,7 +445,13 @@ class InvoiceService(BaseDocumentService):
                     case(
                         (
                             and_(
-                                Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]),
+                                Invoice.status.in_(
+                                    [
+                                        InvoiceStatus.SENT,
+                                        InvoiceStatus.PARTIAL,
+                                        InvoiceStatus.OVERDUE,
+                                    ]
+                                ),
                                 Invoice.due_date < today,
                                 Invoice.balance_due > 0,
                             ),
@@ -491,9 +517,15 @@ class InvoiceService(BaseDocumentService):
             agg = (
                 self._db.query(
                     func.count(Invoice.id).label("total_invoices"),
-                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label("total_invoiced"),
-                    func.coalesce(func.sum(Invoice.amount_paid), Decimal("0")).label("total_paid"),
-                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label("total_outstanding"),
+                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label(
+                        "total_invoiced"
+                    ),
+                    func.coalesce(func.sum(Invoice.amount_paid), Decimal("0")).label(
+                        "total_paid"
+                    ),
+                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
+                        "total_outstanding"
+                    ),
                     func.coalesce(
                         func.avg(
                             case(
@@ -504,8 +536,13 @@ class InvoiceService(BaseDocumentService):
                                     ),
                                     func.extract(
                                         "epoch",
-                                        Invoice.paid_at - func.cast(Invoice.transaction_date, type_=Invoice.paid_at.type),
-                                    ) / 86400,
+                                        Invoice.paid_at
+                                        - func.cast(
+                                            Invoice.transaction_date,
+                                            type_=Invoice.paid_at.type,
+                                        ),
+                                    )
+                                    / 86400,
                                 )
                             )
                         ),
@@ -515,7 +552,13 @@ class InvoiceService(BaseDocumentService):
                         case(
                             (
                                 and_(
-                                    Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]),
+                                    Invoice.status.in_(
+                                        [
+                                            InvoiceStatus.SENT,
+                                            InvoiceStatus.PARTIAL,
+                                            InvoiceStatus.OVERDUE,
+                                        ]
+                                    ),
                                     Invoice.due_date < today,
                                     Invoice.balance_due > 0,
                                 ),
@@ -528,7 +571,13 @@ class InvoiceService(BaseDocumentService):
                             case(
                                 (
                                     and_(
-                                        Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]),
+                                        Invoice.status.in_(
+                                            [
+                                                InvoiceStatus.SENT,
+                                                InvoiceStatus.PARTIAL,
+                                                InvoiceStatus.OVERDUE,
+                                            ]
+                                        ),
                                         Invoice.due_date < today,
                                         Invoice.balance_due > 0,
                                     ),
@@ -550,25 +599,33 @@ class InvoiceService(BaseDocumentService):
 
             total = agg.total_invoices or 0
             avg_value = (
-                (Decimal(str(agg.total_invoiced)) / total) if total > 0 else Decimal("0.00")
+                (Decimal(str(agg.total_invoiced)) / total)
+                if total > 0
+                else Decimal("0.00")
             )
 
             logger.debug(
                 "Calculated invoice statistics",
-                extra={"date_from": str(date_from), "date_to": str(date_to), "total": total},
+                extra={
+                    "date_from": str(date_from),
+                    "date_to": str(date_to),
+                    "total": total,
+                },
             )
 
             return {
-                "total_invoices":          total,
-                "total_invoiced":          Decimal(str(agg.total_invoiced)),
-                "total_paid":              Decimal(str(agg.total_paid)),
-                "total_outstanding":       Decimal(str(agg.total_outstanding)),
-                "average_invoice_value":   avg_value,
-                "average_days_to_payment": round(float(agg.avg_days_to_payment or 0), 1),
-                "overdue_count":           agg.overdue_count or 0,
-                "overdue_amount":          Decimal(str(agg.overdue_amount)),
-                "date_from":               date_from,
-                "date_to":                 date_to,
+                "total_invoices": total,
+                "total_invoiced": Decimal(str(agg.total_invoiced)),
+                "total_paid": Decimal(str(agg.total_paid)),
+                "total_outstanding": Decimal(str(agg.total_outstanding)),
+                "average_invoice_value": avg_value,
+                "average_days_to_payment": round(
+                    float(agg.avg_days_to_payment or 0), 1
+                ),
+                "overdue_count": agg.overdue_count or 0,
+                "overdue_amount": Decimal(str(agg.overdue_amount)),
+                "date_from": date_from,
+                "date_to": date_to,
             }
 
         except SQLAlchemyError as e:
@@ -595,8 +652,7 @@ class InvoiceService(BaseDocumentService):
 
         if not invoice.is_editable:
             raise BadRequestException(
-                detail=f"Cannot edit invoice in {invoice.status} status",
-                field="status"
+                detail=f"Cannot edit invoice in {invoice.status} status", field="status"
             )
 
         # Atomic optimistic-lock guard (P-9): locks the row and compares the
@@ -615,7 +671,7 @@ class InvoiceService(BaseDocumentService):
                 if field in update_data:
                     raise BadRequestException(
                         detail=f"Cannot change {field} after invoice has been sent",
-                        field=field
+                        field=field,
                     )
 
         if "discount_type" in update_data:
@@ -628,7 +684,7 @@ class InvoiceService(BaseDocumentService):
             else:
                 update_data.setdefault("discount_amount", None)
                 update_data.setdefault("discount_percentage", None)
-        
+
         # Handle line items update (replace all)
         if "line_items" in update_data:
             self._db.query(InvoiceLineItem).filter(
@@ -648,17 +704,28 @@ class InvoiceService(BaseDocumentService):
         # Recalculate totals if discount or subtotal changed
         recompute_balance = any(
             k in update_data
-            for k in ["subtotal", "discount_type", "discount_amount", "discount_percentage"]
+            for k in [
+                "subtotal",
+                "discount_type",
+                "discount_amount",
+                "discount_percentage",
+            ]
         )
         if recompute_balance:
             subtotal = update_data.get("subtotal", invoice.subtotal)
             tax_total = update_data.get("tax_total", invoice.tax_total)
 
-            effective_type       = update_data.get("discount_type", invoice.discount_type)
-            effective_amount     = update_data.get("discount_amount", invoice.discount_amount)
-            effective_percentage = update_data.get("discount_percentage", invoice.discount_percentage)
+            effective_type = update_data.get("discount_type", invoice.discount_type)
+            effective_amount = update_data.get(
+                "discount_amount", invoice.discount_amount
+            )
+            effective_percentage = update_data.get(
+                "discount_percentage", invoice.discount_percentage
+            )
 
-            discount_value = calculate_discount(subtotal, effective_type, effective_amount, effective_percentage)
+            discount_value = calculate_discount(
+                subtotal, effective_type, effective_amount, effective_percentage
+            )
 
             total_due = subtotal - discount_value + tax_total
             balance_due = total_due - invoice.amount_paid
@@ -698,12 +765,11 @@ class InvoiceService(BaseDocumentService):
                 "invoice_id": str(invoice.id),
                 "updated_fields": list(update_data.keys()),
                 "new_version": invoice.version,
-            }
+            },
         )
 
         return invoice
 
-   
     # STATUS TRANSITIONS & ACTIONS
 
     def _capture_owner_snapshot(self, invoice: Invoice) -> None:
@@ -731,8 +797,11 @@ class InvoiceService(BaseDocumentService):
         invoice.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(invoice)
         self._db.flush()
-        logger.info("Marked invoice as sent: %s", invoice.invoice_number,
-                    extra={"invoice_id": str(invoice.id), "sent_at": invoice.sent_at})
+        logger.info(
+            "Marked invoice as sent: %s",
+            invoice.invoice_number,
+            extra={"invoice_id": str(invoice.id), "sent_at": invoice.sent_at},
+        )
         return invoice
 
     def send_invoice(
@@ -748,15 +817,21 @@ class InvoiceService(BaseDocumentService):
 
         Uses SELECT FOR UPDATE to prevent TOCTOU race conditions.
         """
+        # Lock the bare invoices row: a joined customer load would emit a
+        # LEFT OUTER JOIN that Postgres rejects under FOR UPDATE ("cannot be
+        # applied to the nullable side of an outer join"). customer still
+        # loads lazily on access below.
         invoice = (
             self._db.query(Invoice)
-            .options(joinedload(Invoice.customer))
+            .options(lazyload("*"))
             .filter(Invoice.id == invoice_id)
             .with_for_update()
             .first()
         )
         if not invoice:
-            raise NotFoundException(detail=f"Invoice '{invoice_id}' not found", resource="invoice")
+            raise NotFoundException(
+                detail=f"Invoice '{invoice_id}' not found", resource="invoice"
+            )
 
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
@@ -776,6 +851,7 @@ class InvoiceService(BaseDocumentService):
 
         # Dispatch email
         from app.lib.email import email_service
+
         email_service.send_document_email(
             recipient=recipient,
             subject=email_subject,
@@ -791,8 +867,13 @@ class InvoiceService(BaseDocumentService):
             self._db.flush()
 
         logger.info(
-            "Sent invoice: %s", invoice.invoice_number,
-            extra={"invoice_id": str(invoice.id), "recipient": recipient, "attached_pdf": attach_pdf},
+            "Sent invoice: %s",
+            invoice.invoice_number,
+            extra={
+                "invoice_id": str(invoice.id),
+                "recipient": recipient,
+                "attached_pdf": attach_pdf,
+            },
         )
         return {
             "invoice_id": invoice.id,
@@ -818,9 +899,11 @@ class InvoiceService(BaseDocumentService):
         payments both pass the overpay check and overpay the invoice
         (V-REL-3 / INV-BE-3). Mirrors the locking pattern in send_invoice.
         """
+        # Lock the bare invoices row (see send_invoice): suppress the joined
+        # customer outer join so Postgres allows FOR UPDATE.
         invoice = (
             self._db.query(Invoice)
-            .options(joinedload(Invoice.customer))
+            .options(lazyload("*"))
             .filter(Invoice.id == invoice_id)
             .with_for_update()
             .first()
@@ -835,13 +918,12 @@ class InvoiceService(BaseDocumentService):
         if invoice.status == InvoiceStatus.DRAFT:
             raise BadRequestException(
                 detail="Cannot record payment for draft invoice. Send it first.",
-                field="status"
+                field="status",
             )
 
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
-                detail="Cannot record payment for canceled invoice",
-                field="status"
+                detail="Cannot record payment for canceled invoice", field="status"
             )
 
         # Validate payment amount
@@ -851,7 +933,7 @@ class InvoiceService(BaseDocumentService):
                     f"Payment amount ({data.amount}) exceeds balance due ({invoice.balance_due}). "
                     f"Cannot overpay invoice."
                 ),
-                field="amount"
+                field="amount",
             )
 
         # Create payment record
@@ -887,14 +969,15 @@ class InvoiceService(BaseDocumentService):
         self._update_customer_balance(invoice.customer_id)
 
         logger.info(
-            "Recorded payment for invoice %s", invoice.invoice_number,
+            "Recorded payment for invoice %s",
+            invoice.invoice_number,
             extra={
                 "invoice_id": str(invoice.id),
                 "payment_id": str(payment.id),
                 "amount": float(data.amount),
                 "new_balance": float(invoice.balance_due),
                 "new_status": invoice.status,
-            }
+            },
         )
 
         return payment
@@ -908,6 +991,7 @@ class InvoiceService(BaseDocumentService):
         try:
             original = self.get_by_id(invoice_id)
             from datetime import timedelta
+
             new_transaction_date = date.today()
             new_due_date = new_transaction_date + timedelta(days=30)
             last_error: Exception | None = None
@@ -938,22 +1022,25 @@ class InvoiceService(BaseDocumentService):
                     self._db.add(duplicate)
                     self._db.flush()
                     for orig_item in original.line_items:
-                        self._db.add(InvoiceLineItem(
-                            invoice_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        ))
+                        self._db.add(
+                            InvoiceLineItem(
+                                invoice_id=duplicate.id,
+                                line_number=orig_item.line_number,
+                                item_name=orig_item.item_name,
+                                description=orig_item.description,
+                                quantity=orig_item.quantity,
+                                unit_price=orig_item.unit_price,
+                                line_total=orig_item.line_total,
+                                tax_type=orig_item.tax_type,
+                                tax_amount=orig_item.tax_amount,
+                            )
+                        )
                     self._db.flush()
                     sp.commit()
                     logger.info(
                         "Duplicated invoice %s → %s",
-                        original.invoice_number, duplicate.invoice_number,
+                        original.invoice_number,
+                        duplicate.invoice_number,
                     )
                     return InvoiceDuplicateResponse(
                         original_invoice_id=original.id,
@@ -966,9 +1053,13 @@ class InvoiceService(BaseDocumentService):
                     last_error = exc
                     is_collision = self._is_reference_collision(exc)
                     if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
-                        logger.warning("Collision during duplicate, retry %d", attempt + 1)
+                        logger.warning(
+                            "Collision during duplicate, retry %d", attempt + 1
+                        )
                         continue
-                    raise ConflictException("Invoice data violates database constraints") from exc
+                    raise ConflictException(
+                        "Invoice data violates database constraints"
+                    ) from exc
 
             raise ConflictException(
                 "Failed to generate unique invoice number after retries"
@@ -990,8 +1081,7 @@ class InvoiceService(BaseDocumentService):
 
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
-                detail="Invoice is already canceled",
-                field="status"
+                detail="Invoice is already canceled", field="status"
             )
 
         # Route through the state machine so ALLOWED_TRANSITIONS is enforced
@@ -1006,11 +1096,10 @@ class InvoiceService(BaseDocumentService):
 
         logger.warning(
             f"Canceled invoice: {invoice.invoice_number}",
-            extra={"invoice_id": str(invoice.id)}
+            extra={"invoice_id": str(invoice.id)},
         )
 
         return invoice
-
 
     # CALCULATIONS & UTILITIES
 
@@ -1030,17 +1119,21 @@ class InvoiceService(BaseDocumentService):
         built_items = build_line_items(line_items)
         subtotal, tax_total = sum_line_totals(built_items)
         for item in built_items:
-            calculated_items.append({
-                "item_name":   item["item_name"],
-                "description": item["description"],
-                "quantity":    float(item["quantity"]),
-                "unit_price":  float(item["unit_price"]),
-                "line_total":  float(item["line_total"]),
-                "tax_type":    item["tax_type"],
-                "tax_amount":  float(item["tax_amount"]),
-            })
+            calculated_items.append(
+                {
+                    "item_name": item["item_name"],
+                    "description": item["description"],
+                    "quantity": float(item["quantity"]),
+                    "unit_price": float(item["unit_price"]),
+                    "line_total": float(item["line_total"]),
+                    "tax_type": item["tax_type"],
+                    "tax_amount": float(item["tax_amount"]),
+                }
+            )
 
-        discount_value = calculate_discount(subtotal, discount_type, discount_amount, discount_percentage)
+        discount_value = calculate_discount(
+            subtotal, discount_type, discount_amount, discount_percentage
+        )
         total_due = subtotal - discount_value + tax_total
 
         return InvoiceCalculationResponse(
@@ -1063,7 +1156,9 @@ class InvoiceService(BaseDocumentService):
         from app.modules.customers.models import Customer
 
         outstanding = (
-            self._db.query(func.coalesce(func.sum(Invoice.balance_due), Decimal("0.00")))
+            self._db.query(
+                func.coalesce(func.sum(Invoice.balance_due), Decimal("0.00"))
+            )
             .filter(
                 Invoice.customer_id == customer_id,
                 Invoice.status.notin_([InvoiceStatus.CANCELED, InvoiceStatus.DRAFT]),
@@ -1076,7 +1171,8 @@ class InvoiceService(BaseDocumentService):
             customer.balance = Decimal(str(outstanding))
             self._db.flush()
             logger.debug(
-                "Updated customer balance to %s", outstanding,
+                "Updated customer balance to %s",
+                outstanding,
                 extra={"customer_id": str(customer_id)},
             )
 

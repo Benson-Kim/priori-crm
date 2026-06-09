@@ -1,11 +1,12 @@
 """Quote API endpoints with comprehensive documentation."""
+
 import logging
 from datetime import date
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
@@ -82,11 +83,17 @@ def list_quotes(
     ] = None,
     date_from: Annotated[
         date | None,
-        Query(description="Filter quotes from this date (transaction_date)", alias="dateFrom"),
+        Query(
+            description="Filter quotes from this date (transaction_date)",
+            alias="dateFrom",
+        ),
     ] = None,
     date_to: Annotated[
         date | None,
-        Query(description="Filter quotes up to this date (transaction_date)", alias="dateTo"),
+        Query(
+            description="Filter quotes up to this date (transaction_date)",
+            alias="dateTo",
+        ),
     ] = None,
     due_date_from: Annotated[
         date | None,
@@ -149,7 +156,7 @@ def calculate_quote_totals(
     dt = DiscountType(discount_type) if discount_type else None
     da = Decimal(str(discount_amount)) if discount_amount is not None else None
     dp = Decimal(str(discount_percentage)) if discount_percentage is not None else None
-    
+
     return QuoteService.calculate_totals(line_items, dt, da, dp)
 
 
@@ -160,7 +167,9 @@ def calculate_quote_totals(
     responses={
         200: {
             "description": "Excel file",
-            "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}},
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
         },
         501: {"description": "Excel export not yet implemented"},
     },
@@ -173,14 +182,17 @@ def export_quotes_to_excel(
     date_to: Annotated[date | None, Query(alias="dateTo")] = None,
     include_line_items: Annotated[
         bool,
-        Query(alias="includeLineItems", description="Include line items in separate sheet")
+        Query(
+            alias="includeLineItems", description="Include line items in separate sheet"
+        ),
     ] = False,
 ) -> StreamingResponse:
     """Export quotes to Excel."""
     import io
+
     from fastapi.responses import StreamingResponse
+
     from app.common.excel import ExcelExporter
-    from app.common.pagination import PaginationParams
     from app.lib.config import settings
 
     filters = QuoteFilterParams(
@@ -247,6 +259,7 @@ def get_quote_by_number(
 
 # DUPLICATE
 
+
 @router.post(
     "/{quote_id}/duplicate",
     response_model=QuoteDuplicateResponse,
@@ -268,11 +281,12 @@ def duplicate_quote(
         original_quote_id=quote_id,
         new_quote_id=duplicate.id,
         new_quote_number=duplicate.quote_number,
-        message="Quote duplicated successfully"
+        message="Quote duplicated successfully",
     )
 
 
 # GET BY ID
+
 
 @router.get(
     "/{quote_id}",
@@ -292,8 +306,9 @@ def get_quote(quote_id: UUID, service: QuoteServiceDep) -> QuoteResponse:
 
 # UPDATE
 
+
 @router.put(
-    "/{quote_id}", 
+    "/{quote_id}",
     response_model=QuoteResponse,
     summary="Update quote",
     description="Update quote details (restrictions apply based on status).",
@@ -319,6 +334,7 @@ def update_quote(
 
 
 # STATUS CHANGES
+
 
 @router.post(
     "/{quote_id}/mark-sent",
@@ -363,7 +379,7 @@ def send_quote(
     Send quote via email.
     """
     request_data = body or QuoteSendRequest()
-    
+
     result = service.send_quote(
         quote_id,
         to_email=request_data.to_email,
@@ -371,7 +387,7 @@ def send_quote(
         body=request_data.body,
         attach_pdf=request_data.attach_pdf,
     )
-    
+
     return QuoteSendResponse(**result)
 
 
@@ -407,7 +423,9 @@ def approve_quote(
     description="Convert an approved quote to a new invoice.",
     responses={
         201: {"description": "Quote converted to invoice successfully"},
-        400: {"description": "Quote cannot be converted (not approved, expired, or already converted)"},
+        400: {
+            "description": "Quote cannot be converted (not approved, expired, or already converted)"
+        },
         403: {"description": "Insufficient role to convert quotes"},
         404: {"description": "Quote not found"},
     },
@@ -454,6 +472,7 @@ def delete_quote(quote_id: UUID, service: QuoteServiceDep) -> None:
 def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
     """Generate and download quote as PDF."""
     import io
+
     from fastapi.responses import StreamingResponse
 
     pdf_data = service.generate_pdf(quote_id)

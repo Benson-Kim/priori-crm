@@ -4,6 +4,7 @@ GET/PUT the single live owner profile, plus logo upload/remove/serve. Reads
 require authentication; profile and logo writes require an elevated role
 since this is an organisation-wide setting.
 """
+
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 

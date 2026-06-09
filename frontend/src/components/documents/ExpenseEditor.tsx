@@ -2,8 +2,8 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { COMPANY_INFO } from "@/lib/constants";
 import { CURRENCY_OPTIONS } from "@/lib/constants";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { formatCurrency } from "@/lib/utils";
 import { PaperclipIcon, Plus, Save, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -219,24 +219,7 @@ export function ExpenseEditor({
       <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
         {/* Top Section */}
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Logo */}
-            <div className="flex flex-col items-start gap-3">
-              <img
-                src="/Logo Priori.svg"
-                alt="Priori logo"
-                className="aspect-150/44 w-37.5"
-              />
-            </div>
-
-            {/* Company Info */}
-            <div className="flex flex-col gap-1 text-gray-800 items-end">
-              <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
-              <p className="text-sm">{COMPANY_INFO.address}</p>
-              <p className="text-sm">{COMPANY_INFO.phone}</p>
-              <p className="text-sm mb-1">{COMPANY_INFO.email}</p>
-            </div>
-          </div>
+          <DocumentOwnerHeader editable={!restrictedMode} />
         </div>
 
         <div className="p-6">

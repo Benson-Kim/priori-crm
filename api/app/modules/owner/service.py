@@ -1,4 +1,5 @@
 """Owner / document-header service (W3.6)."""
+
 import hashlib
 import logging
 import secrets
@@ -145,7 +146,9 @@ class OwnerService:
 
     # Logo
 
-    def upload_logo(self, file_obj: BinaryIO, filename: str, content_type: str) -> OwnerProfile:
+    def upload_logo(
+        self, file_obj: BinaryIO, filename: str, content_type: str
+    ) -> OwnerProfile:
         """Validate and store a new logo, replacing any previous one."""
         safe_basename, _ext, _size = validate_upload(
             file_obj, filename or "logo", content_type or "application/octet-stream"

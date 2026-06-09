@@ -1,7 +1,8 @@
 """FastAPI dependencies for database sessions, authentication, and services."""
-from typing import Annotated
 
 import secrets
+from typing import Annotated
+
 from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
@@ -46,7 +47,7 @@ def require_role(*allowed_roles: UserRole):
     """
     allowed = set(allowed_roles)
 
-    def _check(current_user: CurrentUser):  # noqa: F821
+    def _check(current_user: CurrentUser):
         if UserRole(current_user.role) not in allowed:
             raise ForbiddenException(
                 detail="You do not have permission to perform this action.",
@@ -72,15 +73,14 @@ def verify_internal_secret(
         raise ForbiddenException(
             detail="Internal endpoint is not enabled (no INTERNAL_API_SECRET configured)."
         )
-    if not x_internal_secret or not secrets.compare_digest(
-        x_internal_secret, expected
-    ):
+    if not x_internal_secret or not secrets.compare_digest(x_internal_secret, expected):
         raise UnauthorizedException("Invalid or missing internal credentials.")
 
 
 def get_customer_service(db: DbSession, current_user: CurrentUser):
     """Provide a CustomerService scoped to the current request and acting user."""
     from app.modules.customers.service import CustomerService
+
     return CustomerService(db, current_user=current_user)
 
 
@@ -90,6 +90,7 @@ CustomerServiceDep = Annotated["CustomerService", Depends(get_customer_service)]
 def get_invoice_service(db: DbSession, current_user: CurrentUser):
     """Provide a InvoiceService scoped to the current request and acting user."""
     from app.modules.invoices.service import InvoiceService
+
     return InvoiceService(db, current_user=current_user)
 
 
@@ -99,6 +100,7 @@ InvoiceServiceDep = Annotated["InvoiceService", Depends(get_invoice_service)]  #
 def get_quote_service(db: DbSession, current_user: CurrentUser):
     """Provide a QuoteService scoped to the current request and acting user."""
     from app.modules.quotes.service import QuoteService
+
     return QuoteService(db, current_user=current_user)
 
 
@@ -108,6 +110,7 @@ QuoteServiceDep = Annotated["QuoteService", Depends(get_quote_service)]  # noqa:
 def get_expense_service(db: DbSession, current_user: CurrentUser) -> "ExpenseService":  # noqa: F821
     """Provide an ExpenseService scoped to the current request and acting user."""
     from app.modules.expenses.service import ExpenseService
+
     return ExpenseService(db, current_user=current_user)
 
 
@@ -117,15 +120,17 @@ ExpenseServiceDep = Annotated["ExpenseService", Depends(get_expense_service)]  #
 def get_vendor_service(db: DbSession, current_user: CurrentUser):
     """Provide a VendorService scoped to the current request and acting user."""
     from app.modules.vendors.service import VendorService
+
     return VendorService(db, current_user=current_user)
 
 
-VendorServiceDep = Annotated["VendorService", Depends(get_vendor_service)]
+VendorServiceDep = Annotated["VendorService", Depends(get_vendor_service)]  # noqa: F821
 
 
 def get_owner_service(db: DbSession, current_user: CurrentUser):
     """Provide an OwnerService scoped to the current request and acting user."""
     from app.modules.owner.service import OwnerService
+
     return OwnerService(db, current_user=current_user)
 
 

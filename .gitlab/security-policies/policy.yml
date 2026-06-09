@@ -1,0 +1,69 @@
+---
+# Merge request approval (scan result) policy for priori-crm.
+#
+# Implements the severity-blocking policy agreed in
+# https://gitlab.com/neww-group1/priori-crm/-/work_items/26
+#
+# The SAST, Dependency Scanning, and Secret Detection analyzers are wired
+# into .gitlab-ci.yml (security stage) and run on every MR targeting
+# develop/main. This policy decides which findings block merge: rather
+# than failing the analyzer jobs, newly introduced high-impact findings
+# require an explicit security approval before the MR can merge.
+
+approval_policy:
+  - name: Block merge on new Critical/High SAST or Dependency findings
+    description: >-
+      Requires security approval when an MR introduces a new Critical or
+      High severity SAST or Dependency Scanning vulnerability. Medium and
+      lower findings are non-blocking and tracked as security debt.
+    enabled: true
+    rules:
+      - type: scan_finding
+        scanners:
+          - sast
+          - dependency_scanning
+        vulnerabilities_allowed: 0
+        severity_levels:
+          - critical
+          - high
+        vulnerability_states:
+          - newly_detected
+        branches:
+          - develop
+          - main
+    actions:
+      - type: require_approval
+        approvals_required: 1
+        role_approvers:
+          - maintainer
+          - owner
+
+  - name: Block merge on any new Secret Detection finding
+    description: >-
+      Requires security approval when an MR introduces any new secret
+      detected by Secret Detection. Secret findings have no severity, so
+      all detected secrets are treated as blocking.
+    enabled: true
+    rules:
+      - type: scan_finding
+        scanners:
+          - secret_detection
+        vulnerabilities_allowed: 0
+        severity_levels:
+          - critical
+          - high
+          - medium
+          - low
+          - info
+          - unknown
+        vulnerability_states:
+          - newly_detected
+        branches:
+          - develop
+          - main
+    actions:
+      - type: require_approval
+        approvals_required: 1
+        role_approvers:
+          - maintainer
+          - owner

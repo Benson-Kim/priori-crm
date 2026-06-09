@@ -8,6 +8,7 @@ GET /vendors/{id} endpoint uses get_by_id() -> VendorResponse instead.
 These tests lock in that the dead method is gone and that get_by_id returns a
 vendor with computed payables attached for serialization.
 """
+
 import uuid
 from decimal import Decimal
 from unittest.mock import MagicMock

@@ -53,7 +53,7 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
 
     useEffect(() => {
         if (customerId) {
-            fetchCustomer();
+            void (async () => { await fetchCustomer(); })();
         }
     }, [customerId, fetchCustomer]);
 

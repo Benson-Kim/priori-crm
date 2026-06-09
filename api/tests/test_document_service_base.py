@@ -5,9 +5,11 @@ the mixins are exercised with lightweight stand-in objects so the refactor's
 contract is locked independently of the concrete services (whose end-to-end
 behaviour is already covered by test_status_state_machine.py et al.).
 """
-import enum
+
 from decimal import Decimal
+from enum import StrEnum
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -20,18 +22,18 @@ from app.common.document_service import (
 from app.common.exceptions import BadRequestException
 
 
-class _Status(str, enum.Enum):
+class _Status(StrEnum):
     DRAFT = "draft"
     SENT = "sent"
     DONE = "done"
 
 
-# ── StateMachineMixin ─────────────────────────────────────────────
+# StateMachineMixin
 
 
 class _SM(StateMachineMixin):
     _document_noun = "widget"
-    ALLOWED_TRANSITIONS = {
+    ALLOWED_TRANSITIONS: ClassVar[dict[_Status, list[_Status]]] = {
         _Status.DRAFT: [_Status.SENT],
         _Status.SENT: [_Status.DONE],
         _Status.DONE: [],
@@ -64,7 +66,7 @@ class TestStateMachineMixin:
         assert "widget" in str(exc.value.detail)
 
 
-# ── ReferenceRetryMixin ─────────────────────────────────────────
+# ReferenceRetryMixin
 
 
 class _RR(ReferenceRetryMixin):
@@ -83,15 +85,17 @@ class TestReferenceRetryMixin:
         assert _RR()._is_reference_collision(err) is False
 
     def test_falls_back_to_str_when_no_orig(self):
-        assert _RR()._is_reference_collision(Exception("widget_reference clash")) is True
+        assert (
+            _RR()._is_reference_collision(Exception("widget_reference clash")) is True
+        )
         assert _RR()._is_reference_collision(Exception("something else")) is False
 
 
-# ── DocumentEmailMixin ──────────────────────────────────────────
+# DocumentEmailMixin
 
 
 class _InvoiceEmail(DocumentEmailMixin):
-    _email_terms = {
+    _email_terms: ClassVar[dict[str, str]] = {
         "noun": "invoice",
         "date_label": "Due date",
         "closing": "Thank you for your business.",
@@ -99,7 +103,7 @@ class _InvoiceEmail(DocumentEmailMixin):
 
 
 class _QuoteEmail(DocumentEmailMixin):
-    _email_terms = {
+    _email_terms: ClassVar[dict[str, str]] = {
         "noun": "quote",
         "date_label": "Valid until",
         "closing": "Thank you for considering our proposal.",
@@ -138,7 +142,7 @@ class TestDocumentEmailMixin:
         assert "Thank you for considering our proposal." in body
 
 
-# ── Concrete services are wired onto the base ───────────────────────────
+# Concrete services are wired onto the base
 
 
 class TestConcreteServicesUseBase:

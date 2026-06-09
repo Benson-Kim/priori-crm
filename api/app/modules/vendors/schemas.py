@@ -10,19 +10,18 @@ from uuid import UUID
 
 from pydantic import (
     BaseModel,
-    Field,
     EmailStr,
+    Field,
     computed_field,
     field_validator,
-    model_validator,
 )
+
 from app.common.validators import (
     empty_str_to_none as _empty_str_to_none,
 )
 from app.constants.enums import Currency, VendorStatus
 
-
-# Helpers 
+# Helpers
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -53,10 +52,10 @@ class VendorBase(BaseModel):
         Path B (from existing contact): same fields, pre-populated from contact;
             contact_id is set so the service can record the linkage.
 
-    Only vendor_name is required 
+    Only vendor_name is required
     """
 
-    vendor_name: str = Field(..., min_length=1, max_length=255,alias="vendorName")
+    vendor_name: str = Field(..., min_length=1, max_length=255, alias="vendorName")
     address: str | None = Field(None, max_length=5000)
     email: EmailStr | None = Field(None, max_length=320)
     country: str | None = Field(None, max_length=100)
@@ -66,17 +65,22 @@ class VendorBase(BaseModel):
     vat_number: str | None = Field(None, max_length=100, alias="vatNumber")
     tax_id_pin: str | None = Field(None, max_length=100, alias="taxIdPin")
     currency: Currency | None = Field(default=Currency.KES)
-    notes: str | None = Field(None, max_length=5000,alias="notes")
+    notes: str | None = Field(None, max_length=5000, alias="notes")
 
     # Set only when vendor is created from an existing contact
     contact_id: UUID | None = Field(None, alias="contactId")
 
-    # Field Validators 
+    # Field Validators
 
     @field_validator(
-        "vendor_name", "address", "country",
-        "phone_primary", "phone_secondary",
-        "vat_number", "tax_id_pin", "notes",
+        "vendor_name",
+        "address",
+        "country",
+        "phone_primary",
+        "phone_secondary",
+        "vat_number",
+        "tax_id_pin",
+        "notes",
         mode="before",
     )
     @classmethod
@@ -166,14 +170,21 @@ class VendorUpdate(VendorBase):
     go through the dedicated activate/deactivate endpoints so the
     `_transition()` state machine and version bump are enforced. Allowing a
     plain PUT to set status would bypass ALLOWED_TRANSITIONS.
+
+    All fields are optional: an update accepts a partial payload and only the
+    provided fields are applied (the service uses exclude_unset).
     """
 
+    vendor_name: str | None = Field(
+        None, min_length=1, max_length=255, alias="vendorName"
+    )
     contact_id: UUID | None = Field(None, alias="contactId")
 
     model_config = {"populate_by_name": True}
 
 
 # Vendor Response Schemas
+
 
 class VendorResponse(BaseModel):
     """
@@ -263,10 +274,10 @@ class VendorStatusCounts(BaseModel):
     active: int = 0
     inactive: int = 0
 
-from typing import Literal
 
 TransactionStatus = Literal["paid", "pending", "overdue"]
 TransactionType = Literal["expense", "bill"]
+
 
 class VendorTransactionSummary(BaseModel):
     """
@@ -274,7 +285,9 @@ class VendorTransactionSummary(BaseModel):
     """
 
     id: UUID = Field(description="Expense or Bill UUID")
-    transaction_type: TransactionType = Field(description="Source record type", alias="transactionType")
+    transaction_type: TransactionType = Field(
+        description="Source record type", alias="transactionType"
+    )
     ref_no: str = Field(description="Reference number, e.g. INV-202407", alias="refNo")
     transaction_date: date = Field(description="Transaction date", alias="date")
     amount: Decimal = Field(description="Total transaction amount")
@@ -303,7 +316,7 @@ class VendorTransactionSummary(BaseModel):
             return f"Overdue ({self.days_overdue} days)"
         return self.status.capitalize()
 
-    model_config = {"from_attributes": True}
+    model_config = {"populate_by_name": True, "from_attributes": True}
 
 
 class VendorPayablesSummary(BaseModel):
@@ -311,19 +324,28 @@ class VendorPayablesSummary(BaseModel):
     Payables summary .
     """
 
-    total_unpaid: Decimal = Field(default=Decimal("0.00"), description="Sum of all pending + overdue balances")
-    overdue_total: Decimal = Field(default=Decimal("0.00"), description="Sum of overdue balances only")
-    currency: str = Field(default="KES", description="Currency for display (inherited from vendor record)")
+    total_unpaid: Decimal = Field(
+        default=Decimal("0.00"), description="Sum of all pending + overdue balances"
+    )
+    overdue_total: Decimal = Field(
+        default=Decimal("0.00"), description="Sum of overdue balances only"
+    )
+    currency: str = Field(
+        default="KES", description="Currency for display (inherited from vendor record)"
+    )
 
 
 # Statement Schemas
+
 
 class VendorStatementTransaction(BaseModel):
     """Single transaction line in a vendor statement."""
 
     transaction_date: date = Field(description="Date of the transaction", alias="date")
     description: str = Field(description="Human-readable description of the line")
-    amount: Decimal = Field(description="Amount charged (expense/bill). 0.00 for payments.")
+    amount: Decimal = Field(
+        description="Amount charged (expense/bill). 0.00 for payments."
+    )
     payment: Decimal = Field(description="Amount paid. 0.00 for expense/bill lines.")
     balance: Decimal = Field(description="Running balance after this line")
 
@@ -333,10 +355,18 @@ class VendorStatementTransaction(BaseModel):
 class VendorStatementSummary(BaseModel):
     """Account summary for the vendor statement header."""
 
-    opening_balance: Decimal = Field(default=Decimal("0.00"), description="Balance carried forward before the period")
-    invoiced_amount: Decimal = Field(default=Decimal("0.00"), description="Total expenses/bills raised in the period")
-    amount_paid: Decimal = Field(default=Decimal("0.00"), description="Total payments made in the period")
-    balance_due: Decimal = Field(default=Decimal("0.00"), description="Closing balance owed at period end")
+    opening_balance: Decimal = Field(
+        default=Decimal("0.00"), description="Balance carried forward before the period"
+    )
+    invoiced_amount: Decimal = Field(
+        default=Decimal("0.00"), description="Total expenses/bills raised in the period"
+    )
+    amount_paid: Decimal = Field(
+        default=Decimal("0.00"), description="Total payments made in the period"
+    )
+    balance_due: Decimal = Field(
+        default=Decimal("0.00"), description="Closing balance owed at period end"
+    )
 
 
 class VendorStatement(BaseModel):
@@ -351,12 +381,15 @@ class VendorStatement(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
 class VendorFilterParams(BaseModel):
     """Query parameters for the vendor list endpoint."""
 
-    status: VendorStatus | None = Field(None,description="Filter by status.")
-    search: str | None = Field(None, max_length=100,description="Search across vendor_name, email, and phone_primary")
+    status: VendorStatus | None = Field(None, description="Filter by status.")
+    search: str | None = Field(
+        None,
+        max_length=100,
+        description="Search across vendor_name, email, and phone_primary",
+    )
 
     @field_validator("status", mode="before")
     @classmethod
@@ -374,13 +407,18 @@ class VendorTransactionFilterParams(BaseModel):
     Filter params for the transaction list on the vendor detail view.
     """
 
-    status: TransactionStatus | None = Field(None, description="Filter transactions by status. Omit for all.")
-    transaction_type: TransactionType | None = Field(None, description="Filter transactions by type. Omit for all.")
+    status: TransactionStatus | None = Field(
+        None, description="Filter transactions by status. Omit for all."
+    )
+    transaction_type: TransactionType | None = Field(
+        None, description="Filter transactions by type. Omit for all."
+    )
 
     model_config = {"populate_by_name": True}
 
 
-# Contact Search Schemas 
+# Contact Search Schemas
+
 
 class ContactSearchResult(BaseModel):
     """
@@ -407,6 +445,7 @@ class ContactSearchResponse(BaseModel):
 
 
 # Action / Operation Response Schemas
+
 
 class VendorActivateResponse(BaseModel):
     """Response after activating a vendor."""
@@ -445,7 +484,8 @@ class VendorOperationResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-# Duplicate Detection Schema 
+# Duplicate Detection Schema
+
 
 class VendorDuplicateCheckResponse(BaseModel):
     """

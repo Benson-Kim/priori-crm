@@ -1,15 +1,15 @@
 import { ExpenseViewer } from "@/components/documents/ExpenseViewer";
-import { useHeaderOverride } from "@/components/layout/default-layout";
+import { useHeaderOverride } from "@/components/layout/header-context";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useConfirm } from "@/hooks/useConfirm";
-import type { ExpenseResponse } from "@/services/expenseApi";
-import { deleteExpense, deleteExpenseDocument, downloadExpenseDocument, getExpense, uploadExpenseDocument } from "@/services/expenseApi";
 import { saveBlob } from "@/lib/utils";
+import type { ExpenseLineItem, ExpenseResponse } from "@/services/expenseApi";
+import { deleteExpense, deleteExpenseDocument, downloadExpenseDocument, getExpense, uploadExpenseDocument } from "@/services/expenseApi";
 import { ArrowLeft, Ban, CreditCard, Download, PaperclipIcon, Pencil, Plus, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 export default function ExpensesDetailPage() {
@@ -45,12 +45,12 @@ export default function ExpensesDetailPage() {
     }, [id]);
 
     useEffect(() => {
-        fetchExpense();
+        void (async () => { await fetchExpense(); })();
     }, [fetchExpense]);
 
     useEffect(() => {
         if (searchParams.get("action") === "record-payment" && expense) {
-            setShowPaymentModal(true);
+            startTransition(() => { setShowPaymentModal(true); });
         }
     }, [searchParams, expense]);
 
@@ -221,14 +221,14 @@ export default function ExpensesDetailPage() {
                     totalDue: expense.total_due,
                     amountPaid: expense.amount_paid,
                     balanceDue: expense.balance_due,
-                    lineItems: expense.line_items.map((item: any) => ({
-                        id: item.id || Math.random().toString(),
+                    lineItems: expense.line_items.map((item: ExpenseLineItem, index) => ({
+                        id: item.id ?? `line-${index}`,
                         itemName: item.item_name,
                         description: item.description,
                         quantity: item.quantity,
                         unitPrice: item.unit_price,
                         taxType: item.tax_type,
-                        lineTotal: item.line_total || (item.quantity * (item.unit_price || 0)),
+                        lineTotal: item.line_total ?? item.quantity * item.unit_price,
                     })),
                 }}
             />

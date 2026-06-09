@@ -1,12 +1,13 @@
 """SQLAlchemy models for quotes module."""
+
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
-    DateTime,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -32,11 +33,11 @@ from app.constants.enums import (
 class Quote(Base):
     """
     Quote entity for sales quotations with financial calculations.
-    
+
     Lifecycle: DRAFT → SENT → APPROVED → INVOICED
                              ↓
                           EXPIRED
-    
+
     Financial Formula:
         subtotal = SUM(line_items.line_total)
         discount_value = discount_amount OR (subtotal * discount_percentage / 100)
@@ -100,7 +101,7 @@ class Quote(Base):
         index=True,
         comment="System-generated quote number (e.g., QTE-20260315)",
     )
-    
+
     quote_reference: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
@@ -121,10 +122,9 @@ class Quote(Base):
     transaction_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
-        index=True,
         comment="Quote issue date",
     )
-    
+
     due_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
@@ -141,7 +141,7 @@ class Quote(Base):
         index=True,
         comment="Current quote status",
     )
-    
+
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
@@ -158,26 +158,26 @@ class Quote(Base):
         server_default=text("0.00"),
         comment="Sum of all line items before discount/tax",
     )
-    
+
     # Discount
     discount_type: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Type of discount: 'amount' or 'percentage'",
     )
-    
+
     discount_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2),
         nullable=True,
         comment="Fixed discount amount (if discount_type = 'amount')",
     )
-    
+
     discount_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Discount percentage 0-100 (if discount_type = 'percentage')",
     )
-    
+
     tax_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -185,7 +185,7 @@ class Quote(Base):
         server_default=text("0.00"),
         comment="Sum of all tax amounts",
     )
-    
+
     total_due: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -200,7 +200,7 @@ class Quote(Base):
         nullable=True,
         comment="RFQ/RFP reference number",
     )
-    
+
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -215,7 +215,7 @@ class Quote(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         comment="Record creation timestamp",
     )
-    
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -224,25 +224,25 @@ class Quote(Base):
         onupdate=lambda: datetime.now(UTC),
         comment="Last update timestamp",
     )
-    
+
     sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When quote was sent to customer",
     )
-    
+
     approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When quote was approved",
     )
-    
+
     invoiced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When quote was converted to invoice",
     )
-    
+
     expired_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -255,7 +255,7 @@ class Quote(Base):
         nullable=True,
         comment="User who created this quote",
     )
-    
+
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -269,7 +269,7 @@ class Quote(Base):
         nullable=True,
         comment="Owner profile as it was when this quote was issued",
     )
-    
+
     # Optimistic Locking
     version: Mapped[int] = mapped_column(
         Integer,
@@ -294,7 +294,7 @@ class Quote(Base):
         back_populates="quotes",
         lazy="joined",
     )
-    
+
     line_items = relationship(
         "QuoteLineItem",
         back_populates="quote",
@@ -302,7 +302,7 @@ class Quote(Base):
         order_by="QuoteLineItem.line_number",
         lazy="selectin",
     )
-    
+
     related_invoice = relationship(
         "Invoice",
         foreign_keys=[related_invoice_id],
@@ -319,6 +319,7 @@ class Quote(Base):
     def is_expired(self) -> bool:
         """Check if quote is past due date (centralized predicate, V-DRY-4)."""
         from app.common.financial import check_is_overdue
+
         return check_is_overdue(
             self.status,
             self.due_date,
@@ -334,9 +335,9 @@ class Quote(Base):
     def can_convert_to_invoice(self) -> bool:
         """Check if quote can be converted to invoice."""
         return (
-            self.status in [QuoteStatus.APPROVED, QuoteStatus.SENT] and
-            not self.is_expired and
-            self.related_invoice_id is None
+            self.status in [QuoteStatus.APPROVED, QuoteStatus.SENT]
+            and not self.is_expired
+            and self.related_invoice_id is None
         )
 
     @property
@@ -359,7 +360,7 @@ class Quote(Base):
 class QuoteLineItem(Base):
     """
     Individual line item within a quote.
-    
+
     Each line represents a product/service being quoted.
     """
 
@@ -382,10 +383,8 @@ class QuoteLineItem(Base):
             "tax_amount >= 0",
             name="ck_quote_line_items_tax_non_negative",
         ),
-        Index("ix_quote_line_items_quote_id", "quote_id"),
         UniqueConstraint(
-            "quote_id", "line_number",
-            name="uq_quote_line_items_quote_line_number"
+            "quote_id", "line_number", name="uq_quote_line_items_quote_line_number"
         ),
     )
 
@@ -439,7 +438,7 @@ class QuoteLineItem(Base):
     line_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
-        comment="Total before tax: quantity × unit_price",
+        comment="Total before tax: quantity x unit_price",
     )
 
     tax_type: Mapped[str] = mapped_column(

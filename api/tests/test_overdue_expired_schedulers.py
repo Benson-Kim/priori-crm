@@ -5,8 +5,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from app.common.financial import check_is_overdue
 from app.constants.enums import (
     Currency,
@@ -37,7 +35,9 @@ def _customer(db, email="sched@acme.test") -> Customer:
     return c
 
 
-def _invoice(db, customer, *, number, status, due_offset_days, balance=Decimal("10.00")):
+def _invoice(
+    db, customer, *, number, status, due_offset_days, balance=Decimal("10.00")
+):
     today = date.today()
     inv = Invoice(
         invoice_number=number,
@@ -82,10 +82,35 @@ class TestInvoiceOverdueScheduler:
         customer = _customer(db, email="inv-sched@acme.test")
         service = InvoiceService(db)
 
-        due = _invoice(db, customer, number="INV-OD-1", status=InvoiceStatus.SENT, due_offset_days=-5)
-        current = _invoice(db, customer, number="INV-OD-2", status=InvoiceStatus.SENT, due_offset_days=5)
-        paid = _invoice(db, customer, number="INV-OD-3", status=InvoiceStatus.PAID, due_offset_days=-5, balance=Decimal("0.00"))
-        draft = _invoice(db, customer, number="INV-OD-4", status=InvoiceStatus.DRAFT, due_offset_days=-5)
+        due = _invoice(
+            db,
+            customer,
+            number="INV-OD-1",
+            status=InvoiceStatus.SENT,
+            due_offset_days=-5,
+        )
+        current = _invoice(
+            db,
+            customer,
+            number="INV-OD-2",
+            status=InvoiceStatus.SENT,
+            due_offset_days=5,
+        )
+        paid = _invoice(
+            db,
+            customer,
+            number="INV-OD-3",
+            status=InvoiceStatus.PAID,
+            due_offset_days=-5,
+            balance=Decimal("0.00"),
+        )
+        draft = _invoice(
+            db,
+            customer,
+            number="INV-OD-4",
+            status=InvoiceStatus.DRAFT,
+            due_offset_days=-5,
+        )
 
         count = service.bulk_transition_overdue()
         assert count == 1
@@ -105,9 +130,19 @@ class TestQuoteExpiredScheduler:
         customer = _customer(db, email="qt-sched@acme.test")
         service = QuoteService(db)
 
-        due = _quote(db, customer, number="QTE-EX-1", status=QuoteStatus.SENT, due_offset_days=-5)
-        current = _quote(db, customer, number="QTE-EX-2", status=QuoteStatus.SENT, due_offset_days=5)
-        approved = _quote(db, customer, number="QTE-EX-3", status=QuoteStatus.APPROVED, due_offset_days=-5)
+        due = _quote(
+            db, customer, number="QTE-EX-1", status=QuoteStatus.SENT, due_offset_days=-5
+        )
+        current = _quote(
+            db, customer, number="QTE-EX-2", status=QuoteStatus.SENT, due_offset_days=5
+        )
+        approved = _quote(
+            db,
+            customer,
+            number="QTE-EX-3",
+            status=QuoteStatus.APPROVED,
+            due_offset_days=-5,
+        )
 
         count = service.bulk_transition_expired()
         assert count == 1
@@ -129,7 +164,9 @@ class TestCentralizedPredicate:
         assert check_is_overdue("paid", yesterday, {"paid", "canceled"}) is False
         # Quote terminal set
         assert check_is_overdue("sent", yesterday, {"approved", "invoiced"}) is True
-        assert check_is_overdue("approved", yesterday, {"approved", "invoiced"}) is False
+        assert (
+            check_is_overdue("approved", yesterday, {"approved", "invoiced"}) is False
+        )
 
     def test_future_due_date_is_not_overdue(self):
         tomorrow = date.today() + timedelta(days=1)

@@ -10,8 +10,6 @@ cases explicitly.
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from app.common.financial import (
     MONEY_QUANTUM,
     build_line_items,
@@ -28,8 +26,6 @@ from app.constants.enums import (
 )
 from app.modules.customers.models import Customer
 from app.modules.invoices.models import Invoice, InvoiceLineItem
-
-from tests.conftest import USING_POSTGRES
 
 TWO_DP = MONEY_QUANTUM
 

@@ -1,4 +1,5 @@
 """Custom exceptions and global error handlers."""
+
 import logging
 import uuid
 from typing import Any
@@ -32,7 +33,9 @@ class AppException(Exception):
 class NotFoundException(AppException):
     """Resource not found (404)."""
 
-    def __init__(self, detail: str = "Resource not found", resource: str | None = None) -> None:
+    def __init__(
+        self, detail: str = "Resource not found", resource: str | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
@@ -50,18 +53,24 @@ class UnauthorizedException(AppException):
 class ForbiddenException(AppException):
     """Insufficient permissions (403)."""
 
-    def __init__(self, detail: str = "Permission denied", required_permission: str | None = None) -> None:
+    def __init__(
+        self, detail: str = "Permission denied", required_permission: str | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
-            extra={"required_permission": required_permission} if required_permission else {},
+            extra={"required_permission": required_permission}
+            if required_permission
+            else {},
         )
 
 
 class BadRequestException(AppException):
     """Invalid request data (400)."""
 
-    def __init__(self, detail: str = "Invalid request", field: str | None = None) -> None:
+    def __init__(
+        self, detail: str = "Invalid request", field: str | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
@@ -72,7 +81,9 @@ class BadRequestException(AppException):
 class ConflictException(AppException):
     """Resource conflict (409)."""
 
-    def __init__(self, detail: str = "Resource already exists", field: str | None = None) -> None:
+    def __init__(
+        self, detail: str = "Resource already exists", field: str | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
             detail=detail,
@@ -83,7 +94,11 @@ class ConflictException(AppException):
 class ValidationException(AppException):
     """Validation error (422)."""
 
-    def __init__(self, detail: str = "Validation failed", errors: list[dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self,
+        detail: str = "Validation failed",
+        errors: list[dict[str, Any]] | None = None,
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=detail,
@@ -95,13 +110,17 @@ class DatabaseException(AppException):
     """Database operation failed (500)."""
 
     def __init__(self, detail: str = "Database operation failed") -> None:
-        super().__init__(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
+        )
 
 
 class EmailDeliveryException(AppException):
     """Email delivery failed (502)."""
 
-    def __init__(self, detail: str = "Email delivery failed", recipient: str | None = None) -> None:
+    def __init__(
+        self, detail: str = "Email delivery failed", recipient: str | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=detail,
@@ -112,7 +131,9 @@ class EmailDeliveryException(AppException):
 class RateLimitException(AppException):
     """Rate limit exceeded (429)."""
 
-    def __init__(self, detail: str = "Rate limit exceeded", retry_after: int | None = None) -> None:
+    def __init__(
+        self, detail: str = "Rate limit exceeded", retry_after: int | None = None
+    ) -> None:
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=detail,
@@ -124,10 +145,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers for consistent error responses."""
 
     @app.exception_handler(AppException)
-    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    async def app_exception_handler(
+        request: Request, exc: AppException
+    ) -> JSONResponse:
         """Handle custom application exceptions."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-        
+
         logger.warning(
             f"Application exception: {exc.error_code}",
             extra={
@@ -139,27 +162,28 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "extra": exc.extra,
             },
         )
-        
+
         response_data = {
             "error": exc.detail,
             "error_code": exc.error_code,
             "status_code": exc.status_code,
             "request_id": request_id,
         }
-        
+
         if exc.extra:
             response_data["details"] = exc.extra
-        
+
         return JSONResponse(status_code=exc.status_code, content=response_data)
 
     from fastapi.exceptions import RequestValidationError
-    from pydantic import ValidationError
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         """Handle FastAPI request validation errors."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-        
+
         logger.warning(
             "Request validation error",
             extra={
@@ -169,7 +193,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "errors": exc.errors(),
             },
         )
-        
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -182,10 +206,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(IntegrityError)
-    async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    async def integrity_error_handler(
+        request: Request, exc: IntegrityError
+    ) -> JSONResponse:
         """Handle database integrity constraint violations."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-        
+
         logger.error(
             "Database integrity error",
             exc_info=exc,
@@ -195,18 +221,28 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "method": request.method,
             },
         )
-        
+
         # Parse constraint violation to provide user-friendly message
         detail = "A database constraint was violated"
         error_code = "INTEGRITY_ERROR"
-        
-        if "unique constraint" in str(exc.orig).lower():
+
+        pgcode = getattr(exc.orig, "pgcode", None)
+        if pgcode == "23505":
             detail = "This record already exists"
             error_code = "DUPLICATE_RECORD"
-        elif "foreign key constraint" in str(exc.orig).lower():
+        elif pgcode == "23503":
             detail = "Referenced record does not exist"
             error_code = "INVALID_REFERENCE"
-        
+        else:
+            # Fallback for SQLite in tests
+            orig_str = str(exc.orig).lower()
+            if "unique constraint" in orig_str:
+                detail = "This record already exists"
+                error_code = "DUPLICATE_RECORD"
+            elif "foreign key constraint" in orig_str:
+                detail = "Referenced record does not exist"
+                error_code = "INVALID_REFERENCE"
+
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
@@ -218,10 +254,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(SQLAlchemyError)
-    async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    async def sqlalchemy_error_handler(
+        request: Request, exc: SQLAlchemyError
+    ) -> JSONResponse:
         """Handle general SQLAlchemy errors."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-        
+
         logger.exception(
             "Database error",
             extra={
@@ -230,7 +268,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "method": request.method,
             },
         )
-        
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -242,10 +280,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         """Handle all unhandled exceptions."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-        
+
         logger.exception(
             "Unhandled exception",
             extra={
@@ -255,7 +295,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "client": request.client.host if request.client else None,
             },
         )
-        
+
         # Don't leak exception details in production
         detail = "An internal server error occurred"
         response_data: dict[str, Any] = {
@@ -264,13 +304,13 @@ def register_exception_handlers(app: FastAPI) -> None:
             "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
             "request_id": request_id,
         }
-        
+
         if settings.is_development:
             response_data["debug"] = {
                 "type": type(exc).__name__,
                 "message": str(exc),
             }
-        
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=response_data,
