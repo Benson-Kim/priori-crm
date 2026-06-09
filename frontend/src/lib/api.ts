@@ -124,7 +124,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     // Handle validation errors with detailed information
     if (body.details?.errors && Array.isArray(body.details.errors)) {
       const errorMessages = body.details.errors
-        .map((err: any) => {
+        .map((err: { loc?: (string | number)[]; msg?: string }) => {
           const field = err.loc?.join(".") || "unknown";
           return `${field}: ${err.msg}`;
         })
@@ -230,9 +230,9 @@ export async function apiDownload(
 export function flattenPaginated<T>(raw: PaginatedApiResponse<T>) {
   return {
     items: raw.items,
-    total: raw.metadata.total,
+    total: raw.metadata.total ?? 0,
     page: raw.metadata.page,
     per_page: raw.metadata.per_page,
-    total_pages: raw.metadata.total_pages,
+    total_pages: raw.metadata.total_pages ?? 1,
   };
 }

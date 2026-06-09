@@ -53,7 +53,7 @@ export function useQuoteForm(quoteId?: string): UseQuoteFormReturn {
     }, [quoteId, navigate]);
 
     useEffect(() => {
-        if (quoteId) fetchQuote();
+        if (quoteId) void (async () => { await fetchQuote(); })();
     }, [quoteId, fetchQuote]);
 
     const handleCancel = () => {

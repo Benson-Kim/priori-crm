@@ -1,18 +1,19 @@
 """
 Expense ORM models — Purchases module.
 
-Lifecycle: PENDING → PAID | OVERDUE 
+Lifecycle: PENDING → PAID | OVERDUE
 No discount field in v1
 No CANCELED terminal state — removal is hard-delete.
 
 Financial formula:
-    line_total  = quantity × unit_price
-    tax_amount  = line_total × tax_rate
+    line_total  = quantity x unit_price
+    tax_amount  = line_total x tax_rate
     subtotal    = Σ line_total
     tax_total   = Σ tax_amount
     total_due   = subtotal + tax_total   ← no discount in v1
     balance_due = total_due - amount_paid
 """
+
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -48,17 +49,17 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     __table_args__ = (
-        # Status integrity 
+        # Status integrity
         CheckConstraint(
             "status IN ('pending', 'paid', 'overdue', 'canceled')",
             name="ck_expenses_valid_status",
         ),
-        # Date ordering 
+        # Date ordering
         CheckConstraint(
             "due_date >= expense_date",
             name="ck_expenses_due_after_expense_date",
         ),
-        # Financial non-negativity 
+        # Financial non-negativity
         CheckConstraint(
             "subtotal >= 0",
             name="ck_expenses_subtotal_non_negative",
@@ -83,17 +84,17 @@ class Expense(Base):
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_expenses_valid_currency",
         ),
-        # Query-path indexes 
-        Index("ix_expenses_vendor_status",   "vendor_id", "status"),
-        Index("ix_expenses_status_due_date", "status",    "due_date"),
-        Index("ix_expenses_expense_date",    "expense_date"),
-        Index("ix_expenses_created_at",      "created_at"),
-        # Unique references 
-        UniqueConstraint("expense_number",    name="uq_expenses_expense_number"),
+        # Query-path indexes
+        Index("ix_expenses_vendor_status", "vendor_id", "status"),
+        Index("ix_expenses_status_due_date", "status", "due_date"),
+        Index("ix_expenses_expense_date", "expense_date"),
+        Index("ix_expenses_created_at", "created_at"),
+        # Unique references
+        UniqueConstraint("expense_number", name="uq_expenses_expense_number"),
         UniqueConstraint("expense_reference", name="uq_expenses_expense_reference"),
     )
 
-    # Primary key 
+    # Primary key
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
@@ -101,7 +102,7 @@ class Expense(Base):
         server_default=text("gen_random_uuid()"),
     )
 
-    # Identification 
+    # Identification
     expense_number: Mapped[str] = mapped_column(
         String(50),
         unique=True,
@@ -118,7 +119,7 @@ class Expense(Base):
         comment="Short human-facing reference e.g. EXP-0042",
     )
 
-    # Foreign keys 
+    # Foreign keys
     vendor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("vendors.id", ondelete="RESTRICT"),
@@ -127,11 +128,10 @@ class Expense(Base):
         comment="Vendor this expense is payable to",
     )
 
-    # Dates 
+    # Dates
     expense_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
-        index=True,
         comment="Date the expense was incurred",
     )
 
@@ -142,7 +142,7 @@ class Expense(Base):
         comment="Payment due date — must be >= expense_date (DB enforced)",
     )
 
-    # Status & currency 
+    # Status & currency
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -160,19 +160,16 @@ class Expense(Base):
         comment="ISO 4217 currency — locked after first save",
     )
 
-    # Recurring flag 
+    # Recurring flag
     is_recurring: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
         server_default=text("false"),
-        comment=(
-            "Recurring-bill flag. "
-            "Informational only in v1 — no auto-generation."
-        ),
+        comment=("Recurring-bill flag. Informational only in v1 — no auto-generation."),
     )
 
-    # Financial amounts 
+    # Financial amounts
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -213,14 +210,14 @@ class Expense(Base):
         comment="total_due - amount_paid",
     )
 
-    # Optional metadata 
+    # Optional metadata
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Vendor-facing or internal notes",
     )
 
-    # Timestamps 
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -242,14 +239,14 @@ class Expense(Base):
         comment="Timestamp when expense transitioned to PAID",
     )
 
-    # Audit 
+    # Audit
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who created this expense record",
     )
 
-    # Optimistic locking 
+    # Optimistic locking
     version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -307,11 +304,11 @@ class Expense(Base):
 
     @property
     def is_overdue(self) -> bool:
-        return check_is_overdue(self.status.value, self.due_date)
+        return check_is_overdue(self.status, self.due_date)
 
     @property
     def days_overdue(self) -> int:
-        return calculate_days_overdue(self.status.value, self.due_date)
+        return calculate_days_overdue(self.status, self.due_date)
 
     def __repr__(self) -> str:
         return (
@@ -324,8 +321,8 @@ class ExpenseLineItem(Base):
     """
     Individual line item within an expense.
 
-    line_total = quantity × unit_price
-    tax_amount = line_total × tax_rate  (derived from tax_type via get_tax_rate)
+    line_total = quantity x unit_price
+    tax_amount = line_total x tax_rate  (derived from tax_type via get_tax_rate)
 
     Mirrors InvoiceLineItem exactly, scoped to expenses.
     """
@@ -349,9 +346,9 @@ class ExpenseLineItem(Base):
             "tax_amount >= 0",
             name="ck_expense_line_items_tax_non_negative",
         ),
-        Index("ix_expense_line_items_expense_id", "expense_id"),
         UniqueConstraint(
-            "expense_id", "line_number",
+            "expense_id",
+            "line_number",
             name="uq_expense_line_items_expense_line_number",
         ),
     )
@@ -401,7 +398,7 @@ class ExpenseLineItem(Base):
     line_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
-        comment="quantity × unit_price",
+        comment="quantity x unit_price",
     )
 
     tax_type: Mapped[str] = mapped_column(
@@ -416,7 +413,7 @@ class ExpenseLineItem(Base):
         nullable=False,
         default=Decimal("0.00"),
         server_default=text("0.00"),
-        comment="line_total × tax_rate",
+        comment="line_total x tax_rate",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -434,10 +431,10 @@ class ExpenseLineItem(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    # Relationships 
+    # Relationships
     expense = relationship("Expense", back_populates="line_items")
 
-    # Validators 
+    # Validators
     @validates("quantity")
     def validate_quantity(self, key: str, value: Decimal) -> Decimal:
         """Mirror of InvoiceLineItem.validate_quantity_positive."""
@@ -495,7 +492,6 @@ class ExpenseDocument(Base):
         UUID(as_uuid=True),
         ForeignKey("expenses.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     filename: Mapped[str] = mapped_column(
@@ -543,14 +539,14 @@ class ExpenseDocument(Base):
         comment="User who attached the document",
     )
 
-    # Relationships 
+    # Relationships
     expense = relationship(
         "Expense",
         back_populates="documents",
         foreign_keys=[expense_id],
     )
 
-    # Computed helpers 
+    # Computed helpers
     @property
     def file_size_kb(self) -> float:
         """Kilobytes rounded to one decimal — used by ExpenseDocumentResponse."""
@@ -582,7 +578,7 @@ class ExpensePayment(Base):
             "amount > 0",
             name="ck_expense_payments_amount_positive",
         ),
-        Index("ix_expense_payments_expense_id",  "expense_id"),
+        Index("ix_expense_payments_expense_id", "expense_id"),
         Index("ix_expense_payments_payment_date", "payment_date"),
     )
 
@@ -597,7 +593,6 @@ class ExpensePayment(Base):
         UUID(as_uuid=True),
         ForeignKey("expenses.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     amount: Mapped[Decimal] = mapped_column(
@@ -609,7 +604,6 @@ class ExpensePayment(Base):
     payment_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
-        index=True,
         comment="Date payment was made — required",
     )
 
@@ -647,7 +641,7 @@ class ExpensePayment(Base):
         comment="User who recorded this payment",
     )
 
-    # Relationships 
+    # Relationships
     expense = relationship("Expense", back_populates="payments")
 
     proof_document = relationship(

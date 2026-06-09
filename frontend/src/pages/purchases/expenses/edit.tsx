@@ -1,6 +1,7 @@
 import { ExpenseEditor } from "@/components/documents/ExpenseEditor";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useExpenseForm } from "@/hooks/use-expense-form";
+import type { ExpenseLineItem } from "@/services/expenseApi";
 import { useParams } from "react-router-dom";
 
 export default function EditExpensePage() {
@@ -31,7 +32,7 @@ export default function EditExpensePage() {
                 currency: initialData.currency,
                 isRecurring: initialData.is_recurring,
                 notes: initialData.notes || undefined,
-                lineItems: initialData.line_items.map((li: any) => ({
+                lineItems: initialData.line_items.map((li: ExpenseLineItem) => ({
                     id: li.id,
                     itemName: li.item_name,
                     description: li.description,

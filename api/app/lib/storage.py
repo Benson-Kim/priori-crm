@@ -17,6 +17,7 @@ path (EXP-SEC-1). Every key is reduced to safe per-segment basenames and
 checked for containment before any I/O, so the S3 backend inherits the same
 guarantees as local.
 """
+
 import shutil
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
@@ -80,7 +81,9 @@ class LocalStorageBackend:
         key = sanitize_storage_key(*parts)
         candidate = (self.base_dir / key).resolve()
         if not self._is_contained(candidate):
-            raise BadRequestException(detail="Invalid storage path.", field="storage_key")
+            raise BadRequestException(
+                detail="Invalid storage path.", field="storage_key"
+            )
         return candidate
 
     def resolve_safe_path(self, storage_key: str) -> Path:
@@ -91,9 +94,13 @@ class LocalStorageBackend:
         that already points inside ``base_dir``.
         """
         raw = Path(storage_key)
-        candidate = raw.resolve() if raw.is_absolute() else (self.base_dir / raw).resolve()
+        candidate = (
+            raw.resolve() if raw.is_absolute() else (self.base_dir / raw).resolve()
+        )
         if not self._is_contained(candidate):
-            raise BadRequestException(detail="Invalid storage path.", field="storage_key")
+            raise BadRequestException(
+                detail="Invalid storage path.", field="storage_key"
+            )
         return candidate
 
     def upload_file(self, file_obj: BinaryIO, directory: str, filename: str) -> str:
@@ -178,7 +185,7 @@ class S3StorageBackend:
         self._client.upload_fileobj(file_obj, self.bucket, key)
         return key
 
-    def _get_object(self, storage_key: str):  # noqa: ANN202 - boto3 response dict
+    def _get_object(self, storage_key: str):
         from botocore.exceptions import ClientError
 
         key = sanitize_storage_key(storage_key)
@@ -213,7 +220,7 @@ class S3StorageBackend:
         try:
             self._client.delete_object(Bucket=self.bucket, Key=key)
             return True
-        except Exception:  # noqa: BLE001 - storage cleanup is best-effort
+        except Exception:
             return False
 
     def file_exists(self, storage_key: str) -> bool:

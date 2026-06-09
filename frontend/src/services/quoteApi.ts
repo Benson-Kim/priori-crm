@@ -10,6 +10,7 @@ import {
   apiPut,
   flattenPaginated,
 } from "@/lib/api";
+import type { CurrencyOption } from "@/lib/constants";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
 
 
@@ -59,7 +60,7 @@ export interface QuoteResponse {
   transaction_date: string;
   due_date: string;
   status: string;
-  currency: string;
+  currency: CurrencyOption;
   subtotal: number;
   discount_type: string | null;
   discount_amount: number | null;
@@ -99,6 +100,13 @@ export interface QuoteConvertResponse {
   quote_id: string;
   invoice_id: string;
   invoice_number: string;
+  message: string;
+}
+
+export interface QuoteDuplicateResponse {
+  original_quote_id: string;
+  new_quote_id: string;
+  new_quote_number: string;
   message: string;
 }
 
@@ -185,7 +193,7 @@ export function convertQuoteToInvoice(id: string) {
 }
 
 export function duplicateQuote(id: string) {
-  return apiPost<QuoteResponse>(`quotes/${id}/duplicate`, {});
+  return apiPost<QuoteDuplicateResponse>(`quotes/${id}/duplicate`, {});
 }
 
 export function deleteQuote(id: string) {
@@ -206,12 +214,12 @@ export interface QuoteSendResult {
   message: string;
 }
 
-/** Send the quote by email (POST /quotes/{id}/send). Backend exists (QT-FE-2). */
+/** Send the quote by email. */
 export function sendQuote(id: string, data: QuoteSendPayload = {}) {
   return apiPost<QuoteSendResult>(`quotes/${id}/send`, data);
 }
 
-/** Download the quote PDF (GET /quotes/{id}/pdf). Returns a Blob to save. */
+/** Download the quote PDF. Returns a Blob to save. */
 export function downloadQuotePdf(id: string) {
   return apiDownload(`quotes/${id}/pdf`);
 }

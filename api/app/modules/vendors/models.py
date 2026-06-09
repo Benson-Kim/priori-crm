@@ -2,27 +2,23 @@
 Vendor entity and supporting models for the Purchases module.
 """
 
-from app.constants.enums import VendorStatus
-from app.constants.enums import Currency
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    ForeignKey,
     Index,
     Integer,
     String,
     Text,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
+from app.constants.enums import Currency, VendorStatus
 
 
 class Vendor(Base):
@@ -52,7 +48,6 @@ class Vendor(Base):
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_vendors_valid_currency",
         ),
-
         Index("ix_vendors_status_name", "status", "vendor_name"),
         Index("ix_vendors_email", "email"),
         Index("ix_vendors_contact_id", "contact_id"),

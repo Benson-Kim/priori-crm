@@ -5,6 +5,7 @@ the path-confinement guarantees of StorageService (lib/storage.py). They are
 pure-filesystem/logic tests (no DB), so they run identically on SQLite and
 PostgreSQL.
 """
+
 import io
 
 import pytest
@@ -17,7 +18,6 @@ from app.common.uploads import (
 )
 from app.lib.storage import StorageService
 
-
 # Magic-byte prefixes for crafting valid sample payloads.
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 PDF_MAGIC = b"%PDF-1.4\n"
@@ -29,7 +29,7 @@ def storage(tmp_path):
     return StorageService(base_dir=str(tmp_path))
 
 
-# ── filename sanitization ──────────────────────────────────────────────
+# filename sanitization
 
 
 class TestSanitizeBasename:
@@ -50,7 +50,7 @@ class TestSanitizeBasename:
         assert sanitize_basename("receipt.pdf") == "receipt.pdf"
 
 
-# ── StorageService path confinement ────────────────────────────────────
+# StorageService path confinement
 
 
 class TestStorageContainment:
@@ -65,19 +65,17 @@ class TestStorageContainment:
         assert storage.file_exists(key) is False
 
     def test_upload_neutralizes_traversal_in_parts(self, storage):
-        key = storage.upload_file(
-            io.BytesIO(b"x"), "../../../etc", "../../passwd"
-        )
-        resolved = storage.resolve_safe_path(key)
-        assert storage.base_dir in resolved.parents
+        key = storage.upload_file(io.BytesIO(b"x"), "../../../etc", "../../passwd")
+        resolved = storage.backend.resolve_safe_path(key)
+        assert storage.backend.base_dir in resolved.parents
 
     def test_open_traversal_key_rejected(self, storage):
         with pytest.raises(BadRequestException):
-            storage.resolve_safe_path("../../../../etc/passwd")
+            storage.backend.resolve_safe_path("../../../../etc/passwd")
 
     def test_open_absolute_outside_rejected(self, storage):
         with pytest.raises(BadRequestException):
-            storage.resolve_safe_path("/etc/passwd")
+            storage.backend.resolve_safe_path("/etc/passwd")
 
     def test_open_missing_file_raises_not_found(self, storage):
         with pytest.raises(NotFoundException):
@@ -87,15 +85,13 @@ class TestStorageContainment:
         assert storage.delete_file("../../etc/passwd") is False
 
 
-# ── upload content guards ──────────────────────────────────────────────
+# upload content guards
 
 
 class TestValidateUpload:
     def test_valid_png_accepted(self):
         payload = PNG_MAGIC + b"\x00" * 32
-        name, ext, size = validate_upload(
-            io.BytesIO(payload), "logo.png", "image/png"
-        )
+        name, ext, size = validate_upload(io.BytesIO(payload), "logo.png", "image/png")
         assert name == "logo.png"
         assert ext == ".png"
         assert size == len(payload)
@@ -112,9 +108,7 @@ class TestValidateUpload:
     def test_disallowed_mime_rejected(self):
         payload = PDF_MAGIC + b"x"
         with pytest.raises(BadRequestException):
-            validate_upload(
-                io.BytesIO(payload), "f.pdf", "application/x-msdownload"
-            )
+            validate_upload(io.BytesIO(payload), "f.pdf", "application/x-msdownload")
 
     def test_empty_file_rejected(self):
         with pytest.raises(BadRequestException):

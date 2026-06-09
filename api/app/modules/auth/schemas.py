@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # Request Schemas
@@ -40,6 +42,12 @@ class UserResponse(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v: str | UUID) -> str:
+        """Accept a uuid.UUID (as returned by Postgres) and serialize as str."""
+        return str(v) if isinstance(v, UUID) else v
 
 
 class TokenResponse(BaseModel):

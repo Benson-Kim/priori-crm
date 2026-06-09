@@ -47,8 +47,7 @@ class EmailService:
         subject = f"{settings.APP_NAME} — Verification Code"
         body_html = self._build_otp_html(otp_code)
         body_text = (
-            f"Your verification code is: {otp_code}\n\n"
-            f"This code expires in 5 minutes."
+            f"Your verification code is: {otp_code}\n\nThis code expires in 5 minutes."
         )
 
         return self._send(
@@ -174,7 +173,7 @@ class EmailService:
                     {digits}
                 </div>
                 <p style="color:#6B7280;font-size:13px;margin-top:24px;">
-                    This code expires in 5 minutes. If you didn't request this, 
+                    This code expires in 5 minutes. If you didn't request this,
                     please ignore this email.
                 </p>
                 <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">

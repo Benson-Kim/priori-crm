@@ -1,13 +1,14 @@
 """
 Expense API endpoints — Purchases module.
 """
+
 import logging
 import secrets
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
@@ -41,7 +42,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-
 # CREATE
 
 
@@ -70,7 +70,6 @@ def create_expense(
     return ExpenseResponse.model_validate(expense)
 
 
-
 # LIST & AGGREGATES   (fixed paths before /{expense_id})
 
 
@@ -85,8 +84,8 @@ def create_expense(
 )
 def list_expenses(
     service: ExpenseServiceDep,
-    page:     Annotated[int, Query(ge=1,       description="Page number (1-indexed)")] = 1,
-    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")]       = 10,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
     filter_status: Annotated[
         str | None,
         Query(alias="status", description="pending | paid | overdue"),
@@ -165,7 +164,7 @@ def get_expense_counts(service: ExpenseServiceDep) -> ExpenseStatusCounts:
 def get_expense_statistics(
     service: ExpenseServiceDep,
     date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
-    date_to:   Annotated[date | None, Query(alias="dateTo")]   = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
 ) -> ExpenseStatisticsResponse:
     stats = service.get_statistics(date_from, date_to)
     return ExpenseStatisticsResponse(**stats)
@@ -194,10 +193,7 @@ def calculate_expense_totals(
 @router.get(
     "/export/excel",
     summary="Export expenses to Excel",
-    description=(
-        "Export currently-filtered expenses as .xlsx. "
-        "Not yet implemented."
-    ),
+    description=("Export currently-filtered expenses as .xlsx. Not yet implemented."),
     responses={
         200: {
             "description": "Excel file",
@@ -210,17 +206,21 @@ def calculate_expense_totals(
 )
 def export_expenses_to_excel(
     service: ExpenseServiceDep,
-    filter_status: Annotated[str | None, Query(alias="status")]       = None,
-    vendor_id:     Annotated[UUID | None, Query(alias="vendorId")]    = None,
-    date_from:     Annotated[date | None, Query(alias="dateFrom")]    = None,
-    date_to:       Annotated[date | None, Query(alias="dateTo")]      = None,
-    is_recurring:  Annotated[bool | None, Query(alias="isRecurring")] = None,
+    filter_status: Annotated[str | None, Query(alias="status")] = None,
+    vendor_id: Annotated[UUID | None, Query(alias="vendorId")] = None,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+    is_recurring: Annotated[bool | None, Query(alias="isRecurring")] = None,
     include_line_items: Annotated[
         bool,
-        Query(alias="includeLineItems", description="Include line items in a separate sheet"),
+        Query(
+            alias="includeLineItems",
+            description="Include line items in a separate sheet",
+        ),
     ] = False,
 ) -> StreamingResponse:
     import io
+
     from app.common.excel import ExcelExporter
     from app.lib.config import settings
 
@@ -240,7 +240,9 @@ def export_expenses_to_excel(
     )
 
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_expenses(expenses, include_line_items=include_line_items)
+    xlsx_bytes = exporter.export_expenses(
+        expenses, include_line_items=include_line_items
+    )
 
     filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
@@ -266,7 +268,6 @@ def get_expense_by_number(
 ) -> ExpenseResponse:
     expense = service.get_by_number(expense_number)
     return ExpenseResponse.model_validate(expense)
-
 
 
 # SINGLE RESOURCE  (/{expense_id} — must follow all fixed paths)
@@ -353,7 +354,6 @@ def delete_expense(
     service.delete(expense_id)
 
 
-
 # ACTIONS
 
 
@@ -431,7 +431,6 @@ def duplicate_expense(
     return ExpenseResponse.model_validate(duplicate)
 
 
-
 # DOCUMENT MANAGEMENT
 
 
@@ -450,10 +449,7 @@ def list_expense_documents(
     service: ExpenseServiceDep,
 ) -> list[ExpenseDocumentResponse]:
     expense = service.get_by_id(expense_id)
-    return [
-        ExpenseDocumentResponse.model_validate(doc)
-        for doc in expense.documents
-    ]
+    return [ExpenseDocumentResponse.model_validate(doc) for doc in expense.documents]
 
 
 @router.post(
@@ -479,6 +475,7 @@ def attach_expense_document(
     source: str = Form("form"),
 ) -> ExpenseDocumentResponse:
     from app.constants.enums import DocumentSource
+
     user_id = service._actor_id
     doc_source = DocumentSource(source)
 
@@ -548,9 +545,7 @@ def get_expense_document_download(
         file_stream,
         media_type=document.mime_type,
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="{document.filename}"'
-            )
+            "Content-Disposition": (f'attachment; filename="{document.filename}"')
         },
     )
 
@@ -575,7 +570,7 @@ def delete_expense_document(
 ) -> None:
     storage_key = service.delete_document(expense_id, document_id)
     success = storage_service.delete_file(storage_key)
-    
+
     if success:
         logger.info(
             "Document file deleted from storage",
@@ -586,7 +581,6 @@ def delete_expense_document(
             "Failed to delete document file from storage — orphaned file may remain",
             extra={"storage_key": storage_key},
         )
-
 
 
 # SCHEDULER  (internal — hidden from public OpenAPI docs)
@@ -608,5 +602,5 @@ def trigger_overdue_transition(service: ExpenseServiceDep) -> dict:
     updated = service.bulk_transition_overdue()
     return {
         "transitioned": updated,
-        "message":      f"{updated} expense(s) transitioned to OVERDUE",
+        "message": f"{updated} expense(s) transitioned to OVERDUE",
     }

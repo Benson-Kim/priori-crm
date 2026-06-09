@@ -1,6 +1,7 @@
 """Invoice API endpoints with comprehensive documentation."""
+
 import logging
-from datetime import date, timedelta
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -12,12 +13,11 @@ from app.common.dependencies import (
     require_role,
     verify_internal_secret,
 )
-from app.constants.enums import UserRole
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.constants.enums import UserRole
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
-    InvoiceDetailResponse,
     InvoiceDuplicateResponse,
     InvoiceFilterParams,
     InvoiceLineItemCreate,
@@ -25,8 +25,8 @@ from app.modules.invoices.schemas import (
     InvoiceResponse,
     InvoiceSendRequest,
     InvoiceSendResponse,
-    InvoiceStatusCounts,
     InvoiceStatisticsResponse,
+    InvoiceStatusCounts,
     InvoiceSummary,
     InvoiceUpdate,
     PaymentCreate,
@@ -40,6 +40,7 @@ router = APIRouter()
 
 
 # CREATE
+
 
 @router.post(
     "",
@@ -67,6 +68,7 @@ def create_invoice(
 
 # READ
 
+
 @router.get(
     "",
     response_model=PaginatedResponse[InvoiceSummary],
@@ -83,7 +85,9 @@ def list_invoices(
     per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
     status: Annotated[
         str | None,
-        Query(description="Filter by status: draft, sent, partial, paid, overdue, canceled"),
+        Query(
+            description="Filter by status: draft, sent, partial, paid, overdue, canceled"
+        ),
     ] = None,
     customer_id: Annotated[
         UUID | None,
@@ -91,11 +95,17 @@ def list_invoices(
     ] = None,
     date_from: Annotated[
         date | None,
-        Query(description="Filter invoices from this date (transaction_date)", alias="dateFrom"),
+        Query(
+            description="Filter invoices from this date (transaction_date)",
+            alias="dateFrom",
+        ),
     ] = None,
     date_to: Annotated[
         date | None,
-        Query(description="Filter invoices up to this date (transaction_date)", alias="dateTo"),
+        Query(
+            description="Filter invoices up to this date (transaction_date)",
+            alias="dateTo",
+        ),
     ] = None,
     due_date_from: Annotated[
         date | None,
@@ -114,7 +124,7 @@ def list_invoices(
     List invoices with pagination and filtering.
     """
     params = PaginationParams(page=page, per_page=per_page)
-    
+
     filters = InvoiceFilterParams(
         status=status,
         customer_id=customer_id,
@@ -124,7 +134,7 @@ def list_invoices(
         due_date_to=due_date_to,
         search=search,
     )
-    
+
     return service.list_invoices(params, filters)
 
 
@@ -152,6 +162,7 @@ def get_invoice_counts(
 
 # CALCULATIONS
 
+
 @router.post(
     "/calculate",
     response_model=InvoiceCalculationResponse,
@@ -172,13 +183,14 @@ def calculate_invoice_totals(
     Calculate invoice totals without saving.
     """
     from decimal import Decimal
+
     from app.constants.enums import DiscountType
-    
+
     # Convert discount parameters
     dt = DiscountType(discount_type) if discount_type else None
     da = Decimal(str(discount_amount)) if discount_amount else None
     dp = Decimal(str(discount_percentage)) if discount_percentage else None
-    
+
     return InvoiceService.calculate_totals(line_items, dt, da, dp)
 
 
@@ -189,7 +201,9 @@ def calculate_invoice_totals(
     responses={
         200: {
             "description": "Excel file",
-            "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}},
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
         },
         501: {"description": "Excel export not yet implemented"},
     },
@@ -202,15 +216,17 @@ def export_invoices_to_excel(
     date_to: Annotated[date | None, Query(alias="dateTo")] = None,
     include_line_items: Annotated[
         bool,
-        Query(alias="includeLineItems", description="Include line items in separate sheet")
+        Query(
+            alias="includeLineItems", description="Include line items in separate sheet"
+        ),
     ] = False,
 ) -> StreamingResponse:
     """
     Export invoices to Excel.
     """
     import io
+
     from app.common.excel import ExcelExporter
-    from app.common.pagination import PaginationParams
     from app.lib.config import settings
 
     filters = InvoiceFilterParams(
@@ -229,7 +245,9 @@ def export_invoices_to_excel(
     )
 
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_invoices(invoices, include_line_items=include_line_items)
+    xlsx_bytes = exporter.export_invoices(
+        invoices, include_line_items=include_line_items
+    )
 
     filename = f"Invoices_{date.today().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
@@ -240,6 +258,7 @@ def export_invoices_to_excel(
 
 
 # STATISTICS & ANALYTICS (Bonus)
+
 
 @router.get(
     "/stats/summary",
@@ -284,6 +303,7 @@ def get_invoice_by_number(
 
 # DUPLICATE
 
+
 @router.post(
     "/{invoice_id}/duplicate",
     response_model=InvoiceDuplicateResponse,
@@ -304,7 +324,9 @@ def duplicate_invoice(
     """
     return service.duplicate_invoice(invoice_id, service._actor_id)
 
-# GET BY ID  
+
+# GET BY ID
+
 
 @router.get(
     "/{invoice_id}",
@@ -326,7 +348,9 @@ def get_invoice(
     invoice = service.get_by_id(invoice_id)
     return InvoiceResponse.model_validate(invoice)
 
+
 # UPDATE
+
 
 @router.put(
     "/{invoice_id}",
@@ -357,6 +381,7 @@ def update_invoice(
 
 
 # ACTIONS
+
 
 @router.post(
     "/{invoice_id}/mark-sent",
@@ -403,7 +428,7 @@ def send_invoice(
     Send invoice via email.
     """
     request_data = body or InvoiceSendRequest()
-    
+
     result = service.send_invoice(
         invoice_id,
         to_email=request_data.to_email,
@@ -411,7 +436,7 @@ def send_invoice(
         body=request_data.body,
         attach_pdf=request_data.attach_pdf,
     )
-    
+
     return InvoiceSendResponse(**result)
 
 
@@ -423,7 +448,9 @@ def send_invoice(
     description="Record a payment against an invoice and update balance.",
     responses={
         201: {"description": "Payment recorded successfully"},
-        400: {"description": "Payment amount exceeds balance or invoice is DRAFT/CANCELED"},
+        400: {
+            "description": "Payment amount exceeds balance or invoice is DRAFT/CANCELED"
+        },
         403: {"description": "Insufficient role to record payments"},
         404: {"description": "Invoice not found"},
     },
@@ -466,6 +493,7 @@ def cancel_invoice(
 
 
 # PDF & EXPORT
+
 
 @router.get(
     "/{invoice_id}/pdf",

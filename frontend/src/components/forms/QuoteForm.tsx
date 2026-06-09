@@ -1,3 +1,10 @@
+import { CURRENCY_OPTIONS, type CurrencyOption } from "@/lib/constants";
+import {
+  addDays,
+  getDefaultDueDate,
+  getTodayString,
+  isDueDateBeforeTransactionDate,
+} from "@/lib/dateUtils";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import type {
   QuoteCreatePayload,
@@ -5,21 +12,14 @@ import type {
   QuoteResponse,
 } from "@/services/quoteApi";
 import {
-  Image as ImageIcon,
   Plus,
   Save,
   SquarePen,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { DocumentOwnerHeader } from "../documents/DocumentOwnerHeader";
 import { CustomerSelector } from "../modals/CustomerSelector";
-import { COMPANY_INFO } from "@/lib/constants";
-import {
-  addDays,
-  getDefaultDueDate,
-  getTodayString,
-  isDueDateBeforeTransactionDate,
-} from "@/lib/dateUtils";
 
 interface QuoteFormProps {
   initialData?: QuoteResponse;
@@ -29,7 +29,6 @@ interface QuoteFormProps {
   restrictedMode?: boolean;
 }
 
-const CURRENCY_OPTIONS = ["KES", "USD", "EUR", "GBP"];
 
 interface LineItemRow {
   key: string;
@@ -83,7 +82,7 @@ export function QuoteForm({
     }
   }
 
-  const [currency, setCurrency] = useState(initialData?.currency || "KES");
+  const [currency, setCurrency] = useState(initialData?.currency || CURRENCY_OPTIONS[0].value);
   const [rfqNumber, setRfqNumber] = useState(initialData?.rfq_rfp_number || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
 
@@ -177,31 +176,8 @@ export function QuoteForm({
         {/* Top Section */}
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Logo Column */}
-            <div className="flex flex-col items-start gap-3">
-              <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 text-gray-500">
-                <ImageIcon size={28} />
-              </div>
-              <button
-                type="button"
-                className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline"
-              >
-                Update <SquarePen size={20} />
-              </button>
-            </div>
-
-            {/* Company Info */}
-            <div className="flex flex-col gap-1 text-gray-800">
-              <h3 className="font-bold text-base mb-1">{COMPANY_INFO.name}</h3>
-              <p className="text-sm">{COMPANY_INFO.address}</p>
-              <p className="text-sm">{COMPANY_INFO.phone}</p>
-              <p className="text-sm mb-1">{COMPANY_INFO.email}</p>
-              <button
-                type="button"
-                className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline w-fit"
-              >
-                Update <SquarePen size={20} />
-              </button>
+            <div className="md:col-span-2">
+              <DocumentOwnerHeader editable={!restrictedMode} />
             </div>
 
             {/* Quote To */}
@@ -216,10 +192,10 @@ export function QuoteForm({
                 initialCustomerDetails={
                   initialData?.customer
                     ? {
-                        address: initialData.customer.address || undefined,
-                        phone: initialData.customer.phone,
-                        email: initialData.customer.email,
-                      }
+                      address: initialData.customer.address || undefined,
+                      phone: initialData.customer.phone,
+                      email: initialData.customer.email,
+                    }
                     : null
                 }
                 onChange={(id) => setCustomerId(id)}
@@ -339,12 +315,12 @@ export function QuoteForm({
               {!restrictedMode && (
                 <select
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  onChange={(e) => setCurrency(e.target.value as CurrencyOption)}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 >
                   {CURRENCY_OPTIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                    <option key={c.value} value={c.value}>
+                      {c.label}
                     </option>
                   ))}
                 </select>

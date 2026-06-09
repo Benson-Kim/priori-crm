@@ -1,4 +1,4 @@
-"""Shared, LIKE-safe search helpers (architecture review P-2).
+r"""Shared, LIKE-safe search helpers (architecture review P-2).
 
 Every list endpoint previously built ``column.ilike(f"%{term}%")`` directly.
 That has two problems:
@@ -79,6 +79,4 @@ def build_search_clause(
         return None
 
     pattern = like_pattern(term)
-    return or_(
-        *(col.ilike(pattern, escape=_LIKE_ESCAPE_CHAR) for col in columns)
-    )
+    return or_(*(col.ilike(pattern, escape=_LIKE_ESCAPE_CHAR) for col in columns))

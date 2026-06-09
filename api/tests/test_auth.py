@@ -69,9 +69,7 @@ class TestVerifyOTP:
     def test_verify_otp_success(self, client, db):
         _seed_user(db)
         # Trigger login to create OTP
-        with patch(
-            "app.modules.auth.service.AuthService._send_otp_email"
-        ) as mock_send:
+        with patch("app.modules.auth.service.AuthService._send_otp_email"):
             client.post(
                 "/api/v1/auth/login",
                 json={"email": "frank@mail.com", "password": "securepass123"},

@@ -4,6 +4,7 @@ duplicate_invoice is annotated -> InvoiceDuplicateResponse and the router
 validates against it; returning the ORM Invoice raised at response time on
 every call. The service must return a populated InvoiceDuplicateResponse.
 """
+
 import uuid
 from decimal import Decimal
 from unittest.mock import MagicMock

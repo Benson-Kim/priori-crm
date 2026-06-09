@@ -3,6 +3,7 @@
 cancel_invoice must call _transition() so ALLOWED_TRANSITIONS is enforced and
 the version bump is owned in a single place, rather than mutating status inline.
 """
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -18,6 +19,7 @@ class _FakeInvoice:
 
     def __init__(self, *, status: str = InvoiceStatus.SENT, version: int = 1):
         self.id = uuid.uuid4()
+        self.customer_id = uuid.uuid4()
         self.status = status
         self.version = version
         self.invoice_number = "INV-0001"
@@ -28,6 +30,11 @@ def _service_with(invoice: _FakeInvoice) -> InvoiceService:
     svc = InvoiceService(db)
     # cancel_invoice loads via get_by_id; stub it directly.
     svc.get_by_id = MagicMock(return_value=invoice)  # type: ignore[method-assign]
+    # cancel_invoice also resyncs the customer balance (V-DI-6) via a real
+    # query; against the MagicMock db that yields a non-numeric value. Stub it
+    # so these unit tests isolate the state-machine transition + version bump.
+    # Balance resync is covered against Postgres in test_currency_and_balance.
+    svc._update_customer_balance = MagicMock()  # type: ignore[method-assign]
     return svc
 
 

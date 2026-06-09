@@ -11,6 +11,7 @@ scan a user's OTP history on every login/verify.
 Chained after the search migration (d4e5f6a7b8c9) to keep a single linear
 history now that both have merged.
 """
+
 from typing import Sequence, Union
 
 from alembic import op

@@ -1,3 +1,4 @@
+import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { VendorModal } from "@/components/modals/VendorModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -8,7 +9,6 @@ import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table } from "@/components/ui/Table";
-import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
 import {
   getVendor,
@@ -21,7 +21,7 @@ import {
   type VendorTransactionSummary,
 } from "@/services/vendorApi";
 import { ChevronLeft, ChevronRight, Pencil, Printer } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function VendorDetailPage() {
@@ -125,21 +125,21 @@ export default function VendorDetailPage() {
   );
 
   useEffect(() => {
-    fetchVendorData();
+    void (async () => { await fetchVendorData(); })();
   }, [fetchVendorData]);
 
   useEffect(() => {
     if (mainTab === "statements") {
-      fetchStatement();
+      void (async () => { await fetchStatement(); })();
     }
   }, [mainTab, fetchStatement, periodMonths]);
 
   useEffect(() => {
-    fetchTransactions();
+    void (async () => { await fetchTransactions(); })();
   }, [fetchTransactions]);
 
   useEffect(() => {
-    setCurrentPage(1);
+    startTransition(() => { setCurrentPage(1); });
   }, [activeTab]);
 
   const actions: DropdownItem[] = [
@@ -278,11 +278,10 @@ export default function VendorDetailPage() {
         <div className="flex items-center gap-1 border-b border-gray-200">
           <button
             onClick={() => setMainTab("overview")}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
-              mainTab === "overview"
-                ? "text-priori-purple"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`px-6 py-3 font-semibold transition-colors relative ${mainTab === "overview"
+              ? "text-priori-purple"
+              : "text-gray-500 hover:text-gray-700"
+              }`}
           >
             Overview
             {mainTab === "overview" && (
@@ -291,11 +290,10 @@ export default function VendorDetailPage() {
           </button>
           <button
             onClick={() => setMainTab("statements")}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
-              mainTab === "statements"
-                ? "text-priori-purple"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`px-6 py-3 font-semibold transition-colors relative ${mainTab === "statements"
+              ? "text-priori-purple"
+              : "text-gray-500 hover:text-gray-700"
+              }`}
           >
             Statements
             {mainTab === "statements" && (
@@ -412,9 +410,9 @@ export default function VendorDetailPage() {
                 <p className="font-bold text-gray-800 text-2xl">
                   {formatCurrency(
                     payables?.total_unpaid ||
-                      vendor.total_unpaid ||
-                      vendor.payables ||
-                      0,
+                    vendor.total_unpaid ||
+                    vendor.payables ||
+                    0,
                     vendor.currency
                   )}
                 </p>
@@ -493,7 +491,7 @@ export default function VendorDetailPage() {
                     {statement.vendor && (
                       <>
                         <p className="text-sm text-gray-600">
-                          {statement.vendor.phone}
+                          {statement.vendor.phone_primary ?? statement.vendor.phone_secondary ?? "-"}
                         </p>
                         <p className="text-sm text-gray-600">
                           {statement.vendor.email}
@@ -615,17 +613,17 @@ export default function VendorDetailPage() {
                         <td className="px-3 py-4 text-center text-gray-800">
                           {transaction.amount > 0
                             ? formatCurrency(
-                                transaction.amount,
-                                statement.vendor.currency
-                              )
+                              transaction.amount,
+                              statement.vendor.currency
+                            )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-center text-gray-800">
                           {transaction.payment > 0
                             ? formatCurrency(
-                                transaction.payment,
-                                statement.vendor.currency
-                              )
+                              transaction.payment,
+                              statement.vendor.currency
+                            )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-right text-gray-800">

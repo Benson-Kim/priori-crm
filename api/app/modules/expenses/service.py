@@ -1,28 +1,31 @@
 """
 Expense business logic — service layer.
 """
+
 import logging
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
-from sqlalchemy import Integer, and_, case, func, or_, text
+from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import joinedload, lazyload, selectinload
 
+from app.common.database import assert_version
+from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
     DatabaseException,
     NotFoundException,
 )
-
-from app.common.database import assert_version
-from app.common.document_service import BaseDocumentService
-from app.common.financial import build_line_items, calculate_discount, calculate_line_item, sum_line_totals
-from app.common.search import build_search_clause
+from app.common.financial import (
+    build_line_items,
+    sum_line_totals,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.search import build_search_clause
 from app.constants.enums import DocumentSource, ExpenseStatus
 from app.modules.expenses.models import (
     Expense,
@@ -65,10 +68,10 @@ class ExpenseService(BaseDocumentService):
     _document_noun = "expense"
     _reference_collision_markers = ("expense_number", "expense_reference")
 
-    ALLOWED_TRANSITIONS: dict[ExpenseStatus, list[ExpenseStatus]] = {
+    ALLOWED_TRANSITIONS: ClassVar[dict[ExpenseStatus, list[ExpenseStatus]]] = {
         ExpenseStatus.PENDING: [ExpenseStatus.PAID, ExpenseStatus.OVERDUE],
         ExpenseStatus.OVERDUE: [ExpenseStatus.PAID],
-        ExpenseStatus.PAID:    [],   # terminal
+        ExpenseStatus.PAID: [],  # terminal
     }
 
     def _generate_expense_number(self) -> str:
@@ -92,7 +95,7 @@ class ExpenseService(BaseDocumentService):
             width=4,
             use_date_scope=False,
             use_max_strategy=True,
-            strip_prefix_len=4
+            strip_prefix_len=4,
         )
 
     @staticmethod
@@ -121,11 +124,7 @@ class ExpenseService(BaseDocumentService):
         """
         from app.modules.vendors.models import Vendor
 
-        vendor = (
-            self._db.query(Vendor)
-            .filter(Vendor.id == data.vendor_id)
-            .first()
-        )
+        vendor = self._db.query(Vendor).filter(Vendor.id == data.vendor_id).first()
         if not vendor:
             raise NotFoundException(
                 detail=f"Vendor with ID '{data.vendor_id}' not found",
@@ -169,12 +168,13 @@ class ExpenseService(BaseDocumentService):
                 sp.commit()
 
                 logger.info(
-                    "Created expense: %s", expense.expense_number,
+                    "Created expense: %s",
+                    expense.expense_number,
                     extra={
-                        "expense_id":  str(expense.id),
-                        "vendor_id":   str(data.vendor_id),
-                        "total_due":   float(total_due),
-                        "created_by":  str(user_id) if user_id else None,
+                        "expense_id": str(expense.id),
+                        "vendor_id": str(data.vendor_id),
+                        "total_due": float(total_due),
+                        "created_by": str(user_id) if user_id else None,
                     },
                 )
                 return expense
@@ -239,9 +239,7 @@ class ExpenseService(BaseDocumentService):
         except NotFoundException:
             raise
         except SQLAlchemyError as exc:
-            logger.exception(
-                "Database error retrieving expense %s", expense_number
-            )
+            logger.exception("Database error retrieving expense %s", expense_number)
             raise DatabaseException("Failed to retrieve expense") from exc
 
     def list_expenses(
@@ -253,24 +251,21 @@ class ExpenseService(BaseDocumentService):
         try:
             from app.modules.vendors.models import Vendor
 
-            query = (
-                self._db.query(
-                    Expense.id,
-                    Expense.expense_number,
-                    Expense.expense_reference,
-                    Expense.vendor_id,
-                    Expense.expense_date,
-                    Expense.due_date,
-                    Expense.status,
-                    Expense.currency,
-                    Expense.total_due,
-                    Expense.balance_due,
-                    Expense.is_recurring,
-                    Expense.created_at,
-                    Vendor.vendor_name.label("vendor_name"),
-                )
-                .join(Vendor, Expense.vendor_id == Vendor.id)
-            )
+            query = self._db.query(
+                Expense.id,
+                Expense.expense_number,
+                Expense.expense_reference,
+                Expense.vendor_id,
+                Expense.expense_date,
+                Expense.due_date,
+                Expense.status,
+                Expense.currency,
+                Expense.total_due,
+                Expense.balance_due,
+                Expense.is_recurring,
+                Expense.created_at,
+                Vendor.vendor_name.label("vendor_name"),
+            ).join(Vendor, Expense.vendor_id == Vendor.id)
 
             if filters:
                 if filters.status:
@@ -282,29 +277,19 @@ class ExpenseService(BaseDocumentService):
                     query = query.filter(Expense.vendor_id == filters.vendor_id)
 
                 if filters.date_from:
-                    query = query.filter(
-                        Expense.expense_date >= filters.date_from
-                    )
+                    query = query.filter(Expense.expense_date >= filters.date_from)
 
                 if filters.date_to:
-                    query = query.filter(
-                        Expense.expense_date <= filters.date_to
-                    )
+                    query = query.filter(Expense.expense_date <= filters.date_to)
 
                 if filters.due_date_from:
-                    query = query.filter(
-                        Expense.due_date >= filters.due_date_from
-                    )
+                    query = query.filter(Expense.due_date >= filters.due_date_from)
 
                 if filters.due_date_to:
-                    query = query.filter(
-                        Expense.due_date <= filters.due_date_to
-                    )
+                    query = query.filter(Expense.due_date <= filters.due_date_to)
 
                 if filters.is_recurring is not None:
-                    query = query.filter(
-                        Expense.is_recurring == filters.is_recurring
-                    )
+                    query = query.filter(Expense.is_recurring == filters.is_recurring)
 
                 if filters.search:
                     search_clause = build_search_clause(
@@ -319,8 +304,7 @@ class ExpenseService(BaseDocumentService):
             total = query.count()
 
             rows = (
-                query
-                .order_by(Expense.created_at.desc())
+                query.order_by(Expense.created_at.desc())
                 .offset(params.offset)
                 .limit(params.per_page)
                 .all()
@@ -347,12 +331,14 @@ class ExpenseService(BaseDocumentService):
 
             logger.debug(
                 "Listed %d expenses (page %d, total %d)",
-                len(items), params.page, total,
+                len(items),
+                params.page,
+                total,
                 extra={
-                    "page":     params.page,
+                    "page": params.page,
                     "per_page": params.per_page,
-                    "total":    total,
-                    "filters":  filters.model_dump() if filters else None,
+                    "total": total,
+                    "filters": filters.model_dump() if filters else None,
                 },
             )
             return PaginatedResponse.create(items=items, total=total, params=params)
@@ -377,9 +363,11 @@ class ExpenseService(BaseDocumentService):
         try:
             from app.modules.vendors.models import Vendor
 
-            query = self._db.query(Expense).join(
-                Vendor, Expense.vendor_id == Vendor.id
-            ).options(joinedload(Expense.vendor))
+            query = (
+                self._db.query(Expense)
+                .join(Vendor, Expense.vendor_id == Vendor.id)
+                .options(joinedload(Expense.vendor))
+            )
 
             if include_line_items:
                 query = query.options(selectinload(Expense.line_items))
@@ -468,7 +456,7 @@ class ExpenseService(BaseDocumentService):
                 total += cnt
                 pending_past_due += ppd_cnt or 0
 
-            stored_overdue    = counts.get(ExpenseStatus.OVERDUE, 0)
+            stored_overdue = counts.get(ExpenseStatus.OVERDUE, 0)
             displayed_overdue = stored_overdue + pending_past_due
 
             return ExpenseStatusCounts(
@@ -485,7 +473,7 @@ class ExpenseService(BaseDocumentService):
     def get_statistics(
         self,
         date_from: date | None = None,
-        date_to:   date | None = None,
+        date_to: date | None = None,
     ) -> dict[str, Any]:
         """
         Aggregated expense statistics — all computation pushed to the DB.
@@ -495,9 +483,9 @@ class ExpenseService(BaseDocumentService):
             from datetime import timedelta
 
             if not date_from and not date_to:
-                today     = date.today()
+                today = date.today()
                 date_from = date(today.year, today.month, 1)
-                date_to   = (
+                date_to = (
                     date(today.year, 12, 31)
                     if today.month == 12
                     else date(today.year, today.month + 1, 1) - timedelta(days=1)
@@ -508,15 +496,15 @@ class ExpenseService(BaseDocumentService):
             agg = (
                 self._db.query(
                     func.count(Expense.id).label("total_expenses"),
-                    func.coalesce(
-                        func.sum(Expense.total_due), Decimal("0")
-                    ).label("total_amount"),
-                    func.coalesce(
-                        func.sum(Expense.amount_paid), Decimal("0")
-                    ).label("total_paid"),
-                    func.coalesce(
-                        func.sum(Expense.balance_due), Decimal("0")
-                    ).label("total_outstanding"),
+                    func.coalesce(func.sum(Expense.total_due), Decimal("0")).label(
+                        "total_amount"
+                    ),
+                    func.coalesce(func.sum(Expense.amount_paid), Decimal("0")).label(
+                        "total_paid"
+                    ),
+                    func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
+                        "total_outstanding"
+                    ),
                     func.count(
                         case(
                             (
@@ -537,8 +525,10 @@ class ExpenseService(BaseDocumentService):
                                 (
                                     and_(
                                         Expense.status.in_(
-                                            [ExpenseStatus.PENDING,
-                                             ExpenseStatus.OVERDUE]
+                                            [
+                                                ExpenseStatus.PENDING,
+                                                ExpenseStatus.OVERDUE,
+                                            ]
                                         ),
                                         Expense.due_date < today,
                                         Expense.balance_due > 0,
@@ -576,40 +566,38 @@ class ExpenseService(BaseDocumentService):
                 .filter(
                     Expense.status != ExpenseStatus.CANCELED,
                     Expense.expense_date >= date_from if date_from else True,
-                    Expense.expense_date <= date_to   if date_to   else True,
+                    Expense.expense_date <= date_to if date_to else True,
                 )
                 .one()
             )
 
-            total     = agg.total_expenses or 0
+            total = agg.total_expenses or 0
             avg_value = (
-                Decimal(str(agg.total_amount)) / total
-                if total > 0
-                else Decimal("0.00")
+                Decimal(str(agg.total_amount)) / total if total > 0 else Decimal("0.00")
             )
 
             logger.debug(
                 "Calculated expense statistics",
                 extra={
                     "date_from": str(date_from),
-                    "date_to":   str(date_to),
-                    "total":     total,
+                    "date_to": str(date_to),
+                    "total": total,
                 },
             )
 
             return {
-                "total_expenses":          total,
-                "total_amount":            Decimal(str(agg.total_amount)),
-                "total_paid":              Decimal(str(agg.total_paid)),
-                "total_outstanding":       Decimal(str(agg.total_outstanding)),
-                "overdue_count":           agg.overdue_count or 0,
-                "overdue_amount":          Decimal(str(agg.overdue_amount)),
-                "average_expense_value":   avg_value,
+                "total_expenses": total,
+                "total_amount": Decimal(str(agg.total_amount)),
+                "total_paid": Decimal(str(agg.total_paid)),
+                "total_outstanding": Decimal(str(agg.total_outstanding)),
+                "overdue_count": agg.overdue_count or 0,
+                "overdue_amount": Decimal(str(agg.overdue_amount)),
+                "average_expense_value": avg_value,
                 "average_days_to_payment": round(
                     float(agg.avg_days_to_payment or 0), 1
                 ),
-                "date_from":               date_from,
-                "date_to":                 date_to,
+                "date_from": date_from,
+                "date_to": date_to,
             }
 
         except SQLAlchemyError as exc:
@@ -649,11 +637,12 @@ class ExpenseService(BaseDocumentService):
         update_data = data.model_dump(exclude_unset=True, mode="python")
 
         if not update_data:
-            return expense   # no-op — nothing to apply
+            return expense  # no-op — nothing to apply
 
         # Validate vendor change
         if "vendor_id" in update_data:
             from app.modules.vendors.models import Vendor
+
             vendor = (
                 self._db.query(Vendor)
                 .filter(Vendor.id == update_data["vendor_id"])
@@ -665,11 +654,11 @@ class ExpenseService(BaseDocumentService):
                     resource="vendor",
                 )
 
-        # Cross-field date validation 
+        # Cross-field date validation
         # Pydantic validates only when both dates are in the payload.
         # Here we also guard the mixed case: one date in payload, one from DB.
         new_expense_date = update_data.get("expense_date", expense.expense_date)
-        new_due_date     = update_data.get("due_date",     expense.due_date)
+        new_due_date = update_data.get("due_date", expense.due_date)
         if new_due_date < new_expense_date:
             raise BadRequestException(
                 detail="due_date must be on or after expense_date",
@@ -688,7 +677,7 @@ class ExpenseService(BaseDocumentService):
             line_items_data = self._build_line_items(typed_items)
 
             subtotal, tax_total = self._sum_line_totals(line_items_data)
-            total_due   = subtotal + tax_total
+            total_due = subtotal + tax_total
             balance_due = total_due - expense.amount_paid
 
             if balance_due < Decimal("0.00"):
@@ -704,9 +693,9 @@ class ExpenseService(BaseDocumentService):
             for item in line_items_data:
                 self._db.add(ExpenseLineItem(expense_id=expense.id, **item))
 
-            update_data["subtotal"]    = subtotal
-            update_data["tax_total"]   = tax_total
-            update_data["total_due"]   = total_due
+            update_data["subtotal"] = subtotal
+            update_data["tax_total"] = tax_total
+            update_data["total_due"] = total_due
             update_data["balance_due"] = balance_due
 
         # Apply scalar updates
@@ -717,11 +706,12 @@ class ExpenseService(BaseDocumentService):
         self._db.flush()
 
         logger.info(
-            "Updated expense: %s", expense.expense_number,
+            "Updated expense: %s",
+            expense.expense_number,
             extra={
-                "expense_id":     str(expense.id),
+                "expense_id": str(expense.id),
                 "updated_fields": list(update_data.keys()),
-                "new_version":    expense.version,
+                "new_version": expense.version,
             },
         )
         return expense
@@ -787,8 +777,14 @@ class ExpenseService(BaseDocumentService):
         Uses SELECT FOR UPDATE to prevent TOCTOU race with concurrent
         record_payment() calls on the same expense row.
         """
+        # Lock the bare expenses row. Expense.vendor is lazy="joined", which
+        # would otherwise emit a LEFT OUTER JOIN and make Postgres reject
+        # FOR UPDATE ("cannot be applied to the nullable side of an outer
+        # join"). lazyload("*") suppresses the eager join; relationships load
+        # lazily on access afterward.
         expense = (
             self._db.query(Expense)
+            .options(lazyload("*"))
             .filter(Expense.id == expense_id)
             .with_for_update()
             .first()
@@ -818,10 +814,11 @@ class ExpenseService(BaseDocumentService):
         )
 
         logger.info(
-            "Marked expense as paid: %s", expense.expense_reference,
+            "Marked expense as paid: %s",
+            expense.expense_reference,
             extra={
                 "expense_id": str(expense.id),
-                "paid_at":    str(expense.paid_at),
+                "paid_at": str(expense.paid_at),
                 "payment_amount": str(settlement_amount),
             },
         )
@@ -843,8 +840,11 @@ class ExpenseService(BaseDocumentService):
           amount_paid >= total_due → PAID (expense.paid_at set)
           amount_paid <  total_due → status unchanged (PENDING or OVERDUE)
         """
+        # Lock the bare expenses row (see mark_as_paid): suppress the
+        # lazy="joined" vendor outer join so Postgres allows FOR UPDATE.
         expense = (
             self._db.query(Expense)
+            .options(lazyload("*"))
             .filter(Expense.id == expense_id)
             .with_for_update()
             .first()
@@ -881,13 +881,14 @@ class ExpenseService(BaseDocumentService):
         )
 
         logger.info(
-            "Recorded payment for expense %s", expense.expense_reference,
+            "Recorded payment for expense %s",
+            expense.expense_reference,
             extra={
-                "expense_id":  str(expense.id),
-                "payment_id":  str(payment.id),
-                "amount":      float(data.amount),
+                "expense_id": str(expense.id),
+                "payment_id": str(payment.id),
+                "amount": float(data.amount),
                 "new_balance": float(expense.balance_due),
-                "new_status":  expense.status,
+                "new_status": expense.status,
             },
         )
         return payment
@@ -928,12 +929,13 @@ class ExpenseService(BaseDocumentService):
 
         logger.info(
             "Attached document to expense %s: %s",
-            expense_id, filename,
+            expense_id,
+            filename,
             extra={
-                "expense_id":  str(expense_id),
+                "expense_id": str(expense_id),
                 "document_id": str(document.id),
-                "source":      source.value,
-                "size_bytes":  file_size_bytes,
+                "source": source.value,
+                "size_bytes": file_size_bytes,
             },
         )
         return document
@@ -955,8 +957,7 @@ class ExpenseService(BaseDocumentService):
         if not document:
             raise NotFoundException(
                 detail=(
-                    f"Document '{document_id}' not found "
-                    f"on expense '{expense_id}'"
+                    f"Document '{document_id}' not found on expense '{expense_id}'"
                 ),
                 resource="expense_document",
             )
@@ -983,14 +984,15 @@ class ExpenseService(BaseDocumentService):
 
         logger.info(
             "Deleted document %s from expense %s",
-            document_id, expense_id,
+            document_id,
+            expense_id,
             extra={
-                "expense_id":  str(expense_id),
+                "expense_id": str(expense_id),
                 "document_id": str(document_id),
                 "storage_key": storage_key,
             },
         )
-        return storage_key   # caller deletes from object storage
+        return storage_key  # caller deletes from object storage
 
     # DELETE
 
@@ -1086,9 +1088,9 @@ class ExpenseService(BaseDocumentService):
         try:
             from datetime import timedelta
 
-            original         = self.get_by_id(expense_id)
+            original = self.get_by_id(expense_id)
             new_expense_date = date.today()
-            new_due_date     = new_expense_date + timedelta(days=30)
+            new_due_date = new_expense_date + timedelta(days=30)
             last_error: Exception | None = None
 
             for attempt in range(self.MAX_RETRIES + 1):
@@ -1115,25 +1117,28 @@ class ExpenseService(BaseDocumentService):
                     self._db.flush()
 
                     for orig_item in original.line_items:
-                        self._db.add(ExpenseLineItem(
-                            expense_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        ))
+                        self._db.add(
+                            ExpenseLineItem(
+                                expense_id=duplicate.id,
+                                line_number=orig_item.line_number,
+                                item_name=orig_item.item_name,
+                                description=orig_item.description,
+                                quantity=orig_item.quantity,
+                                unit_price=orig_item.unit_price,
+                                line_total=orig_item.line_total,
+                                tax_type=orig_item.tax_type,
+                                tax_amount=orig_item.tax_amount,
+                            )
+                        )
                     self._db.flush()
                     sp.commit()
 
                     logger.info(
                         "Duplicated expense %s → %s",
-                        original.expense_number, duplicate.expense_number,
+                        original.expense_number,
+                        duplicate.expense_number,
                         extra={
-                            "original_id":  str(original.id),
+                            "original_id": str(original.id),
                             "duplicate_id": str(duplicate.id),
                         },
                     )
@@ -1176,19 +1181,21 @@ class ExpenseService(BaseDocumentService):
         """
         calculated_items = cls._build_line_items(line_items)
         subtotal, tax_total = cls._sum_line_totals(calculated_items)
-        
+
         # Convert Decimals to floats for the response dict structure required
         formatted_items = []
         for item in calculated_items:
-            formatted_items.append({
-                "item_name":   item["item_name"],
-                "description": item["description"],
-                "quantity":    float(item["quantity"]),
-                "unit_price":  float(item["unit_price"]),
-                "line_total":  float(item["line_total"]),
-                "tax_type":    item["tax_type"],
-                "tax_amount":  float(item["tax_amount"]),
-            })
+            formatted_items.append(
+                {
+                    "item_name": item["item_name"],
+                    "description": item["description"],
+                    "quantity": float(item["quantity"]),
+                    "unit_price": float(item["unit_price"]),
+                    "line_total": float(item["line_total"]),
+                    "tax_type": item["tax_type"],
+                    "tax_amount": float(item["tax_amount"]),
+                }
+            )
 
         return ExpenseCalculationResponse(
             subtotal=subtotal,
@@ -1222,7 +1229,7 @@ class ExpenseService(BaseDocumentService):
                 )
                 .update(
                     {
-                        Expense.status:  ExpenseStatus.OVERDUE,
+                        Expense.status: ExpenseStatus.OVERDUE,
                         Expense.version: Expense.version + 1,
                     },
                     synchronize_session=False,
@@ -1240,6 +1247,4 @@ class ExpenseService(BaseDocumentService):
 
         except SQLAlchemyError as exc:
             logger.exception("Error in bulk overdue transition")
-            raise DatabaseException(
-                "Failed to transition overdue expenses"
-            ) from exc
+            raise DatabaseException("Failed to transition overdue expenses") from exc

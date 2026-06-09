@@ -12,17 +12,16 @@ Two layers:
 
 import pytest
 
+from app.common.pagination import PaginationParams
 from app.common.search import build_search_clause, escape_like, like_pattern
 from app.constants.enums import Currency, VendorStatus
-from app.common.pagination import PaginationParams
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import VendorFilterParams
 from app.modules.vendors.service import VendorService
-
 from tests.conftest import USING_POSTGRES
 
-
 # Unit tests (all backends)
+
 
 def test_escape_like_escapes_wildcards():
     assert escape_like("50%") == "50\\%"
@@ -48,6 +47,7 @@ def test_build_search_clause_returns_clause_for_term():
 
 
 # Behavioural test (Postgres only)
+
 
 @pytest.mark.skipif(
     not USING_POSTGRES,

@@ -11,8 +11,8 @@ def test_security_headers_present_on_response(client):
     assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
 
 
-def test_hsts_only_in_production(client):
-    # Tests run with ENVIRONMENT != production, so HSTS must be absent.
+def test_hsts_absent_in_development(client, monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
     resp = client.get("/api/v1/ping")
     assert "Strict-Transport-Security" not in resp.headers
 

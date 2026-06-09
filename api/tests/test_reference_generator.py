@@ -3,28 +3,28 @@ Tests for the ReferenceGenerator deep module in common/reference.py.
 
 RED→GREEN cycle: generate() with date-scoped and non-date-scoped prefixes.
 """
-import uuid
-from datetime import date
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
-import pytest
-from sqlalchemy import Column, Integer, String, text
+from datetime import date
+from unittest.mock import MagicMock
+
+from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.common.reference import ReferenceGenerator
 
-
 # Helpers
+
 
 class _FakeModel:
     """Minimal stand-in for an ORM model with a reference column."""
+
     __tablename__ = "fakes"
     id = Column(UUID(as_uuid=True), primary_key=True)
     ref = Column(String(50))
 
 
 # Tests
+
 
 class TestReferenceGeneratorDateScoped:
     """Behaviors for date-scoped reference generation (e.g. INV-20260527-001)."""
@@ -110,7 +110,8 @@ class TestReferenceGeneratorGlobal:
         call_args = db.execute.call_args
         sql_text = str(call_args[0][0])
         assert "pg_advisory_xact_lock" in sql_text
-        assert call_args[1]["key"] == "quote_reference_gen"
+        # Bind params are passed positionally: execute(text(...), {"key": key}).
+        assert call_args[0][1]["key"] == "quote_reference_gen"
 
 
 class TestReferenceGeneratorMaxStrategy:

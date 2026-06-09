@@ -4,13 +4,14 @@ Excel export for invoices, quotes, and expenses using openpyxl.
 Deep module: small interface (3 public methods), concentrated
 spreadsheet formatting behind it.
 """
+
 import io
 import logging
 from datetime import date, datetime
 from decimal import Decimal
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,8 @@ _HEADER_FONT = Font(name="Calibri", bold=True, color="FFFFFF", size=10)
 _HEADER_FILL = PatternFill(start_color="1A1A2E", end_color="1A1A2E", fill_type="solid")
 _HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 _BODY_FONT = Font(name="Calibri", size=10)
-_MONEY_FORMAT = '#,##0.00'
-_DATE_FORMAT = 'DD MMM YYYY'
+_MONEY_FORMAT = "#,##0.00"
+_DATE_FORMAT = "DD MMM YYYY"
 _THIN_BORDER = Border(
     bottom=Side(style="thin", color="E5E7EB"),
 )
@@ -39,9 +40,18 @@ class ExcelExporter:
     ) -> bytes:
         """Export invoice records to .xlsx bytes."""
         headers = [
-            "Invoice #", "Reference", "Customer", "Date", "Due Date",
-            "Status", "Currency", "Subtotal", "Tax", "Total Due",
-            "Amount Paid", "Balance Due",
+            "Invoice #",
+            "Reference",
+            "Customer",
+            "Date",
+            "Due Date",
+            "Status",
+            "Currency",
+            "Subtotal",
+            "Tax",
+            "Total Due",
+            "Amount Paid",
+            "Balance Due",
         ]
 
         def row_fn(inv):
@@ -84,8 +94,16 @@ class ExcelExporter:
     ) -> bytes:
         """Export quote records to .xlsx bytes."""
         headers = [
-            "Quote #", "Reference", "Customer", "Date", "Due Date",
-            "Status", "Currency", "Subtotal", "Tax", "Total Due",
+            "Quote #",
+            "Reference",
+            "Customer",
+            "Date",
+            "Due Date",
+            "Status",
+            "Currency",
+            "Subtotal",
+            "Tax",
+            "Total Due",
         ]
 
         def row_fn(q):
@@ -123,9 +141,18 @@ class ExcelExporter:
     ) -> bytes:
         """Export expense records to .xlsx bytes."""
         headers = [
-            "Expense #", "Reference", "Vendor", "Date", "Due Date",
-            "Status", "Currency", "Subtotal", "Tax", "Total Due",
-            "Amount Paid", "Balance Due",
+            "Expense #",
+            "Reference",
+            "Vendor",
+            "Date",
+            "Due Date",
+            "Status",
+            "Currency",
+            "Subtotal",
+            "Tax",
+            "Total Due",
+            "Amount Paid",
+            "Balance Due",
         ]
 
         def row_fn(exp):
@@ -235,8 +262,15 @@ class ExcelExporter:
         ws = wb.create_sheet("Line Items")
 
         headers = [
-            f"{doc_type.title()} #", "Line #", "Item", "Description",
-            "Qty", "Unit Price", "Tax Type", "Tax Amount", "Line Total",
+            f"{doc_type.title()} #",
+            "Line #",
+            "Item",
+            "Description",
+            "Qty",
+            "Unit Price",
+            "Tax Type",
+            "Tax Amount",
+            "Line Total",
         ]
         for col_idx, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_idx, value=header)
@@ -258,17 +292,23 @@ class ExcelExporter:
                 qty_cell.number_format = _MONEY_FORMAT
                 qty_cell.font = _BODY_FONT
 
-                price_cell = ws.cell(row=row_idx, column=6, value=float(item.unit_price))
+                price_cell = ws.cell(
+                    row=row_idx, column=6, value=float(item.unit_price)
+                )
                 price_cell.number_format = _MONEY_FORMAT
                 price_cell.font = _BODY_FONT
 
-                ws.cell(row=row_idx, column=7, value=str(item.tax_type)).font = _BODY_FONT
+                ws.cell(
+                    row=row_idx, column=7, value=str(item.tax_type)
+                ).font = _BODY_FONT
 
                 tax_cell = ws.cell(row=row_idx, column=8, value=float(item.tax_amount))
                 tax_cell.number_format = _MONEY_FORMAT
                 tax_cell.font = _BODY_FONT
 
-                total_cell = ws.cell(row=row_idx, column=9, value=float(item.line_total))
+                total_cell = ws.cell(
+                    row=row_idx, column=9, value=float(item.line_total)
+                )
                 total_cell.number_format = _MONEY_FORMAT
                 total_cell.font = _BODY_FONT
 

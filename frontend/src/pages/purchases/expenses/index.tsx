@@ -18,7 +18,7 @@ import {
     type PaginatedExpenses,
 } from "@/services/expenseApi";
 import { CheckCircle, CreditCard, Download, Eye, Plus, Trash } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function ExpensesPage() {
@@ -73,9 +73,17 @@ export default function ExpensesPage() {
         fetchCounts();
     }, [fetchExpenses, fetchCounts]);
 
-    useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
-    useEffect(() => { fetchCounts(); }, [fetchCounts]);
-    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+    useEffect(() => {
+        void (async () => { await fetchExpenses(); })();
+    }, [fetchExpenses]);
+
+    useEffect(() => {
+        void (async () => { await fetchCounts(); })();
+    }, [fetchCounts]);
+
+    useEffect(() => {
+        startTransition(() => { setCurrentPage(1); });
+    }, [activeTab, search]);
 
     const handleView = (expense: ExpenseSummary) => {
         navigate(`/expenses/${expense.id}`);

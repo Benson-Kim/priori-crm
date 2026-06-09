@@ -3,17 +3,15 @@ Tests for the StatementGenerator deep module in common/statement.py.
 
 RED→GREEN cycle: statement generation for generic entities (Customer/Vendor).
 """
+
 from datetime import date
 from decimal import Decimal
-
-import pytest
 
 from app.common.statement import (
     CreditEntry,
     DebitEntry,
     StatementGenerator,
 )
-
 
 # Tests
 
@@ -44,8 +42,16 @@ class TestStatementGeneratorDebitsOnly:
 
     def test_debits_accumulate(self):
         debits = [
-            DebitEntry(date=date(2026, 1, 5), description="Invoice INV-001", amount=Decimal("500.00")),
-            DebitEntry(date=date(2026, 1, 15), description="Invoice INV-002", amount=Decimal("300.00")),
+            DebitEntry(
+                date=date(2026, 1, 5),
+                description="Invoice INV-001",
+                amount=Decimal("500.00"),
+            ),
+            DebitEntry(
+                date=date(2026, 1, 15),
+                description="Invoice INV-002",
+                amount=Decimal("300.00"),
+            ),
         ]
 
         txns, summary = StatementGenerator.generate(
@@ -71,7 +77,11 @@ class TestStatementGeneratorCreditsOnly:
 
     def test_credits_reduce_balance(self):
         credits = [
-            CreditEntry(date=date(2026, 2, 10), description="Payment for INV-001", amount=Decimal("400.00")),
+            CreditEntry(
+                date=date(2026, 2, 10),
+                description="Payment for INV-001",
+                amount=Decimal("400.00"),
+            ),
         ]
 
         txns, summary = StatementGenerator.generate(
@@ -94,11 +104,23 @@ class TestStatementGeneratorChronologicalMerge:
 
     def test_mixed_transactions_sort_chronologically(self):
         debits = [
-            DebitEntry(date=date(2026, 3, 5), description="Expense EXP-001", amount=Decimal("200.00")),
-            DebitEntry(date=date(2026, 3, 20), description="Expense EXP-002", amount=Decimal("150.00")),
+            DebitEntry(
+                date=date(2026, 3, 5),
+                description="Expense EXP-001",
+                amount=Decimal("200.00"),
+            ),
+            DebitEntry(
+                date=date(2026, 3, 20),
+                description="Expense EXP-002",
+                amount=Decimal("150.00"),
+            ),
         ]
         credits = [
-            CreditEntry(date=date(2026, 3, 10), description="Payment Made", amount=Decimal("100.00")),
+            CreditEntry(
+                date=date(2026, 3, 10),
+                description="Payment Made",
+                amount=Decimal("100.00"),
+            ),
         ]
 
         txns, summary = StatementGenerator.generate(
@@ -132,10 +154,18 @@ class TestStatementGeneratorSameDateOrdering:
 
     def test_same_date_debits_come_first(self):
         debits = [
-            DebitEntry(date=date(2026, 4, 1), description="Invoice INV-010", amount=Decimal("1000.00")),
+            DebitEntry(
+                date=date(2026, 4, 1),
+                description="Invoice INV-010",
+                amount=Decimal("1000.00"),
+            ),
         ]
         credits = [
-            CreditEntry(date=date(2026, 4, 1), description="Payment for INV-010", amount=Decimal("1000.00")),
+            CreditEntry(
+                date=date(2026, 4, 1),
+                description="Payment for INV-010",
+                amount=Decimal("1000.00"),
+            ),
         ]
 
         txns, summary = StatementGenerator.generate(

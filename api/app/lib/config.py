@@ -1,4 +1,5 @@
 """Application configuration with validation and environment management."""
+
 import secrets
 from functools import lru_cache
 from typing import Literal
@@ -14,12 +15,12 @@ class Settings(BaseSettings):
     MOCK_PAYMENT_GATEWAY_KEY: str = "mock-key-for-dev"
     APP_NAME: str = "Priori Technologies"
     APP_VERSION: str = "1.0.0"
-    ENVIRONMENT: Literal["development", "test", "staging", "production"] = "development"
+    ENVIRONMENT: Literal["development", "test", "staging", "production"] = "production"
     DEBUG: bool = Field(default=False)
-    
+
     # API
     API_V1_PREFIX: str = "/api/v1"
-    
+
     # Database
     DATABASE_URL: PostgresDsn
     DB_POOL_SIZE: int = Field(default=20, ge=5, le=100)
@@ -27,31 +28,33 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = Field(default=30, ge=10, le=60)
     DB_POOL_RECYCLE: int = Field(default=3600, ge=300)
     DB_ECHO: bool = Field(default=False)
-    
+
     # JWT
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=1440)
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1, le=30)
-    
+
     # AWS SES
     AWS_REGION: str = "af-south-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_SENDER_EMAIL: str = "noreply@example.com"
     SES_MAX_RETRIES: int = Field(default=3, ge=1, le=5)
-    
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     # Explicit allow-lists rather than "*" (MW-SEC-2). Comma-separated so
     # they can be tuned per environment without code changes.
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-    CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
+    CORS_ALLOW_HEADERS: str = (
+        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
+    )
     # Explicit method/header allow-lists (MW-SEC-2). Wildcards with
     # allow_credentials are overly permissive, so we pin them per env.
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-Request-ID"
-    
+
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
@@ -64,11 +67,11 @@ class Settings(BaseSettings):
     # instances so the effective limit is not multiplied by the worker count.
     RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
     REDIS_URL: str = ""
-    
+
     # Monitoring
     SENTRY_DSN: str = ""
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    
+
     # Batch Processing
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
@@ -108,7 +111,7 @@ class Settings(BaseSettings):
         """Ensure JWT secret is sufficiently secure."""
         if len(v) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters long")
-        
+
         insecure_defaults = [
             "your-super-secret-key-change-in-production",
             "secret",
@@ -116,7 +119,7 @@ class Settings(BaseSettings):
         ]
         if v.lower() in insecure_defaults:
             raise ValueError("JWT_SECRET_KEY must not be a default/insecure value")
-        
+
         return v
 
     @field_validator("DATABASE_URL")
@@ -145,27 +148,33 @@ class Settings(BaseSettings):
             errors.append("SES_SENDER_EMAIL must be configured in production")
 
         if self.MOCK_PAYMENT_GATEWAY_KEY == "mock-key-for-dev":
-            errors.append("MOCK_PAYMENT_GATEWAY_KEY must not use the development default in production")
+            errors.append(
+                "MOCK_PAYMENT_GATEWAY_KEY must not use the development default in production"
+            )
 
         if self.STORAGE_BACKEND == "s3" and not self.S3_BUCKET:
             errors.append("S3_BUCKET must be configured when STORAGE_BACKEND is 's3'")
 
         # A multi-worker / horizontally-scaled production deployment must use
         # the shared Redis window, otherwise the limit is per-process (W-4).
-        if self.RATE_LIMIT_ENABLED and self.RATE_LIMIT_BACKEND == "redis" and not self.REDIS_URL:
+        if (
+            self.RATE_LIMIT_ENABLED
+            and self.RATE_LIMIT_BACKEND == "redis"
+            and not self.REDIS_URL
+        ):
             errors.append("REDIS_URL is required when RATE_LIMIT_BACKEND='redis'")
 
         if errors:
-            raise ValueError(
-                "Insecure production configuration: " + "; ".join(errors)
-            )
+            raise ValueError("Insecure production configuration: " + "; ".join(errors))
 
         return self
 
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS origins into list."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        return [
+            origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()
+        ]
 
     @property
     def cors_allow_methods_list(self) -> list[str]:
@@ -175,16 +184,6 @@ class Settings(BaseSettings):
     @property
     def cors_allow_headers_list(self) -> list[str]:
         """Parse comma-separated allowed CORS headers into a list."""
-        return [h.strip() for h in self.CORS_ALLOW_HEADERS.split(",") if h.strip()]
-
-    @property
-    def cors_allow_methods_list(self) -> list[str]:
-        """Parse comma-separated allowed CORS methods into a list."""
-        return [m.strip() for m in self.CORS_ALLOW_METHODS.split(",") if m.strip()]
-
-    @property
-    def cors_allow_headers_list(self) -> list[str]:
-        """Parse comma-separated allowed CORS request headers into a list."""
         return [h.strip() for h in self.CORS_ALLOW_HEADERS.split(",") if h.strip()]
 
     @property

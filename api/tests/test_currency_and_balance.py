@@ -24,7 +24,6 @@ from app.modules.invoices.schemas import (
     PaymentCreate,
 )
 from app.modules.invoices.service import InvoiceService
-
 from tests.conftest import USING_POSTGRES
 
 

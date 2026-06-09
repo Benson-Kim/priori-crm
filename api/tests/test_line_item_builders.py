@@ -3,15 +3,14 @@ Tests for the shared line-item builder helpers in common/financial.py.
 
 RED→GREEN cycle: build_line_items / sum_line_totals
 """
-from decimal import Decimal
 
-import pytest
+from decimal import Decimal
 
 from app.common.financial import build_line_items, sum_line_totals
 from app.constants.enums import TaxType
 
-
 # Helpers
+
 
 def _item(
     item_name: str = "Widget",
@@ -32,6 +31,7 @@ def _item(
 
 # build_line_items
 
+
 class TestBuildLineItems:
     """Behaviors for the generic build_line_items helper."""
 
@@ -49,7 +49,7 @@ class TestBuildLineItems:
         assert row["unit_price"] == Decimal("500.00")
         assert row["line_total"] == Decimal("1000.00")
         assert row["tax_type"] == TaxType.VAT_16
-        assert row["tax_amount"] == Decimal("160.00")  # 1000 × 0.16
+        assert row["tax_amount"] == Decimal("160.00")  # 1000 x 0.16
 
     def test_multiple_items_sequential_line_numbers(self):
         """Multiple items receive sequential 1-based line_number values."""
@@ -72,19 +72,30 @@ class TestBuildLineItems:
 
 # sum_line_totals
 
+
 class TestSumLineTotals:
     """Behaviors for the generic sum_line_totals helper."""
 
     def test_sums_correctly_across_items(self):
         """Correctly sums line_total and tax_amount across items."""
-        items = build_line_items([
-            _item(quantity=Decimal("1"), unit_price=Decimal("200.00"), tax_type=TaxType.VAT_16),
-            _item(quantity=Decimal("3"), unit_price=Decimal("100.00"), tax_type=TaxType.VAT_8),
-        ])
+        items = build_line_items(
+            [
+                _item(
+                    quantity=Decimal("1"),
+                    unit_price=Decimal("200.00"),
+                    tax_type=TaxType.VAT_16,
+                ),
+                _item(
+                    quantity=Decimal("3"),
+                    unit_price=Decimal("100.00"),
+                    tax_type=TaxType.VAT_8,
+                ),
+            ]
+        )
         subtotal, tax_total = sum_line_totals(items)
 
         assert subtotal == Decimal("200.00") + Decimal("300.00")  # 500
-        assert tax_total == Decimal("32.00") + Decimal("24.00")    # 56
+        assert tax_total == Decimal("32.00") + Decimal("24.00")  # 56
 
     def test_empty_list_returns_zeros(self):
         """Empty list returns (0.00, 0.00)."""

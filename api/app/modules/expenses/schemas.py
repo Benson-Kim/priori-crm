@@ -1,6 +1,7 @@
 """
 Pydantic schemas for the Expenses API.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -15,14 +16,14 @@ from pydantic import (
 
 from app.common.financial import calculate_days_overdue, check_is_overdue
 from app.common.validators import empty_str_to_none as normalize_empty_str
-from app.constants.enums import Currency, DocumentSource, ExpenseStatus, TaxType
-
+from app.constants.enums import Currency, ExpenseStatus, TaxType
 
 # VENDOR SUMMARY
 
+
 class VendorSummary(BaseModel):
     """
-    Vendor fields surfaced on expense responses 
+    Vendor fields surfaced on expense responses
     """
 
     id: UUID
@@ -34,7 +35,8 @@ class VendorSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# LINE ITEM SCHEMAS 
+# LINE ITEM SCHEMAS
+
 
 class ExpenseLineItemCreate(BaseModel):
     """Payload for a single line item — used on create and full line-item replace."""
@@ -103,7 +105,8 @@ class ExpenseLineItemResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# DOCUMENT SCHEMAS 
+# DOCUMENT SCHEMAS
+
 
 class ExpenseDocumentResponse(BaseModel):
     """
@@ -117,7 +120,7 @@ class ExpenseDocumentResponse(BaseModel):
     expense_id: UUID
     filename: str
     file_size_bytes: int
-    file_size_kb: float        # @property on model — readable via from_attributes
+    file_size_kb: float  # @property on model — readable via from_attributes
     mime_type: str
     source: str
     uploaded_at: datetime
@@ -126,7 +129,8 @@ class ExpenseDocumentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# PAYMENT SCHEMAS 
+# PAYMENT SCHEMAS
+
 
 class ExpensePaymentCreate(BaseModel):
     """
@@ -189,7 +193,8 @@ class ExpensePaymentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# EXPENSE REQUEST SCHEMAS 
+# EXPENSE REQUEST SCHEMAS
+
 
 class ExpenseCreate(BaseModel):
     """Payload for creating a new expense record ."""
@@ -239,9 +244,7 @@ class ExpenseCreate(BaseModel):
     def validate_due_date(self) -> "ExpenseCreate":
         """due_date must be on or after expense_date."""
         if self.due_date < self.expense_date:
-            raise ValueError(
-                "due_date must be on or after expense_date"
-            )
+            raise ValueError("due_date must be on or after expense_date")
         return self
 
     model_config = {
@@ -334,7 +337,8 @@ class MarkAsPaidRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-# RESPONSE SCHEMAS 
+# RESPONSE SCHEMAS
+
 
 class ExpenseResponse(BaseModel):
     """
@@ -402,7 +406,7 @@ class ExpenseSummary(BaseModel):
     expense_number: str
     expense_reference: str
     vendor_id: UUID
-    vendor_name: str          # joined from vendors table in list query
+    vendor_name: str  # joined from vendors table in list query
 
     expense_date: date
     due_date: date
@@ -435,14 +439,14 @@ class ExpenseStatusCounts(BaseModel):
     all: int = 0
     pending: int = 0
     paid: int = 0
-    overdue: int = 0          # computed-overdue: stored OVERDUE + PENDING-past-due
+    overdue: int = 0  # computed-overdue: stored OVERDUE + PENDING-past-due
 
 
 class ExpenseStatisticsResponse(BaseModel):
     """Aggregated statistics for dashboard display."""
 
     total_expenses: int
-    total_amount: Decimal           # matches get_statistics() dict key exactly
+    total_amount: Decimal  # matches get_statistics() dict key exactly
     total_paid: Decimal
     total_outstanding: Decimal
     overdue_count: int
@@ -455,7 +459,8 @@ class ExpenseStatisticsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# FILTER SCHEMA 
+# FILTER SCHEMA
+
 
 class ExpenseFilterParams(BaseModel):
     """
@@ -503,7 +508,8 @@ class ExpenseFilterParams(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-# CALCULATION PREVIEW 
+# CALCULATION PREVIEW
+
 
 class ExpenseCalculationResponse(BaseModel):
     """

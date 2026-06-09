@@ -10,14 +10,15 @@ indexes make substring ILIKE index-assisted. These are PostgreSQL-only
 constructs; the extension and indexes are created defensively with IF NOT
 EXISTS so re-runs and partially-applied environments are safe.
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd4e5f6a7b8c9'
-down_revision: Union[str, None] = 'c3d4e5f6a7b8'
+revision: str = "d4e5f6a7b8c9"
+down_revision: Union[str, None] = "c3d4e5f6a7b8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

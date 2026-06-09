@@ -50,6 +50,17 @@ export interface StatusCounts {
   all: number;
   active: number;
   inactive: number;
+  suspended: number;
+  deleted: number;
+}
+
+export interface CustomerDetailInvoice {
+  id: string;
+  invoice_number: string;
+  amount: number;
+  balance: number;
+  status: string;
+  date: string;
 }
 
 export interface CustomerDetail {
@@ -60,8 +71,8 @@ export interface CustomerDetail {
     total_invoiced: number;
     total_paid: number;
   };
-  invoices: { id: string; invoice_number: string; amount: number; balance: number; status: string; date: string }[];
-  statements: { id: string; period: string; opening_balance: number; invoiced_amount: number; amount_paid: number; balance_due: number }[];
+  recent_invoices: CustomerDetailInvoice[];
+  statement: CustomerStatement | null;
 }
 
 export interface DeleteCheckResult {

@@ -1,8 +1,9 @@
 """Custom middleware for request tracking, rate limiting, and monitoring."""
+
 import logging
 import time
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
@@ -26,10 +27,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         """Process request and add request ID."""
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
-        
+
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
 
 
@@ -40,7 +41,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         """Log request details and response time."""
         start_time = time.time()
         request_id = getattr(request.state, "request_id", "unknown")
-        
+
         # Log request
         logger.info(
             f"{request.method} {request.url.path}",
@@ -52,13 +53,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "client": request.client.host if request.client else None,
             },
         )
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
-        
+
         # Log response
         log_level = logging.INFO if response.status_code < 400 else logging.WARNING
         logger.log(
@@ -72,10 +73,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "duration_ms": duration_ms,
             },
         )
-        
+
         # Add timing header
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
-        
+
         return response
 
 
@@ -163,16 +164,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         3. Raw socket IP.
         """
         auth_header = request.headers.get("Authorization", "")
-        if auth_header.lower().startswith("bearer "):
+        if isinstance(auth_header, str) and auth_header.lower().startswith("bearer "):
             token = auth_header[7:].strip()
             if token:
                 try:
                     from fastapi.security import HTTPAuthorizationCredentials
 
                     payload = decode_access_token(
-                        HTTPAuthorizationCredentials(
-                            scheme="Bearer", credentials=token
-                        )
+                        HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
                     )
                     sub = payload.get("sub")
                     if sub:
@@ -181,14 +180,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     # Invalid/expired token: fall through to IP-based identity.
                     pass
 
-        if settings.RATE_LIMIT_TRUST_FORWARDED_FOR:
+        # Only trust X-Forwarded-For when the setting is explicitly enabled
+        # (exactly True, not merely truthy) and the header is a real string.
+        if settings.RATE_LIMIT_TRUST_FORWARDED_FOR is True:
             forwarded = request.headers.get("X-Forwarded-For", "")
-            if forwarded:
+            if isinstance(forwarded, str) and forwarded:
                 first_hop = forwarded.split(",")[0].strip()
                 if first_hop:
-                    return f"ip:{first_hop}"
+                    return first_hop
 
-        return f"ip:{request.client.host if request.client else 'unknown'}"
+        return request.client.host if request.client else "unknown"
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Check rate limit and process request."""
@@ -198,9 +199,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_id = self._client_identity(request)
 
         # The store owns the window accounting (per-process or shared Redis).
-        result = self._store.hit(
-            client_id, self.max_requests, self.WINDOW_SECONDS
-        )
+        result = self._store.hit(client_id, self.max_requests, self.WINDOW_SECONDS)
 
         if not result.allowed:
             logger.warning(
@@ -217,6 +216,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             # tracing headers (W-1/W-2/W-3). The Retry-After header lets
             # compliant clients back off correctly.
             request_id = getattr(request.state, "request_id", "unknown")
+            # Guarantee a JSON-/header-safe value: the request-ID middleware
+            # may not have populated this yet (and unit tests stub request).
+            if not isinstance(request_id, str):
+                request_id = "unknown"
             retry_after = result.retry_after or self.WINDOW_SECONDS
             # Stamp tracing headers directly: depending on middleware order
             # this early return may not pass back through the request-ID /

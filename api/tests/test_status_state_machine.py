@@ -3,6 +3,7 @@
 Schema-level tests run anywhere. Service-level tests use the shared `db`
 fixture (PostgreSQL in CI, SQLite locally).
 """
+
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,8 +22,7 @@ from app.constants.enums import (
 from app.modules.customers.schemas import CustomerUpdate
 from app.modules.vendors.schemas import VendorUpdate
 
-
-# ── schema: status is not a PUT-editable field (P-8) ────────────────────────
+# schema: status is not a PUT-editable field
 
 
 class TestUpdateSchemasRejectStatus:
@@ -42,7 +42,7 @@ class TestUpdateSchemasRejectStatus:
         assert not hasattr(model, "status")
 
 
-# ── service fixtures ─────────────────────────────────────────────────
+# service fixtures
 
 
 def _make_customer(db):
@@ -77,7 +77,7 @@ def _make_vendor(db):
     return vendor
 
 
-# ── invoices: cancel via state machine + update balance clamp ───────────────
+# invoices: cancel via state machine + update balance clamp
 
 
 class TestInvoiceStateMachine:
@@ -157,10 +157,10 @@ class TestInvoiceStateMachine:
         payload = InvoiceUpdate(
             line_items=[
                 InvoiceLineItemCreate(
-                    item_name="Cheap",
+                    itemName="Cheap",
                     description="x",
                     quantity=Decimal("1"),
-                    unit_price=Decimal("100.00"),
+                    unitPrice=Decimal("100.00"),
                     tax_type="no_tax",
                 )
             ]
@@ -170,7 +170,7 @@ class TestInvoiceStateMachine:
             service.update(invoice.id, payload)
 
 
-# ── expenses: unified payment settle path ──────────────────────────────
+# expenses: unified payment settle path
 
 
 class TestExpensePaymentSettlement:
@@ -208,7 +208,7 @@ class TestExpensePaymentSettlement:
 
         service.record_payment(
             expense.id,
-            ExpensePaymentCreate(amount=Decimal("100.00"), payment_date=date.today()),
+            ExpensePaymentCreate(amount=Decimal("100.00"), paymentDate=date.today()),
         )
 
         db.refresh(expense)
@@ -227,7 +227,7 @@ class TestExpensePaymentSettlement:
 
         service.record_payment(
             expense.id,
-            ExpensePaymentCreate(amount=Decimal("40.00"), payment_date=date.today()),
+            ExpensePaymentCreate(amount=Decimal("40.00"), paymentDate=date.today()),
         )
 
         db.refresh(expense)
@@ -261,7 +261,7 @@ class TestExpensePaymentSettlement:
             service.record_payment(
                 expense.id,
                 ExpensePaymentCreate(
-                    amount=Decimal("150.00"), payment_date=date.today()
+                    amount=Decimal("150.00"), paymentDate=date.today()
                 ),
             )
 
@@ -273,13 +273,11 @@ class TestExpensePaymentSettlement:
         service = ExpenseService(db)
         service.record_payment(
             expense.id,
-            ExpensePaymentCreate(amount=Decimal("100.00"), payment_date=date.today()),
+            ExpensePaymentCreate(amount=Decimal("100.00"), paymentDate=date.today()),
         )
 
         with pytest.raises(BadRequestException):
             service.record_payment(
                 expense.id,
-                ExpensePaymentCreate(
-                    amount=Decimal("10.00"), payment_date=date.today()
-                ),
+                ExpensePaymentCreate(amount=Decimal("10.00"), paymentDate=date.today()),
             )

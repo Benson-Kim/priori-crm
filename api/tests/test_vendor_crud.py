@@ -14,7 +14,7 @@ from app.modules.vendors.service import VendorService
 def _create_payload(**overrides) -> VendorCreate:
     base = dict(
         vendor_name="Priori Studio Ltd",
-        email="accounts@studio.test",
+        email="accounts@studio.com",
         phone_primary="0700000000",
         currency="KES",
     )
@@ -41,16 +41,18 @@ def test_get_unknown_vendor_raises(db):
 
 def test_list_returns_created_vendor(db):
     svc = VendorService(db)
-    created = svc.create(_create_payload(email="list@studio.test"))
+    created = svc.create(_create_payload(email="list@studio.com"))
     result = svc.list_vendors(PaginationParams(page=1, per_page=50))
     assert any(item.id == created.id for item in result.items)
 
 
 def test_update_changes_persisted_fields(db):
     svc = VendorService(db)
-    created = svc.create(_create_payload(email="upd@studio.test"))
+    created = svc.create(_create_payload(email="upd@studio.com"))
     updated = svc.update(
-        created.id, VendorUpdate(vendor_name="Renamed Studio"), expected_version=created.version
+        created.id,
+        VendorUpdate(vendor_name="Renamed Studio"),
+        expected_version=created.version,
     )
     assert updated.vendor_name == "Renamed Studio"
 
@@ -62,7 +64,7 @@ def test_update_cannot_set_status_directly(db):
 
 def test_lifecycle_transitions_via_dedicated_methods(db):
     svc = VendorService(db)
-    created = svc.create(_create_payload(email="life@studio.test"))
+    created = svc.create(_create_payload(email="life@studio.com"))
 
     deactivated = svc.deactivate(created.id)
     assert deactivated.status == VendorStatus.INACTIVE

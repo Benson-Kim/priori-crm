@@ -1,4 +1,5 @@
 """Centralized logging configuration with structured output."""
+
 import logging
 import sys
 from typing import Any
@@ -27,18 +28,18 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
 def setup_logging() -> None:
     """Configure application-wide logging."""
     log_level = getattr(logging, settings.LOG_LEVEL)
-    
+
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    
+
     # Remove existing handlers
     root_logger.handlers.clear()
-    
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
-    
+
     # Use JSON formatting in production, human-readable in development
     if settings.is_production:
         formatter = CustomJsonFormatter(
@@ -50,10 +51,10 @@ def setup_logging() -> None:
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-    
+
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
-    
+
     # Silence noisy third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)

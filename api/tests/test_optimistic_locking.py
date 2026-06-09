@@ -20,7 +20,6 @@ from app.modules.invoices.service import InvoiceService
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import VendorUpdate
 from app.modules.vendors.service import VendorService
-
 from tests.conftest import USING_POSTGRES, TestingSessionLocal
 
 
@@ -105,7 +104,9 @@ class TestStaleVersionRejected:
 
         service.update(invoice.id, InvoiceUpdate(notes="v1"), expected_version=1)
         # Re-read current version and edit again — should pass.
-        service.update(invoice.id, InvoiceUpdate(notes="v2"), expected_version=invoice.version)
+        service.update(
+            invoice.id, InvoiceUpdate(notes="v2"), expected_version=invoice.version
+        )
         assert invoice.version == 3
 
 

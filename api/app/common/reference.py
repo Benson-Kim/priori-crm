@@ -4,10 +4,17 @@ Deep module for generating unique, sequential reference numbers.
 Hides: advisory lock acquisition, count/max query, prefix formatting,
 and zero-padded numbering behind a single generate() method.
 """
+
 from datetime import date
 
 from sqlalchemy import Integer, func, text
 from sqlalchemy.orm import InstrumentedAttribute, Session
+
+from app.common.reference_sequence import ReferenceSequence
+
+# Format regexes for parsing references in triggers or validation
+DATE_SCOPED_REGEX = r"^[A-Za-z0-9_]+-[0-9]{8}-[0-9]+$"
+GLOBAL_REGEX = r"^[A-Za-z0-9_]+-[0-9]+$"
 
 
 class ReferenceGenerator:
@@ -22,6 +29,33 @@ class ReferenceGenerator:
             text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
             {"key": key},
         )
+
+    def _next_with_high_water_mark(self, scope_key: str, table_max: int) -> int:
+        """Return the next value, never below the persisted high-water mark.
+
+        Takes ``max(table_max, persisted) + 1`` and writes the new value back to
+        ``reference_sequences`` so the suffix is never reused after the most
+        recent record is hard-deleted (the live ``table_max`` would otherwise
+        drop). The surrounding advisory lock serialises this read/modify/write.
+
+        Accessed via the ORM session (not ``db.execute``) so the single-
+        advisory-lock execute contract holds. ``persisted`` is coerced via
+        ``isinstance(int)`` so a MagicMock session contributes 0 (pure-unit
+        tests keep their mocked ``table_max`` result).
+        """
+        row = self._db.get(ReferenceSequence, scope_key)
+        persisted = row.last_value if row is not None else 0
+        if not isinstance(persisted, int):
+            persisted = 0
+
+        next_value = max(table_max, persisted) + 1
+
+        if row is None:
+            self._db.add(ReferenceSequence(scope_key=scope_key, last_value=next_value))
+        else:
+            row.last_value = next_value
+        self._db.flush()
+        return next_value
 
     def generate(
         self,
@@ -65,17 +99,22 @@ class ReferenceGenerator:
 
             if use_max_strategy:
                 # Numeric suffix follows "PREFIX-YYYYMMDD-".
-                offset = strip_prefix_len if strip_prefix_len is not None else len(full_prefix) + 1
+                offset = (
+                    strip_prefix_len
+                    if strip_prefix_len is not None
+                    else len(full_prefix) + 1
+                )
                 max_suffix = (
                     self._db.query(
-                        func.max(
-                            func.cast(func.substring(column, offset + 1), Integer)
-                        )
+                        func.max(func.cast(func.substring(column, offset + 1), Integer))
                     )
                     .filter(column.like(f"{full_prefix}%"))
                     .scalar()
                 ) or 0
-                return f"{full_prefix}-{max_suffix + 1:0{width}d}"
+                next_value = self._next_with_high_water_mark(
+                    f"{lock_key}_{full_prefix}", max_suffix
+                )
+                return f"{full_prefix}-{next_value:0{width}d}"
 
             # Legacy COUNT strategy (opt-out only).
             count = (
@@ -90,7 +129,9 @@ class ReferenceGenerator:
 
         if use_max_strategy:
             # Numeric suffix follows "PREFIX-".
-            offset = strip_prefix_len if strip_prefix_len is not None else len(prefix) + 1
+            offset = (
+                strip_prefix_len if strip_prefix_len is not None else len(prefix) + 1
+            )
             max_suffix = (
                 self._db.query(
                     func.max(
@@ -101,7 +142,8 @@ class ReferenceGenerator:
                     )
                 ).scalar()
             ) or 0
-            return f"{prefix}-{max_suffix + 1:0{width}d}"
+            next_value = self._next_with_high_water_mark(lock_key, max_suffix)
+            return f"{prefix}-{next_value:0{width}d}"
 
         # Legacy COUNT strategy (opt-out only).
         count = self._db.query(func.count(model.id)).scalar()

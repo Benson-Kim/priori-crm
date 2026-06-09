@@ -2,9 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
+from app.common.security import hash_password
 from app.modules.auth.models import OTPCode, User
 from app.modules.auth.service import AuthService
-from app.common.security import hash_password
 
 
 def _make_user(db) -> User:
@@ -25,17 +25,35 @@ def test_purge_removes_used_and_expired_keeps_active(db):
     now = datetime.now(UTC)
 
     # Old + used -> purged
-    db.add(OTPCode(user_id=user.id, code="111111", is_used=True,
-                   expires_at=now - timedelta(minutes=30),
-                   created_at=now - timedelta(minutes=30)))
+    db.add(
+        OTPCode(
+            user_id=user.id,
+            code="111111",
+            is_used=True,
+            expires_at=now - timedelta(minutes=30),
+            created_at=now - timedelta(minutes=30),
+        )
+    )
     # Old + expired (unused) -> purged
-    db.add(OTPCode(user_id=user.id, code="222222", is_used=False,
-                   expires_at=now - timedelta(minutes=20),
-                   created_at=now - timedelta(minutes=20)))
+    db.add(
+        OTPCode(
+            user_id=user.id,
+            code="222222",
+            is_used=False,
+            expires_at=now - timedelta(minutes=20),
+            created_at=now - timedelta(minutes=20),
+        )
+    )
     # Fresh + active -> kept
-    db.add(OTPCode(user_id=user.id, code="333333", is_used=False,
-                   expires_at=now + timedelta(minutes=5),
-                   created_at=now))
+    db.add(
+        OTPCode(
+            user_id=user.id,
+            code="333333",
+            is_used=False,
+            expires_at=now + timedelta(minutes=5),
+            created_at=now,
+        )
+    )
     db.commit()
 
     deleted = AuthService(db).purge_expired_otps()

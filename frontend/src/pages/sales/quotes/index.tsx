@@ -11,6 +11,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
     approveQuote,
@@ -22,9 +23,8 @@ import {
     type QuoteSummary,
 } from "@/services/quoteApi";
 import { CheckCircle, Copy, Download, Eye, Plus, Trash } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConfirm } from "@/hooks/useConfirm";
 
 const STATUS_MAP: Record<string, string | undefined> = {
     all: undefined,
@@ -88,9 +88,17 @@ export default function QuotesPage() {
         fetchCounts();
     }, [fetchQuotes, fetchCounts]);
 
-    useEffect(() => { fetchQuotes(); }, [fetchQuotes]);
-    useEffect(() => { fetchCounts(); }, [fetchCounts]);
-    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+    useEffect(() => {
+        void (async () => { await fetchQuotes(); })();
+    }, [fetchQuotes]);
+
+    useEffect(() => {
+        void (async () => { await fetchCounts(); })();
+    }, [fetchCounts]);
+
+    useEffect(() => {
+        startTransition(() => { setCurrentPage(1); });
+    }, [activeTab, search]);
 
     // Row actions 
     const handleApprove = (quote: QuoteSummary) => {
@@ -108,7 +116,7 @@ export default function QuotesPage() {
     const handleDuplicate = async (quote: QuoteSummary) => {
         try {
             const dup = await duplicateQuote(quote.id);
-            navigate(`/quotes/${dup.id}/edit`);
+            navigate(`/quotes/${dup.new_quote_id}/edit`);
         } catch (err) {
             setListError(
                 err instanceof Error ? err.message : "Failed to duplicate quote"

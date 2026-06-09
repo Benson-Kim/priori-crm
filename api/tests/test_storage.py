@@ -4,6 +4,7 @@ The local backend is exercised against a real temp dir. The S3 backend is
 driven by a stubbed boto3-style client so no AWS access is needed and the
 test runs on every backend (no Postgres dependency).
 """
+
 import io
 
 import pytest
@@ -16,14 +17,16 @@ from app.lib.storage import (
     sanitize_storage_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # Key sanitisation
 # ---------------------------------------------------------------------------
 
 
 def test_sanitize_storage_key_joins_segments():
-    assert sanitize_storage_key("expenses/123", "abc_file.pdf") == "expenses/123/abc_file.pdf"
+    assert (
+        sanitize_storage_key("expenses/123", "abc_file.pdf")
+        == "expenses/123/abc_file.pdf"
+    )
 
 
 def test_sanitize_storage_key_strips_traversal():
@@ -120,26 +123,25 @@ class _FakeS3Client:
     def upload_fileobj(self, fileobj, bucket, key) -> None:
         self.objects[key] = fileobj.read()
 
-    def get_object(self, Bucket, Key):  # noqa: N803 - boto3 kwarg casing
+    def get_object(self, Bucket, Key):
         if Key not in self.objects:
             raise _FakeClientError("NoSuchKey")
         return {"Body": _FakeBody(self.objects[Key])}
 
-    def delete_object(self, Bucket, Key) -> None:  # noqa: N803
+    def delete_object(self, Bucket, Key) -> None:
         self.objects.pop(Key, None)
 
-    def head_object(self, Bucket, Key) -> None:  # noqa: N803
+    def head_object(self, Bucket, Key) -> None:
         if Key not in self.objects:
             raise _FakeClientError("404")
 
-    def generate_presigned_url(self, op, Params, ExpiresIn):  # noqa: N803
+    def generate_presigned_url(self, op, Params, ExpiresIn):
         return f"https://s3.example/{Params['Key']}?expires={ExpiresIn}"
 
 
 @pytest.fixture
 def s3_backend(monkeypatch):
     """An S3StorageBackend wired to the in-memory fake client."""
-    import app.lib.storage as storage_mod
 
     fake = _FakeS3Client()
     backend = S3StorageBackend.__new__(S3StorageBackend)

@@ -1,19 +1,19 @@
 import logging
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
 from app.common.database import Base
 from app.lib.config import settings
 
 # Import all models so Base.metadata is populated
 from app.modules.auth.models import OTPCode, User  # noqa: F401
 from app.modules.customers.models import Customer  # noqa: F401
+from app.modules.expenses.models import Expense  # noqa: F401
 from app.modules.invoices.models import Invoice  # noqa: F401
 from app.modules.quotes.models import Quote  # noqa: F401
 from app.modules.vendors.models import Vendor  # noqa: F401
-from app.modules.expenses.models import Expense  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
@@ -24,6 +24,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 logger = logging.getLogger("alembic.env")
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""

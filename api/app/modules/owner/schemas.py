@@ -3,9 +3,9 @@
 Reuses the shared validators (normalize_phone, empty_str_to_none, website
 normaliser) rather than re-implementing them (W-7).
 """
+
 import re
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 

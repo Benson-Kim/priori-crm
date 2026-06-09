@@ -18,15 +18,14 @@ from app.modules.vendors.schemas import (
     VendorDeleteResponse,
     VendorDuplicateCheckResponse,
     VendorFilterParams,
-    VendorOperationResponse,
     VendorPayablesSummary,
     VendorResponse,
+    VendorStatement,
     VendorStatusCounts,
     VendorSummary,
     VendorTransactionFilterParams,
     VendorTransactionSummary,
     VendorUpdate,
-    VendorStatement,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +34,7 @@ router = APIRouter()
 
 
 # CREATE
+
 
 @router.post(
     "",
@@ -48,7 +48,9 @@ router = APIRouter()
     ),
     responses={
         201: {"description": "Vendor created successfully"},
-        400: {"description": "Validation failed (e.g. blank vendor name, invalid email)"},
+        400: {
+            "description": "Validation failed (e.g. blank vendor name, invalid email)"
+        },
         404: {"description": "Linked contact not found (when contactId is supplied)"},
         409: {"description": "A vendor with this email already exists"},
     },
@@ -63,6 +65,7 @@ def create_vendor(
 
 
 # LIST
+
 
 @router.get(
     "",
@@ -109,6 +112,7 @@ def list_vendors(
 
 # STATUS COUNTS
 
+
 @router.get(
     "/counts",
     response_model=VendorStatusCounts,
@@ -127,6 +131,7 @@ def get_vendor_counts(service: VendorServiceDep) -> VendorStatusCounts:
 
 
 # CONTACT SEARCH
+
 
 @router.get(
     "/contacts/search",
@@ -165,6 +170,7 @@ def search_contacts(
 
 # DUPLICATE EMAIL CHECK
 
+
 @router.get(
     "/check-email",
     response_model=VendorDuplicateCheckResponse,
@@ -202,6 +208,7 @@ def check_email_duplicate(
 
 # GET BY ID
 
+
 @router.get(
     "/{vendor_id}",
     response_model=VendorResponse,
@@ -224,7 +231,8 @@ def get_vendor(
     return VendorResponse.model_validate(vendor)
 
 
-# UPDATE 
+# UPDATE
+
 
 @router.put(
     "/{vendor_id}",
@@ -258,11 +266,14 @@ def update_vendor(
     ] = None,
 ) -> VendorResponse:
     """Update an existing vendor."""
-    vendor = service.update(vendor_id, body, user_id=service._actor_id, expected_version=expected_version)
+    vendor = service.update(
+        vendor_id, body, user_id=service._actor_id, expected_version=expected_version
+    )
     return VendorResponse.model_validate(vendor)
 
 
-# DELETE 
+# DELETE
+
 
 @router.delete(
     "/{vendor_id}",
@@ -293,7 +304,8 @@ def delete_vendor(
     return VendorDeleteResponse(**result)
 
 
-# ACTIVATE 
+# ACTIVATE
+
 
 @router.post(
     "/{vendor_id}/activate",
@@ -314,12 +326,13 @@ def activate_vendor(
     vendor_id: UUID,
     service: VendorServiceDep,
 ) -> VendorResponse:
-    """Activate a vendor """
+    """Activate a vendor"""
     vendor = service.activate(vendor_id, user_id=service._actor_id)
     return VendorResponse.model_validate(vendor)
 
 
-# DEACTIVATE 
+# DEACTIVATE
+
 
 @router.post(
     "/{vendor_id}/deactivate",
@@ -346,7 +359,8 @@ def deactivate_vendor(
     return VendorResponse.model_validate(vendor)
 
 
-# TRANSACTION LIST 
+# TRANSACTION LIST
+
 
 @router.get(
     "/{vendor_id}/transactions",
@@ -384,7 +398,8 @@ def get_vendor_transactions(
     return service.get_vendor_transactions(vendor_id, params, filters)
 
 
-# PAYABLES SUMMARY 
+# PAYABLES SUMMARY
+
 
 @router.get(
     "/{vendor_id}/payables",
@@ -408,7 +423,9 @@ def get_vendor_payables(
     """
     return service.get_payables_summary(vendor_id)
 
+
 # STATEMENT
+
 
 @router.get(
     "/{vendor_id}/statement",

@@ -6,6 +6,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency } from "@/lib/utils";
 import {
     activateCustomer,
@@ -20,9 +21,8 @@ import {
     type StatusCounts,
 } from "@/services/customerApi";
 import { Ban, CheckCircle, Eye, Pencil, Plus, Trash } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConfirm } from "@/hooks/useConfirm";
 
 export default function CustomersPage() {
     const [activeTab, setActiveTab] = useState("all");
@@ -31,9 +31,9 @@ export default function CustomersPage() {
     const [perPage, setPerPage] = useState(10);
     const [customers, setCustomers] = useState<CustomerSummary[]>([]);
     const [totalPages, setTotalPages] = useState(1);
-    const [counts, setCounts] = useState<StatusCounts>({ all: 0, active: 0, inactive: 0 });
+    const [counts, setCounts] = useState<StatusCounts>({ all: 0, active: 0, inactive: 0, suspended: 0, deleted: 0 });
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [, setError] = useState<string | null>(null);
 
     const { showConfirm, ConfirmDialog } = useConfirm();
 
@@ -74,11 +74,17 @@ export default function CustomersPage() {
         fetchCounts();
     }, [fetchCustomers, fetchCounts]);
 
-    useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-    useEffect(() => { fetchCounts(); }, [fetchCounts]);
+    useEffect(() => {
+        void (async () => { await fetchCustomers(); })();
+    }, [fetchCustomers]);
+    useEffect(() => {
+        void (async () => { await fetchCounts(); })();
+    }, [fetchCounts]);
 
     // Reset to page 1 when filters change
-    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+    useEffect(() => {
+        startTransition(() => { setCurrentPage(1); });
+    }, [activeTab, search]);
 
     // Actions
 
@@ -258,14 +264,6 @@ export default function CustomersPage() {
             ),
         },
     ];
-
-    {
-        error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                {error}
-            </div>
-        )
-    }
 
     return (
         <div className="flex flex-col space-y-4">

@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-schema
+        name: SQLAlchemy schema duplicate index check
+        entry: python scripts/check_schema.py
+        language: python
+        pass_filenames: false
+        files: ^app/.*models.*\.py$

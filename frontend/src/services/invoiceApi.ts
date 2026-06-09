@@ -3,6 +3,7 @@
  */
 
 import { apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import type { CurrencyOption } from "@/lib/constants";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
 
 
@@ -64,7 +65,7 @@ export interface InvoiceResponse {
   transaction_date: string;
   due_date: string;
   status: string;
-  currency: string;
+  currency: CurrencyOption;
   subtotal: number;
   discount_type: string | null;
   discount_amount: number | null;
@@ -112,7 +113,7 @@ export interface InvoiceCreatePayload {
   customerId: string;
   transactionDate: string;
   dueDate: string;
-  currency: string;
+  currency: CurrencyOption;
   lineItems: LineItemPayload[];
   rfqNumber?: string;
   notes?: string;

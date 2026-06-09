@@ -2,29 +2,29 @@ import re
 
 # ISO country code → E.164 dial code mapping
 COUNTRY_DIAL_CODES: dict[str, str] = {
-    "KE": "254",   # Kenya
-    "UG": "256",   # Uganda
-    "TZ": "255",   # Tanzania
-    "RW": "250",   # Rwanda
-    "US": "1",     # United States
-    "GB": "44",    # United Kingdom
-    "ZA": "27",    # South Africa
-    "NG": "234",   # Nigeria
-    "GH": "233",   # Ghana
-    "ET": "251",   # Ethiopia
-    "EG": "20",    # Egypt
-    "IN": "91",    # India
-    "CN": "86",    # China
-    "AU": "61",    # Australia
-    "CA": "1",     # Canada
-    "FR": "33",    # France
-    "DE": "49",    # Germany
-    "IT": "39",    # Italy
-    "ES": "34",    # Spain
-    "BR": "55",    # Brazil
-    "MX": "52",    # Mexico
-    "AE": "971",   # UAE
-    "SA": "966",   # Saudi Arabia
+    "KE": "254",  # Kenya
+    "UG": "256",  # Uganda
+    "TZ": "255",  # Tanzania
+    "RW": "250",  # Rwanda
+    "US": "1",  # United States
+    "GB": "44",  # United Kingdom
+    "ZA": "27",  # South Africa
+    "NG": "234",  # Nigeria
+    "GH": "233",  # Ghana
+    "ET": "251",  # Ethiopia
+    "EG": "20",  # Egypt
+    "IN": "91",  # India
+    "CN": "86",  # China
+    "AU": "61",  # Australia
+    "CA": "1",  # Canada
+    "FR": "33",  # France
+    "DE": "49",  # Germany
+    "IT": "39",  # Italy
+    "ES": "34",  # Spain
+    "BR": "55",  # Brazil
+    "MX": "52",  # Mexico
+    "AE": "971",  # UAE
+    "SA": "966",  # Saudi Arabia
 }
 
 DEFAULT_DIAL_CODE = "254"  # Kenya

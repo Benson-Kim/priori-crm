@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
-    DateTime,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -24,7 +24,6 @@ from app.constants.enums import (
     Currency,
     DiscountType,
     InvoiceStatus,
-    PaymentMethod,
     TaxType,
 )
 
@@ -32,9 +31,9 @@ from app.constants.enums import (
 class Invoice(Base):
     """
     Invoice entity with financial calculations and state machine.
-    
+
     Lifecycle: DRAFT → SENT → (PARTIAL →) PAID | OVERDUE | CANCELED
-    
+
     Financial Formula:
         subtotal = SUM(line_items.line_total)
         discount_value = discount_amount OR (subtotal * discount_percentage / 100)
@@ -106,7 +105,7 @@ class Invoice(Base):
         index=True,
         comment="System-generated invoice number (e.g., INV-20240707)",
     )
-    
+
     invoice_reference: Mapped[str] = mapped_column(
         String(50),
         unique=True,
@@ -128,10 +127,9 @@ class Invoice(Base):
     transaction_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
-        index=True,
         comment="Invoice issue date",
     )
-    
+
     due_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
@@ -148,7 +146,7 @@ class Invoice(Base):
         index=True,
         comment="Current invoice status",
     )
-    
+
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
@@ -165,26 +163,26 @@ class Invoice(Base):
         server_default=text("0.00"),
         comment="Sum of all line items before discount/tax",
     )
-    
+
     # Discount
     discount_type: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Type of discount: 'amount' or 'percentage'",
     )
-    
+
     discount_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2),
         nullable=True,
         comment="Fixed discount amount (if discount_type = 'amount')",
     )
-    
+
     discount_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Discount percentage 0-100 (if discount_type = 'percentage')",
     )
-    
+
     tax_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -192,7 +190,7 @@ class Invoice(Base):
         server_default=text("0.00"),
         comment="Sum of all tax amounts",
     )
-    
+
     total_due: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -200,7 +198,7 @@ class Invoice(Base):
         server_default=text("0.00"),
         comment="Final invoice amount: subtotal - discount + tax",
     )
-    
+
     amount_paid: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -208,7 +206,7 @@ class Invoice(Base):
         server_default=text("0.00"),
         comment="Total amount paid against this invoice",
     )
-    
+
     balance_due: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
@@ -223,7 +221,7 @@ class Invoice(Base):
         nullable=True,
         comment="Purchase order or RFQ reference number",
     )
-    
+
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -238,7 +236,7 @@ class Invoice(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         comment="Record creation timestamp",
     )
-    
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -247,13 +245,13 @@ class Invoice(Base):
         onupdate=lambda: datetime.now(UTC),
         comment="Last update timestamp",
     )
-    
+
     sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When invoice was sent to customer",
     )
-    
+
     paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -275,7 +273,7 @@ class Invoice(Base):
         nullable=True,
         comment="Owner profile as it was when this invoice was issued",
     )
-    
+
     # Optimistic Locking
     version: Mapped[int] = mapped_column(
         Integer,
@@ -291,7 +289,7 @@ class Invoice(Base):
         back_populates="invoices",
         lazy="joined",
     )
-    
+
     line_items = relationship(
         "InvoiceLineItem",
         back_populates="invoice",
@@ -299,7 +297,7 @@ class Invoice(Base):
         order_by="InvoiceLineItem.line_number",
         lazy="selectin",
     )
-    
+
     payments = relationship(
         "Payment",
         back_populates="invoice",
@@ -323,6 +321,7 @@ class Invoice(Base):
     def is_overdue(self) -> bool:
         """Check if invoice is past due date (centralized predicate, V-DRY-4)."""
         from app.common.financial import check_is_overdue
+
         # is_paid also covers balance_due <= 0, which the status-only predicate
         # cannot see, so keep it as an additional guard.
         return not self.is_paid and check_is_overdue(
@@ -335,6 +334,7 @@ class Invoice(Base):
     def days_overdue(self) -> int:
         """Calculate days overdue (0 if not overdue)."""
         from datetime import date
+
         if not self.is_overdue:
             return 0
         return (date.today() - self.due_date).days
@@ -359,7 +359,7 @@ class Invoice(Base):
 class InvoiceLineItem(Base):
     """
     Individual line item within an invoice.
-    
+
     """
 
     __tablename__ = "invoice_line_items"
@@ -383,8 +383,7 @@ class InvoiceLineItem(Base):
         ),
         Index("ix_line_items_invoice_id", "invoice_id"),
         UniqueConstraint(
-            "invoice_id", "line_number",
-            name="uq_line_items_invoice_line_number"
+            "invoice_id", "line_number", name="uq_line_items_invoice_line_number"
         ),
     )
 
@@ -399,7 +398,6 @@ class InvoiceLineItem(Base):
         UUID(as_uuid=True),
         ForeignKey("invoices.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # TODO: Add product_id when Products module exists
@@ -438,7 +436,7 @@ class InvoiceLineItem(Base):
     line_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
-        comment="Total before tax: quantity × unit_price",
+        comment="Total before tax: quantity x unit_price",
     )
 
     tax_type: Mapped[str] = mapped_column(
@@ -496,7 +494,7 @@ class InvoiceLineItem(Base):
 class Payment(Base):
     """
     Payment record against an invoice.
-    
+
     Multiple payments can be applied to a single invoice (partial payments).
     """
 
@@ -522,7 +520,6 @@ class Payment(Base):
         UUID(as_uuid=True),
         ForeignKey("invoices.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     amount: Mapped[Decimal] = mapped_column(
@@ -534,7 +531,6 @@ class Payment(Base):
     payment_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
-        index=True,
         comment="Date payment was received",
     )
 

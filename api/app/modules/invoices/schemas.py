@@ -1,4 +1,5 @@
 """Pydantic schemas for invoice API requests and responses."""
+
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -20,21 +21,37 @@ from app.constants.enums import (
 )
 from app.modules.customers.schemas import CustomerSummary
 
-
 # LINE ITEM SCHEMAS
+
 
 class InvoiceLineItemCreate(BaseModel):
     """Schema for creating an invoice line item."""
 
-    item_name: str = Field(..., max_length=500, description="Product/service name", alias="itemName")
+    item_name: str = Field(
+        ..., max_length=500, description="Product/service name", alias="itemName"
+    )
 
-    description: str = Field(..., min_length=1, max_length=1000, description="Line item description", alias="description")
+    description: str = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Line item description",
+        alias="description",
+    )
 
-    quantity: Decimal = Field(..., gt=0, decimal_places=2, description="Quantity of items", alias="quantity")
+    quantity: Decimal = Field(
+        ..., gt=0, decimal_places=2, description="Quantity of items", alias="quantity"
+    )
 
-    unit_price: Decimal = Field(..., ge=0, decimal_places=2, description="Price per unit", alias="unitPrice")
+    unit_price: Decimal = Field(
+        ..., ge=0, decimal_places=2, description="Price per unit", alias="unitPrice"
+    )
 
-    tax_type: TaxType = Field(default=TaxType.VAT_16, description="Tax type for this line item", alias="taxType")
+    tax_type: TaxType = Field(
+        default=TaxType.VAT_16,
+        description="Tax type for this line item",
+        alias="taxType",
+    )
 
     # Optional: product_id when Products module exists
     # product_id: UUID | None = Field(None, alias="productId")
@@ -47,21 +64,20 @@ class InvoiceLineItemCreate(BaseModel):
                 "description": "Monthly subscription",
                 "quantity": 10,
                 "unitPrice": 120.55,
-                "taxType": "vat_16"
+                "taxType": "vat_16",
             }
-        }
+        },
     }
-
 
 
 class InvoiceLineItemUpdate(BaseModel):
     """Schema for updating an invoice line item."""
-    
+
     description: str | None = Field(None, min_length=1, max_length=1000)
     quantity: Decimal | None = Field(None, gt=0, decimal_places=2)
     unit_price: Decimal | None = Field(None, ge=0, decimal_places=2, alias="unitPrice")
     tax_type: TaxType | None = Field(None, alias="taxType")
-    
+
     model_config = {"populate_by_name": True}
 
 
@@ -85,19 +101,42 @@ class InvoiceLineItemResponse(BaseModel):
 
 # PAYMENT SCHEMAS
 
+
 class PaymentCreate(BaseModel):
     """Schema for recording a payment against an invoice."""
-    
-    amount: Decimal = Field(..., gt=0, decimal_places=2, description="Payment amount (must be positive)", alias="amount")
-    
-    payment_date: date = Field(default_factory=date.today, description="Date payment was received", alias="paymentDate")
-    
-    payment_method: PaymentMethod = Field(..., description="Payment method used", alias="paymentMethod")
-    
-    reference: str | None = Field(None, max_length=200, description="Payment reference (check number, transaction ID, etc.)", alias="reference")
-    
-    notes: str | None = Field(None, max_length=1000, description="Internal notes about this payment", alias="notes")
-    
+
+    amount: Decimal = Field(
+        ...,
+        gt=0,
+        decimal_places=2,
+        description="Payment amount (must be positive)",
+        alias="amount",
+    )
+
+    payment_date: date = Field(
+        default_factory=date.today,
+        description="Date payment was received",
+        alias="paymentDate",
+    )
+
+    payment_method: PaymentMethod = Field(
+        ..., description="Payment method used", alias="paymentMethod"
+    )
+
+    reference: str | None = Field(
+        None,
+        max_length=200,
+        description="Payment reference (check number, transaction ID, etc.)",
+        alias="reference",
+    )
+
+    notes: str | None = Field(
+        None,
+        max_length=1000,
+        description="Internal notes about this payment",
+        alias="notes",
+    )
+
     @field_validator("reference", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -105,7 +144,7 @@ class PaymentCreate(BaseModel):
         if v == "" or (isinstance(v, str) and v.strip() == ""):
             return None
         return v
-    
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {
@@ -114,15 +153,15 @@ class PaymentCreate(BaseModel):
                 "paymentDate": "2026-03-30",
                 "paymentMethod": "bank_transfer",
                 "reference": "TXN-123456789",
-                "notes": "Payment received via M-Pesa"
+                "notes": "Payment received via M-Pesa",
             }
-        }
+        },
     }
 
 
 class PaymentResponse(BaseModel):
     """Schema for payment in responses."""
-    
+
     id: UUID
     amount: Decimal
     payment_date: date
@@ -131,39 +170,77 @@ class PaymentResponse(BaseModel):
     notes: str | None = None
     created_at: datetime
     recorded_by: UUID | None = None
-    
+
     model_config = {"from_attributes": True}
 
 
 # INVOICE REQUEST SCHEMAS
 
+
 class InvoiceCreate(BaseModel):
     """Schema for creating a new invoice."""
-    
+
     # Required Fields
-    customer_id: UUID = Field(..., description="Customer receiving this invoice", alias="customerId")
-    
-    transaction_date: date = Field(default_factory=date.today,description="Invoice issue date",alias="transactionDate")
-    
-    due_date: date = Field(...,description="Payment due date",alias="dueDate")
-    
-    currency: Currency = Field(default=Currency.KES, description="Invoice currency", alias="currency")
-    
+    customer_id: UUID = Field(
+        ..., description="Customer receiving this invoice", alias="customerId"
+    )
+
+    transaction_date: date = Field(
+        default_factory=date.today,
+        description="Invoice issue date",
+        alias="transactionDate",
+    )
+
+    due_date: date = Field(..., description="Payment due date", alias="dueDate")
+
+    currency: Currency = Field(
+        default=Currency.KES, description="Invoice currency", alias="currency"
+    )
+
     # Line Items (at least one required)
-    line_items: list[InvoiceLineItemCreate] = Field(..., min_length=1, description="Invoice line items (at least one required)", alias="lineItems" )
-    
+    line_items: list[InvoiceLineItemCreate] = Field(
+        ...,
+        min_length=1,
+        description="Invoice line items (at least one required)",
+        alias="lineItems",
+    )
+
     # Optional Fields
-    rfq_number: str | None = Field(None, max_length=100, description="Purchase order or RFQ reference", alias="rfqNumber")
-    
-    notes: str | None = Field(None, max_length=5000, description="Customer-facing notes", alias="notes" )
-    
+    rfq_number: str | None = Field(
+        None,
+        max_length=100,
+        description="Purchase order or RFQ reference",
+        alias="rfqNumber",
+    )
+
+    notes: str | None = Field(
+        None, max_length=5000, description="Customer-facing notes", alias="notes"
+    )
+
     # Discount (optional)
-    discount_type: DiscountType | None = Field(None, description="Type of discount: 'amount' or 'percentage'", alias="discountType" )
-    
-    discount_amount: Decimal | None = Field(None, ge=0, decimal_places=2, description="Fixed discount amount", alias="discountAmount" )
-    
-    discount_percentage: Decimal | None = Field(None, ge=0, le=100, decimal_places=2, description="Discount percentage (0-100)", alias="discountPercentage" )
-    
+    discount_type: DiscountType | None = Field(
+        None,
+        description="Type of discount: 'amount' or 'percentage'",
+        alias="discountType",
+    )
+
+    discount_amount: Decimal | None = Field(
+        None,
+        ge=0,
+        decimal_places=2,
+        description="Fixed discount amount",
+        alias="discountAmount",
+    )
+
+    discount_percentage: Decimal | None = Field(
+        None,
+        ge=0,
+        le=100,
+        decimal_places=2,
+        description="Discount percentage (0-100)",
+        alias="discountPercentage",
+    )
+
     @field_validator("rfq_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -171,27 +248,29 @@ class InvoiceCreate(BaseModel):
         if v == "" or (isinstance(v, str) and v.strip() == ""):
             return None
         return v
-    
+
     @model_validator(mode="after")
     def validate_due_date(self) -> "InvoiceCreate":
         """Ensure due date is not before transaction date."""
         if self.due_date < self.transaction_date:
             raise ValueError("due_date must be on or after transaction_date")
         return self
-    
+
     @model_validator(mode="after")
     def validate_discount(self) -> "InvoiceCreate":
         """Ensure discount type matches provided values."""
         sent = self.model_fields_set
         has_amount = self.discount_amount is not None and self.discount_amount > 0
-        has_percentage = self.discount_percentage is not None and self.discount_percentage > 0
-        
+        has_percentage = (
+            self.discount_percentage is not None and self.discount_percentage > 0
+        )
+
         if has_amount and has_percentage:
             raise ValueError(
                 "Cannot specify both discount_amount and discount_percentage. "
                 "Choose one discount method."
             )
-        
+
         if has_amount:
             self.discount_type = DiscountType.AMOUNT
             if "discount_percentage" in sent:
@@ -203,7 +282,7 @@ class InvoiceCreate(BaseModel):
             if "discount_amount" in sent:
                 self.discount_amount = None
             return self
-        
+
         discount_fields = {"discount_type", "discount_amount", "discount_percentage"}
         client_sent_discount_fields = discount_fields & sent
 
@@ -219,7 +298,7 @@ class InvoiceCreate(BaseModel):
                 self.discount_percentage = None
 
         return self
-    
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {
@@ -233,41 +312,41 @@ class InvoiceCreate(BaseModel):
                         "description": "Microsoft 365 Suite",
                         "quantity": 120.55,
                         "unitPrice": 120.55,
-                        "taxType": "vat_16"
+                        "taxType": "vat_16",
                     }
                 ],
                 "rfqNumber": "PO-2026-001",
                 "notes": "Thank you for your business",
                 "discountType": "percentage",
-                "discountPercentage": 10.0
+                "discountPercentage": 10.0,
             }
-        }
+        },
     }
 
 
 class InvoiceUpdate(BaseModel):
     """Schema for updating an existing invoice (only editable fields)."""
-    
+
     # Customer can only be changed in DRAFT status
     customer_id: UUID | None = Field(None, alias="customerId")
-    
+
     transaction_date: date | None = Field(None, alias="transactionDate")
     due_date: date | None = Field(None, alias="dueDate")
     currency: Currency | None = None
-    
+
     line_items: list[InvoiceLineItemCreate] | None = Field(
-        None,
-        min_length=1,
-        alias="lineItems"
+        None, min_length=1, alias="lineItems"
     )
-    
+
     rfq_number: str | None = Field(None, max_length=100, alias="rfqNumber")
     notes: str | None = Field(None, max_length=5000)
-    
+
     discount_type: DiscountType | None = Field(None, alias="discountType")
     discount_amount: Decimal | None = Field(None, ge=0, alias="discountAmount")
-    discount_percentage: Decimal | None = Field(None, ge=0, le=100, alias="discountPercentage")
-    
+    discount_percentage: Decimal | None = Field(
+        None, ge=0, le=100, alias="discountPercentage"
+    )
+
     @field_validator("rfq_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -275,37 +354,38 @@ class InvoiceUpdate(BaseModel):
         if v == "" or (isinstance(v, str) and v.strip() == ""):
             return None
         return v
-    
+
     @model_validator(mode="after")
     def validate_due_date(self) -> "InvoiceUpdate":
         """Ensure due date is not before transaction date if both provided."""
         if (
-            self.due_date is not None and
-            self.transaction_date is not None and
-            self.due_date < self.transaction_date
+            self.due_date is not None
+            and self.transaction_date is not None
+            and self.due_date < self.transaction_date
         ):
             raise ValueError("due_date must be on or after transaction_date")
         return self
-    
+
     model_config = {"populate_by_name": True}
 
 
 # INVOICE RESPONSE SCHEMAS
 
+
 class InvoiceResponse(BaseModel):
     """Complete invoice data for API responses."""
-    
+
     id: UUID
     invoice_number: str
     invoice_reference: str
     customer_id: UUID
-    
+
     transaction_date: date
     due_date: date
-    
+
     status: str
     currency: str
-    
+
     subtotal: Decimal
     discount_type: str | None = None
     discount_amount: Decimal | None = None
@@ -314,23 +394,23 @@ class InvoiceResponse(BaseModel):
     total_due: Decimal
     amount_paid: Decimal
     balance_due: Decimal
-    
+
     rfq_number: str | None = None
     notes: str | None = None
-    
+
     created_at: datetime
     updated_at: datetime
     sent_at: datetime | None = None
     paid_at: datetime | None = None
-    
+
     created_by: UUID | None = None
     version: int
-    
+
     # Relationships
     customer: CustomerSummary
     line_items: list[InvoiceLineItemResponse] = Field(default_factory=list)
     payments: list[PaymentResponse] = Field(default_factory=list)
-    
+
     # Computed fields
     @computed_field
     @property
@@ -343,9 +423,9 @@ class InvoiceResponse(BaseModel):
     def is_overdue(self) -> bool:
         """Check if invoice is overdue."""
         return (
-            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED] and
-            self.due_date < date.today() and
-            self.balance_due > 0
+            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED]
+            and self.due_date < date.today()
+            and self.balance_due > 0
         )
 
     @computed_field
@@ -361,31 +441,31 @@ class InvoiceResponse(BaseModel):
 
 class InvoiceSummary(BaseModel):
     """Lightweight invoice summary for list views."""
-    
+
     id: UUID
     invoice_number: str
     invoice_reference: str
     customer_id: UUID
     customer_name: str  # Joined from customer table
-    
+
     transaction_date: date
     due_date: date
-    
+
     status: str
     currency: str
     total_due: Decimal
     balance_due: Decimal
-    
+
     created_at: datetime
-    
+
     @computed_field
     @property
     def is_overdue(self) -> bool:
         """Check if invoice is overdue."""
         return (
-            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED] and
-            self.due_date < date.today() and
-            self.balance_due > 0
+            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED]
+            and self.due_date < date.today()
+            and self.balance_due > 0
         )
 
     @computed_field
@@ -401,7 +481,7 @@ class InvoiceSummary(BaseModel):
 
 class InvoiceStatusCounts(BaseModel):
     """Invoice counts by status for dashboard."""
-    
+
     all: int = 0
     draft: int = 0
     sent: int = 0
@@ -413,13 +493,15 @@ class InvoiceStatusCounts(BaseModel):
 
 class InvoiceStatisticsResponse(BaseModel):
     """Response schema for invoice statistics."""
-    
+
     total_invoices: int = Field(..., description="Total number of invoices in period")
     total_invoiced: Decimal = Field(..., description="Total invoiced amount")
     total_paid: Decimal = Field(..., description="Total amount paid")
     total_outstanding: Decimal = Field(..., description="Total outstanding balance")
     average_invoice_value: Decimal = Field(..., description="Average invoice amount")
-    average_days_to_payment: float = Field(..., description="Average days from invoice to payment")
+    average_days_to_payment: float = Field(
+        ..., description="Average days from invoice to payment"
+    )
     overdue_count: int = Field(..., description="Number of overdue invoices")
     overdue_amount: Decimal = Field(..., description="Total overdue amount")
     date_from: date | None = Field(None, description="Start date of period")
@@ -430,17 +512,34 @@ class InvoiceStatisticsResponse(BaseModel):
 
 # ACTION SCHEMAS
 
+
 class InvoiceSendRequest(BaseModel):
     """Schema for sending an invoice via email."""
-    
-    to_email: str | None = Field(None, description="Override recipient email (defaults to customer email)", alias="toEmail")
-    
-    subject: str | None = Field(None, max_length=200, description="Email subject (auto-generated if not provided)", alias="subject" )
-    
-    body: str | None = Field(None, max_length=5000, description="Email body (uses template if not provided)", alias="body" )
-    
-    attach_pdf: bool = Field(default=True, description="Whether to attach invoice PDF", alias="attachPdf" )
-    
+
+    to_email: str | None = Field(
+        None,
+        description="Override recipient email (defaults to customer email)",
+        alias="toEmail",
+    )
+
+    subject: str | None = Field(
+        None,
+        max_length=200,
+        description="Email subject (auto-generated if not provided)",
+        alias="subject",
+    )
+
+    body: str | None = Field(
+        None,
+        max_length=5000,
+        description="Email body (uses template if not provided)",
+        alias="body",
+    )
+
+    attach_pdf: bool = Field(
+        default=True, description="Whether to attach invoice PDF", alias="attachPdf"
+    )
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {
@@ -448,15 +547,15 @@ class InvoiceSendRequest(BaseModel):
                 "toEmail": "customer@example.com",
                 "subject": "Invoice IN-0101 from Priori Technologies",
                 "body": "Please find attached your invoice.",
-                "attachPdf": True
+                "attachPdf": True,
             }
-        }
+        },
     }
 
 
 class InvoiceSendResponse(BaseModel):
     """Response after sending an invoice."""
-    
+
     invoice_id: UUID
     sent_to: str
     sent_at: datetime
@@ -465,15 +564,19 @@ class InvoiceSendResponse(BaseModel):
 
 class InvoiceMarkSentRequest(BaseModel):
     """Schema for marking invoice as sent without emailing."""
-    
-    sent_at: datetime | None = Field(None, description="Timestamp when invoice was sent (defaults to now)", alias="sentAt" )
-    
+
+    sent_at: datetime | None = Field(
+        None,
+        description="Timestamp when invoice was sent (defaults to now)",
+        alias="sentAt",
+    )
+
     model_config = {"populate_by_name": True}
 
 
 class InvoiceDuplicateResponse(BaseModel):
     """Response after duplicating an invoice."""
-    
+
     original_invoice_id: UUID
     new_invoice_id: UUID
     new_invoice_number: str
@@ -482,74 +585,101 @@ class InvoiceDuplicateResponse(BaseModel):
 
 class InvoiceCalculationResponse(BaseModel):
     """Response for invoice total calculations (preview)."""
-    
+
     subtotal: Decimal
     discount_value: Decimal
     tax_total: Decimal
     total_due: Decimal
-    
-    line_items: list[dict] = Field(default_factory=list, description="Line items with calculated totals" )
+
+    line_items: list[dict] = Field(
+        default_factory=list, description="Line items with calculated totals"
+    )
 
 
 # FILTER & SEARCH SCHEMAS
 
+
 class InvoiceFilterParams(BaseModel):
     """Query parameters for filtering invoices."""
-    
-    status: InvoiceStatus | None = Field(None, description="Filter by status" )
-    
-    customer_id: UUID | None = Field(None, description="Filter by customer", alias="customerId" )
-    
-    date_from: date | None = Field(None, description="Filter invoices from this date (transaction_date)", alias="dateFrom" )
-    
-    date_to: date | None = Field(None, description="Filter invoices up to this date (transaction_date)", alias="dateTo" )
-    
-    due_date_from: date | None = Field(None, description="Filter by due date range start", alias="dueDateFrom" )
-    
-    due_date_to: date | None = Field(None, description="Filter by due date range end", alias="dueDateTo")
-    
-    search: str | None = Field(None, max_length=100, description="Search in invoice number, customer name, or reference" )
-    
+
+    status: InvoiceStatus | None = Field(None, description="Filter by status")
+
+    customer_id: UUID | None = Field(
+        None, description="Filter by customer", alias="customerId"
+    )
+
+    date_from: date | None = Field(
+        None,
+        description="Filter invoices from this date (transaction_date)",
+        alias="dateFrom",
+    )
+
+    date_to: date | None = Field(
+        None,
+        description="Filter invoices up to this date (transaction_date)",
+        alias="dateTo",
+    )
+
+    due_date_from: date | None = Field(
+        None, description="Filter by due date range start", alias="dueDateFrom"
+    )
+
+    due_date_to: date | None = Field(
+        None, description="Filter by due date range end", alias="dueDateTo"
+    )
+
+    search: str | None = Field(
+        None,
+        max_length=100,
+        description="Search in invoice number, customer name, or reference",
+    )
+
     model_config = {"populate_by_name": True}
 
 
 # DETAIL VIEW SCHEMAS
 
+
 class InvoiceDetailResponse(BaseModel):
     """Enhanced invoice detail with customer information."""
-    
+
     invoice: InvoiceResponse
     customer: dict  # CustomerResponse from customers module
-    
+
     # Computed summaries
     total_line_items: int
     total_payments: int
     next_actions: list[str] = Field(
-        default_factory=list,
-        description="Available actions based on current status"
+        default_factory=list, description="Available actions based on current status"
     )
 
 
 # EXPORT SCHEMAS
 
+
 class InvoiceExportRequest(BaseModel):
     """Request parameters for Excel export."""
-    
+
     status: InvoiceStatus | None = None
     customer_id: UUID | None = Field(None, alias="customerId")
     date_from: date | None = Field(None, alias="dateFrom")
     date_to: date | None = Field(None, alias="dateTo")
-    
-    include_line_items: bool = Field(default=False, alias="includeLineItems", description="Include line items in export")
-    
+
+    include_line_items: bool = Field(
+        default=False,
+        alias="includeLineItems",
+        description="Include line items in export",
+    )
+
     model_config = {"populate_by_name": True}
 
 
 # VALIDATION ERROR SCHEMAS
 
+
 class InvoiceValidationError(BaseModel):
     """Detailed validation error for invoice operations."""
-    
+
     field: str
     message: str
     error_code: str
@@ -557,7 +687,7 @@ class InvoiceValidationError(BaseModel):
 
 class InvoiceOperationResponse(BaseModel):
     """Generic response for invoice operations."""
-    
+
     success: bool
     message: str
     invoice_id: UUID | None = None

@@ -11,7 +11,9 @@ def test_ses_client_is_lazy_not_built_on_init():
 
 
 def test_dev_mode_skips_send_without_credentials(monkeypatch):
-    monkeypatch.setattr(email_module.settings, "ENVIRONMENT", "development", raising=False)
+    monkeypatch.setattr(
+        email_module.settings, "ENVIRONMENT", "development", raising=False
+    )
     monkeypatch.setattr(email_module.settings, "AWS_ACCESS_KEY_ID", "", raising=False)
     svc = EmailService()
     # Both send paths route through _send and must skip cleanly in dev.

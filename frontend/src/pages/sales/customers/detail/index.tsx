@@ -1,3 +1,4 @@
+import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -7,7 +8,6 @@ import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table } from "@/components/ui/Table";
-import { COMPANY_INFO } from "@/lib/constants";
 import type { CustomerStatement } from "@/lib/types";
 import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
 import {
@@ -29,7 +29,7 @@ import {
   Eye,
   Printer,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function CustomerDetailsPage() {
@@ -142,25 +142,25 @@ export default function CustomerDetailsPage() {
   );
 
   useEffect(() => {
-    fetchCustomer();
+    void (async () => { await fetchCustomer(); })();
   }, [fetchCustomer]);
 
   useEffect(() => {
     if (mainTab === "statements") {
-      fetchStatement();
+      void (async () => { await fetchStatement(); })();
     }
   }, [mainTab, fetchStatement, periodMonths]);
 
   useEffect(() => {
-    fetchInvoices();
+    void (async () => { await fetchInvoices(); })();
   }, [fetchInvoices]);
 
   useEffect(() => {
-    fetchCounts();
+    void (async () => { await fetchCounts(); })();
   }, [fetchCounts]);
 
   useEffect(() => {
-    setCurrentPage(1);
+    startTransition(() => { setCurrentPage(1); });
   }, [activeTab]);
 
   const handleApprove = async (invoice: InvoiceSummary) => {
@@ -180,6 +180,7 @@ export default function CustomerDetailsPage() {
       icon: <Eye size={16} />,
       onClick: () => navigate(`/invoices/${invoice.id}`),
     },
+
     {
       key: "approve",
       label: "Approve",
@@ -189,25 +190,6 @@ export default function CustomerDetailsPage() {
   ];
 
   const actions: DropdownItem[] = [];
-
-  actions.push({
-    key: "edit",
-    label: "Edit",
-    onClick: () => navigate(`/customers/${details.id}/edit`),
-  });
-
-  // create invoice and create quote for this customer
-  actions.push({
-    key: "create-invoice",
-    label: "Create Invoice",
-    onClick: () => navigate(`/customers/${details.id}/edit`),
-  });
-
-  actions.push({
-    key: "create-quote",
-    label: "Create Quote",
-    onClick: () => navigate(`/customers/${details.id}/edit`),
-  });
 
   const getStatusBadge = (item: InvoiceSummary) => {
     if (item.is_overdue && item.days_overdue > 0) {
@@ -221,6 +203,7 @@ export default function CustomerDetailsPage() {
       | "draft"
       | "partial"
       | "canceled";
+
     const labelMap: Record<string, string> = {
       paid: "Paid",
       sent: "Sent",
@@ -228,6 +211,7 @@ export default function CustomerDetailsPage() {
       canceled: "Canceled",
       draft: "Draft",
     };
+
     return <Badge variant={status}>{labelMap[status] ?? item.status}</Badge>;
   };
 
@@ -249,6 +233,24 @@ export default function CustomerDetailsPage() {
   }
 
   const { customer: details, financial_summary } = customer;
+
+  actions.push({
+    key: "edit",
+    label: "Edit",
+    onClick: () => navigate(`/customers/${details.id}/edit`),
+  });
+
+  actions.push({
+    key: "create-invoice",
+    label: "Create Invoice",
+    onClick: () => navigate(`/invoices/add?customerId=${details.id}`),
+  });
+
+  actions.push({
+    key: "create-quote",
+    label: "Create Quote",
+    onClick: () => navigate(`/quotes/add?customerId=${details.id}`),
+  });
 
   // Create display name from customer data
   const displayName =
@@ -346,11 +348,10 @@ export default function CustomerDetailsPage() {
         <div className="flex items-center gap-1 border-b border-gray-200">
           <button
             onClick={() => setMainTab("overview")}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
-              mainTab === "overview"
-                ? "text-priori-purple"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`px-6 py-3 font-semibold transition-colors relative ${mainTab === "overview"
+              ? "text-priori-purple"
+              : "text-gray-500 hover:text-gray-700"
+              }`}
           >
             Overview
             {mainTab === "overview" && (
@@ -359,11 +360,10 @@ export default function CustomerDetailsPage() {
           </button>
           <button
             onClick={() => setMainTab("statements")}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
-              mainTab === "statements"
-                ? "text-priori-purple"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`px-6 py-3 font-semibold transition-colors relative ${mainTab === "statements"
+              ? "text-priori-purple"
+              : "text-gray-500 hover:text-gray-700"
+              }`}
           >
             Statements
             {mainTab === "statements" && (
@@ -483,7 +483,10 @@ export default function CustomerDetailsPage() {
               <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
                 <p className="text-gray-500 text-lg py-3">Total Unpaid</p>
                 <p className="font-bold text-gray-800 text-2xl">
-                  {formatCurrency(details.balance, details.currency ?? "")}
+                  {formatCurrency(
+                    financial_summary.total_unpaid,
+                    details.currency ?? ""
+                  )}
                 </p>
               </Card>
               <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
@@ -553,24 +556,7 @@ export default function CustomerDetailsPage() {
             <>
               {/* Statement Header */}
               <div className="p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start">
-                  <div className="flex flex-col items-start gap-3">
-                    <img
-                      src="/Logo Priori.svg"
-                      alt="Priori logo"
-                      className="aspect-150/44 w-37.5"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1 text-gray-800">
-                    <h3 className="font-bold text-base mb-1">
-                      {COMPANY_INFO.name}
-                    </h3>
-                    <p className="text-sm">{COMPANY_INFO.address}</p>
-                    <p className="text-sm">{COMPANY_INFO.phone}</p>
-                    <p className="text-sm">{COMPANY_INFO.email}</p>
-                  </div>
-                </div>
+                <DocumentOwnerHeader editable={false} />
 
                 <div className="flex flex-col md:flex-row justify-between items-start py-6">
                   {/* Document To */}
@@ -708,17 +694,17 @@ export default function CustomerDetailsPage() {
                         <td className="px-3 py-4 text-center text-gray-800">
                           {transaction.amount > 0
                             ? formatCurrency(
-                                transaction.amount,
-                                statement.customer.currency
-                              )
+                              transaction.amount,
+                              statement.customer.currency
+                            )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-center text-gray-800">
                           {transaction.payment > 0
                             ? formatCurrency(
-                                transaction.payment,
-                                statement.customer.currency
-                              )
+                              transaction.payment,
+                              statement.customer.currency
+                            )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-right text-gray-800">

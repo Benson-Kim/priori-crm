@@ -3,10 +3,10 @@ Tests for the mark_as_paid audit trail fix.
 
 Ensure a payment record is always created so the audit trail is complete.
 """
+
 import uuid
-from datetime import UTC, date, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -47,20 +47,18 @@ class TestMarkAsPaidCreatesPaymentRecord:
         db = MagicMock()
         expense = _FakeExpense()
 
-        # Mock query chain: .query().filter().with_for_update().first()
-        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
+        # Mock query chain:
+        # .query().options().filter().with_for_update().first()
+        db.query.return_value.options.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
 
         svc = ExpenseService(db)
-        result = svc.mark_as_paid(expense.id)
+        svc.mark_as_paid(expense.id)
 
         # Verify db.add was called with an ExpensePayment
         from app.modules.expenses.models import ExpensePayment
 
         add_calls = db.add.call_args_list
-        payment_adds = [
-            c for c in add_calls
-            if isinstance(c[0][0], ExpensePayment)
-        ]
+        payment_adds = [c for c in add_calls if isinstance(c[0][0], ExpensePayment)]
         assert len(payment_adds) == 1, "Expected exactly one ExpensePayment to be added"
 
         payment = payment_adds[0][0][0]
@@ -79,7 +77,7 @@ class TestMarkAsPaidSetsFinancialFields:
             total_due=Decimal("500.00"),
             balance_due=Decimal("500.00"),
         )
-        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
+        db.query.return_value.options.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
 
         svc = ExpenseService(db)
         result = svc.mark_as_paid(expense.id)
@@ -98,7 +96,7 @@ class TestMarkAsPaidAlreadyPaid:
 
         db = MagicMock()
         expense = _FakeExpense(status=ExpenseStatus.PAID)
-        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
+        db.query.return_value.options.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
 
         svc = ExpenseService(db)
         with pytest.raises(BadRequestException):
@@ -112,7 +110,7 @@ class TestMarkAsPaidNotFound:
         from app.modules.expenses.service import ExpenseService
 
         db = MagicMock()
-        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
+        db.query.return_value.options.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
         svc = ExpenseService(db)
         with pytest.raises(NotFoundException):

@@ -28,9 +28,29 @@ else:
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "no_db: test is a pure in-memory check and must skip schema building",
+    )
+
+
 @pytest.fixture(autouse=True)
-def setup_db():
-    """Create all tables before each test and drop after."""
+def setup_db(request):
+    """Provide each test a clean schema.
+
+    Drop first so a schema left behind by a previously aborted run cannot
+    cause cross-test contamination or partial-state failures; then create,
+    then drop on teardown.
+
+    Tests marked ``no_db`` are pure in-memory checks (e.g. schema-metadata
+    invariants) and skip schema building entirely, so they still run and
+    report even when create_all itself would fail.
+    """
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)

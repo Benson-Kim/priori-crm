@@ -5,6 +5,7 @@ be either per-process (in-memory, default) or shared across all workers and
 instances (Redis). Sharing the window is what stops the effective limit from
 being multiplied by ``workers x instances`` under horizontal scaling.
 """
+
 import logging
 import time
 from collections import OrderedDict
@@ -13,6 +14,8 @@ from datetime import datetime, timedelta
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
+
+_REDIS_UNAVAILABLE_ERRORS: tuple[type[BaseException], ...] = (ConnectionError, OSError)
 
 
 @dataclass(slots=True)
@@ -86,14 +89,28 @@ class RedisRateLimitStore:
     def __init__(self, redis_url: str) -> None:
         import redis  # imported lazily so redis is only needed for this backend
 
-        self._redis = redis.Redis.from_url(
-            redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
-        )
         self._key_prefix = "ratelimit"
+        self._fallback = InMemoryRateLimitStore(max_clients=1024)
+        self._redis_exc = (redis.RedisError, ConnectionError, OSError)
+
+        global _REDIS_UNAVAILABLE_ERRORS
+        if redis.RedisError not in _REDIS_UNAVAILABLE_ERRORS:
+            _REDIS_UNAVAILABLE_ERRORS = (redis.RedisError, *_REDIS_UNAVAILABLE_ERRORS)
+            self._redis = redis.Redis.from_url(
+                redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
+            )
+
+    @property
+    def _fallback_store(self) -> "InMemoryRateLimitStore":
+        # Lazy local-memory fallback, resilient if __init__ was bypassed
+        fallback = getattr(self, "_fallback", None)
+        if fallback is None:
+            fallback = InMemoryRateLimitStore(max_clients=1024)
+            self._fallback = fallback
+        return fallback
 
     def hit(self, key: str, limit: int, window_seconds: int) -> RateLimitResult:
-        # Bucket the key by the current fixed window so the TTL and counter
-        # reset together.
+        # Bucket the key by the current fixed window so the TTL and counter reset together.
         window_id = int(time.time()) // window_seconds
         redis_key = f"{self._key_prefix}:{key}:{window_id}"
         try:
@@ -102,12 +119,13 @@ class RedisRateLimitStore:
             pipe.expire(redis_key, window_seconds)
             count, _ = pipe.execute()
             count = int(count)
-        except Exception as exc:  # noqa: BLE001 - never let Redis break requests
-            logger.warning(
-                "Rate-limit Redis backend unavailable; failing open",
+        except self._redis_exc as exc:
+            logger.error(
+                "Rate-limit Redis backend unavailable; falling back to local memory window. "
+                "ALERT: REDIS_RATE_LIMIT_OUTAGE",
                 exc_info=exc,
             )
-            return RateLimitResult(allowed=True, retry_after=0)
+            return self._fallback_store.hit(key, limit, window_seconds)
 
         if count > limit:
             retry_after = window_seconds - (int(time.time()) % window_seconds)

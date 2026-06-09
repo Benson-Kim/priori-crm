@@ -1,0 +1,188 @@
+# GitLab CI pipeline (W3.8 / P-12).
+#
+# Runs on every merge request targeting develop/main and on pushes to
+# those branches. The repository historically used GitHub Actions
+# (.github/workflows/api-ci.yml, ui-ci.yml) which never fired on GitLab
+# MR events, so the Postgres-guarded test suite was not executed before
+# merge. This pipeline reproduces those jobs natively in GitLab CI.
+#
+# The security stage runs GitLab's managed SAST, Dependency Scanning, and
+# Secret Detection analyzers. Their results satisfy the scan_finding
+# approval rules defined in .gitlab/security-policies/policy.yml.
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+stages:
+  - lint
+  - test
+  - security
+
+variables:
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
+
+# Run pipelines for merge requests and for pushes to the long-lived
+# branches. The `workflow` block prevents duplicate detached/branch
+# pipelines for the same MR commit.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ---------------------------------------------------------------------------
+# Security scanning (#26, review Part III §3 @ci-cd)
+#
+# GitLab-managed analyzers. Their own `rules` run them on branch pipelines
+# and merge_request pipelines, which the `workflow` block above permits.
+# SAST and Secret Detection need no extra config; Dependency Scanning picks
+# up api/requirements.txt and frontend/package-lock.json. The injected jobs
+# are placed in the `security` stage below.
+# ---------------------------------------------------------------------------
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+# Analyzers run on branch pipelines only by default; enable them on
+# merge_request_event pipelines so they gate MRs targeting develop (#26).
+variables:
+  AST_ENABLE_MR_PIPELINES: "true"
+
+# Place the injected analyzer jobs in the `security` stage and make them run
+# unconditionally on MR pipelines and on develop/main pushes. SAST fans out
+# per-language jobs that all extend the `sast` job, and the secret/dependency
+# analyzers extend hidden base jobs, so overriding those parents moves and
+# re-rules every child job without naming each one.
+#
+# Explicit rules (rather than the templates' default `changes:`/language
+# gating) guarantee the analyzers execute on every MR targeting develop —
+# the point of #26 — and avoid an all-skipped, fail-at-creation pipeline
+# when an MR only touches .gitlab-ci.yml.
+.security-rules: &security-rules
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+
+.sast:
+  stage: security
+  rules: *security-rules
+
+.secret-analyzer:
+  stage: security
+  rules: *security-rules
+
+.ds-analyzer:
+  stage: security
+  rules: *security-rules
+
+# ---------------------------------------------------------------------------
+# Backend (api/)
+# ---------------------------------------------------------------------------
+
+api:lint:
+  stage: lint
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - api/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - api/**/*
+        - .gitlab-ci.yml
+  cache:
+    key:
+      files:
+        - api/requirements.txt
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  before_script:
+    - cd api
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+  script:
+    - ruff check .
+    - ruff format --check .
+
+api:test:
+  stage: test
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - api/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - api/**/*
+        - .gitlab-ci.yml
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: prioritech_test
+    POSTGRES_USER: priori
+    POSTGRES_PASSWORD: test_password
+    POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+    # Postgres-backed test config (W1.2). conftest.py reads DATABASE_URL
+    # and only runs the Postgres-guarded tests when it starts with
+    # "postgresql"; using psycopg2 also satisfies config.py's DSN validator.
+    DATABASE_URL: "postgresql+psycopg2://priori:test_password@postgres:5432/prioritech_test"
+    JWT_SECRET_KEY: "ci-test-secret-key-at-least-32-characters-long"
+    SES_SENDER_EMAIL: "noreply@ci.example.com"
+    ENVIRONMENT: "test"
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key:
+      files:
+        - api/requirements.txt
+    paths:
+      - .cache/pip
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends postgresql-client
+    - cd api
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    # The test conftest builds the schema with Base.metadata.create_all
+    # rather than running migrations, so the Postgres extensions the schema
+    # depends on (pg_trgm for the W3.1 trigram indexes, pgcrypto for
+    # gen_random_uuid() server defaults) must be enabled here first.
+    - until pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 1; done
+    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto;'
+  script:
+    - pytest -v --tb=short
+
+# ---------------------------------------------------------------------------
+# Frontend (frontend/)
+# ---------------------------------------------------------------------------
+
+ui:lint-build:
+  stage: test
+  image: node:20-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/node_modules
+  before_script:
+    - cd frontend
+    - npm ci
+  script:
+    - npm run lint
+    - npx tsc --noEmit
+    - npm run build

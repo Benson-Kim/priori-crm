@@ -7,6 +7,7 @@ record_payment must:
   ALLOWED_TRANSITIONS is enforced and the version is bumped exactly once;
 - still reject overpayment.
 """
+
 import uuid
 from datetime import date
 from decimal import Decimal

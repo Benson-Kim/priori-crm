@@ -44,7 +44,7 @@ export function useExpenseForm(expenseId?: string): UseExpenseFormReturn {
     }, [expenseId, navigate]);
 
     useEffect(() => {
-        if (expenseId) fetchExpense();
+        if (expenseId) void (async () => { await fetchExpense(); })();
     }, [expenseId, fetchExpense]);
 
     const handleCancel = () => {
@@ -63,11 +63,11 @@ export function useExpenseForm(expenseId?: string): UseExpenseFormReturn {
                 currency: payload.currency,
                 isRecurring: payload.isRecurring,
                 lineItems: payload.lineItems.map((li) => ({
-                    item_name: li.itemName,
+                    itemName: li.itemName,
                     description: li.description,
                     quantity: li.quantity,
-                    unit_price: li.unitPrice,
-                    tax_type: li.taxType,
+                    unitPrice: li.unitPrice,
+                    taxType: li.taxType,
                 })),
                 notes: payload.notes,
             };
@@ -81,11 +81,11 @@ export function useExpenseForm(expenseId?: string): UseExpenseFormReturn {
                     dueDate: payload.dueDate,
                     isRecurring: payload.isRecurring,
                     lineItems: payload.lineItems.map((li) => ({
-                        item_name: li.itemName,
+                        itemName: li.itemName,
                         description: li.description,
                         quantity: li.quantity,
-                        unit_price: li.unitPrice,
-                        tax_type: li.taxType,
+                        unitPrice: li.unitPrice,
+                        taxType: li.taxType,
                     })),
                     notes: payload.notes,
                 };

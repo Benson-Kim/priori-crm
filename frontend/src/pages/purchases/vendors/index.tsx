@@ -1,3 +1,4 @@
+import { VendorModal } from "@/components/modals/VendorModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
@@ -6,6 +7,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency } from "@/lib/utils";
 import {
     activateVendor,
@@ -17,11 +19,9 @@ import {
     type VendorStatusCounts,
     type VendorSummary,
 } from "@/services/vendorApi";
-import { VendorModal } from "@/components/modals/VendorModal";
 import { Ban, CheckCircle, Eye, Pencil, Plus, Trash } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConfirm } from "@/hooks/useConfirm";
 
 export default function VendorsPage() {
     const [activeTab, setActiveTab] = useState("all");
@@ -70,9 +70,17 @@ export default function VendorsPage() {
         fetchCounts();
     }, [fetchVendors, fetchCounts]);
 
-    useEffect(() => { fetchVendors(); }, [fetchVendors]);
-    useEffect(() => { fetchCounts(); }, [fetchCounts]);
-    useEffect(() => { setCurrentPage(1); }, [activeTab, search]);
+    useEffect(() => {
+        void (async () => { await fetchVendors(); })();
+    }, [fetchVendors]);
+
+    useEffect(() => {
+        void (async () => { await fetchCounts(); })();
+    }, [fetchCounts]);
+
+    useEffect(() => {
+        startTransition(() => { setCurrentPage(1); });
+    }, [activeTab, search]);
 
     const handleView = (vendor: VendorSummary) => {
         navigate(`/vendors/${vendor.id}`);
@@ -115,7 +123,7 @@ export default function VendorsPage() {
                 try {
                     await deleteVendor(vendor.id);
                     refreshAll();
-                } catch (err: any) {
+                } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     setError(msg);
                 }
@@ -296,18 +304,18 @@ export default function VendorsPage() {
             {/* Confirmation Dialog */}
             {ConfirmDialog}
 
-            <VendorModal 
-                isOpen={isModalOpen} 
+            <VendorModal
+                isOpen={isModalOpen}
                 onClose={() => {
                     setIsModalOpen(false);
                     setEditVendorId(null);
-                }} 
-                vendorId={editVendorId} 
+                }}
+                vendorId={editVendorId}
                 onSuccess={() => {
                     refreshAll();
                     setIsModalOpen(false);
                     setEditVendorId(null);
-                }} 
+                }}
             />
         </div>
     );

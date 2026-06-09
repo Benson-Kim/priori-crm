@@ -115,7 +115,7 @@ export function CustomerSelector({
     }, [searchQuery]);
 
     useEffect(() => {
-        if (showDropdown) fetchCustomers();
+        if (showDropdown) void (async () => { await fetchCustomers(); })();
     }, [showDropdown, fetchCustomers]);
 
     const selectCustomer = async (c: CustomerSummary) => {

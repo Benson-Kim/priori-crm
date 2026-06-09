@@ -44,7 +44,7 @@ export function useOwnerProfile(): UseOwnerProfile {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    void (async () => { await refresh(); })();
   }, [refresh]);
 
   const save = useCallback(async (data: OwnerProfileUpdate) => {

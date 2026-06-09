@@ -16,6 +16,7 @@ This is a behaviour-preserving refactor. The transition *tables*
 (``ALLOWED_TRANSITIONS``) and reference *formats* stay defined on each concrete
 service; only the mechanics move here.
 """
+
 from __future__ import annotations
 
 from typing import Any, ClassVar
@@ -116,7 +117,9 @@ class DocumentEmailMixin:
         from app.lib.config import settings
 
         noun = self._email_terms["noun"].capitalize()
-        return f"{noun} {self._document_email_reference(entity)} from {settings.APP_NAME}"
+        return (
+            f"{noun} {self._document_email_reference(entity)} from {settings.APP_NAME}"
+        )
 
     def _generate_email_body(self, entity: Any) -> str:
         """Generate the plain-text email body for a document."""
@@ -127,11 +130,11 @@ class DocumentEmailMixin:
         return f"""\
 Dear {entity.customer.display_name},
 
-Please find attached {terms['noun']} {reference} for {entity.currency} {entity.total_due}.
+Please find attached {terms["noun"]} {reference} for {entity.currency} {entity.total_due}.
 
-{terms['date_label']}: {entity.due_date.strftime('%d %B %Y')}
+{terms["date_label"]}: {entity.due_date.strftime("%d %B %Y")}
 
-{terms['closing']}
+{terms["closing"]}
 
 Best regards,
 {settings.APP_NAME}

@@ -12,6 +12,7 @@ Two tables, one bounded context:
   ``content_hash`` so re-issuing while the profile is unchanged reuses the
   existing row instead of growing the table.
 """
+
 import uuid
 from datetime import UTC, datetime
 

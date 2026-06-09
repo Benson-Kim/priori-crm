@@ -1,37 +1,10 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useState } from "react";
 import { Outlet, useMatches, type UIMatch } from "react-router-dom";
 
 import type { RouteHandle } from "@/lib/types";
 import { Header } from "./header";
+import { HeaderContext, type HeaderOverride } from "./header-context";
 import { Sidebar } from "./sidebar";
-
-type HeaderOverride = {
-    title: string;
-    description?: string;
-} | null;
-
-export const HeaderContext = createContext<{
-    override: HeaderOverride;
-    setOverride: (override: HeaderOverride) => void;
-}>({
-    override: null,
-    setOverride: () => { },
-});
-
-export function useHeaderOverride(title: string | undefined, description: string | undefined = "") {
-    const { setOverride } = useContext(HeaderContext);
-
-    useEffect(() => {
-        if (title !== undefined) {
-            setOverride({ title, description });
-        } else {
-            setOverride(null);
-        }
-        return () => {
-            setOverride(null);
-        };
-    }, [title, description, setOverride]);
-}
 
 const DefaultLayout = () => {
     const matches = useMatches() as UIMatch<unknown, RouteHandle>[];
