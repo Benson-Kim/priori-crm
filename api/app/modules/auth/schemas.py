@@ -2,13 +2,27 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.common.validators import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    validate_password_strength,
+)
+
 
 # Request Schemas
 class LoginRequest(BaseModel):
     """Login request with email and password."""
 
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(
+        ..., min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH
+    )
+
+    @field_validator("password")
+    @classmethod
+    def _check_password_policy(cls, v: str) -> str:
+        """Enforce the shared password policy."""
+        return validate_password_strength(v)
 
 
 class VerifyOTPRequest(BaseModel):
@@ -20,6 +34,12 @@ class VerifyOTPRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Token refresh request."""
+
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Logout request: the refresh token to revoke."""
 
     refresh_token: str
 
@@ -60,7 +80,13 @@ class TokenResponse(BaseModel):
 
 
 class RefreshResponse(BaseModel):
-    """Response for token refresh — new access token only."""
+    """Response for token refresh.
+
+    Returns a rotated token pair: the presented refresh token is
+    revoked server-side, so the new refresh token must be persisted by the
+    client and used for the next refresh.
+    """
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"

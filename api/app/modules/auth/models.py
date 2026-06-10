@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     text,
 )
@@ -64,10 +65,10 @@ class OTPCode(Base):
     __tablename__ = "otp_codes"
 
     __table_args__ = (
-        # Hot path: verify_otp filters (user_id, code, is_used) ordered by
+        # Hot path: verify_otp filters (user_id, is_used) ordered by
         # created_at desc, and _invalidate_pending_otps filters
         # (user_id, is_used). A composite index on these columns avoids a
-        # scan of a user's OTP history on every login/verify (AUTH-DBA-1).
+        # scan of a user's OTP history on every login/verify.
         Index(
             "ix_otp_user_unused_created",
             "user_id",
@@ -89,6 +90,9 @@ class OTPCode(Base):
     )
     code: Mapped[str] = mapped_column(String(6), nullable=False)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

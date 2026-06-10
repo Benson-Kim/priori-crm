@@ -22,6 +22,9 @@ stages:
 
 variables:
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
+  # Analyzers run on branch pipelines only by default; enable them on
+  # merge_request_event pipelines so they gate MRs targeting develop (#26).
+  AST_ENABLE_MR_PIPELINES: "true"
 
 # Run pipelines for merge requests and for pushes to the long-lived
 # branches. The `workflow` block prevents duplicate detached/branch
@@ -41,15 +44,6 @@ workflow:
 # up api/requirements.txt and frontend/package-lock.json. The injected jobs
 # are placed in the `security` stage below.
 # ---------------------------------------------------------------------------
-include:
-  - template: Security/SAST.gitlab-ci.yml
-  - template: Security/Dependency-Scanning.gitlab-ci.yml
-  - template: Security/Secret-Detection.gitlab-ci.yml
-
-# Analyzers run on branch pipelines only by default; enable them on
-# merge_request_event pipelines so they gate MRs targeting develop (#26).
-variables:
-  AST_ENABLE_MR_PIPELINES: "true"
 
 # Place the injected analyzer jobs in the `security` stage and make them run
 # unconditionally on MR pipelines and on develop/main pushes. SAST fans out

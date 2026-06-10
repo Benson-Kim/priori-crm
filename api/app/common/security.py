@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -39,13 +40,27 @@ def create_access_token(subject: str, extra: dict | None = None) -> str:
     )
 
 
-def create_refresh_token(subject: str) -> str:
-    """Create a JWT refresh token."""
+def create_refresh_token(subject: str) -> tuple[str, str, datetime]:
+    """Create a JWT refresh token.
+
+    Returns ``(token, jti, expires_at)``. The ``jti`` (unique token id) lets
+    the auth service revoke this exact token via the denylist, and
+    ``expires_at`` lets the caller size the denylist entry's TTL to the token's
+    remaining lifetime so revoked ids expire themselves.
+    """
     expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {"sub": subject, "exp": expire, "type": "refresh"}
-    return jwt.encode(
+    jti = str(uuid.uuid4())
+    payload = {
+        "sub": subject,
+        "exp": expire,
+        "iat": datetime.now(UTC),
+        "type": "refresh",
+        "jti": jti,
+    }
+    token = jwt.encode(
         payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
+    return token, jti, expire
 
 
 def decode_access_token(

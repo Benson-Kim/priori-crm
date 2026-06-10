@@ -4,8 +4,7 @@
  * The single source of truth for the organisation identity printed on
  * documents, replacing the hardcoded COMPANY_INFO constant.
  */
-import { apiDelete, apiGet, apiPut, apiUploadPut } from "@/lib/api";
-import { appConfig } from "@/lib/constants";
+import { apiDelete, apiDownload, apiGet, apiPut, apiUploadPut } from "@/lib/api";
 
 export interface OwnerProfile {
   fullName: string;
@@ -50,10 +49,13 @@ export function removeOwnerLogo(): Promise<OwnerProfile> {
 }
 
 /**
- * Absolute URL to the served logo binary. A cache-busting token (e.g. the
- * profile's updatedAt) forces the <img> to refetch after an upload/remove.
+ * Fetch the served logo binary through the shared client so the request
+ * carries the bearer token and the 401 -> refresh -> retry flow (ISSUE-028).
+ *
+ * The logo endpoint requires authentication, so a bare <img src> 401s and
+ * never renders. Callers turn the returned Blob into an object URL (and must
+ * revoke it when done) — mirroring the expense-document download pattern.
  */
-export function ownerLogoUrl(cacheBust?: string | null): string {
-  const base = `${appConfig.apiUrl}owner/logo`;
-  return cacheBust ? `${base}?v=${encodeURIComponent(cacheBust)}` : base;
+export function fetchOwnerLogo(): Promise<Blob> {
+  return apiDownload("owner/logo");
 }

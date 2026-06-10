@@ -1272,6 +1272,9 @@ class InvoiceService(BaseDocumentService):
         else:
             source = owner_service.get_or_create()
         owner_info = owner_service.to_owner_info(source)
+        logo_bytes = owner_service.load_logo_bytes(source)
 
         generator = DocumentPDFGenerator()
-        return generator.generate_invoice_pdf(invoice, owner=owner_info)
+        return generator.generate_invoice_pdf(
+            invoice, owner=owner_info, logo_bytes=logo_bytes
+        )

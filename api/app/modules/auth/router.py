@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.common.dependencies import DbSession, verify_internal_secret
 from app.modules.auth.schemas import (
     LoginRequest,
+    LogoutRequest,
     MessageResponse,
     RefreshResponse,
     RefreshTokenRequest,
@@ -17,10 +18,16 @@ router = APIRouter()
 
 @router.post("/login", response_model=MessageResponse)
 def login(body: LoginRequest, db: DbSession):
-    """Step 1: Validate credentials and send OTP to user's email."""
+    """Step 1: Validate credentials and send OTP to user's email.
+
+    Returns a generic confirmation that never reveals whether the account
+    exists, so the endpoint cannot be used to enumerate users.
+    """
     auth_service = AuthService(db)
-    masked_email = auth_service.login(body.email, body.password)
-    return MessageResponse(message=f"Verification code sent to {masked_email}")
+    auth_service.login(body.email, body.password)
+    return MessageResponse(
+        message="If the credentials are valid, a verification code has been sent."
+    )
 
 
 @router.post("/verify-otp", response_model=TokenResponse)
@@ -37,10 +44,26 @@ def verify_otp(body: VerifyOTPRequest, db: DbSession):
 
 @router.post("/refresh", response_model=RefreshResponse)
 def refresh_token(body: RefreshTokenRequest, db: DbSession):
-    """Issue a new access token using a valid refresh token."""
+    """Rotate tokens: issue a new access + refresh pair.
+
+    The presented refresh token is revoked, so the client must store and use
+    the returned refresh token for its next refresh.
+    """
     auth_service = AuthService(db)
-    new_access_token = auth_service.refresh_access_token(body.refresh_token)
-    return RefreshResponse(access_token=new_access_token)
+    access_token, refresh_token = auth_service.refresh_access_token(body.refresh_token)
+    return RefreshResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout(body: LogoutRequest, db: DbSession):
+    """Revoke the presented refresh token.
+
+    Idempotent: a missing/invalid/expired token still returns the same generic
+    confirmation, so logout never leaks token state and never errors.
+    """
+    auth_service = AuthService(db)
+    auth_service.logout(body.refresh_token)
+    return MessageResponse(message="Logged out.")
 
 
 @router.post(
@@ -50,10 +73,10 @@ def refresh_token(body: RefreshTokenRequest, db: DbSession):
     dependencies=[Depends(verify_internal_secret)],
 )
 def purge_otps(db: DbSession):
-    """Internal: delete used/expired OTP rows (AUTH-DBA-2).
+    """Internal: delete used/expired OTP rows .
 
     Protected by the internal machine-to-machine secret; intended to be
-    called by a scheduler. Mirrors the expenses overdue-transition trigger.
+    called by a scheduler.
     """
     auth_service = AuthService(db)
     deleted = auth_service.purge_expired_otps()

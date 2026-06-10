@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
-from app.common.exceptions import NotFoundException
 from app.constants.enums import UserRole
 from app.modules.owner.schemas import OwnerProfileResponse, OwnerProfileUpdate
 
@@ -90,17 +89,15 @@ def remove_owner_logo(service: OwnerServiceDep) -> OwnerProfileResponse:
     },
 )
 def serve_owner_logo(service: OwnerServiceDep):
-    """Stream the logo binary (or redirect to a presigned URL on S3)."""
-    profile = service.get_or_create()
-    key = profile.logo_storage_key
-    if not key:
-        raise NotFoundException(detail="No logo set", resource="logo")
+    """Stream the logo binary (or redirect to a presigned URL on S3).
 
-    presigned = service._storage.presigned_url(key)
-    if presigned:
-        return RedirectResponse(url=presigned, status_code=status.HTTP_302_FOUND)
+    All storage access lives behind the service's public ``serve_logo`` API,
+    so the router never depends on the storage backend (ISSUE-033).
+    """
+    download = service.serve_logo()
+    if download.presigned_url is not None:
+        return RedirectResponse(
+            url=download.presigned_url, status_code=status.HTTP_302_FOUND
+        )
 
-    return StreamingResponse(
-        service._storage.download_stream(key),
-        media_type="application/octet-stream",
-    )
+    return StreamingResponse(download.stream, media_type=download.media_type)

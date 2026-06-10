@@ -17,12 +17,26 @@ import QuotesPage from "@/pages/sales/quotes";
 import AddQuotePage from "@/pages/sales/quotes/add";
 import QuoteDetailPage from "@/pages/sales/quotes/detail";
 import EditQuotePage from "@/pages/sales/quotes/edit";
+import LoginPage from "@/pages/auth/login";
+import OTPPage from "@/pages/auth/otp";
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import RequireAuth from "./auth/RequireAuth";
 import DefaultLayout from "./layout/default-layout";
 
 
 
 const routes = [
+    {
+        path: "/login",
+        element: <LoginPage />,
+    },
+    {
+        path: "/verify-otp",
+        element: <OTPPage />,
+    },
+    {
+        element: <RequireAuth />,
+        children: [
     {
         path: "/",
         element: <DefaultLayout />,
@@ -246,6 +260,8 @@ const routes = [
                     },
                 ],
             },
+        ],
+    },
         ],
     },
     {

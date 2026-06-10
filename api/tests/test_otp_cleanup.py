@@ -1,4 +1,4 @@
-"""W3.7 - OTP retention cleanup (AUTH-DBA-2)."""
+"""OTP retention cleanup."""
 
 from datetime import UTC, datetime, timedelta
 
