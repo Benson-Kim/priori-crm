@@ -271,7 +271,7 @@ def delete_customer(
     ] = False,
 ) -> CustomerDeleteResponse:
     """Delete a customer (soft delete by default)."""
-    # Destructive hard-delete is restricted to privileged roles (AUTH-BE-4).
+    # Destructive hard-delete is restricted to privileged roles.
     if hard_delete and not UserRole(current_user.role).is_privileged:
         raise ForbiddenException(
             detail="You do not have permission to permanently delete customers.",

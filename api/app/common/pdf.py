@@ -14,7 +14,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -25,6 +27,11 @@ from reportlab.platypus import (
 from app.lib.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Logo is constrained to this height in the header; width scales to preserve
+# the source aspect ratio.
+_LOGO_MAX_HEIGHT_MM = 18
+_LOGO_MAX_WIDTH_MM = 60
 
 # Reusable styles
 _STYLES = getSampleStyleSheet()
@@ -54,15 +61,17 @@ class DocumentPDFGenerator:
 
     # public interface
 
-    def generate_invoice_pdf(self, invoice, owner=None) -> bytes:
+    def generate_invoice_pdf(self, invoice, owner=None, logo_bytes=None) -> bytes:
         """Return PDF bytes for an invoice ORM object.
 
         ``owner`` is an optional OwnerInfo DTO (built from the document's
         immutable snapshot for issued invoices, or the live profile). When
-        omitted, the header falls back to ``settings.APP_NAME``.
+        omitted, the header falls back to ``settings.APP_NAME``. ``logo_bytes``
+        is the optional logo image binary embedded in the header.
         """
         return self._build_pdf(
             owner=owner,
+            logo_bytes=logo_bytes,
             doc_type="INVOICE",
             reference=invoice.invoice_reference,
             number=invoice.invoice_number,
@@ -82,10 +91,11 @@ class DocumentPDFGenerator:
             notes=invoice.notes,
         )
 
-    def generate_quote_pdf(self, quote, owner=None) -> bytes:
+    def generate_quote_pdf(self, quote, owner=None, logo_bytes=None) -> bytes:
         """Return PDF bytes for a quote ORM object (optional OwnerInfo header)."""
         return self._build_pdf(
             owner=owner,
+            logo_bytes=logo_bytes,
             doc_type="QUOTE",
             reference=quote.quote_reference,
             number=quote.quote_number,
@@ -111,6 +121,7 @@ class DocumentPDFGenerator:
         self,
         *,
         owner,
+        logo_bytes: bytes | None = None,
         doc_type: str,
         reference: str,
         number: str,
@@ -140,8 +151,14 @@ class DocumentPDFGenerator:
         )
         elements: list = []
 
-        # header — owner identity from the injected DTO (snapshot for issued
-        # documents), falling back to the app name when none is supplied.
+        # header — optional logo, then owner identity from the injected DTO
+        # (snapshot for issued documents), falling back to the app name when
+        # none is supplied.
+        logo_flowable = self._build_logo(logo_bytes)
+        if logo_flowable is not None:
+            elements.append(logo_flowable)
+            elements.append(Spacer(1, 3 * mm))
+
         owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
         elements.append(Paragraph(owner_name, _HEADER_STYLE))
 
@@ -306,3 +323,33 @@ class DocumentPDFGenerator:
             len(pdf_bytes),
         )
         return pdf_bytes
+
+    @staticmethod
+    def _build_logo(logo_bytes: bytes | None) -> Image | None:
+        """Build a header logo flowable from raw image bytes (ISSUE-035).
+
+        Scales the image to fit within the configured max box while
+        preserving aspect ratio. Returns ``None`` (text-only header) when no
+        bytes are supplied or the image cannot be decoded, so a corrupt or
+        unsupported logo never breaks document generation.
+        """
+        if not logo_bytes:
+            return None
+        try:
+            reader = ImageReader(io.BytesIO(logo_bytes))
+            src_w, src_h = reader.getSize()
+            if src_w <= 0 or src_h <= 0:
+                return None
+            max_w = _LOGO_MAX_WIDTH_MM * mm
+            max_h = _LOGO_MAX_HEIGHT_MM * mm
+            scale = min(max_w / src_w, max_h / src_h)
+            img = Image(
+                io.BytesIO(logo_bytes),
+                width=src_w * scale,
+                height=src_h * scale,
+            )
+            img.hAlign = "LEFT"
+            return img
+        except Exception:
+            logger.warning("Owner logo could not be embedded in PDF", exc_info=True)
+            return None

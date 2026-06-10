@@ -56,6 +56,27 @@ def setup_db(request):
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def reset_auth_throttle():
+    """Reset the process-level auth throttle store between tests.
+
+    Both the throttle counter and the refresh-token denylist are lru_cache
+    singletons shared across the whole process. Without clearing them, attempt
+    counts and revoked jtis would leak between tests that reuse the same email
+    or token and could trip limits / reject tokens spuriously.
+    """
+    from app.modules.auth.service import (
+        _auth_throttle_store,
+        _refresh_token_denylist,
+    )
+
+    _auth_throttle_store.cache_clear()
+    _refresh_token_denylist.cache_clear()
+    yield
+    _auth_throttle_store.cache_clear()
+    _refresh_token_denylist.cache_clear()
+
+
 @pytest.fixture
 def db():
     """Provide a test database session."""

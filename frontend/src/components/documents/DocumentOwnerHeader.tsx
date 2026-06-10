@@ -9,23 +9,25 @@
 import { SquarePen, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { useOwnerProfile } from "@/hooks/useOwnerProfile";
-import { ownerLogoUrl } from "@/services/ownerApi";
+import { useCanEditOwner } from "@/hooks/auth-context";
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { OwnerProfileModal } from "./OwnerProfileModal";
 
 interface DocumentOwnerHeaderProps {
-  /** When true, render the logo + profile edit controls (editor only). */
+  /** When true, request the logo + profile edit controls (editor only). */
   editable?: boolean;
 }
 
 export function DocumentOwnerHeader({
   editable = false,
 }: Readonly<DocumentOwnerHeaderProps>) {
-  const { profile, save, uploadLogo, removeLogo } = useOwnerProfile();
+  const { profile, logoUrl, save, uploadLogo, removeLogo } = useOwnerProfile();
+  // Only privileged users (MANAGER/ADMIN) may edit; the backend 403s everyone
+  // else, so never show edit controls to them (ISSUE-029).
+  const canEdit = useCanEditOwner();
+  const showEdit = editable && canEdit;
   const [modalOpen, setModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const cacheBust = profile?.updatedAt ?? undefined;
 
   const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,9 +42,9 @@ export function DocumentOwnerHeader({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Logo */}
         <div className="flex flex-col items-start gap-3">
-          {profile?.hasLogo ? (
+          {profile?.hasLogo && logoUrl ? (
             <img
-              src={ownerLogoUrl(cacheBust)}
+              src={logoUrl}
               alt={`${profile.fullName} logo`}
               className="max-h-12 w-auto"
             />
@@ -51,7 +53,7 @@ export function DocumentOwnerHeader({
               No logo
             </div>
           )}
-          {editable && (
+          {showEdit && (
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -90,7 +92,7 @@ export function DocumentOwnerHeader({
             <p className="text-sm">Tax PIN: {profile.taxPin}</p>
           )}
           {profile?.website && <p className="text-sm">{profile.website}</p>}
-          {editable && (
+          {showEdit && (
             <button
               type="button"
               onClick={() => setModalOpen(true)}

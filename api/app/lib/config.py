@@ -44,28 +44,20 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
-    # Explicit allow-lists rather than "*" (MW-SEC-2). Comma-separated so
-    # they can be tuned per environment without code changes.
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = (
         "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
     )
-    # Explicit method/header allow-lists (MW-SEC-2). Wildcards with
-    # allow_credentials are overly permissive, so we pin them per env.
-    CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-    CORS_ALLOW_HEADERS: str = "Authorization,Content-Type,X-Request-ID"
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
-    # Only trust X-Forwarded-For for client identity when the app sits
-    # behind a known, trusted reverse proxy. The header is client-spoofable
-    # when exposed directly, so it stays off by default (W-5).
+    AUTH_MAX_OTP_ATTEMPTS: int = Field(default=5, ge=1, le=20)
+    AUTH_LOGIN_MAX_ATTEMPTS: int = Field(default=10, ge=3, le=100)
+    AUTH_LOGIN_WINDOW_SECONDS: int = Field(default=300, ge=30, le=3600)
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
-    # Counter backend (W-4). "memory" is per-process (fine for a single
-    # worker / local dev); "redis" shares one window across all workers and
-    # instances so the effective limit is not multiplied by the worker count.
     RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
+    TOKEN_DENYLIST_BACKEND: Literal["memory", "redis"] = "memory"
     REDIS_URL: str = ""
 
     # Monitoring
@@ -76,26 +68,14 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
 
-    # File Storage (P-13 / W3.3)
-    # Root directory all uploaded objects are confined to. The local
-    # StorageService backend resolves every key under this path and refuses
-    # anything that escapes it.
+    # File Storage
     UPLOAD_DIR: str = "uploads"
-    # Backend selector: "local" (single-node filesystem, default) or "s3"
-    # (S3 / S3-compatible object store, required for horizontal scaling).
     STORAGE_BACKEND: Literal["local", "s3"] = "local"
-    # S3 backend settings (only used when STORAGE_BACKEND == "s3").
     S3_BUCKET: str = ""
-    # Falls back to AWS_REGION when unset.
     S3_REGION: str = ""
-    # Optional endpoint override for S3-compatible stores (MinIO, etc.).
     S3_ENDPOINT_URL: str = ""
-    # Lifetime (seconds) of presigned download URLs.
     S3_PRESIGN_EXPIRY: int = Field(default=900, ge=60, le=86400)
 
-    # Internal machine-to-machine secret (P-13). Protects internal endpoints
-    # such as the nightly overdue-transition job. Empty by default so internal
-    # endpoints fail closed (refused) until a secret is explicitly configured.
     INTERNAL_API_SECRET: str = ""
 
     model_config = SettingsConfigDict(
@@ -163,6 +143,12 @@ class Settings(BaseSettings):
             and not self.REDIS_URL
         ):
             errors.append("REDIS_URL is required when RATE_LIMIT_BACKEND='redis'")
+
+        # The refresh-token denylist must be shared in a multi-worker /
+        # horizontally-scaled deployment, otherwise a token revoked on one
+        # worker is still accepted by another.
+        if self.TOKEN_DENYLIST_BACKEND == "redis" and not self.REDIS_URL:
+            errors.append("REDIS_URL is required when TOKEN_DENYLIST_BACKEND='redis'")
 
         if errors:
             raise ValueError("Insecure production configuration: " + "; ".join(errors))

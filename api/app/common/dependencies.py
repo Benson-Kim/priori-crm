@@ -39,7 +39,7 @@ CurrentUser = Annotated["User", Depends(get_current_user)]  # noqa: F821
 
 
 def require_role(*allowed_roles: UserRole):
-    """Build a dependency that rejects users whose role is not allowed (AUTH-BE-4).
+    """Build a dependency that rejects users whose role is not allowed.
 
     Use to gate destructive/financial endpoints, e.g.::
 

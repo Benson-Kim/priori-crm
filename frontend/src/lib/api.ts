@@ -13,7 +13,7 @@ import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
-  setAccessToken,
+  setTokens,
 } from "@/lib/auth-storage";
 
 export class ApiError extends Error {
@@ -73,7 +73,10 @@ async function refreshAccessToken(): Promise<boolean> {
         if (!data?.access_token) {
           return false;
         }
-        setAccessToken(data.access_token);
+        // /auth/refresh rotates the refresh token (ISSUE-039): the presented
+        // token is revoked server-side, so persist the new pair or the next
+        // refresh will be rejected.
+        setTokens(data.access_token, data.refresh_token);
         return true;
       } catch {
         return false;

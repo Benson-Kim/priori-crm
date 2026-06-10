@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -184,13 +185,19 @@ def register_exception_handlers(app: FastAPI) -> None:
         """Handle FastAPI request validation errors."""
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
 
+        # exc.errors() can embed a non-serializable exception object in each
+        # error's ctx (e.g. the ValueError raised by a Pydantic field_validator).
+        # jsonable_encoder coerces those to strings so json.dumps cannot fail
+        # inside the handler itself.
+        errors = jsonable_encoder(exc.errors())
+
         logger.warning(
             "Request validation error",
             extra={
                 "request_id": request_id,
                 "path": request.url.path,
                 "method": request.method,
-                "errors": exc.errors(),
+                "errors": errors,
             },
         )
 
@@ -201,7 +208,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "error_code": "VALIDATION_ERROR",
                 "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "request_id": request_id,
-                "details": {"errors": exc.errors()},
+                "details": {"errors": errors},
             },
         )
 

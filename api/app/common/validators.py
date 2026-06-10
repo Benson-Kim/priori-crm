@@ -106,3 +106,39 @@ def capitalize_location(v: str | None) -> str | None:
     if v is None or v.strip() == "":
         return None
     return v.strip().title()
+
+
+# Password policy (ISSUE-038)
+#
+# Single source of truth for the account password policy so login, future
+# registration, and password-reset flows enforce the same rules instead of an
+# ad-hoc `min_length=6` scattered across schemas.
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+
+def validate_password_strength(password: str) -> str:
+    """Validate a password against the shared account policy.
+
+    Rules: 8-128 characters, at least one letter and at least one digit. Kept
+    deliberately modest so it can be tightened in one place later without
+    touching call sites. Returns the password unchanged on success; raises
+    ``ValueError`` (surfaced by Pydantic as a 422) otherwise.
+    """
+    if not isinstance(password, str):
+        raise ValueError("Password must be a string.")
+
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise ValueError(
+            f"Password must be at least {PASSWORD_MIN_LENGTH} characters long."
+        )
+    if len(password) > PASSWORD_MAX_LENGTH:
+        raise ValueError(
+            f"Password must be at most {PASSWORD_MAX_LENGTH} characters long."
+        )
+    if not re.search(r"[A-Za-z]", password):
+        raise ValueError("Password must contain at least one letter.")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain at least one number.")
+
+    return password
