@@ -37,6 +37,32 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Log all HTTP requests with timing information."""
 
+    # Query-param names whose values must never be logged in clear text
+    # (PII / credentials).
+    _SENSITIVE_QUERY_PARAMS = (
+        "token",
+        "otp",
+        "secret",
+        "password",
+        "passwd",
+        "authorization",
+        "api_key",
+        "apikey",
+        "email",
+    )
+
+    @classmethod
+    def _redact_query_params(cls, request: Request) -> dict[str, str]:
+        """Return query params with sensitive values replaced by [REDACTED]."""
+        redacted: dict[str, str] = {}
+        for key, value in request.query_params.items():
+            lowered = key.lower()
+            if any(marker in lowered for marker in cls._SENSITIVE_QUERY_PARAMS):
+                redacted[key] = "[REDACTED]"
+            else:
+                redacted[key] = value
+        return redacted
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Log request details and response time."""
         start_time = time.time()
@@ -49,7 +75,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "request_id": request_id,
                 "method": request.method,
                 "path": request.url.path,
-                "query_params": dict(request.query_params),
+                "query_params": self._redact_query_params(request),
                 "client": request.client.host if request.client else None,
             },
         )

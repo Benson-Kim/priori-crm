@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 # Single source of truth for which expense/bill statuses count as an open
 # payable. Derived from ExpenseStatus so it can never drift back to the
-# fictional "partial"/"sent" values (ISSUE-047): a payable is open unless it
+# fictional "partial"/"sent" values: a payable is open unless it
 # has been PAID or CANCELED.
 OPEN_PAYABLE_STATUSES: tuple[str, ...] = (
     ExpenseStatus.PENDING,
@@ -490,7 +490,6 @@ class VendorService:
             counts: dict[str, int] = {row.status: row.cnt for row in rows}
             # `all` sums every returned status row rather than active +
             # inactive, so it stays correct if the status set ever expands
-            # (ISSUE-051).
             total = sum(counts.values())
             active = counts.get(VendorStatus.ACTIVE, 0)
             inactive = counts.get(VendorStatus.INACTIVE, 0)

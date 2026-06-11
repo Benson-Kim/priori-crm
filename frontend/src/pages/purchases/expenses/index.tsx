@@ -29,7 +29,7 @@ export default function ExpensesPage() {
     const [perPage, setPerPage] = useState(10);
     const [expenses, setExpenses] = useState<ExpenseSummary[]>([]);
     const [totalPages, setTotalPages] = useState(1);
-    const [counts, setCounts] = useState<ExpenseStatusCounts>({ all: 0, pending: 0, paid: 0, overdue: 0 });
+    const [counts, setCounts] = useState<ExpenseStatusCounts>({ all: 0, pending: 0, paid: 0, overdue: 0, canceled: 0 });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -176,6 +176,7 @@ export default function ExpensesPage() {
         { key: "pending", label: "Pending", count: counts.pending },
         { key: "paid", label: "Paid", count: counts.paid },
         { key: "overdue", label: "Overdue", count: counts.overdue },
+        { key: "canceled", label: "Canceled", count: counts.canceled },
     ];
 
     const columns = [

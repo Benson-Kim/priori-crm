@@ -1,4 +1,4 @@
-r"""Shared, LIKE-safe search helpers (architecture review P-2).
+r"""Shared, LIKE-safe search helpers.
 
 Every list endpoint previously built ``column.ilike(f"%{term}%")`` directly.
 That has two problems:

@@ -1,5 +1,5 @@
 /**
- * Token storage for authentication (ISSUE-031).
+ * Token storage for authentication.
  *
  * Tokens are deliberately NOT persisted in localStorage, where they would be
  * exfiltratable by any XSS. Instead:

@@ -108,11 +108,9 @@ def capitalize_location(v: str | None) -> str | None:
     return v.strip().title()
 
 
-# Password policy (ISSUE-038)
-#
-# Single source of truth for the account password policy so login, future
-# registration, and password-reset flows enforce the same rules instead of an
-# ad-hoc `min_length=6` scattered across schemas.
+# Password policy
+
+# Single source of truth for the account password policy
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 

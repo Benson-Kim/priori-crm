@@ -1,5 +1,5 @@
 /**
- * Owner-profile context + hook (ISSUE-034).
+ * Owner-profile context + hook
  *
  * Kept separate from the OwnerProfileProvider component so the provider file
  * exports only a component (eslint react-refresh/only-export-components). The

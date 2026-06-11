@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
     ExpenseServiceDep,
-    require_role,
+    require_privileged,
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
@@ -344,7 +344,7 @@ def update_expense(
         403: {"description": "Insufficient role to delete expenses"},
         404: {"description": "Expense not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def delete_expense(
     expense_id: UUID,
@@ -370,7 +370,7 @@ def delete_expense(
         403: {"description": "Insufficient role to settle expenses"},
         404: {"description": "Expense not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def mark_expense_as_paid(
     expense_id: UUID,
@@ -398,7 +398,7 @@ def mark_expense_as_paid(
         403: {"description": "Insufficient role to record payments"},
         404: {"description": "Expense not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def record_expense_payment(
     expense_id: UUID,
@@ -578,7 +578,7 @@ def get_expense_document_download(
         403: {"description": "Insufficient role to delete documents"},
         404: {"description": "Document not found on this expense"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def delete_expense_document(
     expense_id: UUID,

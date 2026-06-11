@@ -1,4 +1,4 @@
-"""Env-guarded management script for seeding a development user (ISSUE-004).
+"""Env-guarded management script for seeding a development user.
 
 Plaintext-password seeding must never live in the production ``AuthService``,
 so it is isolated here behind an explicit environment guard. The script

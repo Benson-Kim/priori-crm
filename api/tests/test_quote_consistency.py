@@ -1,9 +1,8 @@
 """Tests for the quotes consistency fixes in #34.
 
-Covers:
-- ISSUE-001: QuoteService.update uses the atomic assert_version guard, so a
+- QuoteService.update uses the atomic assert_version guard, so a
   stale-version writer is rejected rather than silently winning.
-- ISSUE-059: a SENT quote cannot be converted to an invoice; it must be
+- A SENT quote cannot be converted to an invoice; it must be
   APPROVED first, so the SENT -> INVOICED edge is gone from the state machine.
 """
 
@@ -71,7 +70,7 @@ def _quote(db, customer, *, status=QuoteStatus.DRAFT, number="QTE-FIX-1") -> Quo
 
 
 class TestQuoteOptimisticLock:
-    """ISSUE-001: stale version must be rejected by assert_version."""
+    """Stale version must be rejected by assert_version."""
 
     def test_stale_version_conflicts(self, db):
         customer = _customer(db)
@@ -97,7 +96,7 @@ class TestQuoteOptimisticLock:
 
 
 class TestQuoteApprovalGate:
-    """ISSUE-059: conversion requires APPROVED, never plain SENT."""
+    """Conversion requires APPROVED, never plain SENT."""
 
     def test_sent_quote_cannot_convert(self, db):
         customer = _customer(db, email="quote-sent@acme.test")

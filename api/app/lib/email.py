@@ -6,7 +6,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 from tenacity import (
-    retry,
+    Retrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -73,12 +73,6 @@ class EmailService:
             body_text=body_text,
         )
 
-    @retry(
-        stop=stop_after_attempt(settings.SES_MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(ClientError),
-        reraise=True,
-    )
     def _send(
         self,
         recipient: str,
@@ -90,8 +84,27 @@ class EmailService:
 
         In development without SES credentials the send is logged and
         skipped so local flows never fail on missing AWS config.
-        Transient SES ``ClientError``s are retried.
+        Transient SES ``ClientError``s are retried; the retry count is read
+        from ``settings.SES_MAX_RETRIES`` per call rather than
+        being frozen at import time, so configuration changes take effect
+        without a process restart.
         """
+        retryer = Retrying(
+            stop=stop_after_attempt(settings.SES_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type(ClientError),
+            reraise=True,
+        )
+        return retryer(self._send_once, recipient, subject, body_html, body_text)
+
+    def _send_once(
+        self,
+        recipient: str,
+        subject: str,
+        body_html: str,
+        body_text: str,
+    ) -> dict[str, Any]:
+        """Perform a single SES send attempt (wrapped with retries by _send)."""
         if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
             logger.warning(
                 "DEV MODE — email to %s not sent (SES not configured). Subject: %s",

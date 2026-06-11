@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.common.database import get_db
 from app.common.exceptions import ForbiddenException, UnauthorizedException
 from app.common.security import decode_access_token
-from app.constants.enums import UserRole
+from app.constants.enums import PRIVILEGED_ROLES, UserRole
 from app.lib.config import settings
 
 # Type alias for database session dependency
@@ -41,9 +41,8 @@ CurrentUser = Annotated["User", Depends(get_current_user)]  # noqa: F821
 def require_role(*allowed_roles: UserRole):
     """Build a dependency that rejects users whose role is not allowed.
 
-    Use to gate destructive/financial endpoints, e.g.::
-
-        dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))]
+    Use for ad-hoc role sets. For the common destructive/financial gate,
+    prefer :func:`require_privileged`, which centralizes the policy.
     """
     allowed = set(allowed_roles)
 
@@ -52,6 +51,26 @@ def require_role(*allowed_roles: UserRole):
             raise ForbiddenException(
                 detail="You do not have permission to perform this action.",
                 required_permission="/".join(sorted(r.value for r in allowed)),
+            )
+        return current_user
+
+    return _check
+
+
+def require_privileged():
+    """Dependency gating destructive/financial actions to privileged roles.
+
+    The single place that encodes the ``PRIVILEGED_ROLES`` policy (ADMIN /
+    MANAGER). Use on every financial or destructive endpoint, e.g.::
+
+        dependencies=[Depends(require_privileged())]
+    """
+
+    def _check(current_user: CurrentUser):
+        if not UserRole(current_user.role).is_privileged:
+            raise ForbiddenException(
+                detail="You do not have permission to perform this action.",
+                required_permission="/".join(sorted(r.value for r in PRIVILEGED_ROLES)),
             )
         return current_user
 

@@ -10,11 +10,10 @@ from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
     InvoiceServiceDep,
-    require_role,
+    require_privileged,
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import UserRole
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
@@ -205,7 +204,6 @@ def calculate_invoice_totals(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             },
         },
-        501: {"description": "Excel export not yet implemented"},
     },
 )
 def export_invoices_to_excel(
@@ -454,7 +452,7 @@ def send_invoice(
         403: {"description": "Insufficient role to record payments"},
         404: {"description": "Invoice not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def record_payment(
     invoice_id: UUID,
@@ -479,7 +477,7 @@ def record_payment(
         403: {"description": "Insufficient role to cancel invoices"},
         404: {"description": "Invoice not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def cancel_invoice(
     invoice_id: UUID,
@@ -505,7 +503,6 @@ def cancel_invoice(
             "content": {"application/pdf": {}},
         },
         404: {"description": "Invoice not found"},
-        501: {"description": "PDF generation not yet implemented"},
     },
 )
 def download_invoice_pdf(
@@ -517,8 +514,7 @@ def download_invoice_pdf(
     """
     import io
 
-    pdf_data = service.generate_pdf(invoice_id)
-    invoice = service.get_by_id(invoice_id)
+    pdf_data, invoice = service.generate_pdf_for_download(invoice_id)
 
     return StreamingResponse(
         io.BytesIO(pdf_data),

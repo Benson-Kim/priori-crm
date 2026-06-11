@@ -11,8 +11,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables with validation."""
 
-    # API Keys
-    MOCK_PAYMENT_GATEWAY_KEY: str = "mock-key-for-dev"
     APP_NAME: str = "Priori Technologies"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: Literal["development", "test", "staging", "production"] = "production"
@@ -127,16 +125,20 @@ class Settings(BaseSettings):
         if not self.SES_SENDER_EMAIL or self.SES_SENDER_EMAIL == "noreply@example.com":
             errors.append("SES_SENDER_EMAIL must be configured in production")
 
-        if self.MOCK_PAYMENT_GATEWAY_KEY == "mock-key-for-dev":
-            errors.append(
-                "MOCK_PAYMENT_GATEWAY_KEY must not use the development default in production"
-            )
-
         if self.STORAGE_BACKEND == "s3" and not self.S3_BUCKET:
             errors.append("S3_BUCKET must be configured when STORAGE_BACKEND is 's3'")
 
         # A multi-worker / horizontally-scaled production deployment must use
         # the shared Redis window, otherwise the limit is per-process.
+        # Enforce Redis in production so the limit isn't silently
+        # multiplied by the worker count, and require REDIS_URL for it.
+        if self.RATE_LIMIT_ENABLED and self.RATE_LIMIT_BACKEND != "redis":
+            errors.append(
+                "RATE_LIMIT_BACKEND must be 'redis' in production so the rate "
+                "limit is shared across workers (set RATE_LIMIT_ENABLED=false "
+                "only for a single-process deployment)"
+            )
+
         if (
             self.RATE_LIMIT_ENABLED
             and self.RATE_LIMIT_BACKEND == "redis"

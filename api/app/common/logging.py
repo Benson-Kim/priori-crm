@@ -40,8 +40,8 @@ def setup_logging() -> None:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
 
-    # Use JSON formatting in production, human-readable in development
-    if settings.is_production:
+    # Structured JSON everywhere except local development
+    if not settings.is_development:
         formatter = CustomJsonFormatter(
             "%(timestamp)s %(level)s %(name)s %(message)s",
             rename_fields={"levelname": "level", "asctime": "timestamp"},

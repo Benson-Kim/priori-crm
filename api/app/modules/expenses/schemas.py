@@ -440,6 +440,7 @@ class ExpenseStatusCounts(BaseModel):
     pending: int = 0
     paid: int = 0
     overdue: int = 0  # computed-overdue: stored OVERDUE + PENDING-past-due
+    canceled: int = 0  # voided/soft-deleted expenses (excluded from `all`)
 
 
 class ExpenseStatisticsResponse(BaseModel):

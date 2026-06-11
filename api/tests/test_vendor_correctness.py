@@ -1,11 +1,10 @@
 """Tests for the vendor correctness fixes in #36.
 
-Covers:
-- ISSUE-047: open-payable statuses are derived from ExpenseStatus and never
+- Open-payable statuses are derived from ExpenseStatus and never
   reference the fictional "partial"/"sent" values.
-- ISSUE-049: the shared default statement period resolves to the last 12
+- The shared default statement period resolves to the last 12
   months when bounds are omitted.
-- ISSUE-051: VendorStatusCounts.all is the sum of all status rows.
+- VendorStatusCounts.all is the sum of all status rows.
 """
 
 from datetime import date, timedelta
@@ -24,7 +23,7 @@ from app.modules.vendors.service import (
 
 
 class TestPayableStatusConstants:
-    """ISSUE-047: payables statuses must align with ExpenseStatus."""
+    """Payables statuses must align with ExpenseStatus."""
 
     def test_open_statuses_are_pending_and_overdue(self):
         assert set(OPEN_PAYABLE_STATUSES) == {
@@ -60,7 +59,7 @@ class TestPayableStatusConstants:
 
 
 class TestDefaultStatementPeriod:
-    """ISSUE-049: vendor + customer statements share a 12-month default."""
+    """vendor + customer statements share a 12-month default."""
 
     def test_defaults_to_last_twelve_months(self):
         start, end = default_statement_period(None, None)
