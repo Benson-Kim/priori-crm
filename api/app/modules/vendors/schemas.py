@@ -285,15 +285,13 @@ class VendorTransactionSummary(BaseModel):
     """
 
     id: UUID = Field(description="Expense or Bill UUID")
-    transaction_type: TransactionType = Field(
-        description="Source record type", alias="transactionType"
-    )
-    ref_no: str = Field(description="Reference number, e.g. INV-202407", alias="refNo")
+    transaction_type: TransactionType = Field(description="Source record type")
+    ref_no: str = Field(description="Reference number, e.g. INV-202407")
     transaction_date: date = Field(description="Transaction date", alias="date")
     amount: Decimal = Field(description="Total transaction amount")
     balance: Decimal = Field(description="Outstanding balance on the transaction")
     status: TransactionStatus = Field(description="Payment status")
-    due_date: date | None = Field(None, description="Due date", alias="dueDate")
+    due_date: date | None = Field(None, description="Due date")
 
     @computed_field
     @property
@@ -421,20 +419,16 @@ class VendorTransactionFilterParams(BaseModel):
 
 
 class ContactSearchResult(BaseModel):
-    """
-    A single result in the 'Search Existing Vendor' dropdown
-    """
+    """A single result in the 'Search Existing Vendor' dropdown"""
 
     id: UUID
-    full_name: str = Field(..., alias="fullName")
+    full_name: str
     email: str | None = None
-    phone_primary: str | None = Field(None, alias="phonePrimary")
+    phone_primary: str | None = None
     address: str | None = None
     country: str | None = None
     website: str | None = None
-    vat_number: str | None = Field(None, alias="vatNumber")
-
-    model_config = {"populate_by_name": True}
+    vat_number: str | None = None
 
 
 class ContactSearchResponse(BaseModel):

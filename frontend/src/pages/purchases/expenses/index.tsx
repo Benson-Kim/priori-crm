@@ -35,7 +35,7 @@ export default function ExpensesPage() {
     // Modal state for Record Payment
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<ExpenseSummary | null>(null);
-    const [paymentModalPrefillAmount, setPaymentModalPrefillAmount] = useState<number | undefined>();
+    const [paymentModalPrefillAmount, setPaymentModalPrefillAmount] = useState<number | undefined>(undefined);
 
     const { showConfirm, ConfirmDialog } = useConfirm();
     const navigate = useNavigate();
@@ -115,7 +115,7 @@ export default function ExpensesPage() {
 
     const handleMarkAsPaid = (expense: ExpenseSummary) => {
         setSelectedExpense(expense);
-        setPaymentModalPrefillAmount(expense.balance_due);
+        setPaymentModalPrefillAmount(Number(expense.balance_due));
         setIsPaymentModalOpen(true);
     };
 
@@ -195,7 +195,7 @@ export default function ExpensesPage() {
         {
             key: "amount",
             header: "Amount",
-            render: (item: ExpenseSummary) => <span className="text-gray-500">{formatCurrency(item.total_due, item.currency)}</span>,
+            render: (item: ExpenseSummary) => <span className="text-gray-500">{formatCurrency(Number(item.total_due), item.currency)}</span>,
         },
         {
             key: "status",
@@ -298,7 +298,7 @@ export default function ExpensesPage() {
                     }}
                     entityId={selectedExpense.id}
                     entityType="expense"
-                    balanceDue={selectedExpense.balance_due}
+                    balanceDue={Number(selectedExpense.balance_due)}
                     currency={selectedExpense.currency}
                     prefillAmount={paymentModalPrefillAmount}
                     onSuccess={() => {

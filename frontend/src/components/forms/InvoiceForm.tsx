@@ -178,7 +178,7 @@ export function InvoiceForm({
       customerId,
       transactionDate,
       dueDate,
-      currency,
+      currency: currency as InvoiceCreatePayload["currency"],
       lineItems: items,
       rfqNumber: rfqNumber || undefined,
       notes: notes || undefined,
@@ -218,7 +218,6 @@ export function InvoiceForm({
                 initialCustomerDetails={
                   initialData?.customer
                     ? {
-                      address: initialData.customer.address || undefined,
                       phone: initialData.customer.phone,
                       email: initialData.customer.email,
                     }

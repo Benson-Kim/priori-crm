@@ -143,7 +143,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             try {
                 const res = await checkEmailDuplicate(emailValue, currentVendorId);
                 if (res.exists) {
-                    setEmailWarning(res.message);
+                    setEmailWarning(res.message ?? null);
                 } else {
                     setEmailWarning(null);
                 }
@@ -162,12 +162,12 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
         setSelectedContactId(contact.id);
         reset({
             vendor_name: contact.full_name,
-            email: contact.email || "",
-            phone_primary: contact.phone_primary || "",
-            address: contact.address || "",
-            country: contact.country || COUNTRY_OPTIONS[0].value,
-            website: contact.website || "",
-            vat_number: contact.vat_number || "",
+            email: contact.email ?? "",
+            phone_primary: contact.phone_primary ?? "",
+            address: contact.address ?? "",
+            country: contact.country ?? COUNTRY_OPTIONS[0].value,
+            website: contact.website ?? "",
+            vat_number: contact.vat_number ?? "",
             currency: CURRENCY_OPTIONS[0].value,
         });
         setMode('new');

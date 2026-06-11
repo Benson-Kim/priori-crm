@@ -3,20 +3,16 @@
  *
  * The single source of truth for the organisation identity printed on
  * documents, replacing the hardcoded COMPANY_INFO constant.
+ *
+ * The response type derives from the generated OpenAPI contract
+ * (`@/lib/apiTypes`); the update body stays hand-written (#41).
  */
 import { apiDelete, apiDownload, apiGet, apiPut, apiUploadPut } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
 
-export interface OwnerProfile {
-  fullName: string;
-  locationWatermark: string | null;
-  address: string | null;
-  email: string | null;
-  phone: string | null;
-  taxPin: string | null;
-  website: string | null;
-  hasLogo: boolean;
-  updatedAt: string | null;
-}
+// OwnerProfileResponse is serialized by alias, so the generated type is the
+// camelCase shape (fullName / locationWatermark / taxPin / hasLogo / updatedAt).
+export type OwnerProfile = Schema<"OwnerProfileResponse">;
 
 export interface OwnerProfileUpdate {
   fullName: string;

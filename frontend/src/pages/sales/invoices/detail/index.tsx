@@ -271,21 +271,21 @@ export function InvoiceDetailPage() {
                         | "amount"
                         | "percentage"
                         | null,
-                    discountAmount: invoice.discount_amount,
-                    discountPercentage: invoice.discount_percentage,
-                    subtotal: invoice.subtotal,
-                    taxTotal: invoice.tax_total,
-                    totalDue: invoice.total_due,
-                    amountPaid: invoice.amount_paid,
-                    balanceDue: invoice.balance_due,
-                    lineItems: invoice.line_items.map((item) => ({
+                    discountAmount: invoice.discount_amount == null ? invoice.discount_amount : Number(invoice.discount_amount),
+                    discountPercentage: invoice.discount_percentage == null ? invoice.discount_percentage : Number(invoice.discount_percentage),
+                    subtotal: Number(invoice.subtotal),
+                    taxTotal: Number(invoice.tax_total),
+                    totalDue: Number(invoice.total_due),
+                    amountPaid: Number(invoice.amount_paid),
+                    balanceDue: Number(invoice.balance_due),
+                    lineItems: (invoice.line_items ?? []).map((item) => ({
                         id: item.id,
                         itemName: item.item_name,
                         description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: item.unit_price,
+                        quantity: Number(item.quantity),
+                        unitPrice: Number(item.unit_price),
                         taxType: item.tax_type,
-                        lineTotal: item.line_total,
+                        lineTotal: Number(item.line_total),
                     })),
                 }}
             />
@@ -308,7 +308,7 @@ export function InvoiceDetailPage() {
                     onClose={handlePaymentClose}
                     entityId={invoice.id}
                     entityType="invoice"
-                    balanceDue={invoice.balance_due}
+                    balanceDue={Number(invoice.balance_due)}
                     currency={invoice.currency}
                     reference={invoice.invoice_reference}
                     onSuccess={handlePaymentSuccess}

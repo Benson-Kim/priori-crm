@@ -32,12 +32,12 @@ export default function EditExpensePage() {
                 currency: initialData.currency,
                 isRecurring: initialData.is_recurring,
                 notes: initialData.notes || undefined,
-                lineItems: initialData.line_items.map((li: ExpenseLineItem) => ({
+                lineItems: (initialData.line_items ?? []).map((li: ExpenseLineItem) => ({
                     id: li.id,
                     itemName: li.item_name,
                     description: li.description,
-                    quantity: li.quantity,
-                    unitPrice: li.unit_price,
+                    quantity: Number(li.quantity),
+                    unitPrice: Number(li.unit_price),
                     taxType: li.tax_type,
                 })),
             }}

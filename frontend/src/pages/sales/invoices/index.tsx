@@ -171,7 +171,7 @@ export default function InvoicesPage() {
             key: "total_due",
             header: "Amount",
             render: (item: InvoiceSummary) => (
-                <span className="text-gray-600">{formatCurrency(item.total_due, item.currency)}</span>
+                <span className="text-gray-600">{formatCurrency(Number(item.total_due), item.currency)}</span>
             ),
         },
         {

@@ -211,7 +211,7 @@ export default function VendorsPage() {
         {
             key: "payables",
             header: "Payables",
-            render: (item: VendorSummary) => <span className="text-gray-500">{formatCurrency(item.payables, item.currency ?? "Ksh")}</span>,
+            render: (item: VendorSummary) => <span className="text-gray-500">{formatCurrency(Number(item.payables), item.currency ?? "Ksh")}</span>,
         },
         {
             key: "status",

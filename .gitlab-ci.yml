@@ -17,6 +17,7 @@ include:
 
 stages:
   - lint
+  - contract
   - test
   - security
 
@@ -152,12 +153,64 @@ api:test:
     - pytest -v --tb=short
 
 # ---------------------------------------------------------------------------
+# Contract types (#33)
+#
+# The frontend previously hand-mirrored the FastAPI Pydantic schemas, which
+# drifted from the API and caused real runtime breakage (duplicate-response
+# nav, vendor.phone, etc.). This job regenerates the TypeScript contract from
+# the live OpenAPI schema so the frontend's `tsc` checks the generated types,
+# not hand-written guesses.
+#
+# The schema is exported *offline* (scripts/export_openapi.py serialises
+# app.openapi() with no server and no DB), then published as an artifact the
+# ui:lint-build job consumes to generate src/lib/api-schema.d.ts before tsc.
+# ---------------------------------------------------------------------------
+
+api:openapi-schema:
+  stage: contract
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - api/**/*
+        - frontend/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+  cache:
+    key:
+      files:
+        - api/requirements.txt
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    # app.main imports config, which validates these even though no server or
+    # database is started; app.openapi() itself makes no DB connection.
+    DATABASE_URL: "postgresql+psycopg2://placeholder:placeholder@localhost:5432/placeholder"
+    JWT_SECRET_KEY: "ci-openapi-export-secret-key-at-least-32-chars"
+    SES_SENDER_EMAIL: "noreply@ci.example.com"
+    ENVIRONMENT: "test"
+  before_script:
+    - cd api
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+  script:
+    - python -m scripts.export_openapi "$CI_PROJECT_DIR/openapi.json"
+  artifacts:
+    paths:
+      - openapi.json
+    expire_in: 1 day
+
+# ---------------------------------------------------------------------------
 # Frontend (frontend/)
 # ---------------------------------------------------------------------------
 
 ui:lint-build:
   stage: test
   image: node:20-slim
+  needs:
+    - job: api:openapi-schema
+      artifacts: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -173,9 +226,14 @@ ui:lint-build:
         - frontend/package-lock.json
     paths:
       - frontend/node_modules
+  variables:
+    # Generate contract types from the schema exported by api:openapi-schema
+    # instead of hand-written interfaces (#33). Points gen:api at the artifact.
+    VITE_OPENAPI_SCHEMA: "$CI_PROJECT_DIR/openapi.json"
   before_script:
     - cd frontend
     - npm ci
+    - npm run gen:api
   script:
     - npm run lint
     - npx tsc --noEmit

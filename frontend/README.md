@@ -8,11 +8,27 @@ Response/request types come from the backend OpenAPI schema, not hand-mirrored
 interfaces (which previously drifted and caused the duplicate-response and
 `vendor.phone` bugs — LIB-FE-9).
 
-- Generate the typed schema (backend running, or set `VITE_OPENAPI_URL`):
+- Generate the typed schema. The services consume these types, so
+  `src/lib/api-schema.d.ts` must exist for `tsc` to pass — run this before
+  type-checking locally (CI runs it in `ui:lint-build`):
 
   ```sh
   npm run gen:api   # writes src/lib/api-schema.d.ts
   ```
+
+  `gen:api` resolves the schema in this order:
+
+  1. `VITE_OPENAPI_SCHEMA` — a local `openapi.json` file. Prefer this: the API
+     ships `api/scripts/export_openapi.py`, which serialises `app.openapi()`
+     **offline** (no server, no DB), e.g.
+
+     ```sh
+     python api/scripts/export_openapi.py api/openapi.json
+     VITE_OPENAPI_SCHEMA=../api/openapi.json npm run gen:api
+     ```
+
+  2. `VITE_OPENAPI_URL` — a running API's `/openapi.json`.
+  3. `http://localhost:8000/openapi.json` — the local dev default.
 
 - Reference generated types via the seam in `src/lib/apiTypes.ts`:
 

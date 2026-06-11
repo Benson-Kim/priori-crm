@@ -1,42 +1,13 @@
 import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
 import type { CustomerStatement, PaginatedApiResponse } from "@/lib/types";
 
-export interface Customer {
-  id: string;
-  customer_type: string;
-  company_name: string | null;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  website: string | null;
-  vat_number: string | null;
-  currency: string;
-  address: string;
-  address2: string | null;
-  country: string;
-  province: string;
-  city: string;
-  postal_code: string;
-  status: string;
-  balance: number;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-export interface CustomerSummary {
-  id: string;
-  customer_type: string;
-  status: string;
-  display_name: string;
-  email: string;
-  phone: string;
-  balance: number;
-  currency: string;
-  created_at: string;
-}
-
-
+// Response contracts (generated from the FastAPI OpenAPI schema).
+export type Customer = Schema<"CustomerResponse">;
+export type CustomerSummary = Schema<"CustomerSummary">;
+export type StatusCounts = Schema<"CustomerStatusCounts">;
+export type DeleteCheckResult = Schema<"CustomerDeleteCheckResponse">;
+export type DeleteResult = Schema<"CustomerDeleteResponse">;
 
 export interface PaginatedCustomers {
   items: CustomerSummary[];
@@ -46,14 +17,14 @@ export interface PaginatedCustomers {
   total_pages: number;
 }
 
-export interface StatusCounts {
-  all: number;
-  active: number;
-  inactive: number;
-  suspended: number;
-  deleted: number;
-}
-
+/**
+ * Row shape of CustomerDetailResponse.recent_invoices.
+ *
+ * The backend types this field as an untyped `list[dict]`, so the generated
+ * contract cannot describe it. This hand-written interface documents the shape
+ * the service actually emits and the detail page reads; tightening the backend
+ * schema to a typed model is tracked as follow-up (#41).
+ */
 export interface CustomerDetailInvoice {
   id: string;
   invoice_number: string;
@@ -65,31 +36,9 @@ export interface CustomerDetailInvoice {
 
 export interface CustomerDetail {
   customer: Customer;
-  financial_summary: {
-    total_unpaid: number;
-    overdue: number;
-    total_invoiced: number;
-    total_paid: number;
-  };
+  financial_summary: Schema<"FinancialSummary">;
   recent_invoices: CustomerDetailInvoice[];
   statement: CustomerStatement | null;
-}
-
-export interface DeleteCheckResult {
-  can_delete: boolean;
-  can_hard_delete: boolean;
-  delete_type: string;
-  warnings: string[];
-  associated_records: Record<string, number>;
-  message: string;
-}
-
-export interface DeleteResult {
-  customer_id: string;
-  delete_type: string;
-  deleted_at: string;
-  warnings: string[];
-  associated_records: Record<string, number>;
 }
 
 

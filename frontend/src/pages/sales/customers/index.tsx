@@ -112,12 +112,12 @@ export default function CustomersPage() {
     const handleDeactivate = (customer: CustomerSummary) => {
         if (customer.status === "inactive") return;
 
-        const hasBalance = customer.balance > 0;
+        const hasBalance = Number(customer.balance) > 0;
 
         showConfirm({
             title: "Deactivate Customer",
             description: hasBalance
-                ? `${customer.display_name} has an outstanding balance of ${formatCurrency(customer.balance, customer.currency)}. Are you sure you want to force deactivation?`
+                ? `${customer.display_name} has an outstanding balance of ${formatCurrency(Number(customer.balance), customer.currency)}. Are you sure you want to force deactivation?`
                 : `Are you sure you want to deactivate ${customer.display_name}?`,
             confirmLabel: hasBalance ? "Force Deactivate" : "Deactivate",
             variant: hasBalance ? "danger" : "default",
@@ -137,11 +137,11 @@ export default function CustomersPage() {
                 description: check.message,
                 confirmLabel: check.can_hard_delete ? "Delete Permanently" : "Archive",
                 variant: "danger",
-                children: check.warnings.length > 0 && (
+                children: (check.warnings ?? []).length > 0 && (
                     <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
                         <p className="font-semibold mb-1">Warnings:</p>
                         <ul className="list-disc list-inside">
-                            {check.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                            {(check.warnings ?? []).map((w, i) => <li key={i}>{w}</li>)}
                         </ul>
                     </div>
                 ),
@@ -242,7 +242,7 @@ export default function CustomersPage() {
         {
             key: "balance",
             header: "Balance",
-            render: (item: CustomerSummary) => <span className="text-gray-500">{formatCurrency(item.balance, item.currency ?? "Ksh")}</span>,
+            render: (item: CustomerSummary) => <span className="text-gray-500">{formatCurrency(Number(item.balance), item.currency ?? "Ksh")}</span>,
         },
         {
             key: "status",

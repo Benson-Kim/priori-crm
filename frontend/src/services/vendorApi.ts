@@ -1,68 +1,28 @@
+/**
+ * Vendor API service.
+ *
+ * Response types are sourced from the generated OpenAPI contract
+ * (`@/lib/apiTypes`) instead of hand-mirrored Pydantic schemas — the
+ * hand-written copies were the root cause of the `vendor.phone` /
+ * transaction-column drift (#33). Request *payloads* stay hand-written as the
+ * camelCase transport shape the API maps onto its snake_case fields.
+ */
+
 import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse } from "@/lib/types";
 
-export interface VendorStatement {
-  vendor: {
-    id: string;
-    vendor_name: string;
-    email: string | null;
-    phone_primary: string | null;
-    phone_secondary: string | null;
-    currency: string;
-  };
-  period_start: string;
-  period_end: string;
-  summary: {
-    opening_balance: number;
-    invoiced_amount: number;
-    amount_paid: number;
-    balance_due: number;
-  };
-  transactions: {
-    date: string;
-    description: string;
-    amount: number;
-    payment: number;
-    balance: number;
-  }[];
-}
-
-export interface Vendor {
-  id: string;
-  vendor_name: string;
-  address: string | null;
-  email: string | null;
-  country: string | null;
-  phone_primary: string | null;
-  phone_secondary: string | null;
-  website: string | null;
-  currency: string;
-  vat_number: string | null;
-  tax_id_pin: string | null;
-  notes: string | null;
-  status: string;
-  contact_id: string | null;
-  created_at: string;
-  updated_at: string;
-  version: number;
-  vendor_since_year: number;
-  display_initials: string;
-  payables: number;
-  total_unpaid: number;
-  overdue_total: number;
-}
-
-export interface VendorSummary {
-  id: string;
-  vendor_name: string;
-  email: string | null;
-  phone_primary: string | null;
-  status: string;
-  currency: string;
-  payables: number;
-  created_at: string;
-  is_active: boolean;
-}
+// Response contracts (generated from the FastAPI OpenAPI schema).
+export type VendorStatement = Schema<"VendorStatement">;
+export type Vendor = Schema<"VendorResponse">;
+export type VendorSummary = Schema<"app__modules__vendors__schemas__VendorSummary">;
+export type VendorStatusCounts = Schema<"VendorStatusCounts">;
+export type VendorPayablesSummary = Schema<"VendorPayablesSummary">;
+export type VendorTransactionSummary = Schema<"VendorTransactionSummary">;
+export type DeleteResult = Schema<"VendorDeleteResponse">;
+export type DuplicateCheckResult = Schema<"VendorDuplicateCheckResponse">;
+export type ContactSearchResult = Schema<"ContactSearchResult">;
+export type ContactSearchResponse = Schema<"ContactSearchResponse">;
 
 export interface PaginatedVendors {
   items: VendorSummary[];
@@ -72,64 +32,12 @@ export interface PaginatedVendors {
   total_pages: number;
 }
 
-export interface VendorStatusCounts {
-  all: number;
-  active: number;
-  inactive: number;
-}
-
-export interface VendorPayablesSummary {
-  total_unpaid: number;
-  overdue_total: number;
-  currency: string;
-}
-
-export interface VendorTransactionSummary {
-  id: string;
-  transaction_type: string;
-  ref_no: string;
-  date: string;
-  amount: number;
-  balance: number;
-  status: string;
-  due_date: string | null;
-  days_overdue: number;
-  status_display: string;
-}
-
 export interface PaginatedVendorTransactions {
   items: VendorTransactionSummary[];
   total: number;
   page: number;
   per_page: number;
   total_pages: number;
-}
-
-export interface DeleteResult {
-  vendor_id: string;
-  message: string;
-}
-
-export interface DuplicateCheckResult {
-  exists: boolean;
-  vendor: VendorSummary | null;
-  message: string | null;
-}
-
-export interface ContactSearchResult {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone_primary: string | null;
-  address: string | null;
-  country: string | null;
-  website: string | null;
-  vat_number: string | null;
-}
-
-export interface ContactSearchResponse {
-  results: ContactSearchResult[];
-  total: number;
 }
 
 // API Functions

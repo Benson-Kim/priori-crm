@@ -11,14 +11,13 @@
  *   import type { Schema } from "@/lib/apiTypes";
  *   type InvoiceDuplicateResponse = Schema<"InvoiceDuplicateResponse">;
  *
- * This file intentionally does not import the generated module at runtime so
- * the app still builds before the first generation; the type-only re-export
- * is resolved by `tsc` once `api-schema.d.ts` exists (committed by CI or a
- * developer running `gen:api`).
+ * The services consume `Schema<...>` from this seam, so `api-schema.d.ts` must
+ * exist for `tsc` to pass. This is intentional: a missing or broken generation
+ * now fails the type-check instead of silently passing under a `@ts-ignore`,
+ * so the contract is both generated AND enforced. Run `npm run gen:api` before
+ * type-checking locally (CI runs it in `ui:lint-build`).
  */
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - generated at build time by `npm run gen:api`
 import type { components } from "./api-schema";
 
 export type Schemas = components extends { schemas: infer S } ? S : never;

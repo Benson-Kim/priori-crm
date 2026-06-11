@@ -4,29 +4,19 @@
  * Wraps the backend auth endpoints and persists tokens via auth-storage so the
  * shared API client (lib/api.ts) can attach the bearer header and refresh on
  * 401. The login/OTP UI should call these helpers.
+ *
+ * Response types derive from the generated OpenAPI contract (`@/lib/apiTypes`)
+ * rather than hand-mirrored interfaces (#41).
  */
 
 import { apiPost } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
 import { clearTokens, getRefreshToken, setTokens } from "@/lib/auth-storage";
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  avatar_url: string | null;
-  role: string;
-}
+export type AuthUser = Schema<"UserResponse">;
 
-interface MessageResponse {
-  message: string;
-}
-
-interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  user: AuthUser;
-}
+type MessageResponse = Schema<"MessageResponse">;
+type TokenResponse = Schema<"TokenResponse">;
 
 /**
  * Step 1: validate credentials. The backend sends an OTP to the user's email
