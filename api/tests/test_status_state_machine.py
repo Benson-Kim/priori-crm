@@ -281,3 +281,104 @@ class TestExpensePaymentSettlement:
                 expense.id,
                 ExpensePaymentCreate(amount=Decimal("10.00"), paymentDate=date.today()),
             )
+
+
+class TestExpenseCanceledFirstClass:
+    """CANCELED is a first-class terminal expense state."""
+
+    def _make_expense(self, db, *, status=ExpenseStatus.PENDING, total="100.00"):
+        from app.modules.expenses.models import Expense
+
+        vendor = _make_vendor(db)
+        total_d = Decimal(total)
+        expense = Expense(
+            expense_number=f"EXP-{uuid.uuid4().hex[:8]}",
+            expense_reference=f"EXP-{uuid.uuid4().hex[:6]}",
+            vendor_id=vendor.id,
+            expense_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            currency=Currency.KES,
+            status=status,
+            subtotal=total_d,
+            tax_total=Decimal("0.00"),
+            total_due=total_d,
+            amount_paid=Decimal("0.00"),
+            balance_due=total_d,
+            version=1,
+        )
+        db.add(expense)
+        db.flush()
+        return expense
+
+    def test_cancel_uses_transition_and_bumps_version(self, db):
+        from app.modules.expenses.service import ExpenseService
+
+        expense = self._make_expense(db, status=ExpenseStatus.PENDING)
+        v0 = expense.version
+        service = ExpenseService(db)
+
+        result = service.cancel(expense.id)
+
+        assert result.status == ExpenseStatus.CANCELED
+        assert result.version == v0 + 1
+
+    def test_paid_expense_can_be_voided_to_canceled(self, db):
+        from app.modules.expenses.service import ExpenseService
+
+        expense = self._make_expense(db, status=ExpenseStatus.PAID)
+        service = ExpenseService(db)
+
+        result = service.cancel(expense.id)
+        assert result.status == ExpenseStatus.CANCELED
+
+    def test_cancel_already_canceled_rejected(self, db):
+        from app.modules.expenses.service import ExpenseService
+
+        expense = self._make_expense(db, status=ExpenseStatus.CANCELED)
+        service = ExpenseService(db)
+
+        with pytest.raises(BadRequestException):
+            service.cancel(expense.id)
+
+    def test_default_list_hides_canceled_but_filter_surfaces_it(self, db):
+        from app.common.pagination import PaginationParams
+        from app.modules.expenses.schemas import ExpenseFilterParams
+        from app.modules.expenses.service import ExpenseService
+
+        service = ExpenseService(db)
+        live = self._make_expense(db, status=ExpenseStatus.PENDING)
+        canceled = self._make_expense(db, status=ExpenseStatus.PENDING)
+        service.cancel(canceled.id)
+
+        default_ids = {
+            row.id for row in service.list_expenses(PaginationParams()).items
+        }
+        assert live.id in default_ids
+        assert canceled.id not in default_ids
+
+        canceled_ids = {
+            row.id
+            for row in service.list_expenses(
+                PaginationParams(),
+                ExpenseFilterParams(status=ExpenseStatus.CANCELED),
+            ).items
+        }
+        assert canceled.id in canceled_ids
+        assert live.id not in canceled_ids
+
+    def test_status_counts_track_canceled_separately(self, db):
+        from app.modules.expenses.service import ExpenseService
+
+        service = ExpenseService(db)
+        # Two PENDING expenses; cancel one. due_date is in the future so
+        # neither contributes to the computed-overdue bucket.
+        self._make_expense(db, status=ExpenseStatus.PENDING)
+        canceled = self._make_expense(db, status=ExpenseStatus.PENDING)
+        service.cancel(canceled.id)
+
+        counts = service.get_status_counts()
+        # The canceled row is surfaced on its own count and excluded from
+        # `all` (which tracks live expenses only).
+        assert counts.canceled == 1
+        assert counts.pending == 1
+        assert counts.all == 1

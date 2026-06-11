@@ -1,5 +1,4 @@
-"""Tests for OwnerService UoW + storage encapsulation (ISSUE-032, ISSUE-033).
-
+"""Tests for OwnerService UoW + storage encapsulation
 Verify that the owner write-path flushes without committing (so it composes
 inside an outer transaction), that the superseded logo object is only deleted
 after the transaction commits, and that logo serving goes through the public

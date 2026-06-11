@@ -56,6 +56,20 @@ class QuoteService(BaseDocumentService):
     Sequential identifier generation uses pg_advisory_xact_lock so only one
     transaction can enter the generation critical section per unique key.
     Unique DB constraints + retry loops serve as safety nets.
+
+    Editable-field matrix
+    ---------------------------------
+    The single, authoritative statement of which fields may change in which
+    status. Enforced by ``QuoteResponse.is_editable`` and the SENT
+    restricted-field guard in ``update()`` below; mirrors the invoices policy.
+
+      DRAFT     fully editable (customer, dates, currency, line items,
+                discount, notes).
+      SENT      limited: line items / discount / notes / due_date only —
+                customer_id, transaction_date and currency are frozen.
+      APPROVED  read-only.
+      INVOICED  read-only (converted; the invoice owns the figures).
+      EXPIRED   read-only.
     """
 
     # Max retries for number collision (advisory lock makes this very rare)
@@ -74,7 +88,6 @@ class QuoteService(BaseDocumentService):
         QuoteStatus.DRAFT: [QuoteStatus.SENT, QuoteStatus.EXPIRED],
         # SENT must be APPROVED before it can be INVOICED — no direct
         # SENT -> INVOICED edge, so conversion can never skip approval
-        # (ISSUE-059).
         QuoteStatus.SENT: [
             QuoteStatus.APPROVED,
             QuoteStatus.EXPIRED,
@@ -493,7 +506,7 @@ class QuoteService(BaseDocumentService):
 
         # Atomic optimistic-lock guard: locks the row and compares the version,
         # replacing the previous non-atomic Python compare that allowed silent
-        # last-write-wins (ISSUE-001). Matches invoices/expenses/vendors.
+        # last-write-wins
         assert_version(self._db, Quote, quote_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True, mode="python")

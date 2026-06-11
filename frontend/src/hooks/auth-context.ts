@@ -1,5 +1,5 @@
 /**
- * Auth context + hook (ISSUE-036 / ISSUE-030).
+ * Auth context + hook
  *
  * Kept separate from the AuthProvider component so the provider file exports
  * only a component (eslint react-refresh/only-export-components). The provider
@@ -38,7 +38,7 @@ export function useAuth(): AuthContextValue {
 }
 
 /**
- * Whether the current user may edit the owner profile / logo (ISSUE-029).
+ * Whether the current user may edit the owner profile / logo
  * Read-only for everyone else, matching the backend authorisation.
  */
 export function useCanEditOwner(): boolean {

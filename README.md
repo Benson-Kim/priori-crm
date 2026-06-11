@@ -57,7 +57,7 @@ uvicorn app.main:app --reload
 #### UI
 
 ```bash
-cd ui
+cd frontend
 npm install
 npm run dev
 ```

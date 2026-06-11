@@ -1,4 +1,4 @@
-"""Unit tests for the in-memory refresh-token denylist (ISSUE-039)."""
+"""Unit tests for the in-memory refresh-token denylist"""
 
 import time
 

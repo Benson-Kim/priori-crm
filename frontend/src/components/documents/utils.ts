@@ -51,7 +51,7 @@ export function generateRowKey(): string {
  * Single source of truth for money rounding on the frontend. Mirrors the
  * backend policy in api/app/common/financial.quantize_money so preview
  * totals always equal the persisted/PDF totals for the same input
- * (SH-FE-1 / P-3). Uses an epsilon nudge to defend against binary-float
+ *. Uses an epsilon nudge to defend against binary-float
  * representation errors (e.g. 1.005) before half-up rounding.
  */
 export function roundMoney(value: number): number {

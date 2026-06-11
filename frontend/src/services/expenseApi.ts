@@ -158,7 +158,7 @@ export function downloadExpenseDocument(
 /**
  * Preview expense totals. Posts the camelCase ExpenseLineItemPayload shape
  * (the documented POST /expenses/calculate contract), not snake_case keys
- * relying on the backend's populate_by_name fallback (ISSUE-064 class).
+ * relying on the backend's populate_by_name fallback.
  */
 export function calculateTotals(data: ExpenseLineItemPayload[]) {
   return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
@@ -166,8 +166,7 @@ export function calculateTotals(data: ExpenseLineItemPayload[]) {
 
 /**
  * Download the currently-filtered expenses as an .xlsx workbook. Returns a
- * Blob the caller saves with `saveBlob` (ISSUE-063 — the backend export was
- * implemented but unreachable from the UI).
+ * Blob the caller saves with `saveBlob`
  */
 export function exportExpensesExcel(params?: {
   status?: string;

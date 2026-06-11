@@ -5,7 +5,7 @@ from unittest.mock import patch
 from app.common.security import hash_password
 from app.modules.auth.models import User
 
-# A password that satisfies the shared password policy (ISSUE-038): >= 8 chars
+# A password that satisfies the shared password policy: >= 8 chars
 # with an uppercase letter, a lowercase letter, a digit and a special char.
 VALID_PASSWORD = "Securepass123!"
 
@@ -220,7 +220,7 @@ class TestRefreshToken:
         )
         assert response.status_code == 200
         data = response.json()
-        # Rotation (ISSUE-039): a new access AND a new refresh token come back,
+        # Rotation: a new access AND a new refresh token come back,
         # and the refresh token is genuinely rotated (not the same string).
         assert "access_token" in data
         assert "refresh_token" in data
@@ -284,7 +284,7 @@ class TestLogout:
         assert refresh_resp.status_code == 401
 
     def test_logout_is_idempotent_for_invalid_token(self, client):
-        """A malformed/unknown token is a safe no-op, not an error (ISSUE-039)."""
+        """A malformed/unknown token is a safe no-op, not an error."""
         response = client.post(
             "/api/v1/auth/logout",
             json={"refresh_token": "not.a.valid.token"},

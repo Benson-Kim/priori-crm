@@ -1,9 +1,11 @@
 """
 Expense ORM models — Purchases module.
 
-Lifecycle: PENDING → PAID | OVERDUE
+Lifecycle: PENDING → PAID | OVERDUE; PENDING | OVERDUE | PAID → CANCELED
 No discount field in v1
-No CANCELED terminal state — removal is hard-delete.
+CANCELED is a terminal state (voided). An expense with recorded payments is
+soft-deleted by transitioning to CANCELED (preserving its audit trail);
+an expense with no payments is hard-deleted instead.
 
 Financial formula:
     line_total  = quantity x unit_price

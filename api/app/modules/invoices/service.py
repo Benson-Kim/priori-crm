@@ -814,7 +814,56 @@ class InvoiceService(BaseDocumentService):
         """
         Send invoice via email.
 
-        Uses SELECT FOR UPDATE to prevent TOCTOU race conditions.
+        Split into a short locked phase and an unlocked dispatch.
+        The locked phase takes ``SELECT ... FOR UPDATE`` to serialise the
+        DRAFT->SENT transition (preventing the TOCTOU race), then *commits*
+        to release the row lock. Only afterwards is the email dispatched, so
+        the synchronous SES call (and its retries) never runs while the
+        invoices row is locked.
+        """
+        recipient, email_subject, email_body, sent_at = self._prepare_and_mark_sent(
+            invoice_id, to_email, subject, body
+        )
+
+        # Dispatch email *outside* the row lock. The status change above is
+        # already durable, so a slow or failing SES send no longer holds a
+        # write lock on the invoice.
+        from app.lib.email import email_service
+
+        email_service.send_document_email(
+            recipient=recipient,
+            subject=email_subject,
+            body_text=email_body,
+        )
+
+        logger.info(
+            "Sent invoice: %s",
+            invoice_id,
+            extra={
+                "invoice_id": str(invoice_id),
+                "recipient": recipient,
+                "attached_pdf": attach_pdf,
+            },
+        )
+        return {
+            "invoice_id": invoice_id,
+            "sent_to": recipient,
+            "sent_at": sent_at,
+            "message": "Invoice sent successfully",
+        }
+
+    def _prepare_and_mark_sent(
+        self,
+        invoice_id: uuid.UUID,
+        to_email: str | None,
+        subject: str | None,
+        body: str | None,
+    ) -> tuple[str, str, str, datetime]:
+        """Locked phase of send_invoice: validate, transition, then commit.
+
+        Returns the resolved recipient, subject, body and sent_at timestamp.
+        Commits before returning so the row lock is released ahead of the
+        SES dispatch in the caller.
         """
         # Lock the bare invoices row: a joined customer load would emit a
         # LEFT OUTER JOIN that Postgres rejects under FOR UPDATE ("cannot be
@@ -848,16 +897,7 @@ class InvoiceService(BaseDocumentService):
         email_subject = subject or self._generate_email_subject(invoice)
         email_body = body or self._generate_email_body(invoice)
 
-        # Dispatch email
-        from app.lib.email import email_service
-
-        email_service.send_document_email(
-            recipient=recipient,
-            subject=email_subject,
-            body_text=email_body,
-        )
-
-        # Mark as sent if currently draft
+        # Mark as sent if currently draft, then commit to release the lock.
         sent_at = datetime.now(UTC)
         if invoice.status == InvoiceStatus.DRAFT:
             self._transition(invoice, InvoiceStatus.SENT)
@@ -865,21 +905,9 @@ class InvoiceService(BaseDocumentService):
             self._capture_owner_snapshot(invoice)
             self._db.flush()
 
-        logger.info(
-            "Sent invoice: %s",
-            invoice.invoice_number,
-            extra={
-                "invoice_id": str(invoice.id),
-                "recipient": recipient,
-                "attached_pdf": attach_pdf,
-            },
-        )
-        return {
-            "invoice_id": invoice.id,
-            "sent_to": recipient,
-            "sent_at": sent_at,
-            "message": "Invoice sent successfully",
-        }
+        self._db.commit()
+
+        return recipient, email_subject, email_body, sent_at
 
     def record_payment(
         self,
@@ -1253,8 +1281,8 @@ class InvoiceService(BaseDocumentService):
 
     # PDF GENERATION
 
-    def generate_pdf(self, invoice_id: uuid.UUID) -> bytes:
-        """Generate PDF for invoice using ReportLab.
+    def _render_pdf(self, invoice: Invoice) -> bytes:
+        """Render a PDF for an already-loaded invoice using ReportLab.
 
         Renders the owner header from the invoice's immutable snapshot when
         issued, otherwise from the live profile.
@@ -1262,8 +1290,6 @@ class InvoiceService(BaseDocumentService):
         from app.common.pdf import DocumentPDFGenerator
         from app.modules.owner.models import OwnerProfileSnapshot
         from app.modules.owner.service import OwnerService
-
-        invoice = self.get_by_id(invoice_id)
 
         owner_service = OwnerService(self._db)
         if invoice.owner_snapshot_id is not None:
@@ -1277,3 +1303,18 @@ class InvoiceService(BaseDocumentService):
         return generator.generate_invoice_pdf(
             invoice, owner=owner_info, logo_bytes=logo_bytes
         )
+
+    def generate_pdf(self, invoice_id: uuid.UUID) -> bytes:
+        """Generate PDF for an invoice by id."""
+        return self._render_pdf(self.get_by_id(invoice_id))
+
+    def generate_pdf_for_download(self, invoice_id: uuid.UUID) -> tuple[bytes, Invoice]:
+        """Generate the invoice PDF and return it with the loaded invoice.
+
+        The PDF download endpoint needs both the rendered bytes and the
+        invoice (for the attachment filename). Loading the invoice once here
+        and rendering from it avoids the second get_by_id the router used to
+        do just for the filename.
+        """
+        invoice = self.get_by_id(invoice_id)
+        return self._render_pdf(invoice), invoice

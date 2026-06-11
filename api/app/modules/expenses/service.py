@@ -69,9 +69,15 @@ class ExpenseService(BaseDocumentService):
     _reference_collision_markers = ("expense_number", "expense_reference")
 
     ALLOWED_TRANSITIONS: ClassVar[dict[ExpenseStatus, list[ExpenseStatus]]] = {
-        ExpenseStatus.PENDING: [ExpenseStatus.PAID, ExpenseStatus.OVERDUE],
-        ExpenseStatus.OVERDUE: [ExpenseStatus.PAID],
-        ExpenseStatus.PAID: [],  # terminal
+        ExpenseStatus.PENDING: [
+            ExpenseStatus.PAID,
+            ExpenseStatus.OVERDUE,
+            ExpenseStatus.CANCELED,
+        ],
+        ExpenseStatus.OVERDUE: [ExpenseStatus.PAID, ExpenseStatus.CANCELED],
+        # PAID can still be voided (e.g. a mistaken settlement) -> CANCELED.
+        ExpenseStatus.PAID: [ExpenseStatus.CANCELED],
+        ExpenseStatus.CANCELED: [],  # terminal
     }
 
     def _generate_expense_number(self) -> str:
@@ -267,12 +273,14 @@ class ExpenseService(BaseDocumentService):
                 Vendor.vendor_name.label("vendor_name"),
             ).join(Vendor, Expense.vendor_id == Vendor.id)
 
-            if filters:
-                if filters.status:
-                    query = query.filter(Expense.status == filters.status)
-                else:
-                    query = query.filter(Expense.status != ExpenseStatus.CANCELED)
+            # CANCELED is hidden unless explicitly requested via status filter,
+            # so the default list shows only live expenses.
+            if filters and filters.status:
+                query = query.filter(Expense.status == filters.status)
+            else:
+                query = query.filter(Expense.status != ExpenseStatus.CANCELED)
 
+            if filters:
                 if filters.vendor_id:
                     query = query.filter(Expense.vendor_id == filters.vendor_id)
 
@@ -442,18 +450,20 @@ class ExpenseService(BaseDocumentService):
                         )
                     ).label("pending_past_due_cnt"),
                 )
-                .filter(Expense.status != ExpenseStatus.CANCELED)
                 .group_by(Expense.status)
                 .all()
             )
 
             counts: dict[str, int] = {}
             pending_past_due = 0
+            # `all` and the active-status tabs cover live expenses only;
+            # CANCELED is surfaced via its own count, not folded into `all`.
             total = 0
 
             for status_val, cnt, ppd_cnt in rows:
                 counts[status_val] = cnt
-                total += cnt
+                if status_val != ExpenseStatus.CANCELED:
+                    total += cnt
                 pending_past_due += ppd_cnt or 0
 
             stored_overdue = counts.get(ExpenseStatus.OVERDUE, 0)
@@ -464,6 +474,7 @@ class ExpenseService(BaseDocumentService):
                 pending=counts.get(ExpenseStatus.PENDING, 0),
                 paid=counts.get(ExpenseStatus.PAID, 0),
                 overdue=displayed_overdue,
+                canceled=counts.get(ExpenseStatus.CANCELED, 0),
             )
 
         except SQLAlchemyError as exc:
@@ -996,11 +1007,38 @@ class ExpenseService(BaseDocumentService):
 
     # DELETE
 
+    def cancel(self, expense_id: uuid.UUID) -> Expense:
+        """Cancel (void) an expense — terminal CANCELED state.
+
+        Routes through the state machine so ALLOWED_TRANSITIONS is enforced
+        and the version bump is owned in one place. Idempotency is rejected:
+        an already-CANCELED expense raises rather than transitioning again.
+        """
+        expense = self.get_by_id(expense_id)
+
+        if expense.status == ExpenseStatus.CANCELED:
+            raise BadRequestException(
+                detail="Expense is already canceled", field="status"
+            )
+
+        # _transition validates PENDING/OVERDUE/PAID -> CANCELED and bumps
+        # version exactly once.
+        self._transition(expense, ExpenseStatus.CANCELED)
+        self._db.flush()
+
+        logger.warning(
+            "Canceled expense: %s",
+            expense.expense_reference,
+            extra={"expense_id": str(expense.id)},
+        )
+        return expense
+
     def delete(self, expense_id: uuid.UUID) -> bool:
         """
         Delete an expense.
 
-        If the expense has payments, it is soft-deleted (status = CANCELED).
+        If the expense has payments, it is soft-deleted by transitioning to
+        the terminal CANCELED state (preserving the payment audit trail).
         Otherwise, it is hard-deleted.
         Returns True if the expense was soft-deleted so the router can
         surface the augmented warning text.
@@ -1010,8 +1048,10 @@ class ExpenseService(BaseDocumentService):
 
         try:
             if had_payments:
-                expense.status = ExpenseStatus.CANCELED
-                expense.version += 1
+                # Soft-delete via the state machine (CANCELED is first-class),
+                # not a bare status assignment, so the transition is validated
+                # and the version bump happens exactly once.
+                self._transition(expense, ExpenseStatus.CANCELED)
                 logger.warning(
                     "Soft-deleted expense (had payments): %s",
                     expense.expense_reference,

@@ -2,11 +2,7 @@
  * Quote API service.
  *
  * Response types are sourced from the generated OpenAPI contract
- * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas — the
- * hand-written copies were the root cause of the duplicate-response drift
- * (ISSUE-060) and similar (#33). Request *payloads* stay hand-written: they
- * are the camelCase transport shape the frontend sends, which the API maps
- * onto its snake_case fields via Pydantic aliases.
+ * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas
  */
 
 import {

@@ -1,5 +1,5 @@
 /**
- * Top-level route guard (ISSUE-030).
+ * Top-level route guard
  *
  * Wraps the authenticated application shell. When there is no valid session
  * the user is redirected to /login, preserving the attempted location so we

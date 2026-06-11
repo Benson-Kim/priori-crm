@@ -11,11 +11,11 @@ from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
     QuoteServiceDep,
-    require_role,
+    require_privileged,
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType, UserRole
+from app.constants.enums import DiscountType
 from app.modules.quotes.schemas import (
     QuoteApproveRequest,
     QuoteCalculationResponse,
@@ -171,7 +171,6 @@ def calculate_quote_totals(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             },
         },
-        501: {"description": "Excel export not yet implemented"},
     },
 )
 def export_quotes_to_excel(
@@ -402,7 +401,7 @@ def send_quote(
         403: {"description": "Insufficient role to approve quotes"},
         404: {"description": "Quote not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def approve_quote(
     quote_id: UUID,
@@ -429,7 +428,7 @@ def approve_quote(
         403: {"description": "Insufficient role to convert quotes"},
         404: {"description": "Quote not found"},
     },
-    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
+    dependencies=[Depends(require_privileged())],
 )
 def convert_quote_to_invoice(
     quote_id: UUID,
@@ -466,7 +465,6 @@ def delete_quote(quote_id: UUID, service: QuoteServiceDep) -> None:
             "content": {"application/pdf": {}},
         },
         404: {"description": "Quote not found"},
-        501: {"description": "PDF generation not yet implemented"},
     },
 )
 def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):

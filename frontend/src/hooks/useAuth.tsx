@@ -1,9 +1,9 @@
 /**
- * Authentication provider (ISSUE-036 / ISSUE-030).
+ * Authentication provider
  *
  * Centralises the login → OTP → token flow so pages and the route guard share
  * one source of truth for "is the user signed in" and for the current user.
- * Tokens themselves are owned by lib/auth-storage (in-memory, ISSUE-031); this
+ * Tokens themselves are owned by lib/auth-storage (in-memory); this
  * provider only tracks the derived authentication state and the user profile.
  *
  * The context object and the useAuth hook live in hooks/auth-context.ts so
@@ -17,14 +17,14 @@ import {
   type ReactNode,
 } from "react";
 
+import { AuthContext, type AuthContextValue } from "@/hooks/auth-context";
+import { isAuthenticated as hasToken } from "@/lib/auth-storage";
 import {
   login as loginRequest,
   logout as logoutRequest,
   verifyOtp as verifyOtpRequest,
   type AuthUser,
 } from "@/services/authApi";
-import { isAuthenticated as hasToken } from "@/lib/auth-storage";
-import { AuthContext, type AuthContextValue } from "@/hooks/auth-context";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);

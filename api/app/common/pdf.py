@@ -326,7 +326,7 @@ class DocumentPDFGenerator:
 
     @staticmethod
     def _build_logo(logo_bytes: bytes | None) -> Image | None:
-        """Build a header logo flowable from raw image bytes (ISSUE-035).
+        """Build a header logo flowable from raw image bytes.
 
         Scales the image to fit within the configured max box while
         preserving aspect ratio. Returns ``None`` (text-only header) when no

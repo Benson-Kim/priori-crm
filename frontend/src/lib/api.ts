@@ -72,7 +72,7 @@ async function refreshAccessToken(): Promise<boolean> {
         if (!data?.access_token) {
           return false;
         }
-        // /auth/refresh rotates the refresh token (ISSUE-039): the presented
+        // /auth/refresh rotates the refresh token: the presented
         // token is revoked server-side, so persist the new pair or the next
         // refresh will be rejected.
         setTokens(data.access_token, data.refresh_token);

@@ -18,7 +18,14 @@ class UserRole(StrEnum):
     @property
     def is_privileged(self) -> bool:
         """Whether this role may perform destructive/financial actions."""
-        return self in (UserRole.ADMIN, UserRole.MANAGER)
+        return self in PRIVILEGED_ROLES
+
+
+#: Single source of truth for the roles allowed to perform destructive /
+#: financial actions (hard-delete, record-payment, approve, convert, settle).
+#: Use this (or the require_privileged dependency) instead of repeating the
+#: (MANAGER, ADMIN) tuple at every call site.
+PRIVILEGED_ROLES: frozenset["UserRole"] = frozenset({UserRole.ADMIN, UserRole.MANAGER})
 
 
 class CustomerStatus(StrEnum):

@@ -24,7 +24,7 @@ export function DocumentOwnerHeader({
 }: Readonly<DocumentOwnerHeaderProps>) {
   const { profile, logoUrl, save, uploadLogo, removeLogo } = useOwnerProfile();
   // Only privileged users (MANAGER/ADMIN) may edit; the backend 403s everyone
-  // else, so never show edit controls to them (ISSUE-029).
+  // else, so never show edit controls to them 
   const canEdit = useCanEditOwner();
   const showEdit = editable && canEdit;
   const [modalOpen, setModalOpen] = useState(false);
