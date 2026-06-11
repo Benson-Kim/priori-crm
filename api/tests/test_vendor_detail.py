@@ -1,4 +1,4 @@
-"""Tests for the vendor detail path (VEND-BE-2).
+"""Tests for the vendor detail path .
 
 VendorService.get_detail() and get_transactions_count() were dead, unrouted
 code that called a non-existent self._build_vendor_response(...), guaranteeing
@@ -43,7 +43,7 @@ def _service_with(vendor: _FakeVendor) -> VendorService:
 
 class TestVendorDetail:
     def test_dead_get_detail_method_removed(self):
-        """The unrouted get_detail() must no longer exist (VEND-BE-2)."""
+        """The unrouted get_detail() must no longer exist."""
         assert not hasattr(VendorService, "get_detail")
         assert not hasattr(VendorService, "get_transactions_count")
 

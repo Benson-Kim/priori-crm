@@ -6,7 +6,7 @@
  * 401. The login/OTP UI should call these helpers.
  *
  * Response types derive from the generated OpenAPI contract (`@/lib/apiTypes`)
- * rather than hand-mirrored interfaces (#41).
+ * rather than hand-mirrored interfaces.
  */
 
 import { apiPost } from "@/lib/api";

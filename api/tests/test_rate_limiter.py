@@ -91,7 +91,7 @@ class TestRateLimiterEnforcement:
 
     @patch("app.common.middleware.settings")
     def test_exceeding_limit_returns_429_with_retry_after(self, mock_settings):
-        """Requests beyond max_requests return a clean 429 with Retry-After (W-1).
+        """Requests beyond max_requests return a clean 429 with Retry-After
 
         The middleware must NOT raise: a BaseHTTPMiddleware runs outside the
         AppException handler, so raising would surface as a 500. It returns a

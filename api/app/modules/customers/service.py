@@ -51,7 +51,7 @@ class CustomerService:
         """Create a new customer."""
         try:
             # Case-insensitive identity: store and compare emails lowercased
-            # so 'Alpha@x.com' and 'alpha@x.com' are one customer (CUST-DBA-2).
+            # so 'Alpha@x.com' and 'alpha@x.com' are one customer.
             email = data.email.strip().lower()
             existing = self._db.query(Customer).filter(Customer.email == email).first()
             if existing:
@@ -247,7 +247,6 @@ class CustomerService:
                 return customer
 
             # Normalize email to lowercase before conflict check + persist
-            # (CUST-DBA-2).
             if "email" in update_data and update_data["email"] is not None:
                 update_data["email"] = update_data["email"].strip().lower()
 
@@ -430,7 +429,7 @@ class CustomerService:
             if invoice_count > 0:
                 # PARTIAL invoices still carry an outstanding balance and must
                 # count as unpaid, otherwise a partially-paid customer looks
-                # safe to hard-delete (VER-NEW-2).
+                # safe to hard-delete.
                 unpaid_count = (
                     self._db.query(Invoice)
                     .filter(
@@ -844,7 +843,7 @@ class CustomerService:
         """Calculate customer balance as of a specific date (invoiced - paid)."""
         # Sum invoice totals before date, excluding DRAFT/CANCELED so the
         # opening balance matches _update_customer_balance and the persisted
-        # Customer.balance (VER-NEW-3).
+        # Customer.balance.
         invoiced = self._db.query(func.sum(Invoice.total_due)).filter(
             Invoice.customer_id == customer_id,
             Invoice.transaction_date < as_of_date,

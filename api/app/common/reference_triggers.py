@@ -1,4 +1,4 @@
-"""PostgreSQL triggers that maintain the reference high-water mark (P-4 / V-DI-5).
+"""PostgreSQL triggers that maintain the reference high-water mark.
 
 The generator bumps ``reference_sequences`` when it issues a number, but numbers
 can also enter the system by other paths (imports, data fixes, direct inserts).

@@ -1,20 +1,69 @@
 name: UI CI
 
+# Mirrors the GitLab `api:openapi-schema` and `ui:lint-build` jobs in
+# .gitlab-ci.yml. The frontend type-checks against the generated OpenAPI
+# contract (#33/#41), so the schema is exported offline first and the
+# contract types are generated before tsc — a backend schema change that
+# breaks the generated types fails here, not at runtime.
+#
+# api/** is included so API-only changes still type-check the frontend
+# against the freshly exported contract.
+
 on:
   push:
     branches: [main, develop]
-    paths: ["frontend/**"]
+    paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
   pull_request:
     branches: [main, develop]
-    paths: ["frontend/**"]
+    paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
 
 jobs:
-  lint-and-build:
+  openapi-schema:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    env:
+      # app.main imports config, which validates these even though no server
+      # or database is started; app.openapi() itself makes no DB connection.
+      DATABASE_URL: postgresql+psycopg2://priori:placeholder@localhost:5432/placeholder
+      JWT_SECRET_KEY: ci-openapi-export-secret-key-at-least-32-chars
+      SES_SENDER_EMAIL: noreply@ci.example.com
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Export OpenAPI schema
+        run: python -m scripts.export_openapi "$GITHUB_WORKSPACE/openapi.json"
+
+      - name: Upload schema artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: openapi.json
+          retention-days: 1
+
+  lint-build:
+    needs: openapi-schema
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
-
+    env:
+      # Generate contract types from the schema exported by the
+      # openapi-schema job instead of hand-written interfaces (#33).
+      VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/openapi.json
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +73,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Download schema artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-schema
+          path: ${{ github.workspace }}
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate contract types
+        run: npm run gen:api
 
       - name: Lint
         run: npm run lint

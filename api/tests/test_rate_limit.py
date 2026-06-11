@@ -1,4 +1,4 @@
-"""Integration tests for the rate-limit / 429 path (W1.7, W-1).
+"""Integration tests for the rate-limit / 429 path
 
 These drive the *full* ASGI middleware stack through TestClient. The previous
 unit test called RateLimitMiddleware.dispatch() directly, which bypassed the
@@ -106,6 +106,6 @@ def test_distinct_users_get_independent_buckets(monkeypatch):
     assert client.get("/api/v1/probe", headers=auth_a).status_code == 200
     assert client.get("/api/v1/probe", headers=auth_a).status_code == 429
 
-    # User B is unaffected despite sharing the IP (W-5).
+    # User B is unaffected despite sharing the IP
     assert client.get("/api/v1/probe", headers=auth_b).status_code == 200
     assert client.get("/api/v1/probe", headers=auth_b).status_code == 200

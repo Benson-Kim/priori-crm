@@ -1,4 +1,4 @@
-"""PDF owner-logo embedding (ISSUE-035).
+"""PDF owner-logo embedding
 
 Pure, DB-free checks on DocumentPDFGenerator: a valid logo produces a larger
 PDF (the image is embedded) and renders without error, while a corrupt or

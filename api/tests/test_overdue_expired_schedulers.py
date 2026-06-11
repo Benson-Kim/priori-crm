@@ -1,6 +1,4 @@
-"""Tests for the overdue/expired schedulers and the centralized predicate
-(W2.4, P-6 / V-DRY-4).
-"""
+"""Tests for the overdue/expired schedulers and the centralized predicate"""
 
 from datetime import date, timedelta
 from decimal import Decimal

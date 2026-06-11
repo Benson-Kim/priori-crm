@@ -1,5 +1,5 @@
 """Tests for the currency domain + single-currency-per-customer policy and
-customer-balance non-drift (W2.3, P-11 / V-DI-6).
+customer-balance non-drift
 """
 
 from datetime import date, timedelta

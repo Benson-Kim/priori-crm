@@ -89,7 +89,7 @@ def assert_version(
     record_id: Any,
     expected_version: int | None,
 ) -> None:
-    """Atomically assert a row is still at ``expected_version`` (P-9).
+    """Atomically assert a row is still at ``expected_version`.
 
     Re-selects the row's version column ``WITH FOR UPDATE`` so concurrent
     updaters serialize on the row: the second updater blocks until the first

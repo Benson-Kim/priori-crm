@@ -355,8 +355,8 @@ class ExpenseService(BaseDocumentService):
     ) -> list[Expense]:
         """Return full Expense ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
-        (P-5 / EXP-OPS-1): vendor eager-joined for the display name; line items
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
+        vendor eager-joined for the display name; line items
         via ``selectinload`` only when requested. ``limit`` caps rows
         materialised in memory.
         """
@@ -630,7 +630,7 @@ class ExpenseService(BaseDocumentService):
                 field="status",
             )
 
-        # Atomic optimistic-lock guard (P-9): locks the row and compares the
+        # Atomic optimistic-lock guard: locks the row and compares the
         # version under the lock, replacing the non-atomic Python compare.
         assert_version(self._db, Expense, expense_id, expected_version)
 
@@ -732,7 +732,7 @@ class ExpenseService(BaseDocumentService):
     ) -> ExpensePayment:
         """Apply a payment to an already-locked expense and settle if covered.
 
-        Single source of truth for both record_payment and mark_as_paid (P-8):
+        Single source of truth for both record_payment and mark_as_paid:
         creates the audit-trail ExpensePayment, advances amount_paid /
         balance_due, transitions to PAID when the balance is cleared, and
         bumps ``version`` exactly once. The caller must have already loaded
@@ -1022,7 +1022,7 @@ class ExpenseService(BaseDocumentService):
                 )
             else:
                 # Capture storage keys before the cascading DB delete so we
-                # can purge the underlying files and avoid orphans (P-13).
+                # can purge the underlying files and avoid orphans.
                 storage_keys = [doc.storage_key for doc in expense.documents]
 
                 self._db.delete(expense)
@@ -1050,7 +1050,7 @@ class ExpenseService(BaseDocumentService):
 
     @staticmethod
     def _purge_storage_objects(storage_keys: list[str]) -> None:
-        """Best-effort delete of stored objects after a hard delete (P-13).
+        """Best-effort delete of stored objects after a hard delete.
 
         Storage failures are logged, not raised: the DB record is already
         gone, so a missed file is a reconciliation concern, not a request

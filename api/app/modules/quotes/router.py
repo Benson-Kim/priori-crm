@@ -202,7 +202,7 @@ def export_quotes_to_excel(
         date_to=date_to,
     )
 
-    # Batch-load full ORM rows instead of one get_by_id per row (P-5).
+    # Batch-load full ORM rows instead of one get_by_id per row.
     quotes = service.list_for_export(
         filters,
         include_line_items=include_line_items,

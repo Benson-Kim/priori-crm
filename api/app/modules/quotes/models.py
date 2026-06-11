@@ -38,6 +38,9 @@ class Quote(Base):
                              ↓
                           EXPIRED
 
+    Conversion to an invoice requires the APPROVED state; a SENT quote must
+    be approved first (no direct SENT → INVOICED transition).
+
     Financial Formula:
         subtotal = SUM(line_items.line_total)
         discount_value = discount_amount OR (subtotal * discount_percentage / 100)
@@ -262,7 +265,7 @@ class Quote(Base):
         comment="User who approved this quote",
     )
 
-    # Immutable owner-header snapshot captured at issue time (V-DI-4).
+    # Immutable owner-header snapshot captured at issue time.
     owner_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("owner_profile_snapshots.id", ondelete="RESTRICT"),
@@ -317,7 +320,7 @@ class Quote(Base):
 
     @property
     def is_expired(self) -> bool:
-        """Check if quote is past due date (centralized predicate, V-DRY-4)."""
+        """Check if quote is past due date (centralized predicate)."""
         from app.common.financial import check_is_overdue
 
         return check_is_overdue(
@@ -333,9 +336,14 @@ class Quote(Base):
 
     @property
     def can_convert_to_invoice(self) -> bool:
-        """Check if quote can be converted to invoice."""
+        """Check if quote can be converted to invoice.
+
+        A quote must be APPROVED first: converting a merely SENT quote would
+        leave approved_at/approved_by null and bypass the documented
+        DRAFT -> SENT -> APPROVED -> INVOICED lifecycle.
+        """
         return (
-            self.status in [QuoteStatus.APPROVED, QuoteStatus.SENT]
+            self.status == QuoteStatus.APPROVED
             and not self.is_expired
             and self.related_invoice_id is None
         )

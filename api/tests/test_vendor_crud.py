@@ -1,4 +1,4 @@
-"""W3.7 / V-MAINT-3 - vendor CRUD + lifecycle backfill (service layer)."""
+"""vendor CRUD + lifecycle backfill (service layer)."""
 
 import uuid
 
@@ -58,7 +58,7 @@ def test_update_changes_persisted_fields(db):
 
 
 def test_update_cannot_set_status_directly(db):
-    """VEND-BE-1: status is not a VendorUpdate field (state-machine bypass guard)."""
+    """Status is not a VendorUpdate field (state-machine bypass guard)."""
     assert "status" not in VendorUpdate.model_fields
 
 

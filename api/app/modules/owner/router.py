@@ -1,4 +1,4 @@
-"""Owner / document-header API (W3.6).
+"""Owner / document-header API.
 
 GET/PUT the single live owner profile, plus logo upload/remove/serve. Reads
 require authentication; profile and logo writes require an elevated role
@@ -92,7 +92,7 @@ def serve_owner_logo(service: OwnerServiceDep):
     """Stream the logo binary (or redirect to a presigned URL on S3).
 
     All storage access lives behind the service's public ``serve_logo`` API,
-    so the router never depends on the storage backend (ISSUE-033).
+    so the router never depends on the storage backend.
     """
     download = service.serve_logo()
     if download.presigned_url is not None:

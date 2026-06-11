@@ -1,4 +1,4 @@
-"""Tests for DB-enforced optimistic locking (W2.5, P-9).
+"""Tests for DB-enforced optimistic locking
 
 The version check is now atomic: assert_version re-selects the row WITH FOR
 UPDATE before comparing, so a stale writer is rejected rather than silently

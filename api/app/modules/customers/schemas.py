@@ -157,7 +157,7 @@ class CustomerUpdate(BaseModel):
     province: str | None = None
     city: str | None = None
     postal_code: str | None = Field(None, alias="postalCode")
-    # `status` is intentionally NOT editable here (P-8): lifecycle changes must
+    # `status` is intentionally NOT editable here: lifecycle changes must
     # go through the dedicated activate/deactivate endpoints so the state
     # machine is enforced. A plain PUT must not be able to deactivate/delete.
 

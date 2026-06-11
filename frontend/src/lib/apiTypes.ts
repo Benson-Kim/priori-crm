@@ -1,5 +1,5 @@
 /**
- * Generated-contract type seam (LIB-FE-9).
+ * Generated-contract type seam.
  *
  * `api-schema.d.ts` is generated from the FastAPI OpenAPI schema via
  * `npm run gen:api` (openapi-typescript). Services should import response and

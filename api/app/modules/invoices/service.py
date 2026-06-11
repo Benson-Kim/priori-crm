@@ -111,7 +111,7 @@ class InvoiceService(BaseDocumentService):
                 field="customer_id",
             )
 
-        # Single-currency-per-customer (P-11): a customer holds exactly one
+        # Single-currency-per-customer: a customer holds exactly one
         # currency and balance summing assumes it. Reject a document whose
         # currency was *explicitly* set to something other than the
         # customer's; otherwise pin it to the customer's currency (the
@@ -377,8 +377,8 @@ class InvoiceService(BaseDocumentService):
     ) -> list[Invoice]:
         """Return full Invoice ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
-        (P-5 / INV-OPS-1): customer is eager-joined for the display name and,
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
+        customer is eager-joined for the display name and,
         when requested, line items are batch-loaded with ``selectinload`` (one
         extra query for the whole page, not one per row). ``limit`` caps the
         number of rows materialised in memory.
@@ -655,7 +655,7 @@ class InvoiceService(BaseDocumentService):
                 detail=f"Cannot edit invoice in {invoice.status} status", field="status"
             )
 
-        # Atomic optimistic-lock guard (P-9): locks the row and compares the
+        # Atomic optimistic-lock guard: locks the row and compares the
         # version under the lock, so concurrent edits conflict instead of
         # silently overwriting.
         assert_version(self._db, Invoice, invoice_id, expected_version)
@@ -730,7 +730,7 @@ class InvoiceService(BaseDocumentService):
             total_due = subtotal - discount_value + tax_total
             balance_due = total_due - invoice.amount_paid
 
-            # Never let an edit drive the balance negative (INV-BE-7) — that
+            # Never let an edit drive the balance negative — that
             # would violate the balance_due >= 0 CHECK and surface as a 500.
             if balance_due < Decimal("0.00"):
                 raise BadRequestException(
@@ -755,7 +755,7 @@ class InvoiceService(BaseDocumentService):
         self._db.flush()
 
         # An edit that changed the balance of a non-DRAFT invoice must resync
-        # the denormalized Customer.balance in the same unit of work (V-DI-6).
+        # the denormalized Customer.balance in the same unit of work.
         if recompute_balance and invoice.status != InvoiceStatus.DRAFT:
             self._update_customer_balance(invoice.customer_id)
 
@@ -777,7 +777,6 @@ class InvoiceService(BaseDocumentService):
 
         Idempotent: once set, the snapshot is never replaced, so editing the
         live owner profile can never re-brand an already-issued invoice
-        (V-DI-4).
         """
         if invoice.owner_snapshot_id is not None:
             return
@@ -896,8 +895,8 @@ class InvoiceService(BaseDocumentService):
         - If amount_paid > 0 and < total_due → PARTIAL
 
         Uses SELECT FOR UPDATE to prevent the TOCTOU race where two concurrent
-        payments both pass the overpay check and overpay the invoice
-        (V-REL-3 / INV-BE-3). Mirrors the locking pattern in send_invoice.
+        payments both pass the overpay check and overpay the invoice.
+        Mirrors the locking pattern in send_invoice.
         """
         # Lock the bare invoices row (see send_invoice): suppress the joined
         # customer outer join so Postgres allows FOR UPDATE.
@@ -955,7 +954,7 @@ class InvoiceService(BaseDocumentService):
 
         # Update status based on new balance, routed through the state machine
         # so ALLOWED_TRANSITIONS is enforced and the version bump is owned in
-        # one place (INV-BE-3). _transition increments invoice.version.
+        # one place. _transition increments invoice.version.
         if invoice.balance_due <= 0:
             self._transition(invoice, InvoiceStatus.PAID)
             invoice.paid_at = datetime.now(UTC)
@@ -1085,13 +1084,13 @@ class InvoiceService(BaseDocumentService):
             )
 
         # Route through the state machine so ALLOWED_TRANSITIONS is enforced
-        # and the version bump is owned in one place (V-REL-2 / INV-BE-2).
+        # and the version bump is owned in one place.
         self._transition(invoice, InvoiceStatus.CANCELED)
 
         self._db.flush()
 
         # Canceling removes this invoice from the customer's outstanding
-        # balance; resync in the same unit of work so it cannot drift (V-DI-6).
+        # balance; resync in the same unit of work so it cannot drift.
         self._update_customer_balance(invoice.customer_id)
 
         logger.warning(
@@ -1258,7 +1257,7 @@ class InvoiceService(BaseDocumentService):
         """Generate PDF for invoice using ReportLab.
 
         Renders the owner header from the invoice's immutable snapshot when
-        issued, otherwise from the live profile (V-DI-4 / V-SOLID-2).
+        issued, otherwise from the live profile.
         """
         from app.common.pdf import DocumentPDFGenerator
         from app.modules.owner.models import OwnerProfileSnapshot

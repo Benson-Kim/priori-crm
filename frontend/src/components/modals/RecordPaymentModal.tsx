@@ -136,15 +136,20 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     />
                 </div>
 
-                <div>
-                    <Label htmlFor="payment-method">Payment Method</Label>
-                    <Select
-                        id="payment-method"
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        options={PAYMENT_METHODS}
-                    />
-                </div>
+                {/* The expense payment API has no payment_method field, so the
+                    selection would be silently dropped — only show it for
+                    invoices (ISSUE-055). */}
+                {entityType === "invoice" && (
+                    <div>
+                        <Label htmlFor="payment-method">Payment Method</Label>
+                        <Select
+                            id="payment-method"
+                            value={paymentMethod}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                            options={PAYMENT_METHODS}
+                        />
+                    </div>
+                )}
 
                 <div>
                     <Label htmlFor="payment-reference">Reference (optional)</Label>

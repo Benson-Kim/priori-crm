@@ -6,7 +6,7 @@ This template provides a minimal setup to get React working in Vite with HMR and
 
 Response/request types come from the backend OpenAPI schema, not hand-mirrored
 interfaces (which previously drifted and caused the duplicate-response and
-`vendor.phone` bugs — LIB-FE-9).
+`vendor.phone` bugs.
 
 - Generate the typed schema. The services consume these types, so
   `src/lib/api-schema.d.ts` must exist for `tsc` to pass — run this before

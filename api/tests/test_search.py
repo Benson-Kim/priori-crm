@@ -1,4 +1,4 @@
-"""Tests for LIKE-safe search (W3.1, P-2).
+"""Tests for LIKE-safe search
 
 Two layers:
 

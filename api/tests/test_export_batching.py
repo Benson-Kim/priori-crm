@@ -1,4 +1,4 @@
-"""Tests for batched export loaders (W3.2, P-5).
+"""Tests for batched export loaders
 
 The export endpoints previously did ``[service.get_by_id(item.id) for item in
 result.items]`` - one fully-joined fetch per row (N+1). ``list_for_export``

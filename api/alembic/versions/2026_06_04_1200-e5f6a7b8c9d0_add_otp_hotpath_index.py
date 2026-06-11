@@ -1,4 +1,4 @@
-"""add OTP hot-path composite index (W3.7 / AUTH-DBA-1)
+"""add OTP hot-path composite index
 
 Revision ID: e5f6a7b8c9d0
 Revises: c3d4e5f6a7b8

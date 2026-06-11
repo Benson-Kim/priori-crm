@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse } from "@/lib/types";
+import { createSearchParams } from "@/lib/utils";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
 export type ExpenseResponse = Schema<"ExpenseResponse">;
@@ -161,4 +162,22 @@ export function downloadExpenseDocument(
  */
 export function calculateTotals(data: ExpenseLineItemPayload[]) {
   return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
+}
+
+/**
+ * Download the currently-filtered expenses as an .xlsx workbook. Returns a
+ * Blob the caller saves with `saveBlob` (ISSUE-063 — the backend export was
+ * implemented but unreachable from the UI).
+ */
+export function exportExpensesExcel(params?: {
+  status?: string;
+  vendorId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  isRecurring?: boolean;
+  includeLineItems?: boolean;
+}): Promise<Blob> {
+  const query = params ? createSearchParams(params) : "";
+  const path = query ? `expenses/export/excel?${query}` : "expenses/export/excel";
+  return apiDownload(path);
 }

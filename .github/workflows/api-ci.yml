@@ -1,15 +1,45 @@
 name: API CI
 
+# Mirrors the GitLab `api:lint` and `api:test` jobs in .gitlab-ci.yml.
+# .gitlab-ci.yml remains the authoritative pipeline; these workflows are
+# kept in sync so the repository stays CI-ready if GitHub becomes the
+# default VCS (#27, option B).
+
 on:
   push:
     branches: [main, develop]
-    paths: ["api/**"]
+    paths: ["api/**", ".github/workflows/api-ci.yml"]
   pull_request:
     branches: [main, develop]
-    paths: ["api/**"]
+    paths: ["api/**", ".github/workflows/api-ci.yml"]
 
 jobs:
-  lint-and-test:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+  test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,6 +52,7 @@ jobs:
           POSTGRES_DB: prioritech_test
           POSTGRES_USER: priori
           POSTGRES_PASSWORD: test_password
+          POSTGRES_HOST_AUTH_METHOD: scram-sha-256
         ports:
           - 5432:5432
         options: >-
@@ -29,6 +60,16 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      # Postgres-backed test config: conftest.py only runs the
+      # Postgres-guarded tests when DATABASE_URL starts with "postgresql";
+      # the psycopg2 DSN also satisfies config.py's DSN validator.
+      DATABASE_URL: postgresql+psycopg2://priori:test_password@localhost:5432/prioritech_test
+      JWT_SECRET_KEY: ci-test-secret-key-at-least-32-characters-long
+      SES_SENDER_EMAIL: noreply@ci.example.com
+      ENVIRONMENT: test
+      PGPASSWORD: test_password
 
     steps:
       - uses: actions/checkout@v4
@@ -40,19 +81,18 @@ jobs:
           cache-dependency-path: api/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Lint (ruff check)
-        run: ruff check .
-
-      - name: Format check (ruff format)
-        run: ruff format --check .
+      - name: Enable Postgres extensions
+        # conftest builds the schema with Base.metadata.create_all rather than
+        # migrations, so the extensions the schema depends on (pg_trgm for the
+        # trigram indexes, pgcrypto for gen_random_uuid()) must exist first.
+        run: |
+          until pg_isready -h localhost -U priori -d prioritech_test; do sleep 1; done
+          psql -h localhost -U priori -d prioritech_test -v ON_ERROR_STOP=1 \
+            -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto;'
 
       - name: Run tests
         run: pytest -v --tb=short
-        env:
-          DATABASE_URL: postgresql://priori:test_password@localhost:5432/prioritech_test
-          DATABASE_URL: postgresql+psycopg2://priori:test_password@localhost:5432/prioritech_test
-          JWT_SECRET_KEY: ci-test-secret-key-at-least-32-characters-long
-          SES_SENDER_EMAIL: noreply@ci.example.com
-          ENVIRONMENT: test

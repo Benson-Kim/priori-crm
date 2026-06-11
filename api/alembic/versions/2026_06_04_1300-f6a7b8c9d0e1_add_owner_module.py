@@ -1,4 +1,4 @@
-"""add owner module: profiles + immutable snapshots (W3.6 / Section 0)
+"""add owner module: profiles + immutable snapshots
 
 Revision ID: f6a7b8c9d0e1
 Revises: c3d4e5f6a7b8
@@ -93,7 +93,7 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # Immutable owner-header snapshot reference on issued documents (V-DI-4).
+    # Immutable owner-header snapshot reference on issued documents.
     op.add_column(
         "invoices",
         sa.Column("owner_snapshot_id", postgresql.UUID(as_uuid=True), nullable=True),

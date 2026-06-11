@@ -1,4 +1,4 @@
-"""W3.7 / V-MAINT-3 - customer CRUD round-trip backfill (service layer)."""
+"""Customer CRUD round-trip backfill (service layer)."""
 
 import pytest
 
@@ -80,5 +80,5 @@ def test_update_changes_persisted_fields(db):
 
 
 def test_update_cannot_set_status_directly(db):
-    """CUST-BE-4: status is not a CustomerUpdate field (bypass guard)."""
+    """Sstatus is not a CustomerUpdate field (bypass guard)."""
     assert "status" not in CustomerUpdate.model_fields

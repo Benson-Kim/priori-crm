@@ -3,7 +3,7 @@ Customer API endpoints.
 """
 
 import logging
-from datetime import date, timedelta
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
 from app.modules.customers.schemas import (
     CustomerCreate,
@@ -142,7 +143,7 @@ def get_customer(
     except (NotFoundException, DatabaseException):
         # Only tolerate expected, narrow failures here so the detail view
         # still renders without a statement. Unexpected errors must
-        # propagate to the global exception handlers (CUST-BE-2).
+        # propagate to the global exception handlers.
         logger.exception("Failed to generate statement for customer %s", customer_id)
         statement = None
 
@@ -330,10 +331,7 @@ def generate_customer_statement(
     period_end: Annotated[date | None, Query(description="Period end date")] = None,
 ):
     """Generate a statement of accounts."""
-    # Default to last 12 months
-    if period_end is None:
-        period_end = date.today()
-    if period_start is None:
-        period_start = period_end - timedelta(days=365)
+    # Default to the last 12 months (shared with the vendor statement).
+    period_start, period_end = default_statement_period(period_start, period_end)
 
     return service.generate_statement(customer_id, period_start, period_end)

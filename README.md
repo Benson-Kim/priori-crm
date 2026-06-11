@@ -6,9 +6,10 @@
 
 ```
 accounting-software/
-├── api/          # Python FastAPI backend
-├── ui/           # React + TypeScript + TailwindCSS frontend
-├── .github/      # CI/CD workflows
+├── api/             # Python FastAPI backend
+├── ui/              # React + TypeScript + TailwindCSS frontend
+├── .gitlab-ci.yml   # CI/CD pipeline (authoritative)
+├── .github/         # GitHub Actions workflows (kept in sync with GitLab CI)
 └── docker-compose.yml
 ```
 
@@ -20,7 +21,7 @@ accounting-software/
 | **Frontend** | React 18, TypeScript, Vite, TailwindCSS, lucide-react |
 | **Database** | PostgreSQL 16 |
 | **Email** | AWS SES |
-| **CI/CD** | GitHub Actions |
+| **CI/CD** | GitLab CI/CD (`.gitlab-ci.yml`, authoritative) + GitHub Actions (`.github/workflows/`, mirrored) |
 
 ## Getting Started
 
@@ -80,6 +81,32 @@ npm run dev
 feat(api): add customer CRUD endpoints
 fix(ui): correct OTP input focus behavior
 ```
+
+## Health & Monitoring
+
+The API exposes a small, intentional set of health/uptime endpoints:
+
+| Endpoint | Audience | Response |
+|----------|----------|----------|
+| `GET /api/v1/ping` | Uptime checks | `{ "ping": "pong" }` |
+| `GET /api/v1/health` | Load balancers (public) | `status`, `version`, `environment`, `timestamp` |
+| `GET /api/v1/health/detailed` | Internal (requires `X-Internal-Secret`) | adds `database`, `pool`, `redis` |
+
+`GET /health` is deliberately minimal: it carries no service-name field and
+no infrastructure detail (those belong on the secret-gated `/health/detailed`).
+`version` is the semantic application version (`settings.APP_VERSION`).
+
+## Continuous Integration
+
+`.gitlab-ci.yml` is the **authoritative** pipeline: it runs lint, an offline
+OpenAPI contract export + generated-type check, the Postgres-guarded test
+suite, and the managed security analyzers (SAST, dependency scanning, secret
+detection) on every merge request and on `develop`/`main`.
+
+The `.github/workflows/` Actions are kept **in sync** with that pipeline
+(`api-ci.yml`, `ui-ci.yml`, `security.yml`) so the project stays CI-ready if
+GitHub ever becomes the default VCS. Keep the two in step when changing either
+one.
 
 ## License
 

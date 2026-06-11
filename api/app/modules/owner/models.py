@@ -1,4 +1,4 @@
-"""Owner / document-header models (W3.6 / Section 0).
+"""Owner / document-header models.
 
 Two tables, one bounded context:
 
@@ -8,7 +8,7 @@ Two tables, one bounded context:
 - ``OwnerProfileSnapshot`` — an append-only, immutable copy of the profile
   as it was when a document was issued. Documents reference a snapshot, so
   editing the live profile never retroactively re-brands an issued document
-  (locked product decision / V-DI-4). Snapshots are content-addressed via
+  (locked product decision). Snapshots are content-addressed via
   ``content_hash`` so re-issuing while the profile is unchanged reuses the
   existing row instead of growing the table.
 """

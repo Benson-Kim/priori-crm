@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.common.dependencies import VendorServiceDep, require_role
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
 from app.modules.vendors.schemas import (
     ContactSearchResponse,
@@ -431,7 +432,11 @@ def get_vendor_payables(
     "/{vendor_id}/statement",
     response_model=VendorStatement,
     summary="Generate vendor statement",
-    description="Generates a statement of account for a specific period.",
+    description=(
+        "Generates a statement of account for a period. "
+        "If period_start / period_end are omitted, defaults to the last "
+        "12 months, mirroring the customer statement endpoint."
+    ),
     responses={
         200: {"description": "Vendor statement"},
         404: {"description": "Vendor not found"},
@@ -441,21 +446,22 @@ def get_vendor_statement(
     vendor_id: UUID,
     service: VendorServiceDep,
     period_start: Annotated[
-        date,
+        date | None,
         Query(
             alias="period_start",
             description="Start date for the statement period",
         ),
-    ],
+    ] = None,
     period_end: Annotated[
-        date,
+        date | None,
         Query(
             alias="period_end",
             description="End date for the statement period",
         ),
-    ],
+    ] = None,
 ) -> VendorStatement:
-    """Generate a vendor statement for the given period."""
+    """Generate a vendor statement, defaulting to the last 12 months."""
+    period_start, period_end = default_statement_period(period_start, period_end)
     return service.generate_statement(
         vendor_id=vendor_id,
         period_start=period_start,

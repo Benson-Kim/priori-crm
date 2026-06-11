@@ -1,7 +1,7 @@
-"""Pydantic schemas for the owner / document-header module (W3.6).
+"""Pydantic schemas for the owner / document-header module.
 
 Reuses the shared validators (normalize_phone, empty_str_to_none, website
-normaliser) rather than re-implementing them (W-7).
+normaliser) rather than re-implementing them.
 """
 
 import re
@@ -86,7 +86,7 @@ class OwnerProfileResponse(BaseModel):
 
 
 class OwnerInfo(BaseModel):
-    """DTO passed into PDF/email rendering (V-SOLID-2/3).
+    """DTO passed into PDF/email rendering .
 
     Built from either the live profile or an immutable snapshot, so the
     renderer never depends on the global ``settings`` singleton for branding.

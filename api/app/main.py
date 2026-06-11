@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
     # added is the outermost. Register the rate limiter first so the
     # logging (X-Response-Time) and request-ID (X-Request-ID) middleware
     # wrap it and a throttled 429 still unwinds back through them with full
-    # tracing headers (W-2/W-3).
+    # tracing headers.
     if settings.RATE_LIMIT_ENABLED:
         app.add_middleware(RateLimitMiddleware)
 
@@ -96,14 +96,14 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
 
     # Outermost: security headers apply to every response, including error
-    # and throttled (429) paths (MW-SEC-1).
+    # and throttled (429) paths.
     app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        # Explicit allow-lists instead of "*" (MW-SEC-2): wildcards combined
+        # Explicit allow-lists instead of "*": wildcards combined
         # with credentials are overly permissive.
         allow_methods=settings.cors_allow_methods_list,
         allow_headers=settings.cors_allow_headers_list,

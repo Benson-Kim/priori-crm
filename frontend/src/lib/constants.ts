@@ -14,7 +14,7 @@ export const PAGINATION_DEFAULTS = {
 export const OTP_LENGTH = 6;
 export const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 
-// COMPANY_INFO removed (LIB-FE-6 / V-DRY-1): the organisation identity is now
+// COMPANY_INFO removed: the organisation identity is now
 // data-driven via the owner profile API (services/ownerApi + DocumentOwnerHeader),
 // snapshotted immutably onto issued documents. Do not reintroduce a hardcoded
 // company constant.
@@ -73,3 +73,6 @@ export const VAT_RATE_OPTIONS = [
 ] as const;
 
 export const DEFAULT_DUE_DATE_DAYS = 30;
+
+export const ACCEPTED_IMAGE_TYPES = ".jpeg,.jpg,.png,.gif,.webp" as const;
+export const ACCEPTED_UPLOAD_TYPES = `${ACCEPTED_IMAGE_TYPES},.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv` as const;

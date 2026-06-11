@@ -19,7 +19,6 @@ from app.constants.enums import DiscountType, TaxType
 # banker's-free ROUND_HALF_UP before it is summed or persisted. Rounding per
 # line (rather than only at the end) keeps persisted line totals consistent
 # with their summed document totals and reproducible across recalculation
-# (P-3 / SH-BE-1).
 MONEY_QUANTUM = Decimal("0.01")
 
 
@@ -84,7 +83,7 @@ def calculate_line_item(
         tax_amount  = round(line_total x tax_rate)
 
     Both values are quantized to 2 dp via the shared money policy so that
-    summing line items can never accumulate sub-cent drift (P-3).
+    summing line items can never accumulate sub-cent drift.
     """
     line_total = quantize_money(quantity * unit_price)
     tax_rate = get_tax_rate(tax_type)
@@ -122,7 +121,7 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
 
         # Validate required fields are present rather than silently coercing a
         # missing value to None (which would TypeError in calculation or
-        # persist a NULL) — SH-BE-3.
+        # persist a NULL).
         for field in required_fields:
             if _get(field) is None:
                 raise ValueError(

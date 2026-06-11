@@ -1,4 +1,4 @@
-"""Tests for duplicate_invoice returning the correct response type (INV-BE-1 / V-DI-3).
+"""Tests for duplicate_invoice returning the correct response type.
 
 duplicate_invoice is annotated -> InvoiceDuplicateResponse and the router
 validates against it; returning the ORM Invoice raised at response time on

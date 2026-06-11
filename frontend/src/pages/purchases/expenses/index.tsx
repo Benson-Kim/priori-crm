@@ -8,9 +8,10 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { formatCurrency, formatDisplayDate } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
     deleteExpense,
+    exportExpensesExcel,
     getExpenseCounts,
     getExpenses,
     type ExpenseStatusCounts,
@@ -119,6 +120,21 @@ export default function ExpensesPage() {
         setIsPaymentModalOpen(true);
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await exportExpensesExcel({
+                status: activeTab !== "all" ? activeTab : undefined,
+            });
+            saveBlob(blob, `Expenses_${new Date().toISOString().split("T")[0]}.xlsx`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export expenses");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const getActions = (expense: ExpenseSummary): DropdownItem[] => {
         const actions: DropdownItem[] = [
             {
@@ -222,8 +238,12 @@ export default function ExpensesPage() {
         <div className="flex flex-col h-full space-y-4 font-sans">
             {/* Top Header */}
             <div className="flex justify-end mt-4">
-                <Button variant="outline-secondary">
-                    <Download size={20} /> Export Excel
+                <Button
+                    variant="outline-secondary"
+                    onClick={handleExport}
+                    disabled={isExporting}
+                >
+                    <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
                 </Button>
             </div>
 

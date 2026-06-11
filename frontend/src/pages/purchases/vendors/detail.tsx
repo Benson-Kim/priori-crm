@@ -481,7 +481,7 @@ export default function VendorDetailPage() {
             <>
               <div className="p-6">
                 {/* Owner identity (logo + company block) — single source of
-                    truth, snapshot-backed on issued documents (VEND-FE-2). */}
+                    truth, snapshot-backed on issued documents. */}
                 <DocumentOwnerHeader />
 
                 <div className="flex flex-col md:flex-row justify-between items-start py-6">

@@ -1,5 +1,5 @@
 /**
- * Owner / document-header API client (W3.6).
+ * Owner / document-header API client
  *
  * The single source of truth for the organisation identity printed on
  * documents, replacing the hardcoded COMPANY_INFO constant.
@@ -46,7 +46,7 @@ export function removeOwnerLogo(): Promise<OwnerProfile> {
 
 /**
  * Fetch the served logo binary through the shared client so the request
- * carries the bearer token and the 401 -> refresh -> retry flow (ISSUE-028).
+ * carries the bearer token and the 401 -> refresh -> retry flow
  *
  * The logo endpoint requires authentication, so a bare <img src> 401s and
  * never renders. Callers turn the returned Blob into an object URL (and must

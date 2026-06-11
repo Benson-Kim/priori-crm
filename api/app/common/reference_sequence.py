@@ -1,4 +1,4 @@
-"""Persistent high-water-mark store for reference numbering (P-4 / V-DI-5).
+"""Persistent high-water-mark store for reference numbering.
 
 A live ``MAX(numeric_suffix) + 1`` over a documents table reuses a number when
 the most-recent row is hard-deleted (the MAX drops back). For a financial

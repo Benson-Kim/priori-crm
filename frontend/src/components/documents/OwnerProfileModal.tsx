@@ -1,5 +1,5 @@
 /**
- * OwnerProfileModal — edit the document-owner profile (W3.6 / S-1).
+ * OwnerProfileModal — edit the document-owner profile.
  *
  * Opened from the "Update" controls in the document header. Saves through
  * the shared ownerApi; editing here updates *live* document headers but, by

@@ -1,4 +1,4 @@
-"""Tests for record_payment row-locking and state-machine routing (INV-BE-3 / V-REL-3).
+"""Tests for record_payment row-locking and state-machine routing
 
 record_payment must:
 - load the invoice with SELECT ... FOR UPDATE (with_for_update) to avoid the

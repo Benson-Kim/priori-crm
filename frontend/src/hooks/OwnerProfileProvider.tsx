@@ -1,11 +1,11 @@
 /**
  * OwnerProfileProvider — single source of truth for the document-owner
- * profile and its authenticated logo blob (W3.6 / ISSUE-034).
+ * profile and its authenticated logo blob
  *
  * Previously useOwnerProfile fetched the profile (and logo) on every
  * DocumentOwnerHeader mount, so each document surface re-hit the API. This
  * provider performs the fetch once, owns the logo object-URL lifecycle
- * (revoke-on-replace + revoke-on-unmount, ISSUE-028), and refetches the blob
+ * (revoke-on-replace + revoke-on-unmount), and refetches the blob
  * only when the logo identity changes (keyed on hasLogo + updatedAt). All
  * consumers share the same state via useOwnerProfile().
  */
@@ -19,6 +19,10 @@ import {
 } from "react";
 
 import {
+  OwnerProfileContext,
+  type OwnerProfileContextValue,
+} from "@/hooks/owner-profile-context";
+import {
   fetchOwnerLogo,
   getOwnerProfile,
   removeOwnerLogo,
@@ -27,10 +31,6 @@ import {
   type OwnerProfile,
   type OwnerProfileUpdate,
 } from "@/services/ownerApi";
-import {
-  OwnerProfileContext,
-  type OwnerProfileContextValue,
-} from "@/hooks/owner-profile-context";
 
 export function OwnerProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<OwnerProfile | null>(null);

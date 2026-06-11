@@ -1,4 +1,4 @@
-"""W3.7 - email retry on _send (LIB-BE-1), dev-skip (LIB-BE-2), lazy client (LIB-BE-3)."""
+"""email retry on _send, dev-skip, lazy client."""
 
 import app.lib.email as email_module
 from app.lib.email import EmailService
