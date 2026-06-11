@@ -244,7 +244,7 @@ export default function QuotesPage() {
             header: "Amount",
             render: (item: QuoteSummary) => (
                 <span className="text-gray-600">
-                    {formatCurrency(item.total_due, item.currency)}
+                    {formatCurrency(Number(item.total_due), item.currency)}
                 </span>
             ),
         },

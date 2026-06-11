@@ -1,5 +1,12 @@
 /**
  * Quote API service.
+ *
+ * Response types are sourced from the generated OpenAPI contract
+ * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas — the
+ * hand-written copies were the root cause of the duplicate-response drift
+ * (ISSUE-060) and similar (#33). Request *payloads* stay hand-written: they
+ * are the camelCase transport shape the frontend sends, which the API maps
+ * onto its snake_case fields via Pydantic aliases.
  */
 
 import {
@@ -10,106 +17,18 @@ import {
   apiPut,
   flattenPaginated,
 } from "@/lib/api";
-import type { CurrencyOption } from "@/lib/constants";
+import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
 
-
-export interface QuoteLineItem {
-  id: string;
-  line_number: number;
-  item_name: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  line_total: number;
-  tax_type: string;
-  tax_amount: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface QuoteCustomer {
-  id: string;
-  display_name: string;
-  email: string;
-  phone: string;
-  address?: string;
-}
-
-export interface QuoteSummary {
-  id: string;
-  quote_number: string;
-  quote_reference: string;
-  customer_id: string;
-  customer_name: string;
-  transaction_date: string;
-  due_date: string;
-  status: string;
-  currency: string;
-  total_due: number;
-  created_at: string;
-  is_expired: boolean;
-  days_until_expiry: number;
-}
-
-export interface QuoteResponse {
-  id: string;
-  quote_number: string;
-  quote_reference: string;
-  customer_id: string;
-  transaction_date: string;
-  due_date: string;
-  status: string;
-  currency: CurrencyOption;
-  subtotal: number;
-  discount_type: string | null;
-  discount_amount: number | null;
-  discount_percentage: number | null;
-  tax_total: number;
-  total_due: number;
-  rfq_rfp_number: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  sent_at: string | null;
-  approved_at: string | null;
-  invoiced_at: string | null;
-  expired_at: string | null;
-  created_by: string | null;
-  approved_by: string | null;
-  version: number;
-  related_invoice_id: string | null;
-  line_items: QuoteLineItem[];
-  customer: QuoteCustomer;
-  is_editable: boolean;
-  is_expired: boolean;
-  days_until_expiry: number;
-  can_convert_to_invoice: boolean;
-}
-
-export interface QuoteStatusCounts {
-  all: number;
-  draft: number;
-  sent: number;
-  approved: number;
-  invoiced: number;
-  expired: number;
-}
-
-export interface QuoteConvertResponse {
-  quote_id: string;
-  invoice_id: string;
-  invoice_number: string;
-  message: string;
-}
-
-export interface QuoteDuplicateResponse {
-  original_quote_id: string;
-  new_quote_id: string;
-  new_quote_number: string;
-  message: string;
-}
-
+// Response contracts (generated from the FastAPI OpenAPI schema).
+export type QuoteLineItem = Schema<"QuoteLineItemResponse">;
+export type QuoteCustomer = Schema<"CustomerSummary">;
+export type QuoteSummary = Schema<"QuoteSummary">;
+export type QuoteResponse = Schema<"QuoteResponse">;
+export type QuoteStatusCounts = Schema<"QuoteStatusCounts">;
+export type QuoteConvertResponse = Schema<"QuoteConvertToInvoiceResponse">;
+export type QuoteDuplicateResponse = Schema<"QuoteDuplicateResponse">;
+export type QuoteSendResult = Schema<"QuoteSendResponse">;
 
 export interface QuoteLineItemPayload {
   itemName: string;
@@ -205,13 +124,6 @@ export interface QuoteSendPayload {
   subject?: string;
   body?: string;
   attachPdf?: boolean;
-}
-
-export interface QuoteSendResult {
-  quote_id: string;
-  sent_to: string;
-  sent_at: string;
-  message: string;
 }
 
 /** Send the quote by email. */

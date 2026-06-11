@@ -1,6 +1,7 @@
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useInvoiceForm } from "@/hooks/use-invoice-form";
+import type { CurrencyOption } from "@/lib/constants";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function EditInvoicePage() {
@@ -45,21 +46,21 @@ export default function EditInvoicePage() {
                             customer: initialData.customer,
                             transactionDate: initialData.transaction_date,
                             dueDate: initialData.due_date,
-                            currency: initialData.currency,
+                            currency: initialData.currency as CurrencyOption,
                             rfqNumber: initialData.rfq_number ?? undefined,
                             notes: initialData.notes ?? undefined,
                             discountType: initialData.discount_type as
                                 | "amount"
                                 | "percentage"
                                 | null,
-                            discountAmount: initialData.discount_amount,
-                            discountPercentage: initialData.discount_percentage,
-                            lineItems: initialData.line_items.map((li) => ({
+                            discountAmount: initialData.discount_amount == null ? undefined : Number(initialData.discount_amount),
+                            discountPercentage: initialData.discount_percentage == null ? undefined : Number(initialData.discount_percentage),
+                            lineItems: (initialData.line_items ?? []).map((li) => ({
                                 id: li.id,
                                 itemName: li.item_name,
                                 description: li.description,
-                                quantity: li.quantity,
-                                unitPrice: li.unit_price,
+                                quantity: Number(li.quantity),
+                                unitPrice: Number(li.unit_price),
                                 taxType: li.tax_type,
                             })),
                         }

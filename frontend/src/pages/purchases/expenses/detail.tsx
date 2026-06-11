@@ -216,19 +216,19 @@ export default function ExpensesDetailPage() {
                     currency: expense.currency,
                     isRecurring: expense.is_recurring,
                     notes: expense.notes || undefined,
-                    subtotal: expense.subtotal,
-                    taxTotal: expense.tax_total,
-                    totalDue: expense.total_due,
-                    amountPaid: expense.amount_paid,
-                    balanceDue: expense.balance_due,
-                    lineItems: expense.line_items.map((item: ExpenseLineItem, index) => ({
+                    subtotal: Number(expense.subtotal),
+                    taxTotal: Number(expense.tax_total),
+                    totalDue: Number(expense.total_due),
+                    amountPaid: Number(expense.amount_paid),
+                    balanceDue: Number(expense.balance_due),
+                    lineItems: (expense.line_items ?? []).map((item: ExpenseLineItem, index) => ({
                         id: item.id ?? `line-${index}`,
                         itemName: item.item_name,
                         description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: item.unit_price,
+                        quantity: Number(item.quantity),
+                        unitPrice: Number(item.unit_price),
                         taxType: item.tax_type,
-                        lineTotal: item.line_total ?? item.quantity * item.unit_price,
+                        lineTotal: Number(item.line_total ?? Number(item.quantity) * Number(item.unit_price)),
                     })),
                 }}
             />
@@ -298,7 +298,7 @@ export default function ExpensesDetailPage() {
                 onClose={handlePaymentClose}
                 entityId={expense.id}
                 entityType="expense"
-                balanceDue={expense.balance_due}
+                balanceDue={Number(expense.balance_due)}
                 currency={expense.currency}
                 reference={expense.expense_reference}
                 onSuccess={handlePaymentSuccess}

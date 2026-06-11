@@ -310,7 +310,7 @@ export default function CustomerDetailsPage() {
       header: "Amount",
       render: (item: InvoiceSummary) => (
         <span className="text-gray-600">
-          {formatCurrency(item.total_due, item.currency)}
+          {formatCurrency(Number(item.total_due), item.currency)}
         </span>
       ),
     },
@@ -484,7 +484,7 @@ export default function CustomerDetailsPage() {
                 <p className="text-gray-500 text-lg py-3">Total Unpaid</p>
                 <p className="font-bold text-gray-800 text-2xl">
                   {formatCurrency(
-                    financial_summary.total_unpaid,
+                    Number(financial_summary.total_unpaid),
                     details.currency ?? ""
                   )}
                 </p>
@@ -493,7 +493,7 @@ export default function CustomerDetailsPage() {
                 <p className="text-gray-500 text-lg py-3">Overdue</p>
                 <p className="font-bold text-gray-800 text-2xl">
                   {formatCurrency(
-                    financial_summary.overdue,
+                    Number(financial_summary.overdue),
                     details.currency ?? ""
                   )}
                 </p>

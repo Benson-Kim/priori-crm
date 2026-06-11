@@ -192,7 +192,6 @@ export function QuoteForm({
                 initialCustomerDetails={
                   initialData?.customer
                     ? {
-                      address: initialData.customer.address || undefined,
                       phone: initialData.customer.phone,
                       email: initialData.customer.email,
                     }

@@ -1,3 +1,12 @@
+/**
+ * Expense API service.
+ *
+ * Response types are sourced from the generated OpenAPI contract
+ * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas (#41).
+ * Request *payloads* stay hand-written as the camelCase transport shape the
+ * API maps onto its snake_case fields via Pydantic aliases.
+ */
+
 import {
   apiDelete,
   apiDownload,
@@ -7,29 +16,24 @@ import {
   apiUpload,
   flattenPaginated,
 } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse } from "@/lib/types";
 
-// Base models based on API schemas
+// Response contracts (generated from the FastAPI OpenAPI schema).
+export type ExpenseResponse = Schema<"ExpenseResponse">;
+// Two VendorSummary schemas exist (vendors + expenses modules); the
+// expense-flavoured one is only ever ExpenseResponse.vendor, so derive it
+// from there to avoid the ambiguous bare Schema<"VendorSummary"> lookup.
+export type VendorSummary = ExpenseResponse["vendor"];
+export type ExpenseLineItem = Schema<"ExpenseLineItemResponse">;
+export type ExpenseDocument = Schema<"ExpenseDocumentResponse">;
+export type ExpensePayment = Schema<"ExpensePaymentResponse">;
+export type ExpenseSummary = Schema<"ExpenseSummary">;
+export type ExpenseStatusCounts = Schema<"ExpenseStatusCounts">;
+export type ExpenseStatistics = Schema<"ExpenseStatisticsResponse">;
+export type ExpenseCalculationResponse = Schema<"ExpenseCalculationResponse">;
 
-export interface VendorSummary {
-  id: string;
-  vendor_name: string;
-  email: string | null;
-  phone_primary: string | null;
-  phone_secondary: string | null;
-}
-
-export interface ExpenseLineItem {
-  id?: string;
-  item_name: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  tax_type: string;
-  line_total?: number;
-  tax_amount?: number;
-}
-
+// Payloads (hand-written camelCase transport shape).
 
 export interface ExpenseLineItemPayload {
   itemName: string;
@@ -39,76 +43,6 @@ export interface ExpenseLineItemPayload {
   taxType: string;
 }
 
-export interface ExpenseDocument {
-  id: string;
-  expense_id: string;
-  filename: string;
-  file_size_bytes: number;
-  file_size_kb: number;
-  mime_type: string;
-  source: string;
-  uploaded_at: string;
-  uploaded_by: string | null;
-}
-
-export interface ExpensePayment {
-  id: string;
-  expense_id: string;
-  amount: number;
-  payment_date: string;
-  reference: string | null;
-  notes: string | null;
-  document_id: string | null;
-  created_at: string;
-}
-
-export interface ExpenseResponse {
-  id: string;
-  expense_number: string;
-  expense_reference: string;
-  vendor_id: string;
-  expense_date: string;
-  due_date: string;
-  status: string;
-  currency: string;
-  is_recurring: boolean;
-  subtotal: number;
-  tax_total: number;
-  total_due: number;
-  amount_paid: number;
-  balance_due: number;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  paid_at: string | null;
-  version: number;
-  vendor: VendorSummary;
-  line_items: ExpenseLineItem[];
-  payments: ExpensePayment[];
-  documents: ExpenseDocument[];
-  is_editable: boolean;
-  is_overdue: boolean;
-  days_overdue: number;
-}
-
-export interface ExpenseSummary {
-  id: string;
-  expense_number: string;
-  expense_reference: string;
-  vendor_id: string;
-  vendor_name: string;
-  expense_date: string;
-  due_date: string;
-  status: string;
-  currency: string;
-  total_due: number;
-  balance_due: number;
-  is_recurring: boolean;
-  created_at: string;
-  is_overdue: boolean;
-  days_overdue: number;
-}
-
 export interface PaginatedExpenses {
   items: ExpenseSummary[];
   total: number;
@@ -116,28 +50,6 @@ export interface PaginatedExpenses {
   per_page: number;
   total_pages: number;
 }
-
-export interface ExpenseStatusCounts {
-  all: number;
-  pending: number;
-  paid: number;
-  overdue: number;
-}
-
-export interface ExpenseStatistics {
-  total_expenses: number;
-  total_amount: number;
-  total_paid: number;
-  total_outstanding: number;
-  overdue_count: number;
-  overdue_amount: number;
-  average_expense_value: number;
-  average_days_to_payment: number;
-  date_from: string | null;
-  date_to: string | null;
-}
-
-// Payloads
 
 export interface ExpenseCreatePayload {
   vendorId: string;
@@ -242,13 +154,11 @@ export function downloadExpenseDocument(
   return apiDownload(`expenses/${id}/documents/${documentId}/download`);
 }
 
-export interface ExpenseCalculationResponse {
-  subtotal: number;
-  tax_total: number;
-  total_due: number;
-  line_items: ExpenseLineItem[];
-}
-
-export function calculateTotals(data: ExpenseLineItem[]) {
+/**
+ * Preview expense totals. Posts the camelCase ExpenseLineItemPayload shape
+ * (the documented POST /expenses/calculate contract), not snake_case keys
+ * relying on the backend's populate_by_name fallback (ISSUE-064 class).
+ */
+export function calculateTotals(data: ExpenseLineItemPayload[]) {
   return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
 }

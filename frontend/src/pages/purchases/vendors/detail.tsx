@@ -247,7 +247,7 @@ export default function VendorDetailPage() {
       header: "Amount",
       render: (item: VendorTransactionSummary) => (
         <span className="text-gray-600">
-          {formatCurrency(item.amount, vendor.currency)}
+          {formatCurrency(Number(item.amount), vendor.currency)}
         </span>
       ),
     },
@@ -409,10 +409,12 @@ export default function VendorDetailPage() {
                 <p className="text-gray-500 text-lg py-3">Total Unpaid</p>
                 <p className="font-bold text-gray-800 text-2xl">
                   {formatCurrency(
-                    payables?.total_unpaid ||
-                    vendor.total_unpaid ||
-                    vendor.payables ||
-                    0,
+                    Number(
+                      payables?.total_unpaid ||
+                      vendor.total_unpaid ||
+                      vendor.payables ||
+                      0
+                    ),
                     vendor.currency
                   )}
                 </p>
@@ -421,7 +423,7 @@ export default function VendorDetailPage() {
                 <p className="text-gray-500 text-lg py-3">Overdue</p>
                 <p className="font-bold text-gray-800 text-2xl">
                   {formatCurrency(
-                    payables?.overdue_total || vendor.overdue_total || 0,
+                    Number(payables?.overdue_total || vendor.overdue_total || 0),
                     vendor.currency
                   )}
                 </p>
@@ -517,7 +519,7 @@ export default function VendorDetailPage() {
                         <span className="">Opening Balance</span>
                         <span className="font-normal">
                           {formatCurrency(
-                            statement.summary.opening_balance,
+                            Number(statement.summary.opening_balance),
                             statement.vendor.currency ?? "Ksh"
                           )}
                         </span>
@@ -526,7 +528,7 @@ export default function VendorDetailPage() {
                         <span className="">Invoiced Amount</span>
                         <span className="font-normal">
                           {formatCurrency(
-                            statement.summary.invoiced_amount,
+                            Number(statement.summary.invoiced_amount),
                             statement.vendor.currency ?? "Ksh"
                           )}
                         </span>
@@ -535,7 +537,7 @@ export default function VendorDetailPage() {
                         <span className="">Amount Paid</span>
                         <span className="font-normal">
                           {formatCurrency(
-                            statement.summary.amount_paid,
+                            Number(statement.summary.amount_paid),
                             statement.vendor.currency ?? "Ksh"
                           )}
                         </span>
@@ -545,7 +547,7 @@ export default function VendorDetailPage() {
                         <span className="">Balance Due</span>
                         <span className="font-normal">
                           {formatCurrency(
-                            statement.summary.balance_due,
+                            Number(statement.summary.balance_due),
                             statement.vendor.currency ?? "Ksh"
                           )}
                         </span>
@@ -585,14 +587,14 @@ export default function VendorDetailPage() {
                       </td>
                       <td className="px-3 py-4 text-center text-gray-800">
                         {formatCurrency(
-                          statement.summary.opening_balance,
+                          Number(statement.summary.opening_balance),
                           statement.vendor.currency
                         )}
                       </td>
                       <td className="px-3 py-4 text-center text-gray-800">-</td>
                       <td className="px-3 py-4 text-right text-gray-800">
                         {formatCurrency(
-                          statement.summary.opening_balance,
+                          Number(statement.summary.opening_balance),
                           statement.vendor.currency
                         )}
                       </td>
@@ -611,24 +613,24 @@ export default function VendorDetailPage() {
                           </span>
                         </td>
                         <td className="px-3 py-4 text-center text-gray-800">
-                          {transaction.amount > 0
+                          {Number(transaction.amount) > 0
                             ? formatCurrency(
-                              transaction.amount,
+                              Number(transaction.amount),
                               statement.vendor.currency
                             )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-center text-gray-800">
-                          {transaction.payment > 0
+                          {Number(transaction.payment) > 0
                             ? formatCurrency(
-                              transaction.payment,
+                              Number(transaction.payment),
                               statement.vendor.currency
                             )
                             : "-"}
                         </td>
                         <td className="px-3 py-4 text-right text-gray-800">
                           {formatCurrency(
-                            transaction.balance,
+                            Number(transaction.balance),
                             statement.vendor.currency
                           )}
                         </td>
@@ -643,7 +645,7 @@ export default function VendorDetailPage() {
                       </td>
                       <td className="px-3 py-4 text-right font-bold text-gray-800">
                         {formatCurrency(
-                          statement.summary.balance_due,
+                          Number(statement.summary.balance_due),
                           statement.vendor.currency
                         )}
                       </td>

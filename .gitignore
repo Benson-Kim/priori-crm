@@ -18,6 +18,10 @@ node_modules/
 dist/
 build/
 .vercel/
+# Generated API contract types (produced from the OpenAPI schema by
+# `npm run gen:api` / CI; never hand-edited or committed).
+frontend/src/lib/api-schema.d.ts
+openapi.json
 
 # Environment
 .env

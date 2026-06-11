@@ -201,19 +201,19 @@ export default function QuoteDetailPage() {
                     discountType: (quote.discount_type === "amount" || quote.discount_type === "percentage")
                         ? quote.discount_type
                         : null,
-                    discountAmount: quote.discount_amount,
-                    discountPercentage: quote.discount_percentage,
-                    subtotal: quote.subtotal,
-                    taxTotal: quote.tax_total,
-                    totalDue: quote.total_due,
-                    lineItems: quote.line_items.map(item => ({
+                    discountAmount: quote.discount_amount == null ? null : Number(quote.discount_amount),
+                    discountPercentage: quote.discount_percentage == null ? null : Number(quote.discount_percentage),
+                    subtotal: Number(quote.subtotal),
+                    taxTotal: Number(quote.tax_total),
+                    totalDue: Number(quote.total_due),
+                    lineItems: (quote.line_items ?? []).map(item => ({
                         id: item.id,
                         itemName: item.item_name || item.description.split('\n')[0] || "",
                         description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: item.unit_price,
+                        quantity: Number(item.quantity),
+                        unitPrice: Number(item.unit_price),
                         taxType: item.tax_type,
-                        lineTotal: item.line_total,
+                        lineTotal: Number(item.line_total),
                     }))
                 }}
             />
