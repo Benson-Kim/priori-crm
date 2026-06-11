@@ -1,4 +1,4 @@
-"""Tests for the single money-rounding policy (W2.1, P-3).
+"""Tests for the single money-rounding policy
 
 The historical bug: calculate_line_item returned unrounded products, so
 summing several lines accumulated sub-cent drift that could violate a 2-dp

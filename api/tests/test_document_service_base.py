@@ -1,4 +1,4 @@
-"""W3.4 — BaseDocumentService + mixins (P-7, V-SOLID-1, V-DRY-2).
+"""BaseDocumentService + mixins.
 
 Pure unit tests for the extracted shared mechanics. No database, no Postgres:
 the mixins are exercised with lightweight stand-in objects so the refactor's

@@ -1,4 +1,4 @@
-"""Tests for collision-safe reference generation (W2.2, P-4).
+"""Tests for collision-safe reference generation
 
 The COUNT(*) strategy reuses a number after the latest record is hard-deleted
 (count drops by one), colliding on the next insert. The MAX(numeric suffix)+1
@@ -6,7 +6,7 @@ strategy never reuses a deleted number. These tests reproduce the collision and
 prove the new MAX default avoids it.
 
 substring()/cast() and pg_advisory_xact_lock are PostgreSQL constructs, so the
-tests run only against the CI Postgres service (W1.2); on the SQLite fallback
+tests run only against the CI Postgres service; on the SQLite fallback
 the advisory lock and substring semantics differ and the collision scenario is
 not representative.
 """

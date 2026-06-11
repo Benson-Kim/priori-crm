@@ -1,4 +1,4 @@
-"""Storage backend tests (W3.3).
+"""Storage backend tests
 
 The local backend is exercised against a real temp dir. The S3 backend is
 driven by a stubbed boto3-style client so no AWS access is needed and the
@@ -17,9 +17,7 @@ from app.lib.storage import (
     sanitize_storage_key,
 )
 
-# ---------------------------------------------------------------------------
 # Key sanitisation
-# ---------------------------------------------------------------------------
 
 
 def test_sanitize_storage_key_joins_segments():

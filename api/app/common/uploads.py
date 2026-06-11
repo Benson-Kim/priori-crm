@@ -1,4 +1,4 @@
-"""Centralized upload validation (V-DRY-3).
+"""Centralized upload validation.
 
 Single source of truth for the file-upload attack surface: extension,
 MIME, size, emptiness, and magic-byte content sniffing. Both the API

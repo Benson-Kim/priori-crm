@@ -265,7 +265,7 @@ class Invoice(Base):
         comment="User who created this invoice",
     )
 
-    # Immutable owner-header snapshot captured at issue time (V-DI-4). NULL
+    # Immutable owner-header snapshot captured at issue time. NULL
     # for never-issued (DRAFT) invoices, which render from the live profile.
     owner_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -319,7 +319,7 @@ class Invoice(Base):
 
     @property
     def is_overdue(self) -> bool:
-        """Check if invoice is past due date (centralized predicate, V-DRY-4)."""
+        """Check if invoice is past due date (centralized predicate)."""
         from app.common.financial import check_is_overdue
 
         # is_paid also covers balance_due <= 0, which the status-only predicate

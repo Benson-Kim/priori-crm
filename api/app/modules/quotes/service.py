@@ -10,6 +10,7 @@ from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
     BadRequestException,
@@ -71,9 +72,11 @@ class QuoteService(BaseDocumentService):
     # Formal state machine — enforced via _transition()
     ALLOWED_TRANSITIONS: ClassVar[dict[QuoteStatus, list[QuoteStatus]]] = {
         QuoteStatus.DRAFT: [QuoteStatus.SENT, QuoteStatus.EXPIRED],
+        # SENT must be APPROVED before it can be INVOICED — no direct
+        # SENT -> INVOICED edge, so conversion can never skip approval
+        # (ISSUE-059).
         QuoteStatus.SENT: [
             QuoteStatus.APPROVED,
-            QuoteStatus.INVOICED,
             QuoteStatus.EXPIRED,
         ],
         QuoteStatus.APPROVED: [QuoteStatus.INVOICED, QuoteStatus.EXPIRED],
@@ -100,7 +103,7 @@ class QuoteService(BaseDocumentService):
                 field="customer_id",
             )
 
-        # Single-currency-per-customer (P-11): reject a quote whose currency
+        # Single-currency-per-customer: reject a quote whose currency
         # was explicitly set to something other than the customer's; else
         # pin it to the customer's currency.
         if "currency" in data.model_fields_set and data.currency != customer.currency:
@@ -359,8 +362,8 @@ class QuoteService(BaseDocumentService):
     ) -> list[Quote]:
         """Return full Quote ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint
-        (P-5 / QT-OPS-1): customer eager-joined; line items via ``selectinload``
+        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
+        customer eager-joined; line items via ``selectinload``
         only when requested. ``limit`` caps rows materialised in memory.
         """
         try:
@@ -417,7 +420,7 @@ class QuoteService(BaseDocumentService):
         Get counts of quotes by status in a single SQL query.
 
         The 'expired' bucket counts DRAFT/SENT quotes whose due_date has
-        passed; computed via CASE to avoid a second round-trip (S-3 fix).
+        passed; computed via CASE to avoid a second round-trip.
         """
         try:
             today = date.today()
@@ -488,13 +491,10 @@ class QuoteService(BaseDocumentService):
                 detail=f"Cannot edit quote in {quote.status} status", field="status"
             )
 
-        if expected_version is not None and quote.version != expected_version:
-            raise ConflictException(
-                detail=(
-                    f"Quote has been modified by another user. "
-                    f"Expected version {expected_version}, current version {quote.version}"
-                )
-            )
+        # Atomic optimistic-lock guard: locks the row and compares the version,
+        # replacing the previous non-atomic Python compare that allowed silent
+        # last-write-wins (ISSUE-001). Matches invoices/expenses/vendors.
+        assert_version(self._db, Quote, quote_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True, mode="python")
 
@@ -583,7 +583,7 @@ class QuoteService(BaseDocumentService):
     # STATUS TRANSITIONS & ACTIONS
 
     def _capture_owner_snapshot(self, quote: Quote) -> None:
-        """Stamp an immutable owner-header snapshot the first time issued (V-DI-4)."""
+        """Stamp an immutable owner-header snapshot the first time issued."""
         if quote.owner_snapshot_id is not None:
             return
         from app.modules.owner.service import OwnerService
@@ -598,7 +598,7 @@ class QuoteService(BaseDocumentService):
     ) -> Quote:
         """Mark quote as sent. Transitions: DRAFT → SENT."""
         quote = self.get_by_id(quote_id)
-        self._transition(quote, QuoteStatus.SENT)  # enforces state machine (DI-3 fix)
+        self._transition(quote, QuoteStatus.SENT)
         quote.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(quote)
         self._db.flush()
@@ -982,7 +982,7 @@ class QuoteService(BaseDocumentService):
         """
         Get quote statistics for dashboard using SQL aggregates.
 
-        S-1 fix: all aggregations are pushed to the database — no full table
+        All aggregations are pushed to the database — no full table
         scan into Python memory.  Defaults to the current calendar month.
         """
         try:
@@ -1206,7 +1206,7 @@ class QuoteService(BaseDocumentService):
 
     def generate_pdf(self, quote_id: uuid.UUID) -> bytes:
         """Generate PDF for quote, rendering the owner header from the quote's
-        immutable snapshot when issued, else the live profile (V-DI-4)."""
+        immutable snapshot when issued, else the live profile"""
         from app.common.pdf import DocumentPDFGenerator
         from app.modules.owner.models import OwnerProfileSnapshot
         from app.modules.owner.service import OwnerService

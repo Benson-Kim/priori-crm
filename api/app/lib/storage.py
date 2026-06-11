@@ -1,5 +1,5 @@
 """
-Object storage service abstraction (W3.3 / P-13 / V-SCALE-2).
+Object storage service abstraction
 
 A single public ``StorageService`` facade delegates to a pluggable backend
 selected by ``settings.STORAGE_BACKEND``:
@@ -13,7 +13,7 @@ selected by ``settings.STORAGE_BACKEND``:
 
 In both backends ``storage_key`` is an opaque, sanitized *relative* key
 (e.g. ``expenses/<id>/<hex>_name.pdf``) — never a servable absolute local
-path (EXP-SEC-1). Every key is reduced to safe per-segment basenames and
+path. Every key is reduced to safe per-segment basenames and
 checked for containment before any I/O, so the S3 backend inherits the same
 guarantees as local.
 """

@@ -237,7 +237,7 @@ def export_invoices_to_excel(
     )
 
     # Batch-load full ORM rows (customer eager-joined; line items via
-    # selectinload when requested) instead of one get_by_id per row (P-5).
+    # selectinload when requested) instead of one get_by_id per row.
     invoices = service.list_for_export(
         filters,
         include_line_items=include_line_items,

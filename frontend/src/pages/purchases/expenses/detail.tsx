@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useConfirm } from "@/hooks/useConfirm";
+import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 import { saveBlob } from "@/lib/utils";
 import type { ExpenseLineItem, ExpenseResponse } from "@/services/expenseApi";
 import { deleteExpense, deleteExpenseDocument, downloadExpenseDocument, getExpense, uploadExpenseDocument } from "@/services/expenseApi";
@@ -250,7 +251,7 @@ export default function ExpensesDetailPage() {
                         ref={fileInputRef}
                         className="hidden"
                         onChange={handleFileUpload}
-                        accept="image/*,.pdf,.doc,.docx"
+                        accept={ACCEPTED_UPLOAD_TYPES}
                     />
                 </div>
 

@@ -24,7 +24,7 @@ from app.common.exceptions import (
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
-from app.constants.enums import Currency, VendorStatus
+from app.constants.enums import Currency, ExpenseStatus, VendorStatus
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import (
     ContactSearchResponse,
@@ -44,8 +44,19 @@ from app.modules.vendors.schemas import (
 
 logger = logging.getLogger(__name__)
 
-OPEN_PAYABLE_STATUSES = ("pending", "overdue", "partial", "sent")
-CLOSED_PAYABLE_STATUSES = ("paid", "canceled", "cancelled")
+# Single source of truth for which expense/bill statuses count as an open
+# payable. Derived from ExpenseStatus so it can never drift back to the
+# fictional "partial"/"sent" values (ISSUE-047): a payable is open unless it
+# has been PAID or CANCELED.
+OPEN_PAYABLE_STATUSES: tuple[str, ...] = (
+    ExpenseStatus.PENDING,
+    ExpenseStatus.OVERDUE,
+)
+OVERDUE_PAYABLE_STATUS: str = ExpenseStatus.OVERDUE
+CLOSED_PAYABLE_STATUSES: tuple[str, ...] = (
+    ExpenseStatus.PAID,
+    ExpenseStatus.CANCELED,
+)
 
 
 class VendorService:
@@ -137,7 +148,7 @@ class VendorService:
                     func.sum(
                         case(
                             (
-                                union_q.c.status.in_(["pending", "overdue"]),
+                                union_q.c.status.in_(OPEN_PAYABLE_STATUSES),
                                 union_q.c.balance,
                             ),
                             else_=Decimal("0.00"),
@@ -149,7 +160,7 @@ class VendorService:
                     func.sum(
                         case(
                             (
-                                union_q.c.status == "overdue",
+                                union_q.c.status == OVERDUE_PAYABLE_STATUS,
                                 union_q.c.balance,
                             ),
                             else_=Decimal("0.00"),
@@ -190,7 +201,7 @@ class VendorService:
                 Expense.status.label("status"),
             ).filter(
                 Expense.vendor_id.in_(vendor_ids),
-                Expense.status.in_(["pending", "overdue"]),
+                Expense.status.in_(OPEN_PAYABLE_STATUSES),
             )
             # bill_rows = (
             #     self._db.query(
@@ -257,7 +268,7 @@ class VendorService:
                 self._db.query(func.count(Expense.id))
                 .filter(
                     Expense.vendor_id == vendor_id,
-                    Expense.status.in_(["pending", "overdue"]),
+                    Expense.status.in_(OPEN_PAYABLE_STATUSES),
                 )
                 .scalar()
             ) or 0
@@ -477,6 +488,9 @@ class VendorService:
             )
 
             counts: dict[str, int] = {row.status: row.cnt for row in rows}
+            # `all` sums every returned status row rather than active +
+            # inactive, so it stays correct if the status set ever expands
+            # (ISSUE-051).
             total = sum(counts.values())
             active = counts.get(VendorStatus.ACTIVE, 0)
             inactive = counts.get(VendorStatus.INACTIVE, 0)
@@ -610,7 +624,7 @@ class VendorService:
 
             # Atomic optimistic-lock guard: locks the row and compares the
             # version, replacing the previous non-atomic Python compare that
-            # allowed silent last-write-wins (P-9 / VEND-BE-3).
+            # allowed silent last-write-wins.
             assert_version(self._db, Vendor, vendor_id, expected_version)
 
             update_data = data.model_dump(exclude_unset=True)

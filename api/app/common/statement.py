@@ -8,10 +8,30 @@ this module rather than reimplementing the same loop.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.common.financial import quantize_money
+
+# Default statement window when the caller does not supply explicit bounds.
+DEFAULT_STATEMENT_PERIOD_DAYS = 365
+
+
+def default_statement_period(
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[date, date]:
+    """Resolve a statement period, defaulting to the last 12 months.
+
+    Shared by the customer and vendor statement endpoints so both expose the
+    same defaulting behaviour: ``period_end`` defaults to today and
+    ``period_start`` defaults to ``period_end`` minus 12 months.
+    """
+    if period_end is None:
+        period_end = date.today()
+    if period_start is None:
+        period_start = period_end - timedelta(days=DEFAULT_STATEMENT_PERIOD_DAYS)
+    return period_start, period_end
 
 
 @dataclass(frozen=True, slots=True)

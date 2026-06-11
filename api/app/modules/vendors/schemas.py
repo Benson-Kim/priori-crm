@@ -166,7 +166,7 @@ class VendorCreate(VendorBase):
 class VendorUpdate(VendorBase):
     """Schema for editing an existing vendor profile.
 
-    `status` is intentionally NOT editable here (P-8): lifecycle changes must
+    `status` is intentionally NOT editable here: lifecycle changes must
     go through the dedicated activate/deactivate endpoints so the
     `_transition()` state machine and version bump are enforced. Allowing a
     plain PUT to set status would bypass ALLOWED_TRANSITIONS.
@@ -282,6 +282,11 @@ TransactionType = Literal["expense", "bill"]
 class VendorTransactionSummary(BaseModel):
     """
     A single row in the vendor detail transaction list.
+
+    NOTE: FastAPI serializes response models by alias, and the frontend reads
+    snake_case keys (transaction_type, ref_no, due_date) - so those fields
+    must NOT carry camelCase aliases (#33). transaction_date keeps the "date"
+    alias because the frontend reads `item.date`.
     """
 
     id: UUID = Field(description="Expense or Bill UUID")

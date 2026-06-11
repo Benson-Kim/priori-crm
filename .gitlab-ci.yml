@@ -1,4 +1,4 @@
-# GitLab CI pipeline (W3.8 / P-12).
+# GitLab CI pipeline
 #
 # Runs on every merge request targeting develop/main and on pushes to
 # those branches. The repository historically used GitHub Actions
@@ -124,7 +124,7 @@ api:test:
     POSTGRES_USER: priori
     POSTGRES_PASSWORD: test_password
     POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
-    # Postgres-backed test config (W1.2). conftest.py reads DATABASE_URL
+    # Postgres-backed test config. conftest.py reads DATABASE_URL
     # and only runs the Postgres-guarded tests when it starts with
     # "postgresql"; using psycopg2 also satisfies config.py's DSN validator.
     DATABASE_URL: "postgresql+psycopg2://priori:test_password@postgres:5432/prioritech_test"
@@ -211,13 +211,18 @@ ui:lint-build:
   needs:
     - job: api:openapi-schema
       artifacts: true
+  # api/**/* is included so API-only changes still type-check the frontend
+  # against the freshly exported contract (#33): a backend schema change that
+  # breaks the generated types must fail here, not at runtime.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
+        - api/**/*
         - frontend/**/*
         - .gitlab-ci.yml
     - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
       changes:
+        - api/**/*
         - frontend/**/*
         - .gitlab-ci.yml
   cache:

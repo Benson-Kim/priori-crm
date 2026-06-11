@@ -1,4 +1,4 @@
-"""W3.7 - security headers (MW-SEC-1) and CORS allow-lists (MW-SEC-2)."""
+"""Security headers and CORS allow-lists."""
 
 from app.lib.config import settings
 

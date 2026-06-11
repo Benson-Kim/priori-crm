@@ -1,4 +1,4 @@
-"""W3.7 / W-4 - rate-limit counter backends."""
+"""rate-limit counter backends."""
 
 from app.common.rate_limit_store import (
     InMemoryRateLimitStore,

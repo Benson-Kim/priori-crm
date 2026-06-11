@@ -1,4 +1,4 @@
-"""case-insensitive unique customer email (W2.6 / CUST-DBA-2)
+"""case-insensitive unique customer email
 
 Revision ID: c3d4e5f6a7b8
 Revises: b2c3d4e5f6a7

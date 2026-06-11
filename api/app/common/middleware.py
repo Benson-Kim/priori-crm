@@ -81,7 +81,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Attach standard security headers to every response (MW-SEC-1).
+    """Attach standard security headers to every response.
 
     Sets nosniff, frame denial, a conservative referrer policy and CSP, and
     — outside development — HSTS. Applied as the outermost middleware so the
@@ -111,7 +111,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Per-client request throttling over a pluggable counter backend (W-4).
+    Per-client request throttling over a pluggable counter backend.
 
     The window is owned by a RateLimitStore: an in-memory LRU-bounded
     sliding window per process (default), or a shared Redis fixed window so
@@ -132,7 +132,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         self.max_requests = settings.RATE_LIMIT_PER_MINUTE
-        # Pluggable counter backend (W-4): per-process in-memory by default,
+        # Pluggable counter backend: per-process in-memory by default,
         # or a shared Redis window when RATE_LIMIT_BACKEND=redis.
         self._store = build_rate_limit_store(
             backend=settings.RATE_LIMIT_BACKEND,
@@ -213,7 +213,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             # Return the response directly rather than raising: a
             # BaseHTTPMiddleware runs outside the AppException handler, so
             # raising here would surface as an unhandled 500 and drop the
-            # tracing headers (W-1/W-2/W-3). The Retry-After header lets
+            # tracing headers. The Retry-After header lets
             # compliant clients back off correctly.
             request_id = getattr(request.state, "request_id", "unknown")
             # Guarantee a JSON-/header-safe value: the request-ID middleware
@@ -223,8 +223,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             retry_after = result.retry_after or self.WINDOW_SECONDS
             # Stamp tracing headers directly: depending on middleware order
             # this early return may not pass back through the request-ID /
-            # logging middleware, so a throttled response must carry them
-            # itself (W-2/W-3).
+            # logging middleware, so a throttled response must carry them itself.
             headers = {
                 "Retry-After": str(retry_after),
                 "X-Request-ID": request_id,

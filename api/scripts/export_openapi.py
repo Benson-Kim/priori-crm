@@ -1,4 +1,4 @@
-"""Export the FastAPI OpenAPI schema to a JSON file (ISSUE-033 structural / #33).
+"""Export the FastAPI OpenAPI schema to a JSON file
 
 Generates the contract the frontend's ``gen:api`` step consumes, *offline*:
 it imports the app and serialises ``app.openapi()`` directly, so no running

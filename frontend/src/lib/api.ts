@@ -4,17 +4,16 @@
  * Every request carries the bearer access token. On a 401 the client attempts
  * a single token refresh via /auth/refresh and retries the original request;
  * if the refresh fails the tokens are cleared and the user is sent to login
- * (LIB-FE-1, AUTH-FE-2).
  */
 
-import { appConfig } from "@/lib/constants";
-import type { PaginatedApiResponse } from "@/lib/types";
 import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
   setTokens,
 } from "@/lib/auth-storage";
+import { appConfig } from "@/lib/constants";
+import type { PaginatedApiResponse } from "@/lib/types";
 
 export class ApiError extends Error {
   status: number;
@@ -187,8 +186,8 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
 /**
  * Upload one or more files (and optional fields) as multipart/form-data
- * through the shared client so the request carries auth and refresh on 401
- * (LIB-FE-4, EXP-FE-2). Do NOT set Content-Type manually — the browser sets
+ * through the shared client so the request carries auth and refresh on 401.
+ * Do NOT set Content-Type manually — the browser sets
  * the multipart boundary.
  */
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
@@ -213,7 +212,7 @@ export async function apiUploadPut<T>(path: string, formData: FormData): Promise
 
 /**
  * Download a binary resource (PDF, Excel, document) through the shared client
- * so it carries auth and refresh on 401 (LIB-FE-4, EXP-FE-2).
+ * so it carries auth and refresh on 401.
  */
 export async function apiDownload(
   path: string,

@@ -1,4 +1,4 @@
-"""W3.7 - /health stays public, /health/detailed requires the internal secret (MW-SEC-3)."""
+"""/health stays public, /health/detailed requires the internal secret."""
 
 import app.lib.config as config_module
 

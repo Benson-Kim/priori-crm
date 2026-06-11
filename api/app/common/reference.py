@@ -83,7 +83,7 @@ class ReferenceGenerator:
             use_max_strategy: Default True. Uses MAX(numeric_suffix)+1, which
                               never reuses a number after the latest record is
                               deleted. Set False only to fall back to the
-                              legacy COUNT(*) strategy (P-4).
+                              legacy COUNT(*) strategy.
             strip_prefix_len: Number of leading characters to strip when
                               extracting the numeric suffix for MAX strategy.
                               Optional: when omitted it is derived from the

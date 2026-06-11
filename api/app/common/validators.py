@@ -61,7 +61,7 @@ def normalize_phone(phone: str, country: str | None = None) -> str:
 
     # Normalize to E.164 from a known shape only. The previous catch-all
     # `else` prefixed arbitrary input with the dial code, coercing malformed
-    # numbers into valid-looking E.164 (W-6); reject those instead.
+    # numbers into valid-looking E.164; reject those instead.
     if had_plus:
         # Caller supplied a full international number; trust the digits as-is.
         normalized = f"+{digits}"

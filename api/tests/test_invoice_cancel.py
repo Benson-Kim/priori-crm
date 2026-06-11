@@ -1,4 +1,4 @@
-"""Tests for cancel_invoice routing through the state machine (V-REL-2 / INV-BE-2).
+"""Tests for cancel_invoice routing through the state machine
 
 cancel_invoice must call _transition() so ALLOWED_TRANSITIONS is enforced and
 the version bump is owned in a single place, rather than mutating status inline.
@@ -30,7 +30,7 @@ def _service_with(invoice: _FakeInvoice) -> InvoiceService:
     svc = InvoiceService(db)
     # cancel_invoice loads via get_by_id; stub it directly.
     svc.get_by_id = MagicMock(return_value=invoice)  # type: ignore[method-assign]
-    # cancel_invoice also resyncs the customer balance (V-DI-6) via a real
+    # cancel_invoice also resyncs the customer balance via a real
     # query; against the MagicMock db that yields a non-numeric value. Stub it
     # so these unit tests isolate the state-machine transition + version bump.
     # Balance resync is covered against Postgres in test_currency_and_balance.

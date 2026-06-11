@@ -1,4 +1,4 @@
-"""Rate-limit counter backends (W-4).
+"""Rate-limit counter backends.
 
 The middleware delegates counting to a ``RateLimitStore`` so the window can
 be either per-process (in-memory, default) or shared across all workers and
@@ -73,7 +73,7 @@ class InMemoryRateLimitStore:
 
 
 class RedisRateLimitStore:
-    """Shared fixed-window counter backed by Redis (W-4).
+    """Shared fixed-window counter backed by Redis.
 
     Uses an atomic ``INCR`` on a per-(client, window) key with a TTL equal to
     the window, so every worker/instance increments the same counter. The

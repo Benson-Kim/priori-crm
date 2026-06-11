@@ -1,6 +1,6 @@
 /**
  * DocumentOwnerHeader — the single owner identity block rendered on every
- * document (V-SOLID-4). Replaces the duplicated COMPANY_INFO blocks in
+ * document. Replaces the duplicated COMPANY_INFO blocks in
  * DocumentEditor / DocumentViewer / ExpenseViewer and the vendor statement.
  *
  * In editable mode it exposes the logo upload/remove controls and an edit
@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 
 import { useCanEditOwner } from "@/hooks/auth-context";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
+import { ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
 import { OwnerProfileModal } from "./OwnerProfileModal";
 
 interface DocumentOwnerHeaderProps {
@@ -74,7 +75,7 @@ export function DocumentOwnerHeader({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
+                accept={ACCEPTED_IMAGE_TYPES}
                 className="hidden"
                 onChange={handleLogoPick}
               />

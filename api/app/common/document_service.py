@@ -1,8 +1,7 @@
 """Shared base class and mixins for document services (invoices, quotes, expenses).
 
 Extracts the logic that was duplicated near-verbatim across
-``InvoiceService``, ``QuoteService`` and ``ExpenseService`` (review findings
-P-7 / V-SOLID-1 / V-DRY-2):
+``InvoiceService``, ``QuoteService`` and ``ExpenseService``:
 
 - ``StateMachineMixin``    - the ``_transition()`` guard + atomic version bump.
 - ``ReferenceRetryMixin``  - the lazy ``ReferenceGenerator`` accessor and the

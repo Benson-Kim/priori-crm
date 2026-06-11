@@ -1,4 +1,4 @@
-"""W1.5 — status changes routed through the state machine + payment locking (P-8).
+"""Status changes routed through the state machine + payment locking.
 
 Schema-level tests run anywhere. Service-level tests use the shared `db`
 fixture (PostgreSQL in CI, SQLite locally).

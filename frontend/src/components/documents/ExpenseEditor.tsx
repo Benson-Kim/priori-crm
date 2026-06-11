@@ -2,12 +2,18 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CURRENCY_OPTIONS } from "@/lib/constants";
-import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
+import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
+import {
+  addDays,
+  getDefaultDueDate,
+  getTodayString,
+  isDueDateBeforeTransactionDate,
+} from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
 import { PaperclipIcon, Plus, Save, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
   buildVatLabel,
@@ -16,12 +22,6 @@ import {
   validateDocument,
   type LineItemRow,
 } from "./utils";
-import {
-  getTodayString,
-  getDefaultDueDate,
-  isDueDateBeforeTransactionDate,
-  addDays,
-} from "@/lib/dateUtils";
 
 // Types
 
@@ -231,13 +231,13 @@ export function ExpenseEditor({
               initialVendorDetails={
                 initialData?.vendor
                   ? {
-                      address: initialData.vendor.address,
-                      phone:
-                        initialData.vendor.phone_primary ??
-                        initialData.vendor.phone_secondary ??
-                        "",
-                      email: initialData.vendor.email ?? "",
-                    }
+                    address: initialData.vendor.address,
+                    phone:
+                      initialData.vendor.phone_primary ??
+                      initialData.vendor.phone_secondary ??
+                      "",
+                    email: initialData.vendor.email ?? "",
+                  }
                   : null
               }
               onChange={setVendorId}
@@ -471,6 +471,7 @@ export function ExpenseEditor({
               ref={fileInputRef}
               className="hidden"
               multiple
+              accept={ACCEPTED_UPLOAD_TYPES}
               onChange={(e) => {
                 if (e.target.files) {
                   setQueuedFiles((prev) => [

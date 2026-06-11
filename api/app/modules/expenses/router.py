@@ -193,7 +193,7 @@ def calculate_expense_totals(
 @router.get(
     "/export/excel",
     summary="Export expenses to Excel",
-    description=("Export currently-filtered expenses as .xlsx. Not yet implemented."),
+    description=("Export currently-filtered expenses as an .xlsx workbook."),
     responses={
         200: {
             "description": "Excel file",
@@ -201,7 +201,6 @@ def calculate_expense_totals(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             },
         },
-        501: {"description": "Not yet implemented"},
     },
 )
 def export_expenses_to_excel(
@@ -232,7 +231,7 @@ def export_expenses_to_excel(
         is_recurring=is_recurring,
     )
 
-    # Batch-load full ORM rows instead of one get_by_id per row (P-5).
+    # Batch-load full ORM rows instead of one get_by_id per row.
     expenses = service.list_for_export(
         filters,
         include_line_items=include_line_items,
@@ -368,8 +367,10 @@ def delete_expense(
     responses={
         200: {"description": "Expense marked as paid"},
         400: {"description": "Expense already in PAID status"},
+        403: {"description": "Insufficient role to settle expenses"},
         404: {"description": "Expense not found"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def mark_expense_as_paid(
     expense_id: UUID,
@@ -479,13 +480,27 @@ def attach_expense_document(
     user_id = service._actor_id
     doc_source = DocumentSource(source)
 
+    # A payment_modal document is proof-of-payment; attaching it is a
+    # financial action, so require a privileged role. Ordinary
+    # form/view receipts remain attachable by any authenticated member.
+    if (
+        doc_source == DocumentSource.PAYMENT_MODAL
+        and not UserRole(service._current_user.role).is_privileged
+    ):
+        from app.common.exceptions import ForbiddenException
+
+        raise ForbiddenException(
+            detail="You do not have permission to attach payment documents.",
+            required_permission="admin/manager",
+        )
+
     # Confirm the expense exists (and is owned by the authenticated tenant)
     # before touching storage — raises NotFoundException otherwise.
     service.get_by_id(expense_id)
 
     mime_type = file.content_type or "application/octet-stream"
 
-    # Single source of truth for the upload attack surface (V-DRY-3):
+    # Single source of truth for the upload attack surface:
     # sanitize name → extension → MIME → size → magic-byte content sniff.
     # Rejects e.g. HTML/executables mislabeled as image/png. Leaves the
     # stream rewound to 0, ready to persist.
@@ -560,8 +575,10 @@ def get_expense_document_download(
     ),
     responses={
         204: {"description": "Document deleted"},
+        403: {"description": "Insufficient role to delete documents"},
         404: {"description": "Document not found on this expense"},
     },
+    dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))],
 )
 def delete_expense_document(
     expense_id: UUID,

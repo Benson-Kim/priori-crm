@@ -1,4 +1,4 @@
-"""add currency CHECK constraints to money tables (W2.3 / P-11)
+"""add currency CHECK constraints to money tables
 
 Revision ID: b2c3d4e5f6a7
 Revises: a1b2c3d4e5f6

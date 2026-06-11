@@ -1,4 +1,4 @@
-"""Owner / document-header service (W3.6)."""
+"""Owner / document-header service"""
 
 import hashlib
 import logging
@@ -191,7 +191,7 @@ class OwnerService:
     def load_logo_bytes(
         self, source: OwnerProfile | OwnerProfileSnapshot | None
     ) -> bytes | None:
-        """Read the raw logo image bytes for a profile/snapshot (ISSUE-035).
+        """Read the raw logo image bytes for a profile/snapshot.
 
         Used by PDF rendering to embed the logo. Reads through the storage
         facade so it works for both the local and S3 backends. Fails soft:
@@ -261,7 +261,7 @@ class OwnerService:
         return profile
 
     def serve_logo(self) -> LogoDownload:
-        """Serve the current owner logo (ISSUE-033).
+        """Serve the current owner logo.
 
         Returns a presigned URL when the backend supports it (S3), otherwise a
         byte stream the router can return directly. Keeps all storage access

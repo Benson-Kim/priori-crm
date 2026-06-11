@@ -1,4 +1,4 @@
-"""W1.3 — file-storage attack-surface hardening (P-13).
+"""File-storage attack-surface hardening.
 
 These tests exercise the centralized upload guards (common/uploads.py) and
 the path-confinement guarantees of StorageService (lib/storage.py). They are

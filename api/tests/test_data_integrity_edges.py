@@ -1,6 +1,4 @@
-"""Tests for the W2.6 data-integrity edge cases (P-... / SH-BE-2/3, W-6,
-VER-NEW-1/2, CUST-DBA-2).
-"""
+"""Tests for the data-integrity edge cases"""
 
 from decimal import Decimal
 

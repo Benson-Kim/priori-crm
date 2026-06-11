@@ -31,7 +31,7 @@ def test_update_changes_live_profile(db):
 
 
 def test_snapshot_is_immutable_against_later_profile_edits(db):
-    """The locked product decision: issued headers never re-brand (V-DI-4)."""
+    """The locked product decision: issued headers never re-brand."""
     svc = OwnerService(db)
     svc.update(OwnerProfileUpdate(full_name="Original Name", address="Old Address"))
 

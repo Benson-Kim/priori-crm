@@ -1,10 +1,10 @@
-"""Regression tests for W1.6 - destructive quote cascade on customer delete (V-DI-2).
+"""Regression tests for destructive quote cascade on customer delete.
 
 Verifies:
 - Soft-deleting a customer preserves quote history (no destructive cascade).
 - Hard-deleting a customer that still references quotes is rejected by the
   DB-level FK RESTRICT on Quote.customer_id and surfaces as a clean 400.
-- Soft-deleted (DELETED) customers are excluded from default reads (CUST-SEC-1).
+- Soft-deleted (DELETED) customers are excluded from default reads.
 
 The FK-RESTRICT behaviour is enforced by PostgreSQL, so the destructive-delete
 assertion is only meaningful on Postgres (the CI service). It is skipped on the

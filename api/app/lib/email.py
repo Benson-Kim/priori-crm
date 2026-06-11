@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 class EmailService:
     """AWS SES email client for sending transactional emails.
 
-    The boto3 SES client is built lazily on first use (LIB-BE-3) so importing
+    The boto3 SES client is built lazily on first use so importing
     this module never requires AWS configuration; retries and the dev-mode
-    skip both live on ``_send`` so every send path benefits (LIB-BE-1/BE-2).
+    skip both live on ``_send`` so every send path benefits.
     """
 
     def __init__(self) -> None:
@@ -89,8 +89,8 @@ class EmailService:
         """Send an email via AWS SES.
 
         In development without SES credentials the send is logged and
-        skipped (LIB-BE-2) so local flows never fail on missing AWS config.
-        Transient SES ``ClientError``s are retried (LIB-BE-1).
+        skipped so local flows never fail on missing AWS config.
+        Transient SES ``ClientError``s are retried.
         """
         if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
             logger.warning(
@@ -197,7 +197,7 @@ class _EmailServiceProxy:
 
     Existing call sites do ``from app.lib.email import email_service`` and
     call methods on it. This proxy defers to the cached instance so no SES
-    client is constructed at import time (LIB-BE-3) while keeping that API.
+    client is constructed at import time while keeping that API.
     """
 
     def __getattr__(self, name: str) -> Any:

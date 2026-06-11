@@ -44,10 +44,14 @@ class DetailedHealthResponse(BaseModel):
 )
 def health_check() -> HealthResponse:
     """
-    Basic health check endpoint.
+    Basic health check endpoint (load-balancer probe).
 
-    Returns application status and version.
-    Suitable for load balancer health checks.
+    Canonical contract (#28): exactly ``status``, ``version``,
+    ``environment`` and ``timestamp``. This is deliberately minimal — it
+    carries no service-name field and no infrastructure detail. Service
+    identity and dependency metrics live on the internal-secret-gated
+    ``/health/detailed``. ``version`` is the semantic application version
+    (``settings.APP_VERSION``).
     """
     return HealthResponse(
         status="healthy",
@@ -77,7 +81,7 @@ def check_redis_connection() -> bool:
     description=(
         "Comprehensive health check including database connectivity and "
         "connection-pool internals. Requires the internal machine-to-machine "
-        "secret (MW-SEC-3) since it exposes infrastructure details."
+        "secret since it exposes infrastructure details."
     ),
     dependencies=[Depends(verify_internal_secret)],
 )

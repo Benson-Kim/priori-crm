@@ -1,4 +1,4 @@
-"""add reference_sequences high-water-mark table (W3.8 / P-4 / V-DI-5)
+"""add reference_sequences high-water-mark table
 
 Revision ID: d4e5f6a7b8c9
 Revises: c3d4e5f6a7b8

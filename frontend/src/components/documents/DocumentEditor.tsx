@@ -16,20 +16,20 @@ import {
 } from "@/lib/constants";
 import { formatDisplayDate } from "@/lib/utils";
 import { Save, SquarePen } from "lucide-react";
-import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { useMemo, useState } from "react";
 import { Divider } from "../ui/Divider";
+import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { DocumentTotalsPanel } from "./layout/document-totals";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
+  buildVatLabel,
   calculateTotals,
   createEmptyRow,
   validateDocument,
-  buildVatLabel,
   type LineItemRow,
 } from "./utils";
 
-import { getTodayString, getDefaultDueDate } from "@/lib/dateUtils";
+import { getDefaultDueDate, getTodayString } from "@/lib/dateUtils";
 
 // Types
 
@@ -233,7 +233,7 @@ export function DocumentEditor({
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Owner identity (logo + company block) — single source of
-                truth, wired "Update" controls (S-1 / V-DRY-1 / V-SOLID-4). */}
+                truth, wired "Update" controls. */}
             <div className="md:col-span-2">
               <DocumentOwnerHeader editable={!restrictedMode} />
             </div>
@@ -250,10 +250,10 @@ export function DocumentEditor({
                 initialCustomerDetails={
                   initialData?.customer
                     ? {
-                        address: initialData.customer.address,
-                        phone: initialData.customer.phone,
-                        email: initialData.customer.email,
-                      }
+                      address: initialData.customer.address,
+                      phone: initialData.customer.phone,
+                      email: initialData.customer.email,
+                    }
                     : null
                 }
                 onChange={setCustomerId}

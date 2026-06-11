@@ -112,7 +112,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_hardening(self) -> "Settings":
-        """Fail fast on insecure configuration in production (LIB-OPS-2)."""
+        """Fail fast on insecure configuration in production."""
         if self.ENVIRONMENT != "production":
             return self
 
@@ -136,7 +136,7 @@ class Settings(BaseSettings):
             errors.append("S3_BUCKET must be configured when STORAGE_BACKEND is 's3'")
 
         # A multi-worker / horizontally-scaled production deployment must use
-        # the shared Redis window, otherwise the limit is per-process (W-4).
+        # the shared Redis window, otherwise the limit is per-process.
         if (
             self.RATE_LIMIT_ENABLED
             and self.RATE_LIMIT_BACKEND == "redis"

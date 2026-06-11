@@ -137,7 +137,7 @@ export function formatDelta(value: number): string {
  *
  * Centralises the createObjectURL -> temporary anchor -> revokeObjectURL
  * dance so binary downloads (PDFs, attached documents) actually land on disk
- * instead of being fetched and discarded (EXP-FE-1). The object URL is always
+ * instead of being fetched and discarded. The object URL is always
  * revoked, even if the click throws.
  */
 export function saveBlob(blob: Blob, filename: string): void {
