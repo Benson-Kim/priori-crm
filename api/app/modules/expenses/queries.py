@@ -1,9 +1,9 @@
-"""Expense read-side query objects (ISSUE-009).
+"""Expense read-side query objects.
 
 Decomposes the read-heavy concerns out of ExpenseService:
 
 - ``apply_expense_filters``       — single source of truth for expense
-  filtering (ISSUE-011), including the CANCELED-visibility rule, shared by
+  filtering, including the CANCELED-visibility rule, shared by
   the list view and the export so they can never drift.
 - ``ExpenseStatisticsRepository`` — the status-count and dashboard
   statistics SQL.
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 def apply_expense_filters(query, filters: ExpenseFilterParams | None):
-    """Single source of truth for expense filtering (ISSUE-011).
+    """Single source of truth for expense filtering.
 
     Shared by list_expenses and ExpenseExportQuery so the Excel export can
     never drift from the list view. Owns the visibility rule too:
@@ -76,7 +76,7 @@ def apply_expense_filters(query, filters: ExpenseFilterParams | None):
 
 
 class ExpenseStatisticsRepository:
-    """Read-side aggregates for expenses (ISSUE-009).
+    """Read-side aggregates for expenses.
 
     Owns the status-count and dashboard-statistics SQL previously embedded
     in ExpenseService. Read-only: never flushes or commits.
@@ -281,7 +281,7 @@ class ExpenseStatisticsRepository:
 
 
 class ExpenseExportQuery:
-    """Batch loader of full Expense rows for the Excel export (ISSUE-009)."""
+    """Batch loader of full Expense rows for the Excel export."""
 
     def __init__(self, db: Session) -> None:
         self._db = db

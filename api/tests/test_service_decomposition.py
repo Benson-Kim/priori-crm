@@ -1,4 +1,4 @@
-"""ISSUE-009 decomposition wiring tests.
+"""decomposition wiring tests.
 
 Statistics SQL, export loading and PDF orchestration live in dedicated
 objects (*StatisticsRepository, *ExportQuery, DocumentPdfRenderer); the
@@ -90,7 +90,7 @@ class TestExportDelegation:
 
 class TestSharedFilterFunction:
     def test_services_share_the_module_level_filter_appliers(self):
-        """ISSUE-011 invariant: list view and export apply the SAME function,
+        """list view and export apply the SAME function,
         so the Excel export can never drift from the list view."""
         assert InvoiceService._apply_filters is invoice_queries.apply_invoice_filters
         assert QuoteService._apply_filters is quote_queries.apply_quote_filters

@@ -12,7 +12,7 @@ class PaginationParams(BaseModel):
         default=False,
         description=(
             "Compute the total row count (and total_pages). Off by default to "
-            "avoid a COUNT(*) on every list call (ISSUE-016); request it only "
+            "avoid a COUNT(*) on every list call; request it only "
             "when a page-number UI needs the total."
         ),
     )

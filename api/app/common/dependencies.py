@@ -154,3 +154,15 @@ def get_owner_service(db: DbSession, current_user: CurrentUser):
 
 
 OwnerServiceDep = Annotated["OwnerService", Depends(get_owner_service)]  # noqa: F821
+
+
+def get_statements_service(db: DbSession, current_user: CurrentUser):
+    """Provide a StatementsService scoped to the current request and acting user."""
+    from app.modules.statements.service import StatementsService
+
+    return StatementsService(db, current_user=current_user)
+
+
+StatementsServiceDep = Annotated[
+    "StatementsService", Depends(get_statements_service)  # noqa: F821
+]

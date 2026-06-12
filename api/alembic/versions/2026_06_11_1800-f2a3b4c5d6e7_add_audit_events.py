@@ -4,7 +4,7 @@ Revision ID: f2a3b4c5d6e7
 Revises: e1f2a3b4c5d6
 Create Date: 2026-06-11 18:00:00.000000
 
-ISSUE-022: financial mutations (payments, cancellations, hard deletes) were
+financial mutations (payments, cancellations, hard deletes) were
 recorded only in application logs. audit_events rows are written in the same
 transaction as the mutation they describe.
 """

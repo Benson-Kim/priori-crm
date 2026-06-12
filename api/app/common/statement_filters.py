@@ -1,4 +1,4 @@
-"""Shared statement balance predicates (ISSUE-021).
+"""Shared statement balance predicates.
 
 The single source of truth for which document statuses are excluded from
 statement opening balances, applied symmetrically to the debit side (the

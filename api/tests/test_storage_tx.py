@@ -1,4 +1,4 @@
-"""Tests for the shared transaction-scoped storage cleanup (ISSUE-006).
+"""Tests for the shared transaction-scoped storage cleanup.
 
 ``schedule_delete_on_commit`` generalizes the OwnerService logo hook
 (delete the *superseded* object only once the transaction commits);

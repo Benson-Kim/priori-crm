@@ -3,7 +3,7 @@ name: API CI
 # Mirrors the GitLab `api:lint` and `api:test` jobs in .gitlab-ci.yml.
 # .gitlab-ci.yml remains the authoritative pipeline; these workflows are
 # kept in sync so the repository stays CI-ready if GitHub becomes the
-# default VCS (#27, option B).
+# default VCS.
 
 on:
   push:

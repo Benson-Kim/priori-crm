@@ -1,6 +1,6 @@
 name: Security
 
-# Mirrors the GitLab security stage in .gitlab-ci.yml (#26): SAST,
+# Mirrors the GitLab security stage in .gitlab-ci.yml: SAST,
 # dependency scanning, and secret detection. Uses the GitHub-native
 # equivalents (CodeQL, dependency-review, gitleaks).
 

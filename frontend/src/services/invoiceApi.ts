@@ -2,7 +2,7 @@
  * Invoice API service.
  *
  * Response types are sourced from the generated OpenAPI contract
- * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas (#41).
+ * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas.
  * Request *payloads* stay hand-written as the camelCase transport shape.
  */
 

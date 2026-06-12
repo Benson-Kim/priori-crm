@@ -69,7 +69,7 @@ class EmailService:
 
         ``attachments`` is a list of ``(filename, content, mime_type)``
         tuples; when present the message is sent as raw MIME so SES can
-        carry the files (STUB-002).
+        carry the files.
         """
         html = body_html or f"<pre>{body_text}</pre>"
         return self._send(

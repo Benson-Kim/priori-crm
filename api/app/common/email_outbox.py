@@ -1,4 +1,4 @@
-"""Transactional email outbox (ISSUE-003).
+"""Transactional email outbox.
 
 Document emails are enqueued in the SAME database transaction as the
 business-state change they announce (e.g. invoice DRAFT -> SENT), so a
@@ -12,13 +12,13 @@ Delivery surface:
 - ``EmailOutboxService.drain`` — batch retry of pending/failed rows, exposed
   as ``POST /internal/email-outbox/drain`` (X-Internal-Secret).
 
-Scheduling (ISSUE-007): one external scheduler (GitLab scheduled pipeline /
+Scheduling: one external scheduler (GitLab scheduled pipeline /
 k8s CronJob / cron + curl) should periodically call the internal job
 endpoints: ``/invoices/internal/transition-overdue``,
 ``/quotes/internal/transition-expired``, ``/auth/internal/purge-otps`` and
 ``/internal/email-outbox/drain``. Alert if a job has not run in its window.
 
-PDF attachments (STUB-002) are rendered at delivery time from the document
+PDF attachments are rendered at delivery time from the document
 reference (``document_type`` + ``document_id``) using the existing
 per-module PDF renderers, so the locked send phase does no PDF work and
 every retry attaches fresh bytes.
@@ -246,7 +246,7 @@ class EmailOutboxService:
     def _build_attachments(
         self, row: EmailOutbox
     ) -> list[tuple[str, bytes, str]] | None:
-        """Render the document PDF at delivery time (STUB-002)."""
+        """Render the document PDF at delivery time."""
         if not row.attach_pdf or row.document_type is None or row.document_id is None:
             return None
 

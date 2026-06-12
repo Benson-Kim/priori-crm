@@ -23,7 +23,7 @@ export interface PaginatedCustomers {
  * The backend types this field as an untyped `list[dict]`, so the generated
  * contract cannot describe it. This hand-written interface documents the shape
  * the service actually emits and the detail page reads; tightening the backend
- * schema to a typed model is tracked as follow-up (#41).
+ * schema to a typed model is tracked as follow-up.
  */
 export interface CustomerDetailInvoice {
   id: string;

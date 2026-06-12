@@ -248,7 +248,7 @@ async def export_expenses_to_excel(
     )
 
     # Batch-load full ORM rows instead of one get_by_id per row.
-    # Fetch one row beyond the cap so truncation is detectable (ISSUE-014).
+    # Fetch one row beyond the cap so truncation is detectable.
     rows = service.list_for_export(
         filters,
         include_line_items=include_line_items,
@@ -377,7 +377,7 @@ def delete_expense(
     service: ExpenseServiceDep,
     response: Response,
 ) -> None:
-    # ISSUE-017: the service reports whether the expense was soft-deleted
+    # the service reports whether the expense was soft-deleted
     # (canceled, payments preserved) or hard-deleted; surface that instead
     # of silently discarding the distinction.
     soft_deleted = service.delete(expense_id)
@@ -514,8 +514,8 @@ def attach_expense_document(
     doc_source = DocumentSource(source)
 
     # A payment_modal document is proof-of-payment; attaching it is a
-    # financial action, so require a privileged role (enforced by the
-    # service — ISSUE-008). Ordinary form/view receipts remain attachable
+    # financial action, so require a privileged role (enforced by the service).
+    # Ordinary form/view receipts remain attachable
     # by any authenticated member. Checked before any storage write.
     if doc_source == DocumentSource.PAYMENT_MODAL:
         service.require_privileged_actor("attach payment documents")

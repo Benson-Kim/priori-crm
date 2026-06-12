@@ -1,8 +1,7 @@
-"""Phase 3 structural regression tests (docs/architecture-review.md).
+"""Phase 3 structural regression tests.
 
-Covers ISSUE-005 (locked mark_as_sent), ISSUE-015 (reference generation
-from the persisted high-water mark) and ISSUE-021 (statement opening
-balance parity).
+Covers locked mark_as_sent, reference generation
+from the persisted high-water mark and statement opening balance parity.
 """
 
 import uuid
@@ -127,7 +126,7 @@ class TestReferenceHighWaterMark:
         db.flush()
 
         def table_max() -> int:  # pragma: no cover - must never run
-            raise AssertionError("table-max scan ran in steady state (ISSUE-015)")
+            raise AssertionError("table-max scan ran in steady state")
 
         assert gen._next_with_high_water_mark("p3_steady", table_max) == 9
         assert gen._next_with_high_water_mark("p3_steady", table_max) == 10

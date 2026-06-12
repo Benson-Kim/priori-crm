@@ -1,4 +1,4 @@
-"""Phase 3 remainder regression tests (#42): ISSUE-010/011/012/022."""
+"""Phase 3 remainder regression tests."""
 
 from datetime import date, timedelta
 from decimal import Decimal

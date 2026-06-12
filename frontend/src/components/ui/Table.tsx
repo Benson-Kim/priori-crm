@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 
 interface Column<T> {
   key: string;
@@ -12,6 +13,8 @@ interface TableProps<T> {
   data: T[];
   rowKey: (item: T, index: number) => string;
   onRowClick?: (item: T) => void;
+  rowClassName?: (item: T, index: number) => string;
+  footer?: ReactNode;
   className?: string;
   emptyMessage?: string;
 }
@@ -22,6 +25,8 @@ export function Table<T>({
   rowKey,
   onRowClick,
   className,
+  footer,
+  rowClassName,
   emptyMessage = "No data available.",
 }: Readonly<TableProps<T>>) {
   return (
@@ -60,8 +65,9 @@ export function Table<T>({
                 onClick={() => onRowClick?.(item)}
                 className={cn(
                   "border-b border-gray-100 py-4 px-3",
-                  "hover:bg-surface-app/50  transition-colors",
-                  onRowClick && "cursor-pointer"
+                  "hover:bg-surface-app/50 transition-colors",
+                  onRowClick && "cursor-pointer",
+                  rowClassName?.(item, index)
                 )}
               >
                 {columns.map((col) => (
@@ -83,6 +89,7 @@ export function Table<T>({
             ))
           )}
         </tbody>
+        {footer}
       </table>
     </div>
   );

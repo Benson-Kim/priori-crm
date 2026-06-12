@@ -210,7 +210,7 @@ async def export_quotes_to_excel(
     )
 
     # Batch-load full ORM rows instead of one get_by_id per row.
-    # Fetch one row beyond the cap so truncation is detectable (ISSUE-014).
+    # Fetch one row beyond the cap so truncation is detectable.
     rows = service.list_for_export(
         filters,
         include_line_items=include_line_items,

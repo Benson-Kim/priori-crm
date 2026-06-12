@@ -1,4 +1,4 @@
-"""Transaction-scoped object-storage cleanup (ISSUE-006).
+"""Transaction-scoped object-storage cleanup.
 
 Generalizes the ``after_commit`` cleanup hook OwnerService introduced for
 logo uploads so any module can keep object storage consistent with the

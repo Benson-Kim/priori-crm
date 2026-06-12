@@ -11,7 +11,7 @@ from app.lib.config import settings
 
 # auto_error=False so a missing/malformed Authorization header surfaces as our
 # own UnauthorizedException (401 in the app envelope) instead of FastAPI's bare
-# HTTPException 403 (SH-BE-6).
+# HTTPException 403.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 

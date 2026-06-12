@@ -5,7 +5,7 @@
  * documents, replacing the hardcoded COMPANY_INFO constant.
  *
  * The response type derives from the generated OpenAPI contract
- * (`@/lib/apiTypes`); the update body stays hand-written (#41).
+ * (`@/lib/apiTypes`); the update body stays hand-written.
  */
 import { apiDelete, apiDownload, apiGet, apiPut, apiUploadPut } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";

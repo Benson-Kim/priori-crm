@@ -1,8 +1,8 @@
 /**
- * Top-level route guard
+ * Route guard for the authenticated application shell.
  *
- * Wraps the authenticated application shell. When there is no valid session
- * the user is redirected to /login, preserving the attempted location so we
+ * Redirects unauthenticated visitors to /login, preserving the location
+ * they attempted to open (react-router `state.from`) so the login flow
  * can send them back after a successful sign-in.
  */
 

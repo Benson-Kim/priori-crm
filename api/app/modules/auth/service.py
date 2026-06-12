@@ -165,7 +165,7 @@ class AuthService:
         jti = payload.get("jti")
 
         if jti is not None and _refresh_token_denylist().is_revoked(jti):
-            # Reuse of a rotated/revoked token is theft evidence (ISSUE-023):
+            # Reuse of a rotated/revoked token is theft evidence:
             # the thief and the victim each hold a copy and one of them is
             # presenting a token that has already been spent. Fence the whole
             # family so the attacker's descendant chain dies too; the
@@ -244,7 +244,7 @@ class AuthService:
 
     @staticmethod
     def _revoke_token_family(user_id: str | None) -> None:
-        """Fence every outstanding refresh token for a user (ISSUE-023).
+        """Fence every outstanding refresh token for a user.
 
         Writes a per-user fence timestamp with a TTL equal to the refresh
         lifetime, so all tokens minted up to now are rejected while tokens
@@ -314,7 +314,7 @@ class AuthService:
         self._invalidate_pending_otps(user.id)
 
         code = "".join(secrets.choice("0123456789") for _ in range(6))
-        # Store only the digest (ISSUE-023): a DB read must never yield a
+        # Store only the digest: a DB read must never yield a
         # live login code. The plaintext exists only in the outgoing email.
         otp = OTPCode(
             user_id=user.id,
