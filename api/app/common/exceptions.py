@@ -142,6 +142,26 @@ class RateLimitException(AppException):
         )
 
 
+class ServiceUnavailableException(AppException):
+    """Service temporarily unavailable / at capacity (503).
+
+    Used to shed load when a bounded resource (e.g. the export concurrency
+    gate) is saturated, so the client backs off instead of overwhelming the
+    process.
+    """
+
+    def __init__(
+        self,
+        detail: str = "Service temporarily unavailable",
+        retry_after: int | None = None,
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+            extra={"retry_after": retry_after} if retry_after else {},
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers for consistent error responses."""
 
@@ -174,7 +194,16 @@ def register_exception_handlers(app: FastAPI) -> None:
         if exc.extra:
             response_data["details"] = exc.extra
 
-        return JSONResponse(status_code=exc.status_code, content=response_data)
+        # Surface a Retry-After header for backoff-bearing responses
+        # (429 rate limit, 503 export saturation) so clients honour it.
+        headers: dict[str, str] | None = None
+        retry_after = exc.extra.get("retry_after")
+        if retry_after is not None:
+            headers = {"Retry-After": str(retry_after)}
+
+        return JSONResponse(
+            status_code=exc.status_code, content=response_data, headers=headers
+        )
 
     from fastapi.exceptions import RequestValidationError
 

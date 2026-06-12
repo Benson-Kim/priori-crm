@@ -118,11 +118,18 @@ def list_invoices(
         str | None,
         Query(description="Search invoice number, reference, or customer name"),
     ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
 ) -> PaginatedResponse[InvoiceSummary]:
     """
     List invoices with pagination and filtering.
     """
-    params = PaginationParams(page=page, per_page=per_page)
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
 
     filters = InvoiceFilterParams(
         status=status,
@@ -206,7 +213,7 @@ def calculate_invoice_totals(
         },
     },
 )
-def export_invoices_to_excel(
+async def export_invoices_to_excel(
     service: InvoiceServiceDep,
     status: Annotated[str | None, Query()] = None,
     customer_id: Annotated[UUID | None, Query(alias="customerId")] = None,
@@ -225,6 +232,7 @@ def export_invoices_to_excel(
     import io
 
     from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
     from app.lib.config import settings
 
     filters = InvoiceFilterParams(
@@ -245,9 +253,11 @@ def export_invoices_to_excel(
     truncated = len(rows) > settings.BATCH_SIZE
     invoices = rows[: settings.BATCH_SIZE]
 
+    # Cap concurrency and run the CPU-bound workbook build off the event
+    # loop. Rows are already loaded, so the generator is pure CPU.
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_invoices(
-        invoices, include_line_items=include_line_items
+    xlsx_bytes = await run_export(
+        exporter.export_invoices, invoices, include_line_items
     )
 
     filename = f"Invoices_{date.today().strftime('%Y%m%d')}.xlsx"
@@ -512,7 +522,7 @@ def cancel_invoice(
         404: {"description": "Invoice not found"},
     },
 )
-def download_invoice_pdf(
+async def download_invoice_pdf(
     invoice_id: UUID,
     service: InvoiceServiceDep,
 ) -> StreamingResponse:
@@ -521,7 +531,13 @@ def download_invoice_pdf(
     """
     import io
 
-    pdf_data, invoice = service.generate_pdf_for_download(invoice_id)
+    from app.common.export_limiter import run_export
+
+    # Cap concurrent PDF builds and run the blocking render in a worker
+    # thread. The request-scoped Session is only used by this one thread
+    # while the handler awaits, so off-thread use is safe — the same
+    # execution model as the previous sync `def` endpoint.
+    pdf_data, invoice = await run_export(service.generate_pdf_for_download, invoice_id)
 
     return StreamingResponse(
         io.BytesIO(pdf_data),

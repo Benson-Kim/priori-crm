@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
 
+    # Exports: cap how many heavy (Excel/PDF) generations run concurrently
+    # per process so a burst cannot exhaust CPU/memory.
+    EXPORT_MAX_CONCURRENCY: int = Field(default=4, ge=1, le=64)
+
     # File Storage
     UPLOAD_DIR: str = "uploads"
     STORAGE_BACKEND: Literal["local", "s3"] = "local"
