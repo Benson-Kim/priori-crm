@@ -88,7 +88,11 @@ class OTPCode(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    code: Mapped[str] = mapped_column(String(6), nullable=False)
+    code: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment="SHA-256 digest of the OTP code (never plaintext)",
+    )
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     attempt_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False

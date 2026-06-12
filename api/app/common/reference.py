@@ -30,13 +30,19 @@ class ReferenceGenerator:
             {"key": key},
         )
 
-    def _next_with_high_water_mark(self, scope_key: str, table_max: int) -> int:
-        """Return the next value, never below the persisted high-water mark.
+    def _next_with_high_water_mark(self, scope_key: str, table_max_fn) -> int:
+        """Return the next value from the persisted high-water mark.
 
-        Takes ``max(table_max, persisted) + 1`` and writes the new value back to
-        ``reference_sequences`` so the suffix is never reused after the most
-        recent record is hard-deleted (the live ``table_max`` would otherwise
-        drop). The surrounding advisory lock serialises this read/modify/write.
+        Steady state (ISSUE-015): once a ``reference_sequences`` row exists
+        it is authoritative and the next value is simply ``persisted + 1`` —
+        no table scan at all, so generation cost no longer grows with table
+        size while the advisory lock is held. ``table_max_fn`` is invoked
+        only to bootstrap a scope the first time it is seen (e.g. the first
+        generate after deploying onto a table with pre-existing references).
+
+        The new value is written back so the suffix is never reused after
+        the most recent record is hard-deleted. The surrounding advisory
+        lock serialises this read/modify/write.
 
         Accessed via the ORM session (not ``db.execute``) so the single-
         advisory-lock execute contract holds. ``persisted`` is coerced via
@@ -48,7 +54,11 @@ class ReferenceGenerator:
         if not isinstance(persisted, int):
             persisted = 0
 
-        next_value = max(table_max, persisted) + 1
+        if persisted > 0:
+            next_value = persisted + 1
+        else:
+            table_max = table_max_fn() or 0
+            next_value = max(table_max, persisted) + 1
 
         if row is None:
             self._db.add(ReferenceSequence(scope_key=scope_key, last_value=next_value))
@@ -104,15 +114,21 @@ class ReferenceGenerator:
                     if strip_prefix_len is not None
                     else len(full_prefix) + 1
                 )
-                max_suffix = (
-                    self._db.query(
-                        func.max(func.cast(func.substring(column, offset + 1), Integer))
-                    )
-                    .filter(column.like(f"{full_prefix}%"))
-                    .scalar()
-                ) or 0
+
+                def _table_max() -> int:
+                    # Bootstrap-only scan, bounded by the day's prefix.
+                    return (
+                        self._db.query(
+                            func.max(
+                                func.cast(func.substring(column, offset + 1), Integer)
+                            )
+                        )
+                        .filter(column.like(f"{full_prefix}%"))
+                        .scalar()
+                    ) or 0
+
                 next_value = self._next_with_high_water_mark(
-                    f"{lock_key}_{full_prefix}", max_suffix
+                    f"{lock_key}_{full_prefix}", _table_max
                 )
                 return f"{full_prefix}-{next_value:0{width}d}"
 
@@ -132,17 +148,25 @@ class ReferenceGenerator:
             offset = (
                 strip_prefix_len if strip_prefix_len is not None else len(prefix) + 1
             )
-            max_suffix = (
-                self._db.query(
-                    func.max(
-                        func.cast(
-                            func.substring(column, offset + 1),
-                            Integer,
+
+            def _table_max() -> int:
+                # Bootstrap-only scan with the previously missing prefix
+                # filter (ISSUE-015); add a functional index if bootstrapping
+                # on an already-large table.
+                return (
+                    self._db.query(
+                        func.max(
+                            func.cast(
+                                func.substring(column, offset + 1),
+                                Integer,
+                            )
                         )
                     )
-                ).scalar()
-            ) or 0
-            next_value = self._next_with_high_water_mark(lock_key, max_suffix)
+                    .filter(column.like(f"{prefix}-%"))
+                    .scalar()
+                ) or 0
+
+            next_value = self._next_with_high_water_mark(lock_key, _table_max)
             return f"{prefix}-{next_value:0{width}d}"
 
         # Legacy COUNT strategy (opt-out only).

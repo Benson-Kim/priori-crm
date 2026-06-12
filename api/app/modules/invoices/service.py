@@ -6,15 +6,15 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar
 
-from sqlalchemy import and_, case, func
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import joinedload, lazyload, selectinload
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload, lazyload
 
+from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
     BadRequestException,
-    ConflictException,
     DatabaseException,
     NotFoundException,
 )
@@ -24,15 +24,18 @@ from app.common.financial import (
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.common.search import build_search_clause
 from app.constants.enums import DiscountType, InvoiceStatus
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
+from app.modules.invoices.queries import (
+    InvoiceExportQuery,
+    InvoiceStatisticsRepository,
+    apply_invoice_filters,
+)
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
     InvoiceDuplicateResponse,
     InvoiceFilterParams,
-    InvoiceLineItemCreate,
     InvoiceStatusCounts,
     InvoiceSummary,
     InvoiceUpdate,
@@ -61,6 +64,15 @@ class InvoiceService(BaseDocumentService):
         "date_label": "Due date",
         "closing": "Thank you for your business.",
     }
+
+    # Two-phase send wiring (DocumentSendMixin / ISSUE-002)
+    _send_model = Invoice
+    _send_draft_status = InvoiceStatus.DRAFT
+    _send_sent_status = InvoiceStatus.SENT
+
+    # Shared preview-totals + reference-retry wiring (ISSUE-012)
+    _calculation_response_cls = InvoiceCalculationResponse
+    MAX_REFERENCE_RETRIES = MAX_INVOICE_NUMBER_RETRIES
 
     ALLOWED_TRANSITIONS: ClassVar[dict[InvoiceStatus, list[InvoiceStatus]]] = {
         InvoiceStatus.DRAFT: [InvoiceStatus.SENT, InvoiceStatus.CANCELED],
@@ -135,68 +147,53 @@ class InvoiceService(BaseDocumentService):
         )
         total_due = subtotal - discount_value + tax_total
 
-        last_error: Exception | None = None
-        for attempt in range(self.MAX_INVOICE_NUMBER_RETRIES + 1):
-            sp = self._db.begin_nested()
-            try:
-                invoice_number = self._generate_invoice_number()
-                invoice_reference = self._generate_invoice_reference()
+        def _build() -> Invoice:
+            invoice = Invoice(
+                invoice_number=self._generate_invoice_number(),
+                invoice_reference=self._generate_invoice_reference(),
+                customer_id=data.customer_id,
+                transaction_date=data.transaction_date,
+                due_date=data.due_date,
+                currency=invoice_currency,
+                status=InvoiceStatus.DRAFT,
+                subtotal=subtotal,
+                discount_type=data.discount_type,
+                discount_amount=data.discount_amount,
+                discount_percentage=data.discount_percentage,
+                tax_total=tax_total,
+                total_due=total_due,
+                amount_paid=Decimal("0.00"),
+                balance_due=total_due,
+                rfq_number=data.rfq_number,
+                notes=data.notes,
+                created_by=user_id,
+            )
+            self._db.add(invoice)
+            self._db.flush()
+            for item in line_items_data:
+                self._db.add(InvoiceLineItem(invoice_id=invoice.id, **item))
+            self._db.flush()
+            return invoice
 
-                invoice = Invoice(
-                    invoice_number=invoice_number,
-                    invoice_reference=invoice_reference,
-                    customer_id=data.customer_id,
-                    transaction_date=data.transaction_date,
-                    due_date=data.due_date,
-                    currency=invoice_currency,
-                    status=InvoiceStatus.DRAFT,
-                    subtotal=subtotal,
-                    discount_type=data.discount_type,
-                    discount_amount=data.discount_amount,
-                    discount_percentage=data.discount_percentage,
-                    tax_total=tax_total,
-                    total_due=total_due,
-                    amount_paid=Decimal("0.00"),
-                    balance_due=total_due,
-                    rfq_number=data.rfq_number,
-                    notes=data.notes,
-                    created_by=user_id,
-                )
-                self._db.add(invoice)
-                self._db.flush()
-                for item in line_items_data:
-                    self._db.add(InvoiceLineItem(invoice_id=invoice.id, **item))
-                self._db.flush()
-                sp.commit()
+        invoice = self._with_reference_retry(_build, "invoice")
 
-                logger.info(
-                    "Created invoice: %s",
-                    invoice.invoice_number,
-                    extra={
-                        "invoice_id": str(invoice.id),
-                        "customer_id": str(data.customer_id),
-                        "total_due": float(total_due),
-                        "created_by": str(user_id) if user_id else None,
-                    },
-                )
-                return invoice
-
-            except IntegrityError as e:
-                sp.rollback()
-                last_error = e
-                is_collision = self._is_reference_collision(e)
-                if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
-                    logger.warning("Invoice number collision, retry %d", attempt + 1)
-                    continue
-                raise ConflictException(
-                    "Invoice data violates database constraints"
-                ) from e
-
-        raise ConflictException(
-            "Failed to generate unique invoice number after retries"
-        ) from last_error
+        logger.info(
+            "Created invoice: %s",
+            invoice.invoice_number,
+            extra={
+                "invoice_id": str(invoice.id),
+                "customer_id": str(data.customer_id),
+                "total_due": float(total_due),
+                "created_by": str(user_id) if user_id else None,
+            },
+        )
+        return invoice
 
     # READ
+
+    # Single source of truth for invoice filtering (ISSUE-011) — module-level
+    # in queries.py so InvoiceExportQuery shares the identical function.
+    _apply_filters = staticmethod(apply_invoice_filters)
 
     def get_by_id(self, invoice_id: uuid.UUID) -> Invoice:
         """
@@ -288,37 +285,7 @@ class InvoiceService(BaseDocumentService):
                 Customer.last_name,
             ).join(Customer, Invoice.customer_id == Customer.id)
 
-            # Apply filters
-            if filters:
-                if filters.status:
-                    query = query.filter(Invoice.status == filters.status)
-
-                if filters.customer_id:
-                    query = query.filter(Invoice.customer_id == filters.customer_id)
-
-                if filters.date_from:
-                    query = query.filter(Invoice.transaction_date >= filters.date_from)
-
-                if filters.date_to:
-                    query = query.filter(Invoice.transaction_date <= filters.date_to)
-
-                if filters.due_date_from:
-                    query = query.filter(Invoice.due_date >= filters.due_date_from)
-
-                if filters.due_date_to:
-                    query = query.filter(Invoice.due_date <= filters.due_date_to)
-
-                if filters.search:
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Invoice.invoice_number,
-                        Invoice.invoice_reference,
-                        Customer.company_name,
-                        Customer.first_name,
-                        Customer.last_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
+            query = self._apply_filters(query, filters)
 
             total = query.count()
 
@@ -377,260 +344,31 @@ class InvoiceService(BaseDocumentService):
     ) -> list[Invoice]:
         """Return full Invoice ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
-        customer is eager-joined for the display name and,
-        when requested, line items are batch-loaded with ``selectinload`` (one
-        extra query for the whole page, not one per row). ``limit`` caps the
-        number of rows materialised in memory.
+        Delegates to InvoiceExportQuery (ISSUE-009).
         """
-        try:
-            from app.modules.customers.models import Customer
-
-            query = (
-                self._db.query(Invoice)
-                .join(Customer, Invoice.customer_id == Customer.id)
-                .options(joinedload(Invoice.customer))
-            )
-
-            if include_line_items:
-                query = query.options(selectinload(Invoice.line_items))
-
-            if filters:
-                if filters.status:
-                    query = query.filter(Invoice.status == filters.status)
-                if filters.customer_id:
-                    query = query.filter(Invoice.customer_id == filters.customer_id)
-                if filters.date_from:
-                    query = query.filter(Invoice.transaction_date >= filters.date_from)
-                if filters.date_to:
-                    query = query.filter(Invoice.transaction_date <= filters.date_to)
-                if filters.due_date_from:
-                    query = query.filter(Invoice.due_date >= filters.due_date_from)
-                if filters.due_date_to:
-                    query = query.filter(Invoice.due_date <= filters.due_date_to)
-                if filters.search:
-                    from app.common.search import build_search_clause
-
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Invoice.invoice_number,
-                        Invoice.invoice_reference,
-                        Customer.company_name,
-                        Customer.first_name,
-                        Customer.last_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
-
-            query = query.order_by(Invoice.created_at.desc())
-            if limit is not None:
-                query = query.limit(limit)
-
-            return query.all()
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error loading invoices for export")
-            raise DatabaseException("Failed to load invoices for export") from e
+        return InvoiceExportQuery(self._db).list(
+            filters, include_line_items=include_line_items, limit=limit
+        )
 
     def get_status_counts(
         self, customer_id: uuid.UUID | None = None
     ) -> InvoiceStatusCounts:
-        """Get counts of invoices by status"""
-        try:
-            today = date.today()
-            query = self._db.query(
-                Invoice.status,
-                func.count(Invoice.id).label("cnt"),
-                func.sum(
-                    case(
-                        (
-                            and_(
-                                Invoice.status.in_(
-                                    [
-                                        InvoiceStatus.SENT,
-                                        InvoiceStatus.PARTIAL,
-                                        InvoiceStatus.OVERDUE,
-                                    ]
-                                ),
-                                Invoice.due_date < today,
-                                Invoice.balance_due > 0,
-                            ),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ).label("overdue_cnt"),
-            )
+        """Get counts of invoices by status.
 
-            if customer_id:
-                query = query.filter(Invoice.customer_id == customer_id)
-
-            rows = query.group_by(Invoice.status).all()
-
-            counts_dict: dict[str, int] = {}
-            overdue_count = 0
-            total = 0
-            for status_val, cnt, od_cnt in rows:
-                counts_dict[status_val] = cnt
-                total += cnt
-                overdue_count += od_cnt or 0
-
-            return InvoiceStatusCounts(
-                all=total,
-                draft=counts_dict.get(InvoiceStatus.DRAFT, 0),
-                sent=counts_dict.get(InvoiceStatus.SENT, 0),
-                partial=counts_dict.get(InvoiceStatus.PARTIAL, 0),
-                paid=counts_dict.get(InvoiceStatus.PAID, 0),
-                overdue=overdue_count,
-                canceled=counts_dict.get(InvoiceStatus.CANCELED, 0),
-            )
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error getting status counts")
-            raise DatabaseException("Failed to get status counts") from e
+        Delegates to InvoiceStatisticsRepository (ISSUE-009).
+        """
+        return InvoiceStatisticsRepository(self._db).status_counts(customer_id)
 
     def get_invoice_statistics(
         self,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> dict[str, Any]:
+        """Get invoice statistics for dashboard.
+
+        Delegates to InvoiceStatisticsRepository (ISSUE-009).
         """
-        Get invoice statistics for dashboard using SQL aggregates.
-
-        All computation is pushed to the database — no full table scan.
-        Excludes canceled invoices.  Defaults to current calendar month.
-        """
-        try:
-            from datetime import timedelta
-
-            if not date_from and not date_to:
-                today = date.today()
-                date_from = date(today.year, today.month, 1)
-                date_to = (
-                    date(today.year, 12, 31)
-                    if today.month == 12
-                    else date(today.year, today.month + 1, 1) - timedelta(days=1)
-                )
-
-            today = date.today()
-
-            agg = (
-                self._db.query(
-                    func.count(Invoice.id).label("total_invoices"),
-                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label(
-                        "total_invoiced"
-                    ),
-                    func.coalesce(func.sum(Invoice.amount_paid), Decimal("0")).label(
-                        "total_paid"
-                    ),
-                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
-                        "total_outstanding"
-                    ),
-                    func.coalesce(
-                        func.avg(
-                            case(
-                                (
-                                    and_(
-                                        Invoice.status == InvoiceStatus.PAID,
-                                        Invoice.paid_at.isnot(None),
-                                    ),
-                                    func.extract(
-                                        "epoch",
-                                        Invoice.paid_at
-                                        - func.cast(
-                                            Invoice.transaction_date,
-                                            type_=Invoice.paid_at.type,
-                                        ),
-                                    )
-                                    / 86400,
-                                )
-                            )
-                        ),
-                        0,
-                    ).label("avg_days_to_payment"),
-                    func.count(
-                        case(
-                            (
-                                and_(
-                                    Invoice.status.in_(
-                                        [
-                                            InvoiceStatus.SENT,
-                                            InvoiceStatus.PARTIAL,
-                                            InvoiceStatus.OVERDUE,
-                                        ]
-                                    ),
-                                    Invoice.due_date < today,
-                                    Invoice.balance_due > 0,
-                                ),
-                                Invoice.id,
-                            )
-                        )
-                    ).label("overdue_count"),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (
-                                    and_(
-                                        Invoice.status.in_(
-                                            [
-                                                InvoiceStatus.SENT,
-                                                InvoiceStatus.PARTIAL,
-                                                InvoiceStatus.OVERDUE,
-                                            ]
-                                        ),
-                                        Invoice.due_date < today,
-                                        Invoice.balance_due > 0,
-                                    ),
-                                    Invoice.balance_due,
-                                ),
-                                else_=0,
-                            )
-                        ),
-                        Decimal("0"),
-                    ).label("overdue_amount"),
-                )
-                .filter(
-                    Invoice.status != InvoiceStatus.CANCELED,
-                    Invoice.transaction_date >= date_from if date_from else True,
-                    Invoice.transaction_date <= date_to if date_to else True,
-                )
-                .one()
-            )
-
-            total = agg.total_invoices or 0
-            avg_value = (
-                (Decimal(str(agg.total_invoiced)) / total)
-                if total > 0
-                else Decimal("0.00")
-            )
-
-            logger.debug(
-                "Calculated invoice statistics",
-                extra={
-                    "date_from": str(date_from),
-                    "date_to": str(date_to),
-                    "total": total,
-                },
-            )
-
-            return {
-                "total_invoices": total,
-                "total_invoiced": Decimal(str(agg.total_invoiced)),
-                "total_paid": Decimal(str(agg.total_paid)),
-                "total_outstanding": Decimal(str(agg.total_outstanding)),
-                "average_invoice_value": avg_value,
-                "average_days_to_payment": round(
-                    float(agg.avg_days_to_payment or 0), 1
-                ),
-                "overdue_count": agg.overdue_count or 0,
-                "overdue_amount": Decimal(str(agg.overdue_amount)),
-                "date_from": date_from,
-                "date_to": date_to,
-            }
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error calculating invoice statistics")
-            raise DatabaseException("Failed to calculate statistics") from e
+        return InvoiceStatisticsRepository(self._db).statistics(date_from, date_to)
 
     # UPDATE
 
@@ -790,8 +528,12 @@ class InvoiceService(BaseDocumentService):
         invoice_id: uuid.UUID,
         sent_at: datetime | None = None,
     ) -> Invoice:
-        """Mark invoice as sent. Transitions: DRAFT → SENT."""
-        invoice = self.get_by_id(invoice_id)
+        """Mark invoice as sent. Transitions: DRAFT → SENT.
+
+        Locked load (ISSUE-005): serializes with send_invoice and
+        record_payment so a concurrent transition cannot race this one.
+        """
+        invoice = self._get_locked(invoice_id)
         self._transition(invoice, InvoiceStatus.SENT)
         invoice.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(invoice)
@@ -821,20 +563,17 @@ class InvoiceService(BaseDocumentService):
         the synchronous SES call (and its retries) never runs while the
         invoices row is locked.
         """
-        recipient, email_subject, email_body, sent_at = self._prepare_and_mark_sent(
-            invoice_id, to_email, subject, body
+        recipient, _subject, _body, sent_at, outbox_id = self._prepare_and_mark_sent(
+            invoice_id, to_email, subject, body, attach_pdf=attach_pdf
         )
 
-        # Dispatch email *outside* the row lock. The status change above is
-        # already durable, so a slow or failing SES send no longer holds a
-        # write lock on the invoice.
-        from app.lib.email import email_service
+        # Best-effort immediate delivery, *outside* the row lock. On failure
+        # the queued outbox row is retried by the drainer
+        # (/internal/email-outbox/drain), so the email is never lost
+        # (ISSUE-003) and a slow SES call never holds a write lock.
+        from app.common.email_outbox import EmailOutboxService
 
-        email_service.send_document_email(
-            recipient=recipient,
-            subject=email_subject,
-            body_text=email_body,
-        )
+        delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
 
         logger.info(
             "Sent invoice: %s",
@@ -843,71 +582,28 @@ class InvoiceService(BaseDocumentService):
                 "invoice_id": str(invoice_id),
                 "recipient": recipient,
                 "attached_pdf": attach_pdf,
+                "delivered": delivered,
             },
         )
         return {
             "invoice_id": invoice_id,
             "sent_to": recipient,
             "sent_at": sent_at,
-            "message": "Invoice sent successfully",
+            "message": (
+                "Invoice sent successfully"
+                if delivered
+                else "Invoice queued for delivery; the first attempt failed "
+                "and will be retried automatically"
+            ),
         }
 
-    def _prepare_and_mark_sent(
-        self,
-        invoice_id: uuid.UUID,
-        to_email: str | None,
-        subject: str | None,
-        body: str | None,
-    ) -> tuple[str, str, str, datetime]:
-        """Locked phase of send_invoice: validate, transition, then commit.
-
-        Returns the resolved recipient, subject, body and sent_at timestamp.
-        Commits before returning so the row lock is released ahead of the
-        SES dispatch in the caller.
-        """
-        # Lock the bare invoices row: a joined customer load would emit a
-        # LEFT OUTER JOIN that Postgres rejects under FOR UPDATE ("cannot be
-        # applied to the nullable side of an outer join"). customer still
-        # loads lazily on access below.
-        invoice = (
-            self._db.query(Invoice)
-            .options(lazyload("*"))
-            .filter(Invoice.id == invoice_id)
-            .with_for_update()
-            .first()
-        )
-        if not invoice:
-            raise NotFoundException(
-                detail=f"Invoice '{invoice_id}' not found", resource="invoice"
-            )
-
+    def _validate_sendable(self, invoice: Invoice) -> None:
+        """Reject sends for canceled invoices (DocumentSendMixin hook)."""
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
                 detail="Cannot send a canceled invoice",
                 field="status",
             )
-
-        recipient = to_email or invoice.customer.email
-        if not recipient:
-            raise BadRequestException(
-                detail="No email address available for this customer",
-                field="to_email",
-            )
-
-        email_subject = subject or self._generate_email_subject(invoice)
-        email_body = body or self._generate_email_body(invoice)
-
-        # Mark as sent if currently draft, then commit to release the lock.
-        sent_at = datetime.now(UTC)
-        if invoice.status == InvoiceStatus.DRAFT:
-            self._transition(invoice, InvoiceStatus.SENT)
-            invoice.sent_at = sent_at
-            self._capture_owner_snapshot(invoice)
-            self._db.flush()
-
-        self._db.commit()
-
-        return recipient, email_subject, email_body, sent_at
 
     def record_payment(
         self,
@@ -995,6 +691,21 @@ class InvoiceService(BaseDocumentService):
 
         self._update_customer_balance(invoice.customer_id)
 
+        # Durable audit trail (ISSUE-022): commits atomically with the payment.
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="invoice",
+            entity_id=invoice.id,
+            action="payment_recorded",
+            after={
+                "payment_id": str(payment.id),
+                "amount": str(data.amount),
+                "new_balance": str(invoice.balance_due),
+                "new_status": status_value(invoice.status),
+            },
+        )
+
         logger.info(
             "Recorded payment for invoice %s",
             invoice.invoice_number,
@@ -1021,76 +732,57 @@ class InvoiceService(BaseDocumentService):
 
             new_transaction_date = date.today()
             new_due_date = new_transaction_date + timedelta(days=30)
-            last_error: Exception | None = None
 
-            for attempt in range(self.MAX_INVOICE_NUMBER_RETRIES + 1):
-                sp = self._db.begin_nested()
-                try:
-                    duplicate = Invoice(
-                        invoice_number=self._generate_invoice_number(),
-                        invoice_reference=self._generate_invoice_reference(),
-                        customer_id=original.customer_id,
-                        transaction_date=new_transaction_date,
-                        due_date=new_due_date,
-                        currency=original.currency,
-                        status=InvoiceStatus.DRAFT,
-                        subtotal=original.subtotal,
-                        discount_type=original.discount_type,
-                        discount_amount=original.discount_amount,
-                        discount_percentage=original.discount_percentage,
-                        tax_total=original.tax_total,
-                        total_due=original.total_due,
-                        amount_paid=Decimal("0.00"),
-                        balance_due=original.total_due,
-                        rfq_number=original.rfq_number,
-                        notes=original.notes,
-                        created_by=user_id,
-                    )
-                    self._db.add(duplicate)
-                    self._db.flush()
-                    for orig_item in original.line_items:
-                        self._db.add(
-                            InvoiceLineItem(
-                                invoice_id=duplicate.id,
-                                line_number=orig_item.line_number,
-                                item_name=orig_item.item_name,
-                                description=orig_item.description,
-                                quantity=orig_item.quantity,
-                                unit_price=orig_item.unit_price,
-                                line_total=orig_item.line_total,
-                                tax_type=orig_item.tax_type,
-                                tax_amount=orig_item.tax_amount,
-                            )
+            def _build() -> InvoiceDuplicateResponse:
+                duplicate = Invoice(
+                    invoice_number=self._generate_invoice_number(),
+                    invoice_reference=self._generate_invoice_reference(),
+                    customer_id=original.customer_id,
+                    transaction_date=new_transaction_date,
+                    due_date=new_due_date,
+                    currency=original.currency,
+                    status=InvoiceStatus.DRAFT,
+                    subtotal=original.subtotal,
+                    discount_type=original.discount_type,
+                    discount_amount=original.discount_amount,
+                    discount_percentage=original.discount_percentage,
+                    tax_total=original.tax_total,
+                    total_due=original.total_due,
+                    amount_paid=Decimal("0.00"),
+                    balance_due=original.total_due,
+                    rfq_number=original.rfq_number,
+                    notes=original.notes,
+                    created_by=user_id,
+                )
+                self._db.add(duplicate)
+                self._db.flush()
+                for orig_item in original.line_items:
+                    self._db.add(
+                        InvoiceLineItem(
+                            invoice_id=duplicate.id,
+                            line_number=orig_item.line_number,
+                            item_name=orig_item.item_name,
+                            description=orig_item.description,
+                            quantity=orig_item.quantity,
+                            unit_price=orig_item.unit_price,
+                            line_total=orig_item.line_total,
+                            tax_type=orig_item.tax_type,
+                            tax_amount=orig_item.tax_amount,
                         )
-                    self._db.flush()
-                    sp.commit()
-                    logger.info(
-                        "Duplicated invoice %s → %s",
-                        original.invoice_number,
-                        duplicate.invoice_number,
                     )
-                    return InvoiceDuplicateResponse(
-                        original_invoice_id=original.id,
-                        new_invoice_id=duplicate.id,
-                        new_invoice_number=duplicate.invoice_number,
-                    )
+                self._db.flush()
+                logger.info(
+                    "Duplicated invoice %s → %s",
+                    original.invoice_number,
+                    duplicate.invoice_number,
+                )
+                return InvoiceDuplicateResponse(
+                    original_invoice_id=original.id,
+                    new_invoice_id=duplicate.id,
+                    new_invoice_number=duplicate.invoice_number,
+                )
 
-                except IntegrityError as exc:
-                    sp.rollback()
-                    last_error = exc
-                    is_collision = self._is_reference_collision(exc)
-                    if is_collision and attempt < self.MAX_INVOICE_NUMBER_RETRIES:
-                        logger.warning(
-                            "Collision during duplicate, retry %d", attempt + 1
-                        )
-                        continue
-                    raise ConflictException(
-                        "Invoice data violates database constraints"
-                    ) from exc
-
-            raise ConflictException(
-                "Failed to generate unique invoice number after retries"
-            ) from last_error
+            return self._with_reference_retry(_build, "invoice")
 
         except NotFoundException:
             raise
@@ -1111,6 +803,7 @@ class InvoiceService(BaseDocumentService):
                 detail="Invoice is already canceled", field="status"
             )
 
+        previous_status = invoice.status
         # Route through the state machine so ALLOWED_TRANSITIONS is enforced
         # and the version bump is owned in one place.
         self._transition(invoice, InvoiceStatus.CANCELED)
@@ -1121,6 +814,17 @@ class InvoiceService(BaseDocumentService):
         # balance; resync in the same unit of work so it cannot drift.
         self._update_customer_balance(invoice.customer_id)
 
+        # Durable audit trail (ISSUE-022).
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="invoice",
+            entity_id=invoice.id,
+            action="canceled",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(InvoiceStatus.CANCELED)},
+        )
+
         logger.warning(
             f"Canceled invoice: {invoice.invoice_number}",
             extra={"invoice_id": str(invoice.id)},
@@ -1129,47 +833,8 @@ class InvoiceService(BaseDocumentService):
         return invoice
 
     # CALCULATIONS & UTILITIES
-
-    @classmethod
-    def calculate_totals(
-        cls,
-        line_items: list[InvoiceLineItemCreate],
-        discount_type: DiscountType | None = None,
-        discount_amount: Decimal | None = None,
-        discount_percentage: Decimal | None = None,
-    ) -> InvoiceCalculationResponse:
-        """Calculate invoice totals without saving (preview)."""
-        subtotal = Decimal("0.00")
-        tax_total = Decimal("0.00")
-        calculated_items = []
-
-        built_items = build_line_items(line_items)
-        subtotal, tax_total = sum_line_totals(built_items)
-        for item in built_items:
-            calculated_items.append(
-                {
-                    "item_name": item["item_name"],
-                    "description": item["description"],
-                    "quantity": float(item["quantity"]),
-                    "unit_price": float(item["unit_price"]),
-                    "line_total": float(item["line_total"]),
-                    "tax_type": item["tax_type"],
-                    "tax_amount": float(item["tax_amount"]),
-                }
-            )
-
-        discount_value = calculate_discount(
-            subtotal, discount_type, discount_amount, discount_percentage
-        )
-        total_due = subtotal - discount_value + tax_total
-
-        return InvoiceCalculationResponse(
-            subtotal=subtotal,
-            discount_value=discount_value,
-            tax_total=tax_total,
-            total_due=total_due,
-            line_items=calculated_items,
-        )
+    # calculate_totals is inherited from BaseDocumentService (ISSUE-012);
+    # only the response class is invoice-specific.
 
     # Customer balance synchronisation
 
@@ -1282,27 +947,14 @@ class InvoiceService(BaseDocumentService):
     # PDF GENERATION
 
     def _render_pdf(self, invoice: Invoice) -> bytes:
-        """Render a PDF for an already-loaded invoice using ReportLab.
+        """Render a PDF for an already-loaded invoice.
 
-        Renders the owner header from the invoice's immutable snapshot when
-        issued, otherwise from the live profile.
+        Orchestration (owner branding + ReportLab generator) is shared with
+        quotes via DocumentPdfRenderer (ISSUE-009).
         """
-        from app.common.pdf import DocumentPDFGenerator
-        from app.modules.owner.models import OwnerProfileSnapshot
-        from app.modules.owner.service import OwnerService
+        from app.common.pdf_renderer import DocumentPdfRenderer
 
-        owner_service = OwnerService(self._db)
-        if invoice.owner_snapshot_id is not None:
-            source = self._db.get(OwnerProfileSnapshot, invoice.owner_snapshot_id)
-        else:
-            source = owner_service.get_or_create()
-        owner_info = owner_service.to_owner_info(source)
-        logo_bytes = owner_service.load_logo_bytes(source)
-
-        generator = DocumentPDFGenerator()
-        return generator.generate_invoice_pdf(
-            invoice, owner=owner_info, logo_bytes=logo_bytes
-        )
+        return DocumentPdfRenderer(self._db).render_invoice(invoice)
 
     def generate_pdf(self, invoice_id: uuid.UUID) -> bytes:
         """Generate PDF for an invoice by id."""

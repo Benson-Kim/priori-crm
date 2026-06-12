@@ -6,9 +6,8 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar
 
-from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, lazyload
 
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
@@ -24,14 +23,17 @@ from app.common.financial import (
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.common.search import build_search_clause
 from app.constants.enums import DiscountType, QuoteStatus
 from app.modules.quotes.models import Quote, QuoteLineItem
+from app.modules.quotes.queries import (
+    QuoteExportQuery,
+    QuoteStatisticsRepository,
+    apply_quote_filters,
+)
 from app.modules.quotes.schemas import (
     QuoteCalculationResponse,
     QuoteCreate,
     QuoteFilterParams,
-    QuoteLineItemCreate,
     QuoteStatusCounts,
     QuoteSummary,
     QuoteUpdate,
@@ -82,6 +84,15 @@ class QuoteService(BaseDocumentService):
         "date_label": "Valid until",
         "closing": "Thank you for considering our proposal.",
     }
+
+    # Two-phase send wiring (DocumentSendMixin / ISSUE-002)
+    _send_model = Quote
+    _send_draft_status = QuoteStatus.DRAFT
+    _send_sent_status = QuoteStatus.SENT
+
+    # Shared preview-totals + reference-retry wiring (ISSUE-012)
+    _calculation_response_cls = QuoteCalculationResponse
+    MAX_REFERENCE_RETRIES = MAX_QUOTE_NUMBER_RETRIES
 
     # Formal state machine — enforced via _transition()
     ALLOWED_TRANSITIONS: ClassVar[dict[QuoteStatus, list[QuoteStatus]]] = {
@@ -138,66 +149,51 @@ class QuoteService(BaseDocumentService):
         )
         total_due = subtotal - discount_value + tax_total
 
-        last_error: Exception | None = None
-        for attempt in range(self.MAX_QUOTE_NUMBER_RETRIES + 1):
-            sp = self._db.begin_nested()  # SAVEPOINT — not session rollback (R-2 fix)
-            try:
-                quote_number = self._generate_quote_number()
-                quote_reference = self._generate_quote_reference()
-                quote = Quote(
-                    quote_number=quote_number,
-                    quote_reference=quote_reference,
-                    customer_id=data.customer_id,
-                    transaction_date=data.transaction_date,
-                    due_date=data.due_date,
-                    currency=quote_currency,
-                    status=QuoteStatus.DRAFT,
-                    subtotal=subtotal,
-                    discount_type=data.discount_type,
-                    discount_amount=data.discount_amount,
-                    discount_percentage=data.discount_percentage,
-                    tax_total=tax_total,
-                    total_due=total_due,
-                    rfq_rfp_number=data.rfq_rfp_number,
-                    notes=data.notes,
-                    created_by=user_id,
-                )
-                self._db.add(quote)
-                self._db.flush()
-                for item in line_items_data:
-                    self._db.add(QuoteLineItem(quote_id=quote.id, **item))
-                self._db.flush()
-                sp.commit()  # release savepoint
-                logger.info(
-                    "Created quote: %s",
-                    quote.quote_number,
-                    extra={
-                        "quote_id": str(quote.id),
-                        "customer_id": str(data.customer_id),
-                        "total_due": float(total_due),
-                        "created_by": str(user_id) if user_id else None,
-                    },
-                )
-                return quote
+        def _build() -> Quote:
+            quote = Quote(
+                quote_number=self._generate_quote_number(),
+                quote_reference=self._generate_quote_reference(),
+                customer_id=data.customer_id,
+                transaction_date=data.transaction_date,
+                due_date=data.due_date,
+                currency=quote_currency,
+                status=QuoteStatus.DRAFT,
+                subtotal=subtotal,
+                discount_type=data.discount_type,
+                discount_amount=data.discount_amount,
+                discount_percentage=data.discount_percentage,
+                tax_total=tax_total,
+                total_due=total_due,
+                rfq_rfp_number=data.rfq_rfp_number,
+                notes=data.notes,
+                created_by=user_id,
+            )
+            self._db.add(quote)
+            self._db.flush()
+            for item in line_items_data:
+                self._db.add(QuoteLineItem(quote_id=quote.id, **item))
+            self._db.flush()
+            return quote
 
-            except IntegrityError as e:
-                sp.rollback()  # only this savepoint rolls back (R-2 fix)
-                last_error = e
-                is_collision = self._is_reference_collision(e)
-                if is_collision and attempt < self.MAX_QUOTE_NUMBER_RETRIES:
-                    logger.warning(
-                        "Quote number/reference collision, retry %d", attempt + 1
-                    )
-                    continue
-                raise ConflictException(
-                    "Quote data violates database constraints"
-                ) from e
+        quote = self._with_reference_retry(_build, "quote")
 
-        raise ConflictException(
-            "Failed to generate unique quote number after retries"
-        ) from last_error
+        logger.info(
+            "Created quote: %s",
+            quote.quote_number,
+            extra={
+                "quote_id": str(quote.id),
+                "customer_id": str(data.customer_id),
+                "total_due": float(total_due),
+                "created_by": str(user_id) if user_id else None,
+            },
+        )
+        return quote
 
     # READ
+
+    # Single source of truth for quote filtering (ISSUE-011) — module-level
+    # in queries.py so QuoteExportQuery shares the identical function.
+    _apply_filters = staticmethod(apply_quote_filters)
 
     def get_by_id(self, quote_id: uuid.UUID) -> Quote:
         """
@@ -287,37 +283,7 @@ class QuoteService(BaseDocumentService):
                 Customer.customer_type,
             ).join(Customer, Quote.customer_id == Customer.id)
 
-            # Apply filters
-            if filters:
-                if filters.status:
-                    query = query.filter(Quote.status == filters.status)
-
-                if filters.customer_id:
-                    query = query.filter(Quote.customer_id == filters.customer_id)
-
-                if filters.date_from:
-                    query = query.filter(Quote.transaction_date >= filters.date_from)
-
-                if filters.date_to:
-                    query = query.filter(Quote.transaction_date <= filters.date_to)
-
-                if filters.due_date_from:
-                    query = query.filter(Quote.due_date >= filters.due_date_from)
-
-                if filters.due_date_to:
-                    query = query.filter(Quote.due_date <= filters.due_date_to)
-
-                if filters.search:
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Quote.quote_number,
-                        Quote.quote_reference,
-                        Customer.first_name,
-                        Customer.last_name,
-                        Customer.company_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
+            query = self._apply_filters(query, filters)
 
             total = query.count()
 
@@ -375,111 +341,18 @@ class QuoteService(BaseDocumentService):
     ) -> list[Quote]:
         """Return full Quote ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
-        customer eager-joined; line items via ``selectinload``
-        only when requested. ``limit`` caps rows materialised in memory.
+        Delegates to QuoteExportQuery (ISSUE-009).
         """
-        try:
-            from app.modules.customers.models import Customer
-
-            query = (
-                self._db.query(Quote)
-                .join(Customer, Quote.customer_id == Customer.id)
-                .options(joinedload(Quote.customer))
-            )
-
-            if include_line_items:
-                query = query.options(selectinload(Quote.line_items))
-
-            if filters:
-                if filters.status:
-                    query = query.filter(Quote.status == filters.status)
-                if filters.customer_id:
-                    query = query.filter(Quote.customer_id == filters.customer_id)
-                if filters.date_from:
-                    query = query.filter(Quote.transaction_date >= filters.date_from)
-                if filters.date_to:
-                    query = query.filter(Quote.transaction_date <= filters.date_to)
-                if filters.due_date_from:
-                    query = query.filter(Quote.due_date >= filters.due_date_from)
-                if filters.due_date_to:
-                    query = query.filter(Quote.due_date <= filters.due_date_to)
-                if filters.search:
-                    from app.common.search import build_search_clause
-
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Quote.quote_number,
-                        Quote.quote_reference,
-                        Customer.first_name,
-                        Customer.last_name,
-                        Customer.company_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
-
-            query = query.order_by(Quote.created_at.desc())
-            if limit is not None:
-                query = query.limit(limit)
-
-            return query.all()
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error loading quotes for export")
-            raise DatabaseException("Failed to load quotes for export") from e
+        return QuoteExportQuery(self._db).list(
+            filters, include_line_items=include_line_items, limit=limit
+        )
 
     def get_status_counts(self) -> QuoteStatusCounts:
+        """Get counts of quotes by status.
+
+        Delegates to QuoteStatisticsRepository (ISSUE-009).
         """
-        Get counts of quotes by status in a single SQL query.
-
-        The 'expired' bucket counts DRAFT/SENT quotes whose due_date has
-        passed; computed via CASE to avoid a second round-trip.
-        """
-        try:
-            today = date.today()
-            rows = (
-                self._db.query(
-                    Quote.status,
-                    func.count(Quote.id).label("cnt"),
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    Quote.status.in_(
-                                        [QuoteStatus.DRAFT, QuoteStatus.SENT]
-                                    ),
-                                    Quote.due_date < today,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ).label("expired_cnt"),
-                )
-                .group_by(Quote.status)
-                .all()
-            )
-
-            counts_dict: dict[str, int] = {}
-            expired_count = 0
-            total = 0
-            for status_val, cnt, exp_cnt in rows:
-                counts_dict[status_val] = cnt
-                total += cnt
-                expired_count += exp_cnt or 0
-
-            return QuoteStatusCounts(
-                all=total,
-                draft=counts_dict.get(QuoteStatus.DRAFT, 0),
-                sent=counts_dict.get(QuoteStatus.SENT, 0),
-                approved=counts_dict.get(QuoteStatus.APPROVED, 0),
-                invoiced=counts_dict.get(QuoteStatus.INVOICED, 0),
-                expired=expired_count,
-            )
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error getting status counts")
-            raise DatabaseException("Failed to get status counts") from e
+        return QuoteStatisticsRepository(self._db).status_counts()
 
     # UPDATE
 
@@ -609,8 +482,12 @@ class QuoteService(BaseDocumentService):
         quote_id: uuid.UUID,
         sent_at: datetime | None = None,
     ) -> Quote:
-        """Mark quote as sent. Transitions: DRAFT → SENT."""
-        quote = self.get_by_id(quote_id)
+        """Mark quote as sent. Transitions: DRAFT → SENT.
+
+        Locked load (ISSUE-005): serializes with send_quote and
+        convert_to_invoice so a concurrent transition cannot race this one.
+        """
+        quote = self._get_locked(quote_id)
         self._transition(quote, QuoteStatus.SENT)
         quote.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(quote)
@@ -622,6 +499,14 @@ class QuoteService(BaseDocumentService):
         )
         return quote
 
+    def _validate_sendable(self, quote: Quote) -> None:
+        """Reject sends for converted quotes (DocumentSendMixin hook)."""
+        if quote.status == QuoteStatus.INVOICED:
+            raise BadRequestException(
+                detail="Cannot send a quote that has already been converted to an invoice",
+                field="status",
+            )
+
     def send_quote(
         self,
         quote_id: uuid.UUID,
@@ -631,72 +516,44 @@ class QuoteService(BaseDocumentService):
         attach_pdf: bool = True,
     ) -> dict[str, Any]:
         """
-        Send quote via email.
+        Send quote via email (two-phase, ISSUE-002).
 
-        TOCTOU fix (R-3): re-fetches the quote with SELECT FOR UPDATE so no
-        concurrent transaction can transition the same row simultaneously.
+        The locked phase (shared DocumentSendMixin._prepare_and_mark_sent)
+        re-reads the row FOR UPDATE, validates, transitions DRAFT -> SENT and
+        commits — releasing the lock. The SES dispatch below then runs with
+        no lock held, so a slow or failing email call can no longer hold a
+        write lock on the quote or pin a pool connection behind network I/O.
         """
-        # Row-level lock for the duration of this transaction
-        quote = (
-            self._db.query(Quote)
-            .options(joinedload(Quote.customer))
-            .filter(Quote.id == quote_id)
-            .with_for_update()
-            .first()
-        )
-        if not quote:
-            raise NotFoundException(
-                detail=f"Quote '{quote_id}' not found", resource="quote"
-            )
-
-        if quote.status == QuoteStatus.INVOICED:
-            raise BadRequestException(
-                detail="Cannot send a quote that has already been converted to an invoice",
-                field="status",
-            )
-
-        recipient = to_email or quote.customer.email
-        if not recipient:
-            raise BadRequestException(
-                detail="No email address available for this customer",
-                field="to_email",
-            )
-
-        email_subject = subject or self._generate_email_subject(quote)
-        email_body = body or self._generate_email_body(quote)
-
-        # Dispatch email
-        from app.lib.email import email_service
-
-        email_service.send_document_email(
-            recipient=recipient,
-            subject=email_subject,
-            body_text=email_body,
+        recipient, _subject, _body, sent_at, outbox_id = self._prepare_and_mark_sent(
+            quote_id, to_email, subject, body, attach_pdf=attach_pdf
         )
 
-        sent_at = datetime.now(UTC)
-        if quote.status == QuoteStatus.DRAFT:
-            self._transition(
-                quote, QuoteStatus.SENT
-            )  # enforces state machine (DI-3 fix)
-            quote.sent_at = sent_at
-            self._capture_owner_snapshot(quote)
-            self._db.flush()
+        # Best-effort immediate delivery, *outside* the row lock; failures
+        # stay queued for the outbox drainer (mirrors send_invoice).
+        from app.common.email_outbox import EmailOutboxService
+
+        delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
 
         logger.info(
             "Sent quote: %s",
-            quote.quote_number,
+            quote_id,
             extra={
-                "quote_id": str(quote.id),
+                "quote_id": str(quote_id),
                 "recipient": recipient,
                 "attached_pdf": attach_pdf,
+                "delivered": delivered,
             },
         )
         return {
-            "quote_id": quote.id,
+            "quote_id": quote_id,
             "sent_to": recipient,
             "sent_at": sent_at,
-            "message": "Quote sent successfully",
+            "message": (
+                "Quote sent successfully"
+                if delivered
+                else "Quote queued for delivery; the first attempt failed "
+                "and will be retried automatically"
+            ),
         }
 
     def approve_quote(
@@ -744,13 +601,31 @@ class QuoteService(BaseDocumentService):
         Atomicity (R-1 fix): all mutations run inside a single SAVEPOINT so a
         mid-operation failure cannot leave orphan invoices or a half-converted quote.
 
-        SRP fix (M-2): invoice number generation is delegated to InvoiceService.
+        Concurrencythe quote is re-read FOR UPDATE before the
+        eligibility check, so two concurrent conversions serialize on the row
+        lock and the loser observes INVOICED/related_invoice_id and is
+        rejected — one APPROVED quote can never yield two invoices.
+
+        invoice number generation is delegated to InvoiceService.
         """
         from app.constants.enums import InvoiceStatus
         from app.modules.invoices.models import Invoice, InvoiceLineItem
         from app.modules.invoices.service import InvoiceService
 
-        quote = self.get_by_id(quote_id)
+        # Lock the bare row; lazyload('*') keeps the FOR UPDATE off the
+        # customer outer join (PostgreSQL rejects FOR UPDATE on the nullable
+        # side of an outer join — same pattern as send_quote.
+        quote = (
+            self._db.query(Quote)
+            .options(lazyload("*"))
+            .filter(Quote.id == quote_id)
+            .with_for_update()
+            .first()
+        )
+        if not quote:
+            raise NotFoundException(
+                detail=f"Quote with ID '{quote_id}' not found", resource="quote"
+            )
         if not quote.can_convert_to_invoice:
             raise BadRequestException(
                 detail=(
@@ -844,74 +719,55 @@ class QuoteService(BaseDocumentService):
 
             new_transaction_date = date.today()
             new_due_date = new_transaction_date + timedelta(days=30)
-            last_error: Exception | None = None
 
-            for attempt in range(self.MAX_QUOTE_NUMBER_RETRIES + 1):
-                sp = self._db.begin_nested()  # SAVEPOINT (R-2 fix)
-                try:
-                    duplicate = Quote(
-                        quote_number=self._generate_quote_number(),
-                        quote_reference=self._generate_quote_reference(),
-                        customer_id=original.customer_id,
-                        transaction_date=new_transaction_date,
-                        due_date=new_due_date,
-                        currency=original.currency,
-                        status=QuoteStatus.DRAFT,
-                        subtotal=original.subtotal,
-                        discount_type=original.discount_type,
-                        discount_amount=original.discount_amount,
-                        discount_percentage=original.discount_percentage,
-                        tax_total=original.tax_total,
-                        total_due=original.total_due,
-                        rfq_rfp_number=original.rfq_rfp_number,
-                        notes=original.notes,
-                        created_by=user_id,
-                    )
-                    self._db.add(duplicate)
-                    self._db.flush()
-                    for orig_item in original.line_items:
-                        self._db.add(
-                            QuoteLineItem(
-                                quote_id=duplicate.id,
-                                line_number=orig_item.line_number,
-                                item_name=orig_item.item_name,
-                                description=orig_item.description,
-                                quantity=orig_item.quantity,
-                                unit_price=orig_item.unit_price,
-                                line_total=orig_item.line_total,
-                                tax_type=orig_item.tax_type,
-                                tax_amount=orig_item.tax_amount,
-                            )
+            def _build() -> Quote:
+                duplicate = Quote(
+                    quote_number=self._generate_quote_number(),
+                    quote_reference=self._generate_quote_reference(),
+                    customer_id=original.customer_id,
+                    transaction_date=new_transaction_date,
+                    due_date=new_due_date,
+                    currency=original.currency,
+                    status=QuoteStatus.DRAFT,
+                    subtotal=original.subtotal,
+                    discount_type=original.discount_type,
+                    discount_amount=original.discount_amount,
+                    discount_percentage=original.discount_percentage,
+                    tax_total=original.tax_total,
+                    total_due=original.total_due,
+                    rfq_rfp_number=original.rfq_rfp_number,
+                    notes=original.notes,
+                    created_by=user_id,
+                )
+                self._db.add(duplicate)
+                self._db.flush()
+                for orig_item in original.line_items:
+                    self._db.add(
+                        QuoteLineItem(
+                            quote_id=duplicate.id,
+                            line_number=orig_item.line_number,
+                            item_name=orig_item.item_name,
+                            description=orig_item.description,
+                            quantity=orig_item.quantity,
+                            unit_price=orig_item.unit_price,
+                            line_total=orig_item.line_total,
+                            tax_type=orig_item.tax_type,
+                            tax_amount=orig_item.tax_amount,
                         )
-                    self._db.flush()
-                    sp.commit()  # release savepoint
-                    logger.info(
-                        "Duplicated quote %s → %s",
-                        original.quote_number,
-                        duplicate.quote_number,
-                        extra={
-                            "original_id": str(original.id),
-                            "duplicate_id": str(duplicate.id),
-                        },
                     )
-                    return duplicate
+                self._db.flush()
+                logger.info(
+                    "Duplicated quote %s → %s",
+                    original.quote_number,
+                    duplicate.quote_number,
+                    extra={
+                        "original_id": str(original.id),
+                        "duplicate_id": str(duplicate.id),
+                    },
+                )
+                return duplicate
 
-                except IntegrityError as exc:
-                    sp.rollback()  # only this savepoint (R-2 fix)
-                    last_error = exc
-                    is_collision = self._is_reference_collision(exc)
-                    if is_collision and attempt < self.MAX_QUOTE_NUMBER_RETRIES:
-                        logger.warning(
-                            "Collision during duplicate, retry %d", attempt + 1
-                        )
-                        continue
-                    raise ConflictException(
-                        "Quote data violates database constraints"
-                    ) from exc
-
-            raise ConflictException(
-                "Failed to generate unique quote number after retries"
-            ) from last_error
+            return self._with_reference_retry(_build, "quote")
 
         except NotFoundException:
             raise
@@ -945,208 +801,19 @@ class QuoteService(BaseDocumentService):
             raise DatabaseException("Failed to delete quote") from e
 
     # CALCULATIONS & UTILITIES
-
-    @classmethod
-    def calculate_totals(
-        cls,
-        line_items: list[QuoteLineItemCreate],
-        discount_type: DiscountType | None = None,
-        discount_amount: Decimal | None = None,
-        discount_percentage: Decimal | None = None,
-    ) -> QuoteCalculationResponse:
-        """Calculate quote totals without saving (preview)."""
-        subtotal = Decimal("0.00")
-        tax_total = Decimal("0.00")
-        calculated_items = []
-
-        built_items = build_line_items(line_items)
-        subtotal, tax_total = sum_line_totals(built_items)
-        for item in built_items:
-            calculated_items.append(
-                {
-                    "item_name": item["item_name"],
-                    "description": item["description"],
-                    "quantity": float(item["quantity"]),
-                    "unit_price": float(item["unit_price"]),
-                    "line_total": float(item["line_total"]),
-                    "tax_type": item["tax_type"],
-                    "tax_amount": float(item["tax_amount"]),
-                }
-            )
-
-        discount_value = calculate_discount(
-            subtotal, discount_type, discount_amount, discount_percentage
-        )
-        total_due = subtotal - discount_value + tax_total
-
-        return QuoteCalculationResponse(
-            subtotal=subtotal,
-            discount_value=discount_value,
-            tax_total=tax_total,
-            total_due=total_due,
-            line_items=calculated_items,
-        )
+    # calculate_totals is inherited from BaseDocumentService (ISSUE-012);
+    # only the response class is quote-specific.
 
     def get_quote_statistics(
         self,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> dict[str, Any]:
+        """Get quote statistics for dashboard.
+
+        Delegates to QuoteStatisticsRepository (ISSUE-009).
         """
-        Get quote statistics for dashboard using SQL aggregates.
-
-        All aggregations are pushed to the database — no full table
-        scan into Python memory.  Defaults to the current calendar month.
-        """
-        try:
-            from datetime import timedelta
-
-            if not date_from and not date_to:
-                today = date.today()
-                date_from = date(today.year, today.month, 1)
-                date_to = (
-                    date(today.year, 12, 31)
-                    if today.month == 12
-                    else date(today.year, today.month + 1, 1) - timedelta(days=1)
-                )
-
-            today = date.today()
-
-            # Single aggregate query — no Python-side loops over rows
-            agg = (
-                self._db.query(
-                    func.count(Quote.id).label("total_quotes"),
-                    func.coalesce(func.sum(Quote.total_due), Decimal("0")).label(
-                        "total_quoted"
-                    ),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (Quote.status == QuoteStatus.APPROVED, Quote.total_due),
-                                else_=0,
-                            )
-                        ),
-                        Decimal("0"),
-                    ).label("total_approved"),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (Quote.status == QuoteStatus.INVOICED, Quote.total_due),
-                                else_=0,
-                            )
-                        ),
-                        Decimal("0"),
-                    ).label("total_invoiced"),
-                    func.count(
-                        case(
-                            (
-                                Quote.status.in_(
-                                    [QuoteStatus.APPROVED, QuoteStatus.INVOICED]
-                                ),
-                                Quote.id,
-                            )
-                        )
-                    ).label("converted_count"),
-                    func.coalesce(
-                        func.avg(
-                            case(
-                                (
-                                    and_(
-                                        Quote.approved_at.isnot(None),
-                                        Quote.status.in_(
-                                            [QuoteStatus.APPROVED, QuoteStatus.INVOICED]
-                                        ),
-                                    ),
-                                    func.extract(
-                                        "epoch",
-                                        Quote.approved_at
-                                        - func.cast(
-                                            Quote.transaction_date,
-                                            type_=Quote.approved_at.type,
-                                        ),
-                                    )
-                                    / 86400,
-                                )
-                            )
-                        ),
-                        0,
-                    ).label("avg_days_to_approval"),
-                    func.count(
-                        case(
-                            (
-                                and_(
-                                    Quote.status.in_(
-                                        [QuoteStatus.DRAFT, QuoteStatus.SENT]
-                                    ),
-                                    Quote.due_date < today,
-                                ),
-                                Quote.id,
-                            )
-                        )
-                    ).label("expired_count"),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (
-                                    and_(
-                                        Quote.status.in_(
-                                            [QuoteStatus.DRAFT, QuoteStatus.SENT]
-                                        ),
-                                        Quote.due_date < today,
-                                    ),
-                                    Quote.total_due,
-                                ),
-                                else_=0,
-                            )
-                        ),
-                        Decimal("0"),
-                    ).label("expired_amount"),
-                )
-                .filter(
-                    Quote.transaction_date >= date_from if date_from else True,
-                    Quote.transaction_date <= date_to if date_to else True,
-                )
-                .one()
-            )
-
-            total = agg.total_quotes or 0
-            conversion_rate = (
-                round(agg.converted_count / total * 100, 1) if total > 0 else 0.0
-            )
-            avg_value = (
-                (Decimal(str(agg.total_quoted)) / total)
-                if total > 0
-                else Decimal("0.00")
-            )
-
-            logger.debug(
-                "Calculated quote statistics",
-                extra={
-                    "date_from": str(date_from),
-                    "date_to": str(date_to),
-                    "total": total,
-                },
-            )
-
-            return {
-                "total_quotes": total,
-                "total_quoted": Decimal(str(agg.total_quoted)),
-                "total_approved": Decimal(str(agg.total_approved)),
-                "total_invoiced": Decimal(str(agg.total_invoiced)),
-                "conversion_rate": conversion_rate,
-                "average_quote_value": avg_value,
-                "average_days_to_approval": round(
-                    float(agg.avg_days_to_approval or 0), 1
-                ),
-                "expired_count": agg.expired_count or 0,
-                "expired_amount": Decimal(str(agg.expired_amount)),
-                "date_from": date_from,
-                "date_to": date_to,
-            }
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error calculating quote statistics")
-            raise DatabaseException("Failed to calculate statistics") from e
+        return QuoteStatisticsRepository(self._db).statistics(date_from, date_to)
 
     # NIGHTLY SCHEDULER
 
@@ -1217,24 +884,16 @@ class QuoteService(BaseDocumentService):
 
     # PDF GENERATION
 
+    def _render_pdf(self, quote: Quote) -> bytes:
+        """Render a PDF for an already-loaded quote.
+
+        Orchestration (owner branding + ReportLab generator) is shared with
+        invoices via DocumentPdfRenderer (ISSUE-009).
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        return DocumentPdfRenderer(self._db).render_quote(quote)
+
     def generate_pdf(self, quote_id: uuid.UUID) -> bytes:
-        """Generate PDF for quote, rendering the owner header from the quote's
-        immutable snapshot when issued, else the live profile"""
-        from app.common.pdf import DocumentPDFGenerator
-        from app.modules.owner.models import OwnerProfileSnapshot
-        from app.modules.owner.service import OwnerService
-
-        quote = self.get_by_id(quote_id)
-
-        owner_service = OwnerService(self._db)
-        if quote.owner_snapshot_id is not None:
-            source = self._db.get(OwnerProfileSnapshot, quote.owner_snapshot_id)
-        else:
-            source = owner_service.get_or_create()
-        owner_info = owner_service.to_owner_info(source)
-        logo_bytes = owner_service.load_logo_bytes(source)
-
-        generator = DocumentPDFGenerator()
-        return generator.generate_quote_pdf(
-            quote, owner=owner_info, logo_bytes=logo_bytes
-        )
+        """Generate PDF for a quote by id."""
+        return self._render_pdf(self.get_by_id(quote_id))

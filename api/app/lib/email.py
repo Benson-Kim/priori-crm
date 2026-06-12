@@ -63,14 +63,21 @@ class EmailService:
         subject: str,
         body_text: str,
         body_html: str | None = None,
+        attachments: list[tuple[str, bytes, str]] | None = None,
     ) -> dict[str, Any]:
-        """Send a transactional document email (invoice, quote, statement)."""
+        """Send a transactional document email (invoice, quote, statement).
+
+        ``attachments`` is a list of ``(filename, content, mime_type)``
+        tuples; when present the message is sent as raw MIME so SES can
+        carry the files (STUB-002).
+        """
         html = body_html or f"<pre>{body_text}</pre>"
         return self._send(
             recipient=recipient,
             subject=subject,
             body_html=html,
             body_text=body_text,
+            attachments=attachments,
         )
 
     def _send(
@@ -79,6 +86,7 @@ class EmailService:
         subject: str,
         body_html: str,
         body_text: str,
+        attachments: list[tuple[str, bytes, str]] | None = None,
     ) -> dict[str, Any]:
         """Send an email via AWS SES.
 
@@ -95,7 +103,9 @@ class EmailService:
             retry=retry_if_exception_type(ClientError),
             reraise=True,
         )
-        return retryer(self._send_once, recipient, subject, body_html, body_text)
+        return retryer(
+            self._send_once, recipient, subject, body_html, body_text, attachments
+        )
 
     def _send_once(
         self,
@@ -103,6 +113,7 @@ class EmailService:
         subject: str,
         body_html: str,
         body_text: str,
+        attachments: list[tuple[str, bytes, str]] | None = None,
     ) -> dict[str, Any]:
         """Perform a single SES send attempt (wrapped with retries by _send)."""
         if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
@@ -114,17 +125,32 @@ class EmailService:
             return {"MessageId": "dev-mode-skipped", "recipient": recipient}
 
         try:
-            response = self._client.send_email(
-                Source=self._sender,
-                Destination={"ToAddresses": [recipient]},
-                Message={
-                    "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {
-                        "Html": {"Data": body_html, "Charset": "UTF-8"},
-                        "Text": {"Data": body_text, "Charset": "UTF-8"},
+            if attachments:
+                raw = self._build_raw_message(
+                    sender=self._sender,
+                    recipient=recipient,
+                    subject=subject,
+                    body_html=body_html,
+                    body_text=body_text,
+                    attachments=attachments,
+                )
+                response = self._client.send_raw_email(
+                    Source=self._sender,
+                    Destinations=[recipient],
+                    RawMessage={"Data": raw},
+                )
+            else:
+                response = self._client.send_email(
+                    Source=self._sender,
+                    Destination={"ToAddresses": [recipient]},
+                    Message={
+                        "Subject": {"Data": subject, "Charset": "UTF-8"},
+                        "Body": {
+                            "Html": {"Data": body_html, "Charset": "UTF-8"},
+                            "Text": {"Data": body_text, "Charset": "UTF-8"},
+                        },
                     },
-                },
-            )
+                )
 
             logger.info(
                 "Email sent successfully",
@@ -155,6 +181,42 @@ class EmailService:
                 detail=f"Failed to send email: {error_message}",
                 recipient=recipient,
             ) from e
+
+    @staticmethod
+    def _build_raw_message(
+        sender: str,
+        recipient: str,
+        subject: str,
+        body_html: str,
+        body_text: str,
+        attachments: list[tuple[str, bytes, str]],
+    ) -> str:
+        """Build a multipart/mixed MIME message with attachments for SES.
+
+        Structure: mixed( alternative(text, html), attachment* ) — the
+        standard shape so clients render the body and list the files.
+        """
+        from email.mime.application import MIMEApplication
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = sender
+        msg["To"] = recipient
+
+        alternative = MIMEMultipart("alternative")
+        alternative.attach(MIMEText(body_text, "plain", "utf-8"))
+        alternative.attach(MIMEText(body_html, "html", "utf-8"))
+        msg.attach(alternative)
+
+        for filename, content, mime_type in attachments:
+            _, _, subtype = mime_type.partition("/")
+            part = MIMEApplication(content, _subtype=subtype or "octet-stream")
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
+
+        return msg.as_string()
 
     @staticmethod
     def _build_otp_html(otp_code: str) -> str:

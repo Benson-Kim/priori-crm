@@ -1,10 +1,12 @@
 import logging
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from app.common.database import check_database_connection, get_pool_status
+from app.common.database import check_database_connection, get_db, get_pool_status
 from app.common.dependencies import verify_internal_secret
 from app.common.financial import TAX_RATES
 from app.lib.config import settings
@@ -135,3 +137,28 @@ def ping() -> dict:
 def get_tax_rates() -> dict[str, float]:
     """Get tax rates from the single source of truth."""
     return {k.value: float(v) for k, v in TAX_RATES.items()}
+
+
+# SCHEDULER  (internal — hidden from public OpenAPI docs)
+
+
+@router.post(
+    "/internal/email-outbox/drain",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+    summary="Drain the transactional email outbox (internal)",
+    description=(
+        "Retries pending/failed outbox emails with dead-lettering after "
+        "MAX_DELIVERY_ATTEMPTS. Called by the scheduler alongside "
+        "transition-overdue / transition-expired / purge-otps (ISSUE-007). "
+        "Requires the X-Internal-Secret header; not a public client endpoint."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
+)
+def drain_email_outbox(
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> dict:
+    from app.common.email_outbox import EmailOutboxService
+
+    return EmailOutboxService(db).drain(limit=limit)

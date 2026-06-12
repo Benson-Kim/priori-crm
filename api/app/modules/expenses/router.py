@@ -8,7 +8,16 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
@@ -18,7 +27,6 @@ from app.common.dependencies import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.uploads import validate_upload
-from app.constants.enums import UserRole
 from app.lib.storage import storage_service
 from app.modules.expenses.schemas import (
     ExpenseCalculationResponse,
@@ -66,7 +74,7 @@ def create_expense(
     body: ExpenseCreate,
     service: ExpenseServiceDep,
 ) -> ExpenseResponse:
-    expense = service.create(body, user_id=service._actor_id)
+    expense = service.create(body, user_id=service.actor_id)
     return ExpenseResponse.model_validate(expense)
 
 
@@ -232,11 +240,14 @@ def export_expenses_to_excel(
     )
 
     # Batch-load full ORM rows instead of one get_by_id per row.
-    expenses = service.list_for_export(
+    # Fetch one row beyond the cap so truncation is detectable (ISSUE-014).
+    rows = service.list_for_export(
         filters,
         include_line_items=include_line_items,
-        limit=settings.BATCH_SIZE,
+        limit=settings.BATCH_SIZE + 1,
     )
+    truncated = len(rows) > settings.BATCH_SIZE
+    expenses = rows[: settings.BATCH_SIZE]
 
     exporter = ExcelExporter()
     xlsx_bytes = exporter.export_expenses(
@@ -247,7 +258,11 @@ def export_expenses_to_excel(
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
     )
 
 
@@ -335,9 +350,11 @@ def update_expense(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete expense",
     description=(
-        "Permanently delete an expense and all associated line items, "
-        "payments, and documents. Irreversible. "
-        "Manager / Owner role required when the expense has recorded payments."
+        "Delete an expense. Expenses with recorded payments are soft-deleted "
+        "(transitioned to CANCELED, preserving the payment audit trail); "
+        "expenses without payments are permanently removed together with "
+        "their line items and documents. The X-Delete-Type response header "
+        "reports which happened ('soft' | 'hard')."
     ),
     responses={
         204: {"description": "Expense deleted"},
@@ -349,8 +366,13 @@ def update_expense(
 def delete_expense(
     expense_id: UUID,
     service: ExpenseServiceDep,
+    response: Response,
 ) -> None:
-    service.delete(expense_id)
+    # ISSUE-017: the service reports whether the expense was soft-deleted
+    # (canceled, payments preserved) or hard-deleted; surface that instead
+    # of silently discarding the distinction.
+    soft_deleted = service.delete(expense_id)
+    response.headers["X-Delete-Type"] = "soft" if soft_deleted else "hard"
 
 
 # ACTIONS
@@ -361,8 +383,10 @@ def delete_expense(
     response_model=ExpenseResponse,
     summary="Mark expense as paid",
     description=(
-        "Quick-action: set status to PAID without creating a payment record "
-        "For a full audit trail use POST /{expense_id}/payments."
+        "Quick-action: settle the remaining balance and set status to PAID. "
+        "Creates an auto-settlement payment record for the outstanding "
+        "balance, so the audit trail stays complete. For itemised/partial "
+        "payments use POST /{expense_id}/payments."
     ),
     responses={
         200: {"description": "Expense marked as paid"},
@@ -405,7 +429,7 @@ def record_expense_payment(
     body: ExpensePaymentCreate,
     service: ExpenseServiceDep,
 ) -> ExpensePaymentResponse:
-    payment = service.record_payment(expense_id, body, user_id=service._actor_id)
+    payment = service.record_payment(expense_id, body, user_id=service.actor_id)
     return ExpensePaymentResponse.model_validate(payment)
 
 
@@ -428,7 +452,7 @@ def duplicate_expense(
     expense_id: UUID,
     service: ExpenseServiceDep,
 ) -> ExpenseResponse:
-    duplicate = service.duplicate(expense_id, user_id=service._actor_id)
+    duplicate = service.duplicate(expense_id, user_id=service.actor_id)
     return ExpenseResponse.model_validate(duplicate)
 
 
@@ -477,22 +501,15 @@ def attach_expense_document(
 ) -> ExpenseDocumentResponse:
     from app.constants.enums import DocumentSource
 
-    user_id = service._actor_id
+    user_id = service.actor_id
     doc_source = DocumentSource(source)
 
     # A payment_modal document is proof-of-payment; attaching it is a
-    # financial action, so require a privileged role. Ordinary
-    # form/view receipts remain attachable by any authenticated member.
-    if (
-        doc_source == DocumentSource.PAYMENT_MODAL
-        and not UserRole(service._current_user.role).is_privileged
-    ):
-        from app.common.exceptions import ForbiddenException
-
-        raise ForbiddenException(
-            detail="You do not have permission to attach payment documents.",
-            required_permission="admin/manager",
-        )
+    # financial action, so require a privileged role (enforced by the
+    # service — ISSUE-008). Ordinary form/view receipts remain attachable
+    # by any authenticated member. Checked before any storage write.
+    if doc_source == DocumentSource.PAYMENT_MODAL:
+        service.require_privileged_actor("attach payment documents")
 
     # Confirm the expense exists (and is owned by the authenticated tenant)
     # before touching storage — raises NotFoundException otherwise.

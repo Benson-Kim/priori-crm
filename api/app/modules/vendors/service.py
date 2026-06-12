@@ -12,9 +12,10 @@ from typing import Any, ClassVar
 
 from sqlalchemy import case, func, literal_column
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
 
+from app.common.audit import record_audit_event
 from app.common.database import assert_version
+from app.common.document_service import ServiceBase, StateMachineMixin
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
@@ -24,6 +25,7 @@ from app.common.exceptions import (
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
+from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
 from app.constants.enums import Currency, ExpenseStatus, VendorStatus
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import (
@@ -59,39 +61,23 @@ CLOSED_PAYABLE_STATUSES: tuple[str, ...] = (
 )
 
 
-class VendorService:
+class VendorService(StateMachineMixin, ServiceBase):
     """
     Service layer for all vendor operations.
+
+    Status transitions go through the shared StateMachineMixin._transition
+    (ISSUE-010) instead of a hand-rolled copy; the constructor and the
+    public actor surface come from ServiceBase.
     """
+
+    _document_noun = "vendor"
 
     ALLOWED_TRANSITIONS: ClassVar[dict[str, list[str]]] = {
         VendorStatus.ACTIVE: [VendorStatus.INACTIVE],
         VendorStatus.INACTIVE: [VendorStatus.ACTIVE],
     }
 
-    def __init__(self, db: Session, current_user=None) -> None:
-        self._db = db
-        self._current_user = current_user
-        self._actor_id = getattr(current_user, "id", None)
-
     # Internal Helpers
-
-    def _transition(self, vendor: Vendor, new_status: str) -> None:
-        """
-        Validate and apply a status transition
-        """
-        current = vendor.status
-        allowed = self.ALLOWED_TRANSITIONS.get(current, [])
-        if new_status not in allowed:
-            raise BadRequestException(
-                detail=(
-                    f"Cannot transition vendor from '{current}' to '{new_status}'. "
-                    f"Allowed transitions: {allowed or 'none (terminal state)'}"
-                ),
-                field="status",
-            )
-        vendor.status = new_status
-        vendor.version += 1
 
     def _get_vendor_or_404(self, vendor_id: uuid.UUID) -> Vendor:
         """
@@ -106,41 +92,14 @@ class VendorService:
         return vendor
 
     def _compute_payables_for_vendor(self, vendor_id: uuid.UUID) -> dict[str, Decimal]:
-        """
-        Compute total_unpaid and overdue_total for a single vendor.
-
-        IMPORTANT: If the Expense / Bill models are not yet available,
-        this method returns zeros — it never raises. The caller should
-        treat zeros as 'no outstanding transactions' rather than an error.
-        """
-        try:
-            from app.modules.expenses.models import Expense
-            # from app.modules.bills.models import Bill
-        except ImportError:
-            # Expense / Bill modules not yet available — return safe defaults
-            logger.debug(
-                "Expense/Bill modules not importable; payables will be zero for vendor %s",
-                vendor_id,
-            )
-            return {
-                "total_unpaid": Decimal("0.00"),
-                "overdue_total": Decimal("0.00"),
-            }
+        """Compute total_unpaid and overdue_total for a single vendor."""
+        from app.modules.expenses.models import Expense
 
         try:
             expense_rows = self._db.query(
                 Expense.balance_due.label("balance"),
                 Expense.status.label("status"),
             ).filter(Expense.vendor_id == vendor_id)
-            # bill_rows = (
-            #     self._db.query(
-            #         Bill.balance.label("balance"),
-            #         Bill.status.label("status"),
-            #     )
-            #     .filter(Bill.vendor_id == vendor_id)
-            # )
-
-            # union_q = expense_rows.union_all(bill_rows).subquery()
             union_q = expense_rows.subquery()
 
             row = self._db.query(
@@ -188,11 +147,7 @@ class VendorService:
         if not vendor_ids:
             return {}
 
-        try:
-            from app.modules.expenses.models import Expense
-            # from app.modules.bills.models import Bill
-        except ImportError:
-            return {vid: Decimal("0.00") for vid in vendor_ids}
+        from app.modules.expenses.models import Expense
 
         try:
             expense_rows = self._db.query(
@@ -203,19 +158,6 @@ class VendorService:
                 Expense.vendor_id.in_(vendor_ids),
                 Expense.status.in_(OPEN_PAYABLE_STATUSES),
             )
-            # bill_rows = (
-            #     self._db.query(
-            #         Bill.vendor_id.label("vendor_id"),
-            #         Bill.balance.label("balance"),
-            #         Bill.status.label("status"),
-            #     )
-            #     .filter(
-            #         Bill.vendor_id.in_(vendor_ids),
-            #         Bill.status.in_(["pending", "overdue"]),
-            #     )
-            # )
-
-            # union_q = expense_rows.union_all(bill_rows).subquery()
             union_q = expense_rows.subquery()
 
             rows = (
@@ -255,13 +197,7 @@ class VendorService:
         Return True if the vendor has any pending or overdue transactions.
 
         """
-        try:
-            from app.modules.expenses.models import Expense
-            # from app.modules.bills.models import Bill
-        except ImportError:
-            # If these modules don't exist yet, we cannot confirm open
-            # transactions, so we conservatively allow the delete.
-            return False
+        from app.modules.expenses.models import Expense
 
         try:
             expense_count = (
@@ -273,18 +209,7 @@ class VendorService:
                 .scalar()
             ) or 0
 
-            bill_count = 0
-
-            # bill_count = (
-            #     self._db.query(func.count(Bill.id))
-            #     .filter(
-            #         Bill.vendor_id == vendor_id,
-            #         Bill.status.in_(["pending", "overdue"]),
-            #     )
-            #     .scalar()
-            # ) or 0
-
-            return (expense_count + bill_count) > 0
+            return expense_count > 0
 
         except SQLAlchemyError as e:
             logger.exception(
@@ -511,22 +436,14 @@ class VendorService:
         filters: VendorTransactionFilterParams | None = None,
     ) -> PaginatedResponse[VendorTransactionSummary]:
         """
-        Return a paginated, optionally filtered list of all expenses and bills
+        Return a paginated, optionally filtered list of the vendor's expenses.
         """
         # Confirm vendor exists first so we return 404, not an empty list
         self._get_vendor_or_404(vendor_id)
 
-        try:
-            from app.modules.expenses.models import Expense
-            # from app.modules.bills.models import Bill
-        except ImportError:
-            logger.debug(
-                "Expense/Bill modules unavailable; returning empty transaction list"
-            )
-            return PaginatedResponse.create(items=[], total=0, params=params)
+        from app.modules.expenses.models import Expense
 
         try:
-            # Build UNION ALL subquery
             expense_q = self._db.query(
                 Expense.id.label("id"),
                 literal_column("'expense'").label("transaction_type"),
@@ -538,21 +455,6 @@ class VendorService:
                 Expense.due_date.label("due_date"),
             ).filter(Expense.vendor_id == vendor_id)
 
-            # bill_q = (
-            #     self._db.query(
-            #         Bill.id.label("id"),
-            #         literal_column("'bill'").label("transaction_type"),
-            #         Bill.ref_no.label("ref_no"),
-            #         Bill.transaction_date.label("date"),
-            #         Bill.total_amount.label("amount"),
-            #         Bill.balance.label("balance"),
-            #         Bill.status.label("status"),
-            #         Bill.due_date.label("due_date"),
-            #     )
-            #     .filter(Bill.vendor_id == vendor_id)
-            # )
-
-            # union_q = expense_q.union_all(bill_q).subquery()
             union_q = expense_q.subquery()
 
             count_q = self._db.query(func.count()).select_from(union_q)
@@ -771,6 +673,16 @@ class VendorService:
                 )
 
             vendor_name = vendor.vendor_name
+            # Durable audit trail (ISSUE-022) — written before the DELETE so
+            # the snapshot is taken while the row still exists.
+            record_audit_event(
+                self._db,
+                actor_id=user_id or self._actor_id,
+                entity_type="vendor",
+                entity_id=vendor.id,
+                action="hard_deleted",
+                before={"vendor_name": vendor_name},
+            )
             self._db.delete(vendor)
             self._db.flush()
 
@@ -910,21 +822,7 @@ class VendorService:
         """Generate a statement of accounts for a vendor."""
         vendor = self.get_by_id(vendor_id)
 
-        try:
-            from app.modules.expenses.models import Expense, ExpensePayment
-        except ImportError:
-            return VendorStatement(
-                vendor=vendor,
-                period_start=period_start,
-                period_end=period_end,
-                summary=VendorStatementSummary(
-                    opening_balance=Decimal("0.00"),
-                    invoiced_amount=Decimal("0.00"),
-                    amount_paid=Decimal("0.00"),
-                    balance_due=Decimal("0.00"),
-                ),
-                transactions=[],
-            )
+        from app.modules.expenses.models import Expense, ExpensePayment
 
         opening_balance = self._calculate_balance_at_date(vendor_id, period_start)
 
@@ -1012,19 +910,21 @@ class VendorService:
         as_of_date: date,
     ) -> Decimal:
         """Calculate vendor balance as of a specific date (invoiced - paid)."""
-        try:
-            from app.modules.expenses.models import Expense, ExpensePayment
-        except ImportError:
-            return Decimal("0.00")
+        from app.modules.expenses.models import Expense, ExpensePayment
 
+        # Same status predicate on both sides as the customer statement
+        # (ISSUE-021): canceled expenses and payments against them must not
+        # move the opening balance.
         invoiced = self._db.query(func.sum(Expense.total_due)).filter(
             Expense.vendor_id == vendor_id,
             Expense.expense_date < as_of_date,
+            Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
         paid = self._db.query(func.sum(ExpensePayment.amount)).join(Expense).filter(
             Expense.vendor_id == vendor_id,
             ExpensePayment.payment_date < as_of_date,
+            Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
         return Decimal(str(invoiced)) - Decimal(str(paid))

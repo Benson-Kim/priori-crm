@@ -169,9 +169,19 @@ def update_customer(
     customer_id: UUID,
     body: CustomerUpdate,
     service: CustomerServiceDep,
+    expected_version: Annotated[
+        int | None,
+        Query(
+            alias="expectedVersion",
+            description=(
+                "Pass the version from your last GET response. "
+                "If the customer has been modified since, a 409 is returned."
+            ),
+        ),
+    ] = None,
 ) -> CustomerResponse:
-    """Update an existing customer."""
-    customer = service.update(customer_id, body)
+    """Update an existing customer with optimistic locking."""
+    customer = service.update(customer_id, body, expected_version)
     return CustomerResponse.model_validate(customer)
 
 

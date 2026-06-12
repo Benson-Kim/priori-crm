@@ -8,15 +8,14 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar
 
-from sqlalchemy import and_, case, func
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import joinedload, lazyload, selectinload
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload, lazyload
 
+from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
     BadRequestException,
-    ConflictException,
     DatabaseException,
     NotFoundException,
 )
@@ -25,13 +24,17 @@ from app.common.financial import (
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.common.search import build_search_clause
 from app.constants.enums import DocumentSource, ExpenseStatus
 from app.modules.expenses.models import (
     Expense,
     ExpenseDocument,
     ExpenseLineItem,
     ExpensePayment,
+)
+from app.modules.expenses.queries import (
+    ExpenseExportQuery,
+    ExpenseStatisticsRepository,
+    apply_expense_filters,
 )
 from app.modules.expenses.schemas import (
     ExpenseCalculationResponse,
@@ -64,6 +67,8 @@ class ExpenseService(BaseDocumentService):
     """
 
     MAX_RETRIES = 3
+    # Shared reference-retry wiring (ISSUE-012)
+    MAX_REFERENCE_RETRIES = MAX_RETRIES
 
     _document_noun = "expense"
     _reference_collision_markers = ("expense_number", "expense_reference")
@@ -137,72 +142,78 @@ class ExpenseService(BaseDocumentService):
                 resource="vendor",
             )
 
+        # Single-currency-per-vendor (mirrors the customer rule on
+        # invoices/quotes): vendor payables and statements sum balance_due
+        # across this vendor's expenses, which is only meaningful in one
+        # currency. Reject an *explicitly* mismatched currency; otherwise
+        # pin to the vendor's currency so a schema default can never
+        # silently drift it.
+        if (
+            "currency" in data.model_fields_set
+            and vendor.currency
+            and data.currency != vendor.currency
+        ):
+            raise BadRequestException(
+                detail=(
+                    f"Expense currency '{data.currency}' does not match the "
+                    f"vendor's currency '{vendor.currency}'. A vendor can "
+                    "only transact in a single currency."
+                ),
+                field="currency",
+            )
+        expense_currency = vendor.currency or data.currency
+
         # Calculate outside retry loop — deterministic, no DB writes
         line_items_data = self._build_line_items(data.line_items)
         subtotal, tax_total = self._sum_line_totals(line_items_data)
         total_due = subtotal + tax_total
 
-        last_error: Exception | None = None
+        def _build() -> Expense:
+            expense = Expense(
+                expense_number=self._generate_expense_number(),
+                expense_reference=self._generate_expense_reference(),
+                vendor_id=data.vendor_id,
+                expense_date=data.expense_date,
+                due_date=data.due_date,
+                currency=expense_currency,
+                status=ExpenseStatus.PENDING,
+                is_recurring=data.is_recurring,
+                subtotal=subtotal,
+                tax_total=tax_total,
+                total_due=total_due,
+                amount_paid=Decimal("0.00"),
+                balance_due=total_due,
+                notes=data.notes,
+                created_by=user_id,
+            )
+            self._db.add(expense)
+            self._db.flush()
 
-        for attempt in range(self.MAX_RETRIES + 1):
-            sp = self._db.begin_nested()
-            try:
-                expense = Expense(
-                    expense_number=self._generate_expense_number(),
-                    expense_reference=self._generate_expense_reference(),
-                    vendor_id=data.vendor_id,
-                    expense_date=data.expense_date,
-                    due_date=data.due_date,
-                    currency=data.currency,
-                    status=ExpenseStatus.PENDING,
-                    is_recurring=data.is_recurring,
-                    subtotal=subtotal,
-                    tax_total=tax_total,
-                    total_due=total_due,
-                    amount_paid=Decimal("0.00"),
-                    balance_due=total_due,
-                    notes=data.notes,
-                    created_by=user_id,
-                )
-                self._db.add(expense)
-                self._db.flush()
+            for item in line_items_data:
+                self._db.add(ExpenseLineItem(expense_id=expense.id, **item))
+            self._db.flush()
+            return expense
 
-                for item in line_items_data:
-                    self._db.add(ExpenseLineItem(expense_id=expense.id, **item))
-                self._db.flush()
+        expense = self._with_reference_retry(_build, "expense")
 
-                sp.commit()
-
-                logger.info(
-                    "Created expense: %s",
-                    expense.expense_number,
-                    extra={
-                        "expense_id": str(expense.id),
-                        "vendor_id": str(data.vendor_id),
-                        "total_due": float(total_due),
-                        "created_by": str(user_id) if user_id else None,
-                    },
-                )
-                return expense
-
-            except IntegrityError as exc:
-                sp.rollback()
-                last_error = exc
-                is_collision = self._is_reference_collision(exc)
-                if is_collision and attempt < self.MAX_RETRIES:
-                    logger.warning(
-                        "Expense reference collision — retry %d", attempt + 1
-                    )
-                    continue
-                raise ConflictException(
-                    "Expense data violates database constraints"
-                ) from exc
-
-        raise ConflictException(
-            "Failed to generate unique expense reference after retries"
-        ) from last_error
+        logger.info(
+            "Created expense: %s",
+            expense.expense_number,
+            extra={
+                "expense_id": str(expense.id),
+                "vendor_id": str(data.vendor_id),
+                "total_due": float(total_due),
+                "created_by": str(user_id) if user_id else None,
+            },
+        )
+        return expense
 
     # READ
+
+    # Single source of truth for expense filtering (ISSUE-011), including
+    # the CANCELED-visibility rule — module-level in queries.py so
+    # ExpenseExportQuery shares the identical function.
+    _apply_filters = staticmethod(apply_expense_filters)
 
     def get_by_id(self, expense_id: uuid.UUID) -> Expense:
         """Retrieve expense by UUID with all relationships eagerly loaded."""
@@ -273,41 +284,7 @@ class ExpenseService(BaseDocumentService):
                 Vendor.vendor_name.label("vendor_name"),
             ).join(Vendor, Expense.vendor_id == Vendor.id)
 
-            # CANCELED is hidden unless explicitly requested via status filter,
-            # so the default list shows only live expenses.
-            if filters and filters.status:
-                query = query.filter(Expense.status == filters.status)
-            else:
-                query = query.filter(Expense.status != ExpenseStatus.CANCELED)
-
-            if filters:
-                if filters.vendor_id:
-                    query = query.filter(Expense.vendor_id == filters.vendor_id)
-
-                if filters.date_from:
-                    query = query.filter(Expense.expense_date >= filters.date_from)
-
-                if filters.date_to:
-                    query = query.filter(Expense.expense_date <= filters.date_to)
-
-                if filters.due_date_from:
-                    query = query.filter(Expense.due_date >= filters.due_date_from)
-
-                if filters.due_date_to:
-                    query = query.filter(Expense.due_date <= filters.due_date_to)
-
-                if filters.is_recurring is not None:
-                    query = query.filter(Expense.is_recurring == filters.is_recurring)
-
-                if filters.search:
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Expense.expense_number,
-                        Expense.expense_reference,
-                        Vendor.vendor_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
+            query = self._apply_filters(query, filters)
 
             total = query.count()
 
@@ -363,257 +340,29 @@ class ExpenseService(BaseDocumentService):
     ) -> list[Expense]:
         """Return full Expense ORM rows for Excel export, batch-loaded.
 
-        Replaces the per-row ``get_by_id`` N+1 in the export endpoint:
-        vendor eager-joined for the display name; line items
-        via ``selectinload`` only when requested. ``limit`` caps rows
-        materialised in memory.
+        Delegates to ExpenseExportQuery (ISSUE-009).
         """
-        try:
-            from app.modules.vendors.models import Vendor
-
-            query = (
-                self._db.query(Expense)
-                .join(Vendor, Expense.vendor_id == Vendor.id)
-                .options(joinedload(Expense.vendor))
-            )
-
-            if include_line_items:
-                query = query.options(selectinload(Expense.line_items))
-
-            if filters:
-                if filters.status:
-                    query = query.filter(Expense.status == filters.status)
-                else:
-                    query = query.filter(Expense.status != ExpenseStatus.CANCELED)
-                if filters.vendor_id:
-                    query = query.filter(Expense.vendor_id == filters.vendor_id)
-                if filters.date_from:
-                    query = query.filter(Expense.expense_date >= filters.date_from)
-                if filters.date_to:
-                    query = query.filter(Expense.expense_date <= filters.date_to)
-                if filters.due_date_from:
-                    query = query.filter(Expense.due_date >= filters.due_date_from)
-                if filters.due_date_to:
-                    query = query.filter(Expense.due_date <= filters.due_date_to)
-                if filters.is_recurring is not None:
-                    query = query.filter(Expense.is_recurring == filters.is_recurring)
-                if filters.search:
-                    from app.common.search import build_search_clause
-
-                    search_clause = build_search_clause(
-                        filters.search,
-                        Expense.expense_number,
-                        Expense.expense_reference,
-                        Vendor.vendor_name,
-                    )
-                    if search_clause is not None:
-                        query = query.filter(search_clause)
-            else:
-                query = query.filter(Expense.status != ExpenseStatus.CANCELED)
-
-            query = query.order_by(Expense.created_at.desc())
-            if limit is not None:
-                query = query.limit(limit)
-
-            return query.all()
-
-        except SQLAlchemyError as exc:
-            logger.exception("Database error loading expenses for export")
-            raise DatabaseException("Failed to load expenses for export") from exc
+        return ExpenseExportQuery(self._db).list(
+            filters, include_line_items=include_line_items, limit=limit
+        )
 
     def get_status_counts(self) -> ExpenseStatusCounts:
+        """Status counts for the filter-tab bar.
+
+        Delegates to ExpenseStatisticsRepository (ISSUE-009).
         """
-        Single-query status counts for the filter-tab bar.
-
-        The overdue bucket captures both:
-        - Rows already stored as OVERDUE
-        - PENDING rows whose due_date has passed but the nightly job
-          has not yet run (computed via SQL CASE — no second round-trip).
-        """
-        try:
-            today = date.today()
-
-            rows = (
-                self._db.query(
-                    Expense.status,
-                    func.count(Expense.id).label("cnt"),
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    Expense.status == ExpenseStatus.PENDING,
-                                    Expense.due_date < today,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ).label("pending_past_due_cnt"),
-                )
-                .group_by(Expense.status)
-                .all()
-            )
-
-            counts: dict[str, int] = {}
-            pending_past_due = 0
-            # `all` and the active-status tabs cover live expenses only;
-            # CANCELED is surfaced via its own count, not folded into `all`.
-            total = 0
-
-            for status_val, cnt, ppd_cnt in rows:
-                counts[status_val] = cnt
-                if status_val != ExpenseStatus.CANCELED:
-                    total += cnt
-                pending_past_due += ppd_cnt or 0
-
-            stored_overdue = counts.get(ExpenseStatus.OVERDUE, 0)
-            displayed_overdue = stored_overdue + pending_past_due
-
-            return ExpenseStatusCounts(
-                all=total,
-                pending=counts.get(ExpenseStatus.PENDING, 0),
-                paid=counts.get(ExpenseStatus.PAID, 0),
-                overdue=displayed_overdue,
-                canceled=counts.get(ExpenseStatus.CANCELED, 0),
-            )
-
-        except SQLAlchemyError as exc:
-            logger.exception("Database error getting expense status counts")
-            raise DatabaseException("Failed to get status counts") from exc
+        return ExpenseStatisticsRepository(self._db).status_counts()
 
     def get_statistics(
         self,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> dict[str, Any]:
+        """Aggregated expense statistics for the dashboard.
+
+        Delegates to ExpenseStatisticsRepository (ISSUE-009).
         """
-        Aggregated expense statistics — all computation pushed to the DB.
-        Defaults to the current calendar month when no range is supplied.
-        """
-        try:
-            from datetime import timedelta
-
-            if not date_from and not date_to:
-                today = date.today()
-                date_from = date(today.year, today.month, 1)
-                date_to = (
-                    date(today.year, 12, 31)
-                    if today.month == 12
-                    else date(today.year, today.month + 1, 1) - timedelta(days=1)
-                )
-
-            today = date.today()
-
-            agg = (
-                self._db.query(
-                    func.count(Expense.id).label("total_expenses"),
-                    func.coalesce(func.sum(Expense.total_due), Decimal("0")).label(
-                        "total_amount"
-                    ),
-                    func.coalesce(func.sum(Expense.amount_paid), Decimal("0")).label(
-                        "total_paid"
-                    ),
-                    func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
-                        "total_outstanding"
-                    ),
-                    func.count(
-                        case(
-                            (
-                                and_(
-                                    Expense.status.in_(
-                                        [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]
-                                    ),
-                                    Expense.due_date < today,
-                                    Expense.balance_due > 0,
-                                ),
-                                Expense.id,
-                            )
-                        )
-                    ).label("overdue_count"),
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (
-                                    and_(
-                                        Expense.status.in_(
-                                            [
-                                                ExpenseStatus.PENDING,
-                                                ExpenseStatus.OVERDUE,
-                                            ]
-                                        ),
-                                        Expense.due_date < today,
-                                        Expense.balance_due > 0,
-                                    ),
-                                    Expense.balance_due,
-                                ),
-                                else_=0,
-                            )
-                        ),
-                        Decimal("0"),
-                    ).label("overdue_amount"),
-                    func.coalesce(
-                        func.avg(
-                            case(
-                                (
-                                    and_(
-                                        Expense.status == ExpenseStatus.PAID,
-                                        Expense.paid_at.isnot(None),
-                                    ),
-                                    func.extract(
-                                        "epoch",
-                                        Expense.paid_at
-                                        - func.cast(
-                                            Expense.expense_date,
-                                            type_=Expense.paid_at.type,
-                                        ),
-                                    )
-                                    / 86400,
-                                )
-                            )
-                        ),
-                        0,
-                    ).label("avg_days_to_payment"),
-                )
-                .filter(
-                    Expense.status != ExpenseStatus.CANCELED,
-                    Expense.expense_date >= date_from if date_from else True,
-                    Expense.expense_date <= date_to if date_to else True,
-                )
-                .one()
-            )
-
-            total = agg.total_expenses or 0
-            avg_value = (
-                Decimal(str(agg.total_amount)) / total if total > 0 else Decimal("0.00")
-            )
-
-            logger.debug(
-                "Calculated expense statistics",
-                extra={
-                    "date_from": str(date_from),
-                    "date_to": str(date_to),
-                    "total": total,
-                },
-            )
-
-            return {
-                "total_expenses": total,
-                "total_amount": Decimal(str(agg.total_amount)),
-                "total_paid": Decimal(str(agg.total_paid)),
-                "total_outstanding": Decimal(str(agg.total_outstanding)),
-                "overdue_count": agg.overdue_count or 0,
-                "overdue_amount": Decimal(str(agg.overdue_amount)),
-                "average_expense_value": avg_value,
-                "average_days_to_payment": round(
-                    float(agg.avg_days_to_payment or 0), 1
-                ),
-                "date_from": date_from,
-                "date_to": date_to,
-            }
-
-        except SQLAlchemyError as exc:
-            logger.exception("Database error calculating expense statistics")
-            raise DatabaseException("Failed to calculate statistics") from exc
+        return ExpenseStatisticsRepository(self._db).statistics(date_from, date_to)
 
     # UPDATE
 
@@ -772,6 +521,21 @@ class ExpenseService(BaseDocumentService):
 
         expense.version += 1
         self._db.flush()
+
+        # Durable audit trail (ISSUE-022): commits atomically with the payment.
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="expense",
+            entity_id=expense.id,
+            action="payment_recorded",
+            after={
+                "payment_id": str(payment.id),
+                "amount": str(amount),
+                "new_balance": str(expense.balance_due),
+                "new_status": status_value(expense.status),
+            },
+        )
         return payment
 
     def mark_as_paid(
@@ -915,6 +679,7 @@ class ExpenseService(BaseDocumentService):
         storage_key: str,
         source: DocumentSource = DocumentSource.FORM,
         user_id: uuid.UUID | None = None,
+        storage: Any | None = None,
     ) -> ExpenseDocument:
         """
         Persist document metadata after the file has been written to storage.
@@ -922,7 +687,18 @@ class ExpenseService(BaseDocumentService):
         The router is responsible for the storage write and must call this
         method only after the storage write succeeds, preventing orphaned
         DB records for files that never landed in storage.
+
+        ISSUE-006: the freshly written object is registered for
+        delete-on-rollback (shared ``storage_tx`` utility), so if this
+        insert — or the outer request commit — fails, the object is removed
+        from storage instead of being orphaned. ``storage`` is injectable
+        for tests and defaults to the process storage facade.
         """
+        from app.common.storage_tx import schedule_delete_on_rollback
+        from app.lib.storage import storage_service
+
+        schedule_delete_on_rollback(self._db, storage or storage_service, storage_key)
+
         # Confirm expense exists — raises NotFoundException if not
         self.get_by_id(expense_id)
 
@@ -1021,10 +797,22 @@ class ExpenseService(BaseDocumentService):
                 detail="Expense is already canceled", field="status"
             )
 
+        previous_status = expense.status
         # _transition validates PENDING/OVERDUE/PAID -> CANCELED and bumps
         # version exactly once.
         self._transition(expense, ExpenseStatus.CANCELED)
         self._db.flush()
+
+        # Durable audit trail (ISSUE-022).
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="expense",
+            entity_id=expense.id,
+            action="canceled",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(ExpenseStatus.CANCELED)},
+        )
 
         logger.warning(
             "Canceled expense: %s",
@@ -1045,6 +833,7 @@ class ExpenseService(BaseDocumentService):
         """
         expense = self.get_by_id(expense_id)
         had_payments = bool(expense.payments)
+        previous_status = expense.status
 
         try:
             if had_payments:
@@ -1052,6 +841,15 @@ class ExpenseService(BaseDocumentService):
                 # not a bare status assignment, so the transition is validated
                 # and the version bump happens exactly once.
                 self._transition(expense, ExpenseStatus.CANCELED)
+                record_audit_event(
+                    self._db,
+                    actor_id=self._actor_id,
+                    entity_type="expense",
+                    entity_id=expense.id,
+                    action="soft_deleted",
+                    before={"status": status_value(previous_status)},
+                    after={"status": status_value(ExpenseStatus.CANCELED)},
+                )
                 logger.warning(
                     "Soft-deleted expense (had payments): %s",
                     expense.expense_reference,
@@ -1065,6 +863,18 @@ class ExpenseService(BaseDocumentService):
                 # can purge the underlying files and avoid orphans.
                 storage_keys = [doc.storage_key for doc in expense.documents]
 
+                record_audit_event(
+                    self._db,
+                    actor_id=self._actor_id,
+                    entity_type="expense",
+                    entity_id=expense.id,
+                    action="hard_deleted",
+                    before={
+                        "status": status_value(previous_status),
+                        "expense_number": expense.expense_number,
+                        "total_due": str(expense.total_due),
+                    },
+                )
                 self._db.delete(expense)
                 self._db.flush()
 
@@ -1131,75 +941,56 @@ class ExpenseService(BaseDocumentService):
             original = self.get_by_id(expense_id)
             new_expense_date = date.today()
             new_due_date = new_expense_date + timedelta(days=30)
-            last_error: Exception | None = None
 
-            for attempt in range(self.MAX_RETRIES + 1):
-                sp = self._db.begin_nested()
-                try:
-                    duplicate = Expense(
-                        expense_number=self._generate_expense_number(),
-                        expense_reference=self._generate_expense_reference(),
-                        vendor_id=original.vendor_id,
-                        expense_date=new_expense_date,
-                        due_date=new_due_date,
-                        currency=original.currency,
-                        status=ExpenseStatus.PENDING,
-                        is_recurring=original.is_recurring,
-                        subtotal=original.subtotal,
-                        tax_total=original.tax_total,
-                        total_due=original.total_due,
-                        amount_paid=Decimal("0.00"),
-                        balance_due=original.total_due,
-                        notes=original.notes,
-                        created_by=user_id,
-                    )
-                    self._db.add(duplicate)
-                    self._db.flush()
+            def _build() -> Expense:
+                duplicate = Expense(
+                    expense_number=self._generate_expense_number(),
+                    expense_reference=self._generate_expense_reference(),
+                    vendor_id=original.vendor_id,
+                    expense_date=new_expense_date,
+                    due_date=new_due_date,
+                    currency=original.currency,
+                    status=ExpenseStatus.PENDING,
+                    is_recurring=original.is_recurring,
+                    subtotal=original.subtotal,
+                    tax_total=original.tax_total,
+                    total_due=original.total_due,
+                    amount_paid=Decimal("0.00"),
+                    balance_due=original.total_due,
+                    notes=original.notes,
+                    created_by=user_id,
+                )
+                self._db.add(duplicate)
+                self._db.flush()
 
-                    for orig_item in original.line_items:
-                        self._db.add(
-                            ExpenseLineItem(
-                                expense_id=duplicate.id,
-                                line_number=orig_item.line_number,
-                                item_name=orig_item.item_name,
-                                description=orig_item.description,
-                                quantity=orig_item.quantity,
-                                unit_price=orig_item.unit_price,
-                                line_total=orig_item.line_total,
-                                tax_type=orig_item.tax_type,
-                                tax_amount=orig_item.tax_amount,
-                            )
+                for orig_item in original.line_items:
+                    self._db.add(
+                        ExpenseLineItem(
+                            expense_id=duplicate.id,
+                            line_number=orig_item.line_number,
+                            item_name=orig_item.item_name,
+                            description=orig_item.description,
+                            quantity=orig_item.quantity,
+                            unit_price=orig_item.unit_price,
+                            line_total=orig_item.line_total,
+                            tax_type=orig_item.tax_type,
+                            tax_amount=orig_item.tax_amount,
                         )
-                    self._db.flush()
-                    sp.commit()
-
-                    logger.info(
-                        "Duplicated expense %s → %s",
-                        original.expense_number,
-                        duplicate.expense_number,
-                        extra={
-                            "original_id": str(original.id),
-                            "duplicate_id": str(duplicate.id),
-                        },
                     )
-                    return duplicate
+                self._db.flush()
 
-                except IntegrityError as exc:
-                    sp.rollback()
-                    last_error = exc
-                    is_collision = self._is_reference_collision(exc)
-                    if is_collision and attempt < self.MAX_RETRIES:
-                        logger.warning(
-                            "Collision during duplicate — retry %d", attempt + 1
-                        )
-                        continue
-                    raise ConflictException(
-                        "Expense data violates database constraints"
-                    ) from exc
+                logger.info(
+                    "Duplicated expense %s → %s",
+                    original.expense_number,
+                    duplicate.expense_number,
+                    extra={
+                        "original_id": str(original.id),
+                        "duplicate_id": str(duplicate.id),
+                    },
+                )
+                return duplicate
 
-            raise ConflictException(
-                "Failed to generate unique expense reference after retries"
-            ) from last_error
+            return self._with_reference_retry(_build, "expense")
 
         except NotFoundException:
             raise

@@ -1,7 +1,7 @@
 """add reference_sequences high-water-mark table
 
-Revision ID: d4e5f6a7b8c9
-Revises: c3d4e5f6a7b8
+Revision ID: b8c9d0e1f2a3
+Revises: a7b8c9d0e1f2
 Create Date: 2026-06-08 10:30:00.000000
 
 A persistent, monotonic counter per numbering scope so a reference suffix is
@@ -16,6 +16,14 @@ the current high-water mark rather than restarting:
 
 Backfill is best-effort and scoped to the patterns the generator emits; any
 scope not pre-seeded simply starts from its live MAX on first generate.
+
+NOTE: this migration was originally created with revision 'd4e5f6a7b8c9',
+which collided with the trgm search-index migration of the same id and made
+the alembic graph unloadable ("revision present more than once"), breaking
+`alembic upgrade head`. It has been re-keyed to 'b8c9d0e1f2a3' and
+re-chained after the previous head 'a7b8c9d0e1f2' to restore a single
+linear history. No environment can have applied it under the old id,
+because alembic refused to load the duplicated graph outright.
 """
 
 from typing import Sequence, Union
@@ -30,8 +38,8 @@ from app.common.reference_triggers import (
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d4e5f6a7b8c9"
-down_revision: Union[str, None] = "c3d4e5f6a7b8"
+revision: str = "b8c9d0e1f2a3"
+down_revision: Union[str, None] = "a7b8c9d0e1f2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

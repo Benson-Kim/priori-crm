@@ -24,6 +24,23 @@ def _seed_user(db, email="frank@mail.com", password=VALID_PASSWORD):
     return user
 
 
+def _login_and_capture_otp(client, email="frank@mail.com", password=VALID_PASSWORD):
+    """Drive login and capture the plaintext OTP from the (mocked) email.
+
+    The DB stores only the SHA-256 digest of the code (ISSUE-023), so the
+    plaintext can only be observed where a real user would see it: the
+    outgoing email. _send_otp_email(recipient, otp_code) is patched and the
+    code is read from its call args.
+    """
+    with patch("app.modules.auth.service.AuthService._send_otp_email") as send:
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+    assert resp.status_code == 200
+    return send.call_args[0][1]
+
+
 # Login Tests
 
 
@@ -75,14 +92,9 @@ class TestVerifyOTP:
 
     def test_verify_otp_success(self, client, db):
         _seed_user(db)
-        # Trigger login to create OTP
-        with patch("app.modules.auth.service.AuthService._send_otp_email"):
-            client.post(
-                "/api/v1/auth/login",
-                json={"email": "frank@mail.com", "password": VALID_PASSWORD},
-            )
+        code = _login_and_capture_otp(client)
 
-        # Extract OTP from database
+        # The DB never holds the plaintext code (ISSUE-023).
         from app.modules.auth.models import OTPCode
 
         otp = (
@@ -92,10 +104,11 @@ class TestVerifyOTP:
             .first()
         )
         assert otp is not None
+        assert otp.code != code
 
         response = client.post(
             "/api/v1/auth/verify-otp",
-            json={"email": "frank@mail.com", "code": otp.code},
+            json={"email": "frank@mail.com", "code": code},
         )
         assert response.status_code == 200
         data = response.json()
@@ -119,18 +132,13 @@ class TestVerifyOTP:
         from app.modules.auth.models import OTPCode
 
         _seed_user(db)
-        with patch("app.modules.auth.service.AuthService._send_otp_email"):
-            client.post(
-                "/api/v1/auth/login",
-                json={"email": "frank@mail.com", "password": VALID_PASSWORD},
-            )
+        correct_code = _login_and_capture_otp(client)
         otp = (
             db.query(OTPCode)
             .filter(OTPCode.is_used.is_(False))
             .order_by(OTPCode.created_at.desc())
             .first()
         )
-        correct_code = otp.code
         wrong = "999999" if correct_code != "999999" else "111111"
 
         # Exhaust the attempt budget with wrong codes.
@@ -153,31 +161,19 @@ class TestVerifyOTP:
 
     def test_verify_otp_reuse_blocked(self, client, db):
         _seed_user(db)
-        with patch("app.modules.auth.service.AuthService._send_otp_email"):
-            client.post(
-                "/api/v1/auth/login",
-                json={"email": "frank@mail.com", "password": VALID_PASSWORD},
-            )
-
-        from app.modules.auth.models import OTPCode
-
-        otp = (
-            db.query(OTPCode)
-            .filter(OTPCode.is_used.is_(False))
-            .order_by(OTPCode.created_at.desc())
-            .first()
-        )
+        code = _login_and_capture_otp(client)
 
         # First use — should succeed
-        client.post(
+        first = client.post(
             "/api/v1/auth/verify-otp",
-            json={"email": "frank@mail.com", "code": otp.code},
+            json={"email": "frank@mail.com", "code": code},
         )
+        assert first.status_code == 200
 
         # Second use — should fail with the generic 401
         response = client.post(
             "/api/v1/auth/verify-otp",
-            json={"email": "frank@mail.com", "code": otp.code},
+            json={"email": "frank@mail.com", "code": code},
         )
         assert response.status_code == 401
 
@@ -187,23 +183,12 @@ class TestVerifyOTP:
 
 def _login_and_get_refresh_token(client, db):
     """Drive login + verify-otp and return a valid refresh token."""
-    from app.modules.auth.models import OTPCode
-
-    with patch("app.modules.auth.service.AuthService._send_otp_email"):
-        client.post(
-            "/api/v1/auth/login",
-            json={"email": "frank@mail.com", "password": VALID_PASSWORD},
-        )
-    otp = (
-        db.query(OTPCode)
-        .filter(OTPCode.is_used.is_(False))
-        .order_by(OTPCode.created_at.desc())
-        .first()
-    )
+    code = _login_and_capture_otp(client)
     verify_resp = client.post(
         "/api/v1/auth/verify-otp",
-        json={"email": "frank@mail.com", "code": otp.code},
+        json={"email": "frank@mail.com", "code": code},
     )
+    assert verify_resp.status_code == 200
     return verify_resp.json()["refresh_token"]
 
 
@@ -227,7 +212,15 @@ class TestRefreshToken:
         assert data["refresh_token"] != refresh_token
 
     def test_old_refresh_token_revoked_after_rotation(self, client, db):
-        """The presented token is denylisted, so reusing it is rejected."""
+        """Replaying a rotated-away token is rejected AND kills the family.
+
+        Reuse of an already-spent refresh token is theft evidence
+        (ISSUE-023): one of the two parties holding the token is an
+        attacker, and we cannot tell which. The replay itself 401s and the
+        whole token family is fenced — including the freshly rotated
+        descendant the thief would otherwise keep — forcing a clean
+        re-authentication.
+        """
         _seed_user(db)
         refresh_token = _login_and_get_refresh_token(client, db)
 
@@ -245,12 +238,13 @@ class TestRefreshToken:
         )
         assert replay.status_code == 401
 
-        # The freshly issued token still works.
-        ok = client.post(
+        # Family revocation: the replay fenced the whole chain, so even the
+        # freshly issued token is now rejected.
+        fenced = client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": new_refresh},
         )
-        assert ok.status_code == 200
+        assert fenced.status_code == 401
 
     def test_refresh_invalid_token(self, client):
         response = client.post(

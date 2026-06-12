@@ -40,5 +40,8 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
+# Runtime user uploads (ISSUE-018: never commit customer documents/PII)
+api/uploads/
+
 # Misc
 *.log
