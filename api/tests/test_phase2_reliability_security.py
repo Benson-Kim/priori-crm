@@ -1,7 +1,7 @@
 """Phase 2 reliability/security regression tests (docs/architecture-review.md).
 
-Covers ISSUE-003 (transactional email outbox), STUB-002 (PDF attachments),
-ISSUE-023 (refresh-token family revocation + hashed OTP codes).
+Covers transactional email outbox, PDF attachments,
+refresh-token family revocation + hashed OTP codes.
 """
 
 import hashlib

@@ -24,7 +24,7 @@ stages:
 variables:
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
   # Analyzers run on branch pipelines only by default; enable them on
-  # merge_request_event pipelines so they gate MRs targeting develop (#26).
+  # merge_request_event pipelines so they gate MRs targeting develop.
   AST_ENABLE_MR_PIPELINES: "true"
 
 # Run pipelines for merge requests and for pushes to the long-lived
@@ -37,7 +37,7 @@ workflow:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 # ---------------------------------------------------------------------------
-# Security scanning (#26, review Part III §3 @ci-cd)
+# Security scanning
 #
 # GitLab-managed analyzers. Their own `rules` run them on branch pipelines
 # and merge_request pipelines, which the `workflow` block above permits.
@@ -54,7 +54,7 @@ workflow:
 #
 # Explicit rules (rather than the templates' default `changes:`/language
 # gating) guarantee the analyzers execute on every MR targeting develop —
-# the point of #26 — and avoid an all-skipped, fail-at-creation pipeline
+# the point of — and avoid an all-skipped, fail-at-creation pipeline
 # when an MR only touches .gitlab-ci.yml.
 .security-rules: &security-rules
   - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -153,7 +153,7 @@ api:test:
     - pytest -v --tb=short
 
 # ---------------------------------------------------------------------------
-# Contract types (#33)
+# Contract types
 #
 # The frontend previously hand-mirrored the FastAPI Pydantic schemas, which
 # drifted from the API and caused real runtime breakage (duplicate-response
@@ -212,7 +212,7 @@ ui:lint-build:
     - job: api:openapi-schema
       artifacts: true
   # api/**/* is included so API-only changes still type-check the frontend
-  # against the freshly exported contract (#33): a backend schema change that
+  # against the freshly exported contract: a backend schema change that
   # breaks the generated types must fail here, not at runtime.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -233,7 +233,7 @@ ui:lint-build:
       - frontend/node_modules
   variables:
     # Generate contract types from the schema exported by api:openapi-schema
-    # instead of hand-written interfaces (#33). Points gen:api at the artifact.
+    # instead of hand-written interfaces. Points gen:api at the artifact.
     VITE_OPENAPI_SCHEMA: "$CI_PROJECT_DIR/openapi.json"
   before_script:
     - cd frontend

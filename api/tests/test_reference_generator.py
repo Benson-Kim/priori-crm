@@ -76,7 +76,7 @@ class TestReferenceGeneratorGlobal:
         """generate() with use_date_scope=False produces PREFIX-NNNN format."""
         db = MagicMock()
         db.execute.return_value = None
-        # The bootstrap table-max scan is prefix-filtered (ISSUE-015), so the
+        # The bootstrap table-max scan is prefix-filtered, so the
         # mocked chain must include .filter().
         db.query.return_value.filter.return_value.scalar.return_value = 0
 
@@ -123,7 +123,7 @@ class TestReferenceGeneratorMaxStrategy:
         """generate() with use_max_strategy=True uses MAX instead of COUNT."""
         db = MagicMock()
         db.execute.return_value = None
-        # MAX query (prefix-filtered, ISSUE-015) returns 41 — highest suffix
+        # MAX query (prefix-filtered) returns 41 — highest suffix
         db.query.return_value.filter.return_value.scalar.return_value = 41
 
         gen = ReferenceGenerator(db)

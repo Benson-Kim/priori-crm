@@ -150,7 +150,7 @@ def get_tax_rates() -> dict[str, float]:
     description=(
         "Retries pending/failed outbox emails with dead-lettering after "
         "MAX_DELIVERY_ATTEMPTS. Called by the scheduler alongside "
-        "transition-overdue / transition-expired / purge-otps (ISSUE-007). "
+        "transition-overdue / transition-expired / purge-otps. "
         "Requires the X-Internal-Secret header; not a public client endpoint."
     ),
     dependencies=[Depends(verify_internal_secret)],

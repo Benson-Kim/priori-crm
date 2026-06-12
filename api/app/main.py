@@ -37,6 +37,7 @@ from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
 from app.modules.owner.router import router as owner_router
 from app.modules.quotes.router import router as quotes_router
+from app.modules.statements.router import router as statements_router
 from app.modules.vendors.router import router as vendors_router
 
 setup_logging()
@@ -142,6 +143,9 @@ def _register_routers(app: FastAPI) -> None:
         expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"]
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
+    app.include_router(
+        statements_router, prefix=f"{api_prefix}/statements", tags=["Statements"]
+    )
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore

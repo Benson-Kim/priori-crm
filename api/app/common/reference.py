@@ -33,7 +33,7 @@ class ReferenceGenerator:
     def _next_with_high_water_mark(self, scope_key: str, table_max_fn) -> int:
         """Return the next value from the persisted high-water mark.
 
-        Steady state (ISSUE-015): once a ``reference_sequences`` row exists
+        Steady state: once a ``reference_sequences`` row exists
         it is authoritative and the next value is simply ``persisted + 1`` —
         no table scan at all, so generation cost no longer grows with table
         size while the advisory lock is held. ``table_max_fn`` is invoked
@@ -151,7 +151,7 @@ class ReferenceGenerator:
 
             def _table_max() -> int:
                 # Bootstrap-only scan with the previously missing prefix
-                # filter (ISSUE-015); add a functional index if bootstrapping
+                # filter; add a functional index if bootstrapping
                 # on an already-large table.
                 return (
                     self._db.query(

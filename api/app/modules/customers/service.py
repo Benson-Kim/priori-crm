@@ -44,7 +44,7 @@ class CustomerService(ServiceBase):
     """Handles customer CRUD business logic.
 
     Constructor and the public actor surface come from the shared
-    ServiceBase (ISSUE-010).
+    ServiceBase.
     """
 
     # Create
@@ -166,7 +166,7 @@ class CustomerService(ServiceBase):
                     query = query.filter(search_clause)
 
             # Only pay for COUNT(*) when the caller asks for the total
-            # (ISSUE-016); otherwise derive has_next from the over-fetch.
+            # ; otherwise derive has_next from the over-fetch.
             total = query.count() if params.with_total else None
 
             customers = (
@@ -599,7 +599,7 @@ class CustomerService(ServiceBase):
                 # FK rejection rolls back only the nested block and surfaces as
                 # a clean BadRequestException, without poisoning the caller's
                 # outer transaction.
-                # Durable audit trail (ISSUE-022) — written before the DELETE
+                # Durable audit trail — written before the DELETE
                 # so the row snapshot is still readable; rolls back with it
                 # if the FK guard rejects the delete.
                 record_audit_event(
@@ -789,7 +789,7 @@ class CustomerService(ServiceBase):
             if status_filter and status_filter != "all":
                 query = query.filter(Invoice.status == status_filter)
 
-            # Count only on request (ISSUE-016); over-fetch otherwise.
+            # Count only on request; over-fetch otherwise.
             total = query.count() if params.with_total else None
 
             invoices = (
@@ -928,7 +928,7 @@ class CustomerService(ServiceBase):
         ).scalar() or Decimal("0.00")
 
         # Sum payments before date with the SAME status predicate as the
-        # debit side (ISSUE-021): a payment recorded against a since-canceled
+        # debit side: a payment recorded against a since-canceled
         # invoice must not push the opening balance negative.
         paid = self._db.query(func.sum(Payment.amount)).join(Invoice).filter(
             Invoice.customer_id == customer_id,

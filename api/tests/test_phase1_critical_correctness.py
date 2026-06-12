@@ -1,9 +1,9 @@
 """Phase 1 critical-correctness regression tests (docs/architecture-review.md).
 
 Covers:
-- ISSUE-019: customer optimistic locking (stale expectedVersion -> 409,
+- customer optimistic locking (stale expectedVersion -> 409,
   version bump on success) and the currency freeze once documents exist.
-- ISSUE-004: convert_to_invoice re-reads the quote under a row lock, so a
+- convert_to_invoice re-reads the quote under a row lock, so a
   second conversion of the same quote is rejected instead of creating a
   duplicate invoice.
 """

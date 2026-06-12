@@ -100,7 +100,7 @@ class ReferenceRetryMixin:
         return any(marker in orig for marker in self._reference_collision_markers)
 
     def _with_reference_retry(self, build_fn: Callable[[], Any], noun: str) -> Any:
-        """SAVEPOINT-based create/duplicate retry template (ISSUE-012).
+        """SAVEPOINT-based create/duplicate retry template.
 
         Runs ``build_fn`` inside a SAVEPOINT. On a unique-reference
         IntegrityError only the savepoint rolls back (never the whole
@@ -174,7 +174,7 @@ class DocumentEmailMixin:
         """Generate the plain-text email body for a document.
 
         ``attached`` switches the intro line: the email only claims a PDF
-        is attached when delivery will actually attach one (STUB-002).
+        is attached when delivery will actually attach one.
         """
         from app.lib.config import settings
 
@@ -205,7 +205,7 @@ Best regards,
 
 
 class DocumentSendMixin:
-    """Two-phase email send shared by invoices and quotes (ISSUE-002).
+    """Two-phase email send shared by invoices and quotes.
 
     Phase 1 — ``_prepare_and_mark_sent`` (locked): re-read the bare row
     ``FOR UPDATE`` (``lazyload('*')`` keeps the lock off the nullable side
@@ -218,7 +218,7 @@ class DocumentSendMixin:
     or failing SES call can never hold a row lock or serialize concurrent
     operations on the document.
 
-    Atomicity-contract note (ISSUE-024): the mid-request commit here is a
+    Atomicity-contract note: the mid-request commit here is a
     deliberate, documented exception to the get_db()-owns-the-commit rule;
     a later failure in the same request cannot roll the SENT transition
     back.
@@ -235,7 +235,7 @@ class DocumentSendMixin:
         """Per-service guard for unsendable statuses (override)."""
 
     def _get_locked(self, entity_id: Any) -> Any:
-        """Re-read the bare row ``FOR UPDATE`` or raise 404 (ISSUE-005).
+        """Re-read the bare row ``FOR UPDATE`` or raise 404.
 
         ``lazyload('*')`` keeps the lock off the nullable side of the
         customer outer join (PostgreSQL rejects FOR UPDATE there). All
@@ -269,7 +269,7 @@ class DocumentSendMixin:
 
         Returns the resolved recipient, subject, body, sent_at timestamp and
         the id of the outbox row enqueued for delivery. The outbox row
-        commits atomically with the status change (ISSUE-003), so a SENT
+        commits atomically with the status change, so a SENT
         document always has a durable delivery record; the commit also
         releases the row lock ahead of any dispatch in the caller.
         """
@@ -295,7 +295,7 @@ class DocumentSendMixin:
             self._capture_owner_snapshot(entity)
             self._db.flush()
 
-        # Transactional outbox (ISSUE-003): queued in the SAME transaction
+        # Transactional outbox: queued in the SAME transaction
         # as the status change above.
         from app.common.email_outbox import EmailOutboxService
 
@@ -315,7 +315,7 @@ class DocumentSendMixin:
 
 
 class ServiceBase:
-    """Shared constructor + public actor surface for ALL services (ISSUE-010).
+    """Shared constructor + public actor surface for ALL services.
 
     Document and non-document services (customers, vendors) carried
     identical hand-rolled ``__init__`` bodies; this is now the single home
@@ -331,7 +331,7 @@ class ServiceBase:
     def actor_id(self) -> Any | None:
         """Id of the authenticated user driving this service call.
 
-        Public accessor (ISSUE-008) so routers never reach into service
+        Public accessor so routers never reach into service
         privates.
         """
         return self._actor_id
@@ -339,7 +339,7 @@ class ServiceBase:
     def require_privileged_actor(self, action: str) -> None:
         """Raise 403 unless the current actor holds a privileged role.
 
-        Owns the role inspection (ISSUE-008) so routers do not re-implement
+        Owns the role inspection so routers do not re-implement
         require_privileged against service internals.
         """
         from app.common.exceptions import ForbiddenException
@@ -371,7 +371,7 @@ class BaseDocumentService(
     def _load_owner_branding(self, entity: Any) -> tuple[Any, Any]:
         """Resolve the owner header (info + logo bytes) for a document PDF.
 
-        Delegates to the shared DocumentPdfRenderer (ISSUE-009); kept as a
+        Delegates to the shared DocumentPdfRenderer; kept as a
         method for backward compatibility with existing callers.
         """
         from app.common.pdf_renderer import DocumentPdfRenderer
@@ -391,7 +391,7 @@ class BaseDocumentService(
     ) -> Any:
         """Calculate document totals without saving (preview).
 
-        Shared by invoices and quotes (ISSUE-012): the computation was
+        Shared by invoices and quotes: the computation was
         duplicated verbatim, differing only in the response class, which
         concrete services declare via ``_calculation_response_cls``.
         """

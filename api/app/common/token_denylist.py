@@ -28,8 +28,8 @@ _FENCE_PREFIX = "token_fence"
 class TokenDenylist(Protocol):
     """Records and checks revoked refresh-token ids (jti).
 
-    Also stores per-key "fence" timestamps used for family revocation
-    (ISSUE-023): a refresh token whose ``iat`` is at or before the fence is
+    Also stores per-key "fence" timestamps used for family revocation:
+    a refresh token whose ``iat`` is at or before the fence is
     rejected, so detecting reuse of one revoked token can invalidate every
     outstanding token in that user's rotation chain at once.
     """

@@ -66,7 +66,7 @@ class VendorService(StateMachineMixin, ServiceBase):
     Service layer for all vendor operations.
 
     Status transitions go through the shared StateMachineMixin._transition
-    (ISSUE-010) instead of a hand-rolled copy; the constructor and the
+    instead of a hand-rolled copy; the constructor and the
     public actor surface come from ServiceBase.
     """
 
@@ -352,7 +352,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                     if search_clause is not None:
                         query = query.filter(search_clause)
 
-            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            # Count only when requested; over-fetch otherwise.
             total = query.count() if params.with_total else None
 
             vendors = (
@@ -675,7 +675,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                 )
 
             vendor_name = vendor.vendor_name
-            # Durable audit trail (ISSUE-022) — written before the DELETE so
+            # Durable audit trail — written before the DELETE so
             # the snapshot is taken while the row still exists.
             record_audit_event(
                 self._db,
@@ -914,9 +914,8 @@ class VendorService(StateMachineMixin, ServiceBase):
         """Calculate vendor balance as of a specific date (invoiced - paid)."""
         from app.modules.expenses.models import Expense, ExpensePayment
 
-        # Same status predicate on both sides as the customer statement
-        # (ISSUE-021): canceled expenses and payments against them must not
-        # move the opening balance.
+        # Same status predicate on both sides as the customer statement canceled
+        # expenses and payments against them must not move the opening balance.
         invoiced = self._db.query(func.sum(Expense.total_due)).filter(
             Expense.vendor_id == vendor_id,
             Expense.expense_date < as_of_date,

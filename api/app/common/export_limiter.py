@@ -3,7 +3,7 @@
 Excel/PDF generation is CPU- and memory-bound and was run synchronously in
 the request handlers with no cap. This module bounds how many such
 generations run at once per process and moves the blocking work off the
-event loop (complements the ISSUE-014 export hardening):
+event loop:
 
 - ``run_export(fn, *args)`` acquires a slot from a process-wide
   ``anyio.CapacityLimiter`` (sized from ``settings.EXPORT_MAX_CONCURRENCY``)

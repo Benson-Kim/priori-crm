@@ -57,7 +57,7 @@ def get_tax_rate(tax_type: TaxType) -> Decimal:
     """Return the tax rate for a given TaxType.
 
     Raises ValueError on an unknown tax type rather than silently returning
-    0.00 (SH-BE-2): a missing rate is a revenue/compliance risk, and the
+    0.00: a missing rate is a revenue/compliance risk, and the
     TaxType enum already constrains callers to valid values, so this only
     fires on genuinely bad data.
     """

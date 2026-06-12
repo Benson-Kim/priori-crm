@@ -1,4 +1,4 @@
-"""Append-only audit trail for financial mutations (ISSUE-022).
+"""Append-only audit trail for financial mutations.
 
 Every payment, cancellation and hard delete writes an ``audit_events`` row
 IN THE SAME TRANSACTION as the mutation itself (``record_audit_event`` only

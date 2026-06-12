@@ -1,4 +1,4 @@
-"""Shared PDF orchestration for customer-facing documents (ISSUE-009).
+"""Shared PDF orchestration for customer-facing documents.
 
 Invoices and quotes carried near-identical ``_render_pdf``/``generate_pdf``
 implementations: resolve the owner header (the document's immutable snapshot

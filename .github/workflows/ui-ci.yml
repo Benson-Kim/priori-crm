@@ -2,7 +2,7 @@ name: UI CI
 
 # Mirrors the GitLab `api:openapi-schema` and `ui:lint-build` jobs in
 # .gitlab-ci.yml. The frontend type-checks against the generated OpenAPI
-# contract (#33/#41), so the schema is exported offline first and the
+# contract, so the schema is exported offline first and the
 # contract types are generated before tsc — a backend schema change that
 # breaks the generated types fails here, not at runtime.
 #
@@ -62,7 +62,7 @@ jobs:
         working-directory: frontend
     env:
       # Generate contract types from the schema exported by the
-      # openapi-schema job instead of hand-written interfaces (#33).
+      # openapi-schema job instead of hand-written interfaces.
       VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/openapi.json
     steps:
       - uses: actions/checkout@v4

@@ -67,7 +67,7 @@ class ExpenseService(BaseDocumentService):
     """
 
     MAX_RETRIES = 3
-    # Shared reference-retry wiring (ISSUE-012)
+    # Shared reference-retry wiring
     MAX_REFERENCE_RETRIES = MAX_RETRIES
 
     _document_noun = "expense"
@@ -210,7 +210,7 @@ class ExpenseService(BaseDocumentService):
 
     # READ
 
-    # Single source of truth for expense filtering (ISSUE-011), including
+    # Single source of truth for expense filtering, including
     # the CANCELED-visibility rule — module-level in queries.py so
     # ExpenseExportQuery shares the identical function.
     _apply_filters = staticmethod(apply_expense_filters)
@@ -286,7 +286,7 @@ class ExpenseService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            # Count only when requested; over-fetch otherwise.
             total = query.count() if params.with_total else None
 
             rows = (
@@ -342,7 +342,7 @@ class ExpenseService(BaseDocumentService):
     ) -> list[Expense]:
         """Return full Expense ORM rows for Excel export, batch-loaded.
 
-        Delegates to ExpenseExportQuery (ISSUE-009).
+        Delegates to ExpenseExportQuery.
         """
         return ExpenseExportQuery(self._db).list(
             filters, include_line_items=include_line_items, limit=limit
@@ -351,7 +351,7 @@ class ExpenseService(BaseDocumentService):
     def get_status_counts(self) -> ExpenseStatusCounts:
         """Status counts for the filter-tab bar.
 
-        Delegates to ExpenseStatisticsRepository (ISSUE-009).
+        Delegates to ExpenseStatisticsRepository.
         """
         return ExpenseStatisticsRepository(self._db).status_counts()
 
@@ -362,7 +362,7 @@ class ExpenseService(BaseDocumentService):
     ) -> dict[str, Any]:
         """Aggregated expense statistics for the dashboard.
 
-        Delegates to ExpenseStatisticsRepository (ISSUE-009).
+        Delegates to ExpenseStatisticsRepository.
         """
         return ExpenseStatisticsRepository(self._db).statistics(date_from, date_to)
 
@@ -524,7 +524,7 @@ class ExpenseService(BaseDocumentService):
         expense.version += 1
         self._db.flush()
 
-        # Durable audit trail (ISSUE-022): commits atomically with the payment.
+        # Durable audit trail: commits atomically with the payment.
         record_audit_event(
             self._db,
             actor_id=user_id,
@@ -690,7 +690,7 @@ class ExpenseService(BaseDocumentService):
         method only after the storage write succeeds, preventing orphaned
         DB records for files that never landed in storage.
 
-        ISSUE-006: the freshly written object is registered for
+        IThe freshly written object is registered for
         delete-on-rollback (shared ``storage_tx`` utility), so if this
         insert — or the outer request commit — fails, the object is removed
         from storage instead of being orphaned. ``storage`` is injectable
@@ -805,7 +805,7 @@ class ExpenseService(BaseDocumentService):
         self._transition(expense, ExpenseStatus.CANCELED)
         self._db.flush()
 
-        # Durable audit trail (ISSUE-022).
+        # Durable audit trail .
         record_audit_event(
             self._db,
             actor_id=self._actor_id,

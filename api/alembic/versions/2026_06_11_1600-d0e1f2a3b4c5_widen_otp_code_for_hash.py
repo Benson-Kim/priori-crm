@@ -4,7 +4,7 @@ Revision ID: d0e1f2a3b4c5
 Revises: c9d0e1f2a3b4
 Create Date: 2026-06-11 16:00:00.000000
 
-OTP codes were stored in plaintext (ISSUE-023): any database read — a
+OTP codes were stored in plaintext: any database read — a
 backup, a dump, an injection — yielded live login codes. The service now
 stores a SHA-256 hex digest, which needs 64 characters. Existing plaintext
 rows simply fail the digest comparison and expire within their 5-minute

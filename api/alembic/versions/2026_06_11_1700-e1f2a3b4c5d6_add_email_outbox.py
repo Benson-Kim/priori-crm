@@ -4,7 +4,7 @@ Revision ID: e1f2a3b4c5d6
 Revises: d0e1f2a3b4c5
 Create Date: 2026-06-11 17:00:00.000000
 
-ISSUE-003: document emails are now enqueued in the same transaction as the
+Document emails are now enqueued in the same transaction as the
 status change they announce and drained with retry + dead-letter, instead
 of a fire-and-forget synchronous SES call whose failure left a SENT
 document with no delivery record.

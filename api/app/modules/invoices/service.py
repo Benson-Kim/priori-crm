@@ -65,12 +65,12 @@ class InvoiceService(BaseDocumentService):
         "closing": "Thank you for your business.",
     }
 
-    # Two-phase send wiring (DocumentSendMixin / ISSUE-002)
+    # Two-phase send wiring (DocumentSendMixin)
     _send_model = Invoice
     _send_draft_status = InvoiceStatus.DRAFT
     _send_sent_status = InvoiceStatus.SENT
 
-    # Shared preview-totals + reference-retry wiring (ISSUE-012)
+    # Shared preview-totals + reference-retry wiring
     _calculation_response_cls = InvoiceCalculationResponse
     MAX_REFERENCE_RETRIES = MAX_INVOICE_NUMBER_RETRIES
 
@@ -191,7 +191,7 @@ class InvoiceService(BaseDocumentService):
 
     # READ
 
-    # Single source of truth for invoice filtering (ISSUE-011) — module-level
+    # Single source of truth for invoice filtering — module-level
     # in queries.py so InvoiceExportQuery shares the identical function.
     _apply_filters = staticmethod(apply_invoice_filters)
 
@@ -287,7 +287,7 @@ class InvoiceService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            # Count only when requested; over-fetch otherwise.
             total = query.count() if params.with_total else None
 
             results = (
@@ -347,7 +347,7 @@ class InvoiceService(BaseDocumentService):
     ) -> list[Invoice]:
         """Return full Invoice ORM rows for Excel export, batch-loaded.
 
-        Delegates to InvoiceExportQuery (ISSUE-009).
+        Delegates to InvoiceExportQuery.
         """
         return InvoiceExportQuery(self._db).list(
             filters, include_line_items=include_line_items, limit=limit
@@ -358,7 +358,7 @@ class InvoiceService(BaseDocumentService):
     ) -> InvoiceStatusCounts:
         """Get counts of invoices by status.
 
-        Delegates to InvoiceStatisticsRepository (ISSUE-009).
+        Delegates to InvoiceStatisticsRepository.
         """
         return InvoiceStatisticsRepository(self._db).status_counts(customer_id)
 
@@ -369,7 +369,7 @@ class InvoiceService(BaseDocumentService):
     ) -> dict[str, Any]:
         """Get invoice statistics for dashboard.
 
-        Delegates to InvoiceStatisticsRepository (ISSUE-009).
+        Delegates to InvoiceStatisticsRepository.
         """
         return InvoiceStatisticsRepository(self._db).statistics(date_from, date_to)
 
@@ -533,7 +533,7 @@ class InvoiceService(BaseDocumentService):
     ) -> Invoice:
         """Mark invoice as sent. Transitions: DRAFT → SENT.
 
-        Locked load (ISSUE-005): serializes with send_invoice and
+        Locked load: serializes with send_invoice and
         record_payment so a concurrent transition cannot race this one.
         """
         invoice = self._get_locked(invoice_id)
@@ -573,7 +573,7 @@ class InvoiceService(BaseDocumentService):
         # Best-effort immediate delivery, *outside* the row lock. On failure
         # the queued outbox row is retried by the drainer
         # (/internal/email-outbox/drain), so the email is never lost
-        # (ISSUE-003) and a slow SES call never holds a write lock.
+        # and a slow SES call never holds a write lock.
         from app.common.email_outbox import EmailOutboxService
 
         delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
@@ -694,7 +694,7 @@ class InvoiceService(BaseDocumentService):
 
         self._update_customer_balance(invoice.customer_id)
 
-        # Durable audit trail (ISSUE-022): commits atomically with the payment.
+        # Durable audit trail: commits atomically with the payment.
         record_audit_event(
             self._db,
             actor_id=user_id,
@@ -817,7 +817,7 @@ class InvoiceService(BaseDocumentService):
         # balance; resync in the same unit of work so it cannot drift.
         self._update_customer_balance(invoice.customer_id)
 
-        # Durable audit trail (ISSUE-022).
+        # Durable audit trail.
         record_audit_event(
             self._db,
             actor_id=self._actor_id,
@@ -836,7 +836,7 @@ class InvoiceService(BaseDocumentService):
         return invoice
 
     # CALCULATIONS & UTILITIES
-    # calculate_totals is inherited from BaseDocumentService (ISSUE-012);
+    # calculate_totals is inherited from BaseDocumentService;
     # only the response class is invoice-specific.
 
     # Customer balance synchronisation
@@ -953,7 +953,7 @@ class InvoiceService(BaseDocumentService):
         """Render a PDF for an already-loaded invoice.
 
         Orchestration (owner branding + ReportLab generator) is shared with
-        quotes via DocumentPdfRenderer (ISSUE-009).
+        quotes via DocumentPdfRenderer.
         """
         from app.common.pdf_renderer import DocumentPdfRenderer
 

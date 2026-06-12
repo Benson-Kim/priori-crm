@@ -86,12 +86,12 @@ class QuoteService(BaseDocumentService):
         "closing": "Thank you for considering our proposal.",
     }
 
-    # Two-phase send wiring (DocumentSendMixin / ISSUE-002)
+    # Two-phase send wiring (DocumentSendMixin)
     _send_model = Quote
     _send_draft_status = QuoteStatus.DRAFT
     _send_sent_status = QuoteStatus.SENT
 
-    # Shared preview-totals + reference-retry wiring (ISSUE-012)
+    # Shared preview-totals + reference-retry wiring
     _calculation_response_cls = QuoteCalculationResponse
     MAX_REFERENCE_RETRIES = MAX_QUOTE_NUMBER_RETRIES
 
@@ -192,7 +192,7 @@ class QuoteService(BaseDocumentService):
 
     # READ
 
-    # Single source of truth for quote filtering (ISSUE-011) — module-level
+    # Single source of truth for quote filtering — module-level
     # in queries.py so QuoteExportQuery shares the identical function.
     _apply_filters = staticmethod(apply_quote_filters)
 
@@ -286,7 +286,7 @@ class QuoteService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            # Count only when requested; over-fetch otherwise.
             total = query.count() if params.with_total else None
 
             results = (
@@ -345,7 +345,7 @@ class QuoteService(BaseDocumentService):
     ) -> list[Quote]:
         """Return full Quote ORM rows for Excel export, batch-loaded.
 
-        Delegates to QuoteExportQuery (ISSUE-009).
+        Delegates to QuoteExportQuery.
         """
         return QuoteExportQuery(self._db).list(
             filters, include_line_items=include_line_items, limit=limit
@@ -354,7 +354,7 @@ class QuoteService(BaseDocumentService):
     def get_status_counts(self) -> QuoteStatusCounts:
         """Get counts of quotes by status.
 
-        Delegates to QuoteStatisticsRepository (ISSUE-009).
+        Delegates to QuoteStatisticsRepository.
         """
         return QuoteStatisticsRepository(self._db).status_counts()
 
@@ -488,7 +488,7 @@ class QuoteService(BaseDocumentService):
     ) -> Quote:
         """Mark quote as sent. Transitions: DRAFT → SENT.
 
-        Locked load (ISSUE-005): serializes with send_quote and
+        Locked load: serializes with send_quote and
         convert_to_invoice so a concurrent transition cannot race this one.
         """
         quote = self._get_locked(quote_id)
@@ -520,7 +520,7 @@ class QuoteService(BaseDocumentService):
         attach_pdf: bool = True,
     ) -> dict[str, Any]:
         """
-        Send quote via email (two-phase, ISSUE-002).
+        Send quote via email (two-phase).
 
         The locked phase (shared DocumentSendMixin._prepare_and_mark_sent)
         re-reads the row FOR UPDATE, validates, transitions DRAFT -> SENT and
@@ -578,9 +578,7 @@ class QuoteService(BaseDocumentService):
                 detail="Cannot approve an expired quote. Update the due date first.",
                 field="due_date",
             )
-        self._transition(
-            quote, QuoteStatus.APPROVED
-        )  # enforces state machine (DI-3 fix)
+        self._transition(quote, QuoteStatus.APPROVED)  # enforces state machine
         quote.approved_at = approved_at or datetime.now(UTC)
         quote.approved_by = approved_by
         self._db.flush()
@@ -674,7 +672,7 @@ class QuoteService(BaseDocumentService):
                     InvoiceLineItem(
                         invoice_id=invoice.id,
                         line_number=quote_item.line_number,
-                        item_name=quote_item.item_name,  # preserved — DI-1 fix
+                        item_name=quote_item.item_name,
                         description=quote_item.description,
                         quantity=quote_item.quantity,
                         unit_price=quote_item.unit_price,
@@ -685,7 +683,7 @@ class QuoteService(BaseDocumentService):
                 )
             self._db.flush()
 
-            self._transition(quote, QuoteStatus.INVOICED)  # state machine (DI-3 fix)
+            self._transition(quote, QuoteStatus.INVOICED)
             quote.invoiced_at = datetime.now(UTC)
             quote.related_invoice_id = invoice.id
             self._db.flush()
@@ -805,7 +803,7 @@ class QuoteService(BaseDocumentService):
             self._db.delete(quote)
             self._db.flush()
 
-            # Durable audit trail (ISSUE-022): a hard delete must leave
+            # Durable audit trail: a hard delete must leave
             # evidence, committed atomically with the deletion itself.
             record_audit_event(
                 self._db,
@@ -826,7 +824,7 @@ class QuoteService(BaseDocumentService):
             raise DatabaseException("Failed to delete quote") from e
 
     # CALCULATIONS & UTILITIES
-    # calculate_totals is inherited from BaseDocumentService (ISSUE-012);
+    # calculate_totals is inherited from BaseDocumentService;
     # only the response class is quote-specific.
 
     def get_quote_statistics(
@@ -836,7 +834,7 @@ class QuoteService(BaseDocumentService):
     ) -> dict[str, Any]:
         """Get quote statistics for dashboard.
 
-        Delegates to QuoteStatisticsRepository (ISSUE-009).
+        Delegates to QuoteStatisticsRepository.
         """
         return QuoteStatisticsRepository(self._db).statistics(date_from, date_to)
 
@@ -913,7 +911,7 @@ class QuoteService(BaseDocumentService):
         """Render a PDF for an already-loaded quote.
 
         Orchestration (owner branding + ReportLab generator) is shared with
-        invoices via DocumentPdfRenderer (ISSUE-009).
+        invoices via DocumentPdfRenderer.
         """
         from app.common.pdf_renderer import DocumentPdfRenderer
 

@@ -27,7 +27,7 @@ def _seed_user(db, email="frank@mail.com", password=VALID_PASSWORD):
 def _login_and_capture_otp(client, email="frank@mail.com", password=VALID_PASSWORD):
     """Drive login and capture the plaintext OTP from the (mocked) email.
 
-    The DB stores only the SHA-256 digest of the code (ISSUE-023), so the
+    The DB stores only the SHA-256 digest of the code so the
     plaintext can only be observed where a real user would see it: the
     outgoing email. _send_otp_email(recipient, otp_code) is patched and the
     code is read from its call args.
@@ -94,7 +94,7 @@ class TestVerifyOTP:
         _seed_user(db)
         code = _login_and_capture_otp(client)
 
-        # The DB never holds the plaintext code (ISSUE-023).
+        # The DB never holds the plaintext code
         from app.modules.auth.models import OTPCode
 
         otp = (
@@ -215,7 +215,7 @@ class TestRefreshToken:
         """Replaying a rotated-away token is rejected AND kills the family.
 
         Reuse of an already-spent refresh token is theft evidence
-        (ISSUE-023): one of the two parties holding the token is an
+        one of the two parties holding the token is an
         attacker, and we cannot tell which. The replay itself 401s and the
         whole token family is fenced — including the freshly rotated
         descendant the thief would otherwise keep — forcing a clean

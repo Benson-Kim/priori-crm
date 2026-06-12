@@ -1,9 +1,9 @@
-"""Quote read-side query objects (ISSUE-009).
+"""Quote read-side query objects.
 
 Decomposes the read-heavy concerns out of QuoteService:
 
 - ``apply_quote_filters``       — single source of truth for quote
-  filtering (ISSUE-011), shared by the list view and the export so they
+  filtering, shared by the list view and the export so they
   can never drift.
 - ``QuoteStatisticsRepository`` — the status-count and dashboard
   statistics SQL.
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 def apply_quote_filters(query, filters: QuoteFilterParams | None):
-    """Single source of truth for quote filtering (ISSUE-011).
+    """Single source of truth for quote filtering.
 
     Shared by list_quotes and QuoteExportQuery so the Excel export can
     never drift from the list view. Callers must have joined Customer.
@@ -69,7 +69,7 @@ def apply_quote_filters(query, filters: QuoteFilterParams | None):
 
 
 class QuoteStatisticsRepository:
-    """Read-side aggregates for quotes (ISSUE-009).
+    """Read-side aggregates for quotes.
 
     Owns the status-count and dashboard-statistics SQL previously embedded
     in QuoteService. Read-only: never flushes or commits.
@@ -294,7 +294,7 @@ class QuoteStatisticsRepository:
 
 
 class QuoteExportQuery:
-    """Batch loader of full Quote rows for the Excel export (ISSUE-009)."""
+    """Batch loader of full Quote rows for the Excel export."""
 
     def __init__(self, db: Session) -> None:
         self._db = db

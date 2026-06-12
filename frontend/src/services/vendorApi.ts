@@ -4,7 +4,7 @@
  * Response types are sourced from the generated OpenAPI contract
  * (`@/lib/apiTypes`) instead of hand-mirrored Pydantic schemas — the
  * hand-written copies were the root cause of the `vendor.phone` /
- * transaction-column drift (#33). Request *payloads* stay hand-written as the
+ * transaction-column drift. Request *payloads* stay hand-written as the
  * camelCase transport shape the API maps onto its snake_case fields.
  */
 
