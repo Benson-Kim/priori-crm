@@ -9,6 +9,7 @@ from typing import Any, ClassVar
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload, lazyload
 
+from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
@@ -285,12 +286,13 @@ class QuoteService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            total = query.count()
+            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            total = query.count() if params.with_total else None
 
             results = (
                 query.order_by(Quote.created_at.desc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
@@ -318,7 +320,7 @@ class QuoteService(BaseDocumentService):
                 )
 
             logger.debug(
-                f"Listed {len(items)} quotes (page {params.page}, total {total})",
+                f"Listed quotes (page {params.page}, total {total})",
                 extra={
                     "page": params.page,
                     "per_page": params.per_page,
@@ -327,7 +329,9 @@ class QuoteService(BaseDocumentService):
                 },
             )
 
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except SQLAlchemyError as e:
             logger.exception("Database error listing quotes")
@@ -788,12 +792,33 @@ class QuoteService(BaseDocumentService):
             )
 
         try:
+            # Capture the before-image while the row is still live; after the
+            # DELETE flush the ORM instance is no longer authoritative.
+            quote_number = quote.quote_number
+            before = {
+                "quote_number": quote.quote_number,
+                "status": status_value(quote.status),
+                "customer_id": str(quote.customer_id),
+                "total_due": str(quote.total_due),
+            }
+
             self._db.delete(quote)
             self._db.flush()
 
+            # Durable audit trail (ISSUE-022): a hard delete must leave
+            # evidence, committed atomically with the deletion itself.
+            record_audit_event(
+                self._db,
+                actor_id=self._actor_id,
+                entity_type="quote",
+                entity_id=quote_id,
+                action="hard_deleted",
+                before=before,
+            )
+
             logger.warning(
-                f"Deleted quote: {quote.quote_number}",
-                extra={"quote_id": str(quote.id)},
+                f"Deleted quote: {quote_number}",
+                extra={"quote_id": str(quote_id)},
             )
 
         except SQLAlchemyError as e:
@@ -897,3 +922,13 @@ class QuoteService(BaseDocumentService):
     def generate_pdf(self, quote_id: uuid.UUID) -> bytes:
         """Generate PDF for a quote by id."""
         return self._render_pdf(self.get_by_id(quote_id))
+
+    def generate_pdf_for_download(self, quote_id: uuid.UUID) -> tuple[bytes, Quote]:
+        """Generate the quote PDF and return it with the loaded quote.
+
+        Loads the quote once and renders from it, so the download endpoint
+        does not re-query just for the attachment filename (mirrors
+        InvoiceService.generate_pdf_for_download).
+        """
+        quote = self.get_by_id(quote_id)
+        return self._render_pdf(quote), quote

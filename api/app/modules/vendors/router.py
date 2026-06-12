@@ -104,9 +104,16 @@ def list_vendors(
             )
         ),
     ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
 ) -> PaginatedResponse[VendorSummary]:
     """List vendors with pagination, status filtering, and search."""
-    params = PaginationParams(page=page, per_page=per_page)
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
     filters = VendorFilterParams(status=status_filter, search=search)
     return service.list_vendors(params, filters)
 

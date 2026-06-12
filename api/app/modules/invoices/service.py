@@ -287,12 +287,13 @@ class InvoiceService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            total = query.count()
+            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            total = query.count() if params.with_total else None
 
             results = (
                 query.order_by(Invoice.created_at.desc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
@@ -321,7 +322,7 @@ class InvoiceService(BaseDocumentService):
                 )
 
             logger.debug(
-                f"Listed {len(items)} invoices (page {params.page}, total {total})",
+                f"Listed invoices (page {params.page}, total {total})",
                 extra={
                     "page": params.page,
                     "per_page": params.per_page,
@@ -330,7 +331,9 @@ class InvoiceService(BaseDocumentService):
                 },
             )
 
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except SQLAlchemyError as e:
             logger.exception("Database error listing invoices")

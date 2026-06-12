@@ -48,13 +48,13 @@ class TestRateLimiterBoundedCache:
         # Fill the cache with max_clients unique IPs
         for i in range(max_clients):
             req = _make_request(client_ip=f"10.0.0.{i}")
-            asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+            asyncio.run(mw.dispatch(req, call_next))
 
         assert len(mw.requests) <= max_clients
 
         # One more unique IP should still keep size bounded
         req = _make_request(client_ip="10.0.99.99")
-        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        asyncio.run(mw.dispatch(req, call_next))
         assert len(mw.requests) <= max_clients
 
 
@@ -80,7 +80,7 @@ class TestRateLimiterWindowCleanup:
         req = _make_request(client_ip=client_ip)
 
         # Should NOT raise — old entries should be pruned
-        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        asyncio.run(mw.dispatch(req, call_next))
 
         # Only the current request should remain
         assert len(mw.requests[client_ip]) == 1
@@ -108,13 +108,11 @@ class TestRateLimiterEnforcement:
         # Fill up the limit
         for _ in range(3):
             req = _make_request(client_ip=client_ip)
-            asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+            asyncio.run(mw.dispatch(req, call_next))
 
         # Next request should be rate-limited with a 429 response, not raised
         req = _make_request(client_ip=client_ip)
-        response = asyncio.get_event_loop().run_until_complete(
-            mw.dispatch(req, call_next)
-        )
+        response = asyncio.run(mw.dispatch(req, call_next))
 
         assert response.status_code == 429
         assert response.headers["Retry-After"] == "60"
@@ -131,12 +129,12 @@ class TestRateLimiterEnforcement:
         client_ip = "10.0.0.2"
 
         req = _make_request(client_ip=client_ip)
-        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        asyncio.run(mw.dispatch(req, call_next))
         assert call_next.await_count == 1
 
         # Second request is throttled; downstream must not be invoked again.
         req = _make_request(client_ip=client_ip)
-        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        asyncio.run(mw.dispatch(req, call_next))
         assert call_next.await_count == 1
 
 
@@ -154,7 +152,7 @@ class TestRateLimiterDisabled:
 
         for _ in range(100):
             req = _make_request()
-            asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+            asyncio.run(mw.dispatch(req, call_next))
 
         assert len(mw.requests) == 0
 
@@ -177,6 +175,6 @@ class TestRateLimiterUnknownClient:
         req.url = MagicMock()
         req.url.path = "/api/test"
 
-        asyncio.get_event_loop().run_until_complete(mw.dispatch(req, call_next))
+        asyncio.run(mw.dispatch(req, call_next))
 
         assert "unknown" in mw.requests

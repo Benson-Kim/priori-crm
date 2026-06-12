@@ -165,13 +165,14 @@ class CustomerService(ServiceBase):
                 if search_clause is not None:
                     query = query.filter(search_clause)
 
-            total = query.count()
+            # Only pay for COUNT(*) when the caller asks for the total
+            # (ISSUE-016); otherwise derive has_next from the over-fetch.
+            total = query.count() if params.with_total else None
 
-            # Get status counts for tabs
             customers = (
                 query.order_by(Customer.created_at.desc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
@@ -191,7 +192,7 @@ class CustomerService(ServiceBase):
             ]
 
             logger.debug(
-                f"Listed {len(items)} customers (page {params.page}, total {total})",
+                f"Listed customers (page {params.page}, total {total})",
                 extra={
                     "page": params.page,
                     "per_page": params.per_page,
@@ -201,7 +202,9 @@ class CustomerService(ServiceBase):
                 },
             )
 
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except BadRequestException:
             raise
@@ -786,20 +789,21 @@ class CustomerService(ServiceBase):
             if status_filter and status_filter != "all":
                 query = query.filter(Invoice.status == status_filter)
 
-            # Get total
-            total = query.count()
+            # Count only on request (ISSUE-016); over-fetch otherwise.
+            total = query.count() if params.with_total else None
 
-            # Apply pagination and sorting
             invoices = (
                 query.order_by(Invoice.created_at.desc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
             items = [InvoiceResponse.model_validate(inv) for inv in invoices]
 
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except NotFoundException:
             raise

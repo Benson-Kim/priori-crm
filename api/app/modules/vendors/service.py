@@ -352,12 +352,13 @@ class VendorService(StateMachineMixin, ServiceBase):
                     if search_clause is not None:
                         query = query.filter(search_clause)
 
-            total = query.count()
+            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            total = query.count() if params.with_total else None
 
             vendors = (
                 query.order_by(Vendor.vendor_name.asc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
@@ -380,8 +381,7 @@ class VendorService(StateMachineMixin, ServiceBase):
             ]
 
             logger.debug(
-                "Listed %d vendors (page %d, total %d)",
-                len(items),
+                "Listed vendors (page %d, total %s)",
                 params.page,
                 total,
                 extra={
@@ -392,7 +392,9 @@ class VendorService(StateMachineMixin, ServiceBase):
                 },
             )
 
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except SQLAlchemyError as e:
             logger.exception("Database error listing vendors")

@@ -78,9 +78,16 @@ def list_customers(
         str | None,
         Query(description="Search in name, email, or company name"),
     ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
 ) -> PaginatedResponse[CustomerSummary]:
     """List customers with pagination, status filter, and search."""
-    params = PaginationParams(page=page, per_page=per_page)
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
     return service.list_customers(params, status=status, search=search)
 
 

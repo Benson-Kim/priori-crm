@@ -107,9 +107,16 @@ def list_quotes(
         str | None,
         Query(description="Search quote number, reference, or customer name"),
     ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
 ) -> PaginatedResponse[QuoteSummary]:
     """List quotes with pagination and filtering."""
-    params = PaginationParams(page=page, per_page=per_page)
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
     filters = QuoteFilterParams(
         status=status,
         customer_id=customer_id,
@@ -173,7 +180,7 @@ def calculate_quote_totals(
         },
     },
 )
-def export_quotes_to_excel(
+async def export_quotes_to_excel(
     service: QuoteServiceDep,
     status: Annotated[str | None, Query()] = None,
     customer_id: Annotated[UUID | None, Query(alias="customerId")] = None,
@@ -192,6 +199,7 @@ def export_quotes_to_excel(
     from fastapi.responses import StreamingResponse
 
     from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
     from app.lib.config import settings
 
     filters = QuoteFilterParams(
@@ -211,8 +219,9 @@ def export_quotes_to_excel(
     truncated = len(rows) > settings.BATCH_SIZE
     quotes = rows[: settings.BATCH_SIZE]
 
+    # Cap concurrency and build the workbook off the event loop.
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_quotes(quotes, include_line_items=include_line_items)
+    xlsx_bytes = await run_export(exporter.export_quotes, quotes, include_line_items)
 
     filename = f"Quotes_{date.today().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
@@ -474,14 +483,17 @@ def delete_quote(quote_id: UUID, service: QuoteServiceDep) -> None:
         404: {"description": "Quote not found"},
     },
 )
-def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
+async def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
     """Generate and download quote as PDF."""
     import io
 
     from fastapi.responses import StreamingResponse
 
-    pdf_data = service.generate_pdf(quote_id)
-    quote = service.get_by_id(quote_id)
+    from app.common.export_limiter import run_export
+
+    # Cap concurrent PDF builds and run the blocking render in a worker
+    # thread. Loads the quote once (no second get_by_id for the filename).
+    pdf_data, quote = await run_export(service.generate_pdf_for_download, quote_id)
 
     return StreamingResponse(
         io.BytesIO(pdf_data),

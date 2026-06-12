@@ -286,12 +286,13 @@ class ExpenseService(BaseDocumentService):
 
             query = self._apply_filters(query, filters)
 
-            total = query.count()
+            # Count only when requested (ISSUE-016); over-fetch otherwise.
+            total = query.count() if params.with_total else None
 
             rows = (
                 query.order_by(Expense.created_at.desc())
                 .offset(params.offset)
-                .limit(params.per_page)
+                .limit(params.fetch_limit)
                 .all()
             )
 
@@ -315,8 +316,7 @@ class ExpenseService(BaseDocumentService):
             ]
 
             logger.debug(
-                "Listed %d expenses (page %d, total %d)",
-                len(items),
+                "Listed expenses (page %d, total %s)",
                 params.page,
                 total,
                 extra={
@@ -326,7 +326,9 @@ class ExpenseService(BaseDocumentService):
                     "filters": filters.model_dump() if filters else None,
                 },
             )
-            return PaginatedResponse.create(items=items, total=total, params=params)
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
 
         except SQLAlchemyError as exc:
             logger.exception("Database error listing expenses")

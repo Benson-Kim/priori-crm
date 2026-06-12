@@ -126,8 +126,15 @@ def list_expenses(
         str | None,
         Query(description="Search expense number, reference, or vendor name"),
     ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
 ) -> PaginatedResponse[ExpenseSummary]:
-    params = PaginationParams(page=page, per_page=per_page)
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
     filters = ExpenseFilterParams(
         status=filter_status,
         vendor_id=vendor_id,
@@ -211,7 +218,7 @@ def calculate_expense_totals(
         },
     },
 )
-def export_expenses_to_excel(
+async def export_expenses_to_excel(
     service: ExpenseServiceDep,
     filter_status: Annotated[str | None, Query(alias="status")] = None,
     vendor_id: Annotated[UUID | None, Query(alias="vendorId")] = None,
@@ -229,6 +236,7 @@ def export_expenses_to_excel(
     import io
 
     from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
     from app.lib.config import settings
 
     filters = ExpenseFilterParams(
@@ -249,9 +257,10 @@ def export_expenses_to_excel(
     truncated = len(rows) > settings.BATCH_SIZE
     expenses = rows[: settings.BATCH_SIZE]
 
+    # Cap concurrency and build the workbook off the event loop.
     exporter = ExcelExporter()
-    xlsx_bytes = exporter.export_expenses(
-        expenses, include_line_items=include_line_items
+    xlsx_bytes = await run_export(
+        exporter.export_expenses, expenses, include_line_items
     )
 
     filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
