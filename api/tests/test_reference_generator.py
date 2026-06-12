@@ -76,7 +76,9 @@ class TestReferenceGeneratorGlobal:
         """generate() with use_date_scope=False produces PREFIX-NNNN format."""
         db = MagicMock()
         db.execute.return_value = None
-        db.query.return_value.scalar.return_value = 0
+        # The bootstrap table-max scan is prefix-filtered (ISSUE-015), so the
+        # mocked chain must include .filter().
+        db.query.return_value.filter.return_value.scalar.return_value = 0
 
         gen = ReferenceGenerator(db)
         result = gen.generate(
@@ -93,7 +95,7 @@ class TestReferenceGeneratorGlobal:
     def test_advisory_lock_called(self):
         """Advisory lock is acquired with the correct key."""
         db = MagicMock()
-        db.query.return_value.scalar.return_value = 0
+        db.query.return_value.filter.return_value.scalar.return_value = 0
 
         gen = ReferenceGenerator(db)
         gen.generate(
@@ -121,8 +123,8 @@ class TestReferenceGeneratorMaxStrategy:
         """generate() with use_max_strategy=True uses MAX instead of COUNT."""
         db = MagicMock()
         db.execute.return_value = None
-        # MAX query returns 41 (the highest existing suffix)
-        db.query.return_value.scalar.return_value = 41
+        # MAX query (prefix-filtered, ISSUE-015) returns 41 — highest suffix
+        db.query.return_value.filter.return_value.scalar.return_value = 41
 
         gen = ReferenceGenerator(db)
         result = gen.generate(
@@ -142,7 +144,7 @@ class TestReferenceGeneratorMaxStrategy:
         """MAX strategy with no existing rows (NULL) starts at 001."""
         db = MagicMock()
         db.execute.return_value = None
-        db.query.return_value.scalar.return_value = None  # no rows
+        db.query.return_value.filter.return_value.scalar.return_value = None  # no rows
 
         gen = ReferenceGenerator(db)
         result = gen.generate(

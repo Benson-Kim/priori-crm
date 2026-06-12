@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import BinaryIO
 
-from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,10 +36,6 @@ _SNAPSHOT_FIELDS = (
 )
 
 _LOGO_DIRECTORY = "owner/logo"
-
-# Key under ``Session.info`` holding storage objects to delete once the
-# outer transaction has actually committed (see ``_schedule_object_cleanup``).
-_PENDING_DELETE_KEY = "owner_logo_pending_delete"
 
 
 @dataclass(frozen=True)
@@ -75,39 +70,15 @@ class OwnerService:
     def _schedule_object_cleanup(self, *keys: str | None) -> None:
         """Delete superseded storage objects only after the tx commits.
 
-        The service flushes but never commits (the request-scoped ``get_db``
-        owns the commit), so we cannot delete the old object inline without
-        risking orphaning the *new* key if the outer transaction later rolls
-        back. Instead we register the keys on the session and remove them in a
-        one-shot ``after_commit`` hook, preserving the previous
-        commit-then-delete ordering guarantee. Best-effort: a failed delete is
-        logged, never raised.
+        Thin wrapper over the shared ``storage_tx`` helper (ISSUE-006): the
+        service flushes but never commits (the request-scoped ``get_db`` owns
+        the commit), so the old object is only deleted once the outer
+        transaction actually commits — a later rollback never orphans the new
+        key. Best-effort: a failed delete is logged, never raised.
         """
-        targets = [k for k in keys if k]
-        if not targets:
-            return
+        from app.common.storage_tx import schedule_delete_on_commit
 
-        pending: list[str] = self._db.info.setdefault(_PENDING_DELETE_KEY, [])
-        already_registered = bool(pending)
-        pending.extend(targets)
-
-        if already_registered:
-            # A hook is already attached for this session; it drains the list.
-            return
-
-        storage = self._storage
-
-        @event.listens_for(self._db, "after_commit", once=True)
-        def _drain_pending_deletes(session: Session) -> None:
-            keys_to_delete = session.info.pop(_PENDING_DELETE_KEY, [])
-            for key in keys_to_delete:
-                try:
-                    storage.delete_file(key)
-                except Exception:
-                    logger.warning(
-                        "Failed to delete superseded owner-logo object",
-                        exc_info=True,
-                    )
+        schedule_delete_on_commit(self._db, self._storage, *keys)
 
     # Live profile
 

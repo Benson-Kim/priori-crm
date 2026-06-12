@@ -20,7 +20,6 @@ export const navItems = [
             { label: "Customers", path: "/customers" },
             { label: "Quotes", path: "/quotes" },
             { label: "Invoices", path: "/invoices" },
-            { label: "Products & Services", path: "/products" },
         ],
     },
 

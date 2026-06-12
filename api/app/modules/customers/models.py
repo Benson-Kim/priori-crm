@@ -159,6 +159,13 @@ class Customer(Base):
         comment="Current account balance",
     )
 
+    version: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="Optimistic-locking version counter",
+    )
+
     address: Mapped[str] = mapped_column(
         Text,
         nullable=True,

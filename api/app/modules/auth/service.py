@@ -122,7 +122,7 @@ class AuthService:
         if otp is None or otp.is_expired:
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
-        if otp.code != code:
+        if otp.code != self._hash_otp(code):
             # Count the failed attempt against this code's budget; consume the
             # code once the cap is reached so it can no longer be brute-forced
             # . This path must COMMIT explicitly (not just flush):
@@ -165,6 +165,23 @@ class AuthService:
         jti = payload.get("jti")
 
         if jti is not None and _refresh_token_denylist().is_revoked(jti):
+            # Reuse of a rotated/revoked token is theft evidence (ISSUE-023):
+            # the thief and the victim each hold a copy and one of them is
+            # presenting a token that has already been spent. Fence the whole
+            # family so the attacker's descendant chain dies too; the
+            # legitimate user re-authenticates and mints a post-fence token.
+            self._revoke_token_family(user_id)
+            logger.warning(
+                "Refresh-token reuse detected; revoked token family",
+                extra={"user_id": str(user_id)},
+            )
+            raise UnauthorizedException("Refresh token has been revoked.")
+
+        # Family fence: reject tokens minted at or before the most recent
+        # reuse event, regardless of their individual jti.
+        iat = payload.get("iat")
+        fence = _refresh_token_denylist().get_fence(f"user:{user_id}")
+        if fence is not None and iat is not None and float(iat) <= fence:
             raise UnauthorizedException("Refresh token has been revoked.")
 
         user = self._db.query(User).filter(User.id == user_id).first()
@@ -226,6 +243,27 @@ class AuthService:
     # Private Helpers
 
     @staticmethod
+    def _revoke_token_family(user_id: str | None) -> None:
+        """Fence every outstanding refresh token for a user (ISSUE-023).
+
+        Writes a per-user fence timestamp with a TTL equal to the refresh
+        lifetime, so all tokens minted up to now are rejected while tokens
+        from a subsequent fresh login (later ``iat``) pass. The entry
+        self-expires once every pre-fence token would be expired anyway.
+        """
+        if user_id is None:
+            return
+        import time
+
+        ttl = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        _refresh_token_denylist().set_fence(f"user:{user_id}", time.time(), ttl)
+
+    @staticmethod
+    def _hash_otp(code: str) -> str:
+        """SHA-256 digest of an OTP code (codes are never stored plaintext)."""
+        return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+    @staticmethod
     def _revoke_refresh_payload(payload: dict) -> None:
         """Add a refresh token's jti to the denylist for its remaining life.
 
@@ -276,9 +314,11 @@ class AuthService:
         self._invalidate_pending_otps(user.id)
 
         code = "".join(secrets.choice("0123456789") for _ in range(6))
+        # Store only the digest (ISSUE-023): a DB read must never yield a
+        # live login code. The plaintext exists only in the outgoing email.
         otp = OTPCode(
             user_id=user.id,
-            code=code,
+            code=self._hash_otp(code),
             expires_at=datetime.now(UTC) + timedelta(minutes=OTP_EXPIRY_MINUTES),
         )
         self._db.add(otp)

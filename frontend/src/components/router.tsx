@@ -1,4 +1,3 @@
-import ProductsPage from "@/pages/products";
 import ExpensesPage from "@/pages/purchases/expenses";
 import AddExpensePage from "@/pages/purchases/expenses/add";
 import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
@@ -179,16 +178,6 @@ const routes = [
                         },
                     },
                 ],
-            },
-            {
-                path: "products",
-                element: <ProductsPage />,
-                handle: {
-                    header: {
-                        title: "Products",
-                        description: "Manage your catalog of products and services.",
-                    },
-                },
             },
             {
                 path: "vendors",

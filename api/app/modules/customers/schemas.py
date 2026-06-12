@@ -227,6 +227,7 @@ class CustomerResponse(BaseModel):
     province: str | None = None
     city: str | None = None
     postal_code: str | None = None
+    version: int = 1
     created_at: datetime
     updated_at: datetime
 

@@ -6,8 +6,10 @@ from typing import Any
 
 from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
 
+from app.common.audit import record_audit_event, status_value
+from app.common.database import assert_version
+from app.common.document_service import ServiceBase
 from app.common.exceptions import (
     BadRequestException,
     ConflictException,
@@ -17,6 +19,7 @@ from app.common.exceptions import (
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
+from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
 from app.modules.customers.schemas import (
@@ -37,13 +40,12 @@ from app.modules.quotes.models import Quote, QuoteStatus
 logger = logging.getLogger(__name__)
 
 
-class CustomerService:
-    """Handles customer CRUD business logic."""
+class CustomerService(ServiceBase):
+    """Handles customer CRUD business logic.
 
-    def __init__(self, db: Session, current_user=None) -> None:
-        self._db = db
-        self._current_user = current_user
-        self._actor_id = getattr(current_user, "id", None)
+    Constructor and the public actor surface come from the shared
+    ServiceBase (ISSUE-010).
+    """
 
     # Create
 
@@ -236,10 +238,24 @@ class CustomerService:
 
     # Update
 
-    def update(self, customer_id: uuid.UUID, data: CustomerUpdate) -> Customer:
-        """Update an existing customer."""
+    def update(
+        self,
+        customer_id: uuid.UUID,
+        data: CustomerUpdate,
+        expected_version: int | None = None,
+    ) -> Customer:
+        """Update an existing customer with optimistic locking
+
+        ``expected_version`` mirrors the vendor/invoice/quote/expense
+        contract: when provided, the row is locked and the version compared
+        atomically, so a stale writer gets a 409 instead of silently
+        overwriting concurrent edits to customer master data.
+        """
         try:
             customer = self.get_by_id(customer_id)
+
+            # locks the row, compares versions, raises 409 on mismatch.
+            assert_version(self._db, Customer, customer_id, expected_version)
 
             update_data = data.model_dump(exclude_unset=True)
 
@@ -267,9 +283,39 @@ class CustomerService:
                         field="email",
                     )
 
+            # Currency freeze: invoices and quotes are pinned to
+            # the customer's currency at creation time, so changing it after
+            # documents exist would silently desync balances, statements and
+            # vendor-side aggregations. Same-value no-ops stay allowed.
+            if (
+                "currency" in update_data
+                and update_data["currency"] is not None
+                and update_data["currency"] != customer.currency
+            ):
+                has_documents = (
+                    self._db.query(Invoice.id)
+                    .filter(Invoice.customer_id == customer_id)
+                    .first()
+                    is not None
+                    or self._db.query(Quote.id)
+                    .filter(Quote.customer_id == customer_id)
+                    .first()
+                    is not None
+                )
+                if has_documents:
+                    raise BadRequestException(
+                        detail=(
+                            "Cannot change currency for a customer with "
+                            "existing invoices or quotes. All documents are "
+                            f"pinned to '{customer.currency}'."
+                        ),
+                        field="currency",
+                    )
+
             for field, value in update_data.items():
                 setattr(customer, field, value)
 
+            customer.version += 1
             self._db.flush()
 
             logger.info(
@@ -277,6 +323,7 @@ class CustomerService:
                 extra={
                     "customer_id": str(customer.id),
                     "updated_fields": list(update_data.keys()),
+                    "new_version": customer.version,
                 },
             )
 
@@ -549,6 +596,22 @@ class CustomerService:
                 # FK rejection rolls back only the nested block and surfaces as
                 # a clean BadRequestException, without poisoning the caller's
                 # outer transaction.
+                # Durable audit trail (ISSUE-022) — written before the DELETE
+                # so the row snapshot is still readable; rolls back with it
+                # if the FK guard rejects the delete.
+                record_audit_event(
+                    self._db,
+                    actor_id=self._actor_id,
+                    entity_type="customer",
+                    entity_id=customer.id,
+                    action="hard_deleted",
+                    before={
+                        "email": customer.email,
+                        "display_name": customer.display_name,
+                        "balance": str(customer.balance),
+                        "forced": force,
+                    },
+                )
                 try:
                     with self._db.begin_nested():
                         self._db.delete(customer)
@@ -578,8 +641,18 @@ class CustomerService:
                 )
             else:
                 # SOFT DELETE - Set status to deleted
+                previous_status = customer.status
                 customer.status = CustomerStatus.DELETED
                 delete_type = "soft"
+                record_audit_event(
+                    self._db,
+                    actor_id=self._actor_id,
+                    entity_type="customer",
+                    entity_id=customer.id,
+                    action="soft_deleted",
+                    before={"status": status_value(previous_status)},
+                    after={"status": status_value(CustomerStatus.DELETED)},
+                )
 
                 logger.info(
                     f"Soft deleted customer: {customer_id}",
@@ -847,13 +920,16 @@ class CustomerService:
         invoiced = self._db.query(func.sum(Invoice.total_due)).filter(
             Invoice.customer_id == customer_id,
             Invoice.transaction_date < as_of_date,
-            Invoice.status.notin_([InvoiceStatus.CANCELED, InvoiceStatus.DRAFT]),
+            Invoice.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
-        # Sum all payments before date
+        # Sum payments before date with the SAME status predicate as the
+        # debit side (ISSUE-021): a payment recorded against a since-canceled
+        # invoice must not push the opening balance negative.
         paid = self._db.query(func.sum(Payment.amount)).join(Invoice).filter(
             Invoice.customer_id == customer_id,
             Payment.payment_date < as_of_date,
+            Invoice.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
         return Decimal(str(invoiced)) - Decimal(str(paid))

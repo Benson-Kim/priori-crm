@@ -61,7 +61,7 @@ def create_invoice(
     """
     Create a new invoice.
     """
-    invoice = service.create(body, user_id=service._actor_id)
+    invoice = service.create(body, user_id=service.actor_id)
     return InvoiceResponse.model_validate(invoice)
 
 
@@ -236,11 +236,14 @@ def export_invoices_to_excel(
 
     # Batch-load full ORM rows (customer eager-joined; line items via
     # selectinload when requested) instead of one get_by_id per row.
-    invoices = service.list_for_export(
+    # Fetch one row beyond the cap so truncation is detectable (ISSUE-014).
+    rows = service.list_for_export(
         filters,
         include_line_items=include_line_items,
-        limit=settings.BATCH_SIZE,
+        limit=settings.BATCH_SIZE + 1,
     )
+    truncated = len(rows) > settings.BATCH_SIZE
+    invoices = rows[: settings.BATCH_SIZE]
 
     exporter = ExcelExporter()
     xlsx_bytes = exporter.export_invoices(
@@ -251,7 +254,11 @@ def export_invoices_to_excel(
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
     )
 
 
@@ -320,7 +327,7 @@ def duplicate_invoice(
     """
     Duplicate an existing invoice.
     """
-    return service.duplicate_invoice(invoice_id, service._actor_id)
+    return service.duplicate_invoice(invoice_id, service.actor_id)
 
 
 # GET BY ID
@@ -462,7 +469,7 @@ def record_payment(
     """
     Record a payment against an invoice.
     """
-    payment = service.record_payment(invoice_id, body, service._actor_id)
+    payment = service.record_payment(invoice_id, body, service.actor_id)
     return PaymentResponse.model_validate(payment)
 
 

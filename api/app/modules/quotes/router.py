@@ -55,7 +55,7 @@ router = APIRouter()
 )
 def create_quote(body: QuoteCreate, service: QuoteServiceDep) -> QuoteResponse:
     """Create a new quote."""
-    quote = service.create(body, user_id=service._actor_id)
+    quote = service.create(body, user_id=service.actor_id)
     return QuoteResponse.model_validate(quote)
 
 
@@ -202,11 +202,14 @@ def export_quotes_to_excel(
     )
 
     # Batch-load full ORM rows instead of one get_by_id per row.
-    quotes = service.list_for_export(
+    # Fetch one row beyond the cap so truncation is detectable (ISSUE-014).
+    rows = service.list_for_export(
         filters,
         include_line_items=include_line_items,
-        limit=settings.BATCH_SIZE,
+        limit=settings.BATCH_SIZE + 1,
     )
+    truncated = len(rows) > settings.BATCH_SIZE
+    quotes = rows[: settings.BATCH_SIZE]
 
     exporter = ExcelExporter()
     xlsx_bytes = exporter.export_quotes(quotes, include_line_items=include_line_items)
@@ -215,7 +218,11 @@ def export_quotes_to_excel(
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
     )
 
 
@@ -275,7 +282,7 @@ def duplicate_quote(
     service: QuoteServiceDep,
 ) -> QuoteDuplicateResponse:
     """Duplicate an existing quote as a new DRAFT."""
-    duplicate = service.duplicate_quote(quote_id, service._actor_id)
+    duplicate = service.duplicate_quote(quote_id, service.actor_id)
     return QuoteDuplicateResponse(
         original_quote_id=quote_id,
         new_quote_id=duplicate.id,
@@ -410,7 +417,7 @@ def approve_quote(
 ) -> QuoteResponse:
     """Approve a quote."""
     approved_at = body.approved_at if body else None
-    quote = service.approve_quote(quote_id, approved_at, service._actor_id)
+    quote = service.approve_quote(quote_id, approved_at, service.actor_id)
     return QuoteResponse.model_validate(quote)
 
 
@@ -435,7 +442,7 @@ def convert_quote_to_invoice(
     service: QuoteServiceDep,
 ) -> QuoteConvertToInvoiceResponse:
     """Convert an approved quote to an invoice."""
-    result = service.convert_to_invoice(quote_id, service._actor_id)
+    result = service.convert_to_invoice(quote_id, service.actor_id)
     return QuoteConvertToInvoiceResponse(**result)
 
 

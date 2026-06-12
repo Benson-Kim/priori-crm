@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # SQLAlchemy's string-based relationship() references (e.g. "Customer",
 # "Vendor") can always be resolved when the mapper is first configured.
 # Order is: parent tables first, then children that reference them.
+import app.common.audit
+import app.common.email_outbox
 import app.common.reference_sequence
 import app.common.reference_triggers
 import app.modules.auth.models
@@ -107,7 +109,13 @@ def create_app() -> FastAPI:
         # with credentials are overly permissive.
         allow_methods=settings.cors_allow_methods_list,
         allow_headers=settings.cors_allow_headers_list,
-        expose_headers=["X-Request-ID", "X-Response-Time"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Response-Time",
+            "X-Truncated",
+            "X-Export-Limit",
+            "X-Delete-Type",
+        ],
     )
 
     register_exception_handlers(app)
