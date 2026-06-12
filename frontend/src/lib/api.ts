@@ -28,6 +28,9 @@ function buildUrl(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ): string {
+  if (!appConfig.apiUrl || appConfig.apiUrl.startsWith("undefined")) {
+    throw new ApiError("Server is not responding", 0);
+  }
   const url = new URL(path, appConfig.apiUrl);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {

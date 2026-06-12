@@ -28,8 +28,8 @@ class _FakeInvoice:
 def _service_with(invoice: _FakeInvoice) -> InvoiceService:
     db = MagicMock()
     svc = InvoiceService(db)
-    # cancel_invoice loads via get_by_id; stub it directly.
-    svc.get_by_id = MagicMock(return_value=invoice)  # type: ignore[method-assign]
+    # cancel_invoice loads via the locked _get_locked helper; stub it directly.
+    svc._get_locked = MagicMock(return_value=invoice)  # type: ignore[method-assign]
     # cancel_invoice also resyncs the customer balance via a real
     # query; against the MagicMock db that yields a non-numeric value. Stub it
     # so these unit tests isolate the state-machine transition + version bump.

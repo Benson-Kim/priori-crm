@@ -798,8 +798,16 @@ class InvoiceService(BaseDocumentService):
         Cancel an invoice (terminal state - irreversible).
 
         Can cancel from any status except CANCELED.
+
+        Locked load: serializes with record_payment / mark_as_sent /
+        send_invoice so the status check and the customer-balance resync
+        below cannot interleave with a concurrent payment (race-condition
+        contract: all status transitions load FOR UPDATE). The audit event
+        and _update_customer_balance stay inside the same locked
+        transaction, so the resyncs of two racing operations apply in lock
+        order.
         """
-        invoice = self.get_by_id(invoice_id)
+        invoice = self._get_locked(invoice_id)
 
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
@@ -883,6 +891,10 @@ class InvoiceService(BaseDocumentService):
         SQL (check_is_overdue semantics: a non-terminal, past-due document).
         Uses synchronize_session=False and expire_all so subsequent reads
         reflect the new status. Returns the number of rows transitioned.
+
+        Deliberate exception to the locked-load transition contract: this
+        is a single atomic UPDATE whose WHERE clause re-checks eligibility
+        row-by-row, so no FOR UPDATE pre-read is needed.
         """
         try:
             today = date.today()
