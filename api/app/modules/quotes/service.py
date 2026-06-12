@@ -566,8 +566,16 @@ class QuoteService(BaseDocumentService):
         approved_at: datetime | None = None,
         approved_by: uuid.UUID | None = None,
     ) -> Quote:
-        """Approve a quote. Transitions: DRAFT/SENT → APPROVED."""
-        quote = self.get_by_id(quote_id)
+        """Approve a quote. Transitions: DRAFT/SENT → APPROVED.
+
+        Locked load: serializes with mark_as_sent / send_quote /
+        convert_to_invoice so a concurrent transition cannot race the
+        eligibility checks below (race-condition contract: all status
+        transitions load FOR UPDATE). ``is_expired`` reads only column
+        attributes (status, due_date), so it needs nothing off the
+        relationships suppressed by the bare lazyload("*") row.
+        """
+        quote = self._get_locked(quote_id)
         if quote.status not in [QuoteStatus.SENT, QuoteStatus.DRAFT]:
             raise BadRequestException(
                 detail=f"Can only approve SENT or DRAFT quotes. Current status: {quote.status}",
@@ -849,6 +857,10 @@ class QuoteService(BaseDocumentService):
         and whose due_date has passed. Stamps expired_at and bumps version
         once. Uses synchronize_session=False and expire_all so subsequent
         reads reflect the new status. Returns the number of rows transitioned.
+
+        Deliberate exception to the locked-load transition contract: this
+        is a single atomic UPDATE whose WHERE clause re-checks eligibility
+        row-by-row, so no FOR UPDATE pre-read is needed.
         """
         try:
             now = datetime.now(UTC)

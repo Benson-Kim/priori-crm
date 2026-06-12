@@ -73,6 +73,11 @@ class ExpenseService(BaseDocumentService):
     _document_noun = "expense"
     _reference_collision_markers = ("expense_number", "expense_reference")
 
+    # Locked-load wiring (DocumentSendMixin._get_locked). Expenses send no
+    # customer email, so the draft/sent statuses and send hooks stay unset;
+    # only the shared FOR UPDATE row loader is used by the transition paths.
+    _send_model = Expense
+
     ALLOWED_TRANSITIONS: ClassVar[dict[ExpenseStatus, list[ExpenseStatus]]] = {
         ExpenseStatus.PENDING: [
             ExpenseStatus.PAID,
@@ -791,8 +796,12 @@ class ExpenseService(BaseDocumentService):
         Routes through the state machine so ALLOWED_TRANSITIONS is enforced
         and the version bump is owned in one place. Idempotency is rejected:
         an already-CANCELED expense raises rather than transitioning again.
+
+        Locked load: serializes with record_payment / mark_as_paid so the
+        status check cannot act on a stale row (race-condition contract:
+        all status transitions load FOR UPDATE).
         """
-        expense = self.get_by_id(expense_id)
+        expense = self._get_locked(expense_id)
 
         if expense.status == ExpenseStatus.CANCELED:
             raise BadRequestException(
@@ -832,8 +841,13 @@ class ExpenseService(BaseDocumentService):
         Otherwise, it is hard-deleted.
         Returns True if the expense was soft-deleted so the router can
         surface the augmented warning text.
+
+        Locked load: serializes with record_payment / mark_as_paid so the
+        had_payments check and the soft/hard-delete decision cannot act on
+        a stale row (race-condition contract: all status transitions load
+        FOR UPDATE). payments/documents load lazily off the locked row.
         """
-        expense = self.get_by_id(expense_id)
+        expense = self._get_locked(expense_id)
         had_payments = bool(expense.payments)
         previous_status = expense.status
 
@@ -1048,6 +1062,10 @@ class ExpenseService(BaseDocumentService):
         every matched row into Python memory.
         Explicitly expires all instances so subsequent reads reflect the
         updated status.
+
+        Deliberate exception to the locked-load transition contract: this
+        is a single atomic UPDATE whose WHERE clause re-checks eligibility
+        row-by-row, so no FOR UPDATE pre-read is needed.
 
         Returns count of updated rows.
         """

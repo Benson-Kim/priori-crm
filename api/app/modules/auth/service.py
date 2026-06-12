@@ -188,8 +188,20 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedException("Invalid or inactive user.")
 
-        # Rotate: revoke the presented token, then mint a new pair.
-        self._revoke_refresh_payload(payload)
+        # Rotate: atomically spend the presented token BEFORE minting the
+        # new pair. revoke_if_new is a single revoke-and-report operation,
+        # so exactly one concurrent presenter of a given jti can win this
+        # step. Any other concurrent presenter lands here because the
+        # pre-check above passed for both — the same theft evidence the
+        # pre-check catches for sequential requests — so it takes the same
+        # family-fence + 401 path and no second descendant chain is minted.
+        if not self._revoke_refresh_payload(payload):
+            self._revoke_token_family(user_id)
+            logger.warning(
+                "Concurrent refresh-token reuse detected; revoked token family",
+                extra={"user_id": str(user_id)},
+            )
+            raise UnauthorizedException("Refresh token has been revoked.")
 
         access_token = create_access_token(subject=str(user.id))
         new_refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
@@ -264,24 +276,33 @@ class AuthService:
         return hashlib.sha256(code.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _revoke_refresh_payload(payload: dict) -> None:
-        """Add a refresh token's jti to the denylist for its remaining life.
+    def _revoke_refresh_payload(payload: dict) -> bool:
+        """Atomically spend (revoke) a refresh token's jti.
+
+        Single atomic revoke-and-report via ``TokenDenylist.revoke_if_new``:
+        returns True when this call newly revoked the jti, False when it was
+        already revoked — i.e. an earlier or concurrent presenter spent it
+        first and the caller must treat the token as reused. ``logout``
+        ignores the return value (revocation is idempotent);
+        ``refresh_access_token`` branches on it to close the concurrent
+        rotation window.
 
         Sizing the TTL to the token's own ``exp`` means the denylist entry
         expires itself once the token would have expired anyway, so the store
-        stays bounded by the live-token window. A payload without a jti (legacy
-        token) or already past expiry is a no-op.
+        stays bounded by the live-token window. A payload without a jti
+        (legacy token) or already past expiry has nothing to spend and
+        reports True — exp validation owns rejecting expired tokens.
         """
         jti = payload.get("jti")
         if jti is None:
-            return
+            return True
         exp = payload.get("exp")
 
         now = int(datetime.now(UTC).timestamp())
         ttl = int(exp) - now if exp is not None else 0
         if ttl <= 0:
-            return
-        _refresh_token_denylist().revoke(jti, ttl)
+            return True
+        return _refresh_token_denylist().revoke_if_new(jti, ttl)
 
     def _enforce_attempt_throttle(self, email: str) -> None:
         """Throttle login/verify attempts per identifier.
