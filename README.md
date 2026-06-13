@@ -5,11 +5,11 @@
 ## Architecture
 
 ```
-accounting-software/
+priori-crm/
 ├── api/             # Python FastAPI backend
-├── ui/              # React + TypeScript + TailwindCSS frontend
-├── .gitlab-ci.yml   # CI/CD pipeline (authoritative)
-├── .github/         # GitHub Actions workflows (kept in sync with GitLab CI)
+├── frontend/        # React + TypeScript + TailwindCSS frontend
+├── .github/         # GitHub Actions workflows (authoritative)
+├── .gitlab-ci.yml   # GitLab CI pipeline (archived mirror)
 └── docker-compose.yml
 ```
 
@@ -21,7 +21,7 @@ accounting-software/
 | **Frontend** | React 18, TypeScript, Vite, TailwindCSS, lucide-react |
 | **Database** | PostgreSQL 16 |
 | **Email** | AWS SES |
-| **CI/CD** | GitLab CI/CD (`.gitlab-ci.yml`, authoritative) + GitHub Actions (`.github/workflows/`, mirrored) |
+| **CI/CD** | GitHub Actions (`.github/workflows/`, authoritative) + GitLab CI/CD (`.gitlab-ci.yml`, archived mirror) |
 
 ## Getting Started
 
@@ -117,16 +117,16 @@ no infrastructure detail (those belong on the secret-gated `/health/detailed`).
 
 ## Continuous Integration
 
-`.gitlab-ci.yml` is the **authoritative** pipeline: it runs lint, an offline
+.github/workflows/ is the **authoritative** pipeline: it runs lint, an offline
 OpenAPI contract export + generated-type check, the Postgres-guarded test
-suite, and the managed security analyzers (SAST, dependency scanning, secret
-detection) on every merge request and on `develop`/`main`.
+suite, and security analyzers (CodeQL SAST, dependency review, secret
+detection via gitleaks) on every pull request and on `develop`/`main`.
 
-The `.github/workflows/` Actions are kept **in sync** with that pipeline
-(`api-ci.yml`, `ui-ci.yml`, `security.yml`) so the project stays CI-ready if
-GitHub ever becomes the default VCS. Keep the two in step when changing either
-one.
+The .gitlab-ci.yml is an **archived mirror** of the pipeline from the
+original GitLab repository. It is kept for reference but is no longer
+actively maintained.
 
 ## License
 
 © 2026 Priori Technologies — All Rights Reserved
+
