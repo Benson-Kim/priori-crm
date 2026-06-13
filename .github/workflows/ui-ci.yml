@@ -27,7 +27,7 @@ jobs:
       # app.main imports config, which validates these even though no server
       # or database is started; app.openapi() itself makes no DB connection.
       DATABASE_URL: postgresql+psycopg2://priori:placeholder@localhost:5432/placeholder
-      JWT_SECRET_KEY: ci-openapi-export-secret-key-at-least-32-chars
+      JWT_SECRET_KEY: ci-openapi-export-secret-key-at-least-32-chars # gitleaks:allow
       SES_SENDER_EMAIL: noreply@ci.example.com
       ENVIRONMENT: test
     steps:
