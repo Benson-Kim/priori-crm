@@ -6,19 +6,19 @@
  * can send them back after a successful sign-in.
  */
 
-import { Outlet } from "react-router-dom";
+// import { Outlet } from "react-router-dom";
 
-// import { Navigate, Outlet, useLocation } from "react-router-dom";
-// import { useAuth } from "@/hooks/auth-context";
+import { useAuth } from "@/hooks/auth-context";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 export default function RequireAuth() {
-  // const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // const location = useLocation();
+  const location = useLocation();
 
-  // if (!isAuthenticated) {
-  //   return <Navigate to="/login" replace state={{ from: location }} />;
-  // }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
 
   return <Outlet />;
 }

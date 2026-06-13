@@ -74,16 +74,17 @@ export default function OTPPage() {
 
   return (
     <div className="min-h-screen bg-white relative flex items-center justify-center overflow-hidden">
-      {/* Background Shapes */}
-      <img
-        src={TopLeftCorner}
-        alt=""
-        className="absolute top-0 left-0 w-64 md:w-96 pointer-events-none"
+
+      {/* Top Left Background Shape */}
+      <img src={TopLeftCorner} alt="" aria-hidden="true"
+        className="absolute left-0 top-0 pointer-events-none select-none"
+        style={{ width: 183, height: 322 }}
       />
-      <img
-        src={BottomRightCorner}
-        alt=""
-        className="absolute bottom-0 right-0 w-64 md:w-96 pointer-events-none"
+
+      {/* Bottom Right Background Shape */}
+      <img src={BottomRightCorner} alt="" aria-hidden="true"
+        className="absolute right-0 bottom-0 pointer-events-none select-none"
+        style={{ width: 257, height: 394 }}
       />
 
       {/* OTP Card */}
