@@ -17,7 +17,7 @@ import {
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { OverviewComponent } from "./OverviewComponent";
+import { OverviewComponent } from "../components/OverviewComponent";
 
 const CATEGORY_VALUES: readonly CashflowCategory[] = ["all", "income", "expense"];
 

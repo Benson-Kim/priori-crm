@@ -18,6 +18,9 @@ import QuotesPage from "@/pages/sales/quotes";
 import AddQuotePage from "@/pages/sales/quotes/add";
 import QuoteDetailPage from "@/pages/sales/quotes/detail";
 import EditQuotePage from "@/pages/sales/quotes/edit";
+
+
+import DashboardPage from "@/pages/dashboard";
 import CashflowPage from "@/pages/statements/cashflow";
 import IncomeStatementsPage from "@/pages/statements/income-statement";
 import { createBrowserRouter, Navigate } from "react-router-dom";
@@ -44,7 +47,22 @@ const routes = [
                 children: [
                     {
                         index: true,
-                        element: <Navigate to="/customers" replace />,
+                        element: <Navigate to="/dashboard" replace />,
+                    },
+                    {
+                        path: "dashboard",
+                        children: [
+                            {
+                                index: true,
+                                element: <DashboardPage />,
+                                handle: {
+                                    header: {
+                                        title: "Welcome, Frank ",
+                                        description: "Let's dive into your latest updates and insights.",
+                                    },
+                                }
+                            },
+                        ]
                     },
                     {
                         path: "customers",

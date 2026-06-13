@@ -62,6 +62,25 @@ npm install
 npm run dev
 ```
 
+### OpenAPI Schema Generation
+
+When you add new endpoints or modify Pydantic schemas in the backend, you must regenerate the OpenAPI JSON and the frontend TypeScript types:
+
+```bash
+# 1. Export the schema from the backend (does not require a running DB)
+cd api
+$env:JWT_SECRET_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+$env:ENVIRONMENT="development"
+$env:RATE_LIMIT_ENABLED="false"
+python export_api.py ../frontend/openapi.json
+
+# 2. Generate TypeScript types for the frontend
+cd ../frontend
+npx -y openapi-typescript@^7 openapi.json -o src/lib/api-schema.d.ts
+```
+
+*(Note: Use the commands above instead of `npm run gen:api` if you are on Windows, as the package.json script contains bash-specific syntax.)*
+
 ## Git Workflow
 
 | Branch | Purpose |

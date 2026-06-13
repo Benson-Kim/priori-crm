@@ -1,5 +1,7 @@
+import type { MetricChange } from "@/components/ui/MetricCard";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DEFAULT_CURRENCY } from "./constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -110,6 +112,9 @@ export function formatCurrency(
   })}`;
 }
 
+export const money = (value: number | string | null | undefined): string =>
+  value == null ? "—" : formatCurrency(Number(value), DEFAULT_CURRENCY);
+
 /**
  * Mask an email address for display (e.g. "fra**********18@mail.com").
  */
@@ -125,11 +130,21 @@ export function maskEmail(email: string): string {
 }
 
 /**
- * Format a delta percentage with sign (e.g. "+1.5%" or "-1.5%").
+ * Build the delta badge for a metric. A null/undefined delta means the
+ * previous period was zero — the API deliberately returns null instead of
+ * a fake percentage, so we render a dash rather than 0%.
+ * `invert` flips sentiment for metrics where a decrease is good (expenses).
  */
-export function formatDelta(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
+export function formatDelta(
+  value: number | null | undefined,
+  { invert = false, suffix = "%" }: { invert?: boolean; suffix?: string } = {},
+): MetricChange | null {
+  if (value == null) return null;
+  const sign = value > 0 ? "+" : "";
+  const text = `${sign}${value.toFixed(1)}${suffix}`;
+  if (value === 0) return { text, tone: "neutral" };
+  const isGood = invert ? value < 0 : value > 0;
+  return { text, tone: isGood ? "positive" : "negative" };
 }
 
 /**

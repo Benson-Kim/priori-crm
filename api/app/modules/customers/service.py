@@ -20,6 +20,7 @@ from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
+from app.common.statistics import status_counts
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
 from app.modules.customers.schemas import (
@@ -214,30 +215,25 @@ class CustomerService(ServiceBase):
 
     def get_status_counts(self) -> CustomerStatusCounts:
         """Get counts of customers by status."""
-        try:
-            results = (
-                self._db.query(Customer.status, func.count(Customer.id).label("count"))
-                .group_by(Customer.status)
-                .all()
-            )
-            counts_dict = {row_status: count for row_status, count in results}
-            total = sum(counts_dict.values())
+        counts_dict = status_counts(
+            self._db,
+            Customer.status,
+            Customer.id,
+            error_context="customer",
+        )
+        # `all` sums every returned status row so the total stays correct if
+        # the status set ever expands.
+        counts = CustomerStatusCounts(
+            all=sum(counts_dict.values()),
+            active=counts_dict.get(CustomerStatus.ACTIVE, 0),
+            inactive=counts_dict.get(CustomerStatus.INACTIVE, 0),
+            suspended=counts_dict.get(CustomerStatus.SUSPENDED, 0),
+            deleted=counts_dict.get(CustomerStatus.DELETED, 0),
+        )
 
-            counts = CustomerStatusCounts(
-                all=total,
-                active=counts_dict.get(CustomerStatus.ACTIVE, 0),
-                inactive=counts_dict.get(CustomerStatus.INACTIVE, 0),
-                suspended=counts_dict.get(CustomerStatus.SUSPENDED, 0),
-                deleted=counts_dict.get(CustomerStatus.DELETED, 0),
-            )
+        logger.debug(f"Customer status counts: {counts}")
 
-            logger.debug(f"Customer status counts: {counts}")
-
-            return counts
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error getting status counts")
-            raise DatabaseException("Failed to get status counts") from e
+        return counts
 
     # Update
 

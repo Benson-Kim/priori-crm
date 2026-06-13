@@ -25,6 +25,8 @@ export const COUNTRY_OPTIONS = [
   { value: "TZ", label: "Tanzania" },
 ];
 
+export const DEFAULT_CURRENCY = "KES";
+
 export const CURRENCY_OPTIONS = [
   { value: "KES", label: "KES" },
   { value: "USD", label: "USD" },
