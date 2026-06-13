@@ -195,10 +195,10 @@ api:openapi-schema:
     - pip install --upgrade pip
     - pip install -r requirements.txt
   script:
-    - python -m scripts.export_openapi "$CI_PROJECT_DIR/openapi.json"
+    - python -m scripts.export_openapi "$CI_PROJECT_DIR/frontend/openapi.json"
   artifacts:
     paths:
-      - openapi.json
+      - frontend/openapi.json
     expire_in: 1 day
 
 # ---------------------------------------------------------------------------
