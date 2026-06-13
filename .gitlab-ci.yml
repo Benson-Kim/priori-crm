@@ -128,7 +128,7 @@ api:test:
     # and only runs the Postgres-guarded tests when it starts with
     # "postgresql"; using psycopg2 also satisfies config.py's DSN validator.
     DATABASE_URL: "postgresql+psycopg2://priori:test_password@postgres:5432/prioritech_test"
-    JWT_SECRET_KEY: "ci-test-secret-key-at-least-32-characters-long"
+    JWT_SECRET_KEY: "ci-test-secret-key-at-least-32-characters-long" # gitleaks:allow
     SES_SENDER_EMAIL: "noreply@ci.example.com"
     ENVIRONMENT: "test"
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -187,7 +187,7 @@ api:openapi-schema:
     # app.main imports config, which validates these even though no server or
     # database is started; app.openapi() itself makes no DB connection.
     DATABASE_URL: "postgresql+psycopg2://placeholder:placeholder@localhost:5432/placeholder"
-    JWT_SECRET_KEY: "ci-openapi-export-secret-key-at-least-32-chars"
+    JWT_SECRET_KEY: "ci-openapi-export-secret-key-at-least-32-chars" # gitleaks:allow
     SES_SENDER_EMAIL: "noreply@ci.example.com"
     ENVIRONMENT: "test"
   before_script:
@@ -195,10 +195,10 @@ api:openapi-schema:
     - pip install --upgrade pip
     - pip install -r requirements.txt
   script:
-    - python -m scripts.export_openapi "$CI_PROJECT_DIR/openapi.json"
+    - python -m scripts.export_openapi "$CI_PROJECT_DIR/frontend/openapi.json"
   artifacts:
     paths:
-      - openapi.json
+      - frontend/openapi.json
     expire_in: 1 day
 
 # ---------------------------------------------------------------------------

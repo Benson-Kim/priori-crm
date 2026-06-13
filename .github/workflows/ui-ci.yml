@@ -17,9 +17,16 @@ on:
     branches: [main, develop]
     paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
 
+# Prevent concurrent runs on the same branch to avoid race conditions
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   openapi-schema:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: api
@@ -27,7 +34,7 @@ jobs:
       # app.main imports config, which validates these even though no server
       # or database is started; app.openapi() itself makes no DB connection.
       DATABASE_URL: postgresql+psycopg2://priori:placeholder@localhost:5432/placeholder
-      JWT_SECRET_KEY: ci-openapi-export-secret-key-at-least-32-chars
+      JWT_SECRET_KEY: ci-openapi-export-secret-key-at-least-32-chars # gitleaks:allow
       SES_SENDER_EMAIL: noreply@ci.example.com
       ENVIRONMENT: test
     steps:
@@ -45,13 +52,53 @@ jobs:
           pip install -r requirements.txt
 
       - name: Export OpenAPI schema
-        run: python -m scripts.export_openapi "$GITHUB_WORKSPACE/openapi.json"
+        # Write the committed, build-time copy Vercel reads (no Python runtime
+        # in the Vercel image).
+        run: python -m scripts.export_openapi "$GITHUB_WORKSPACE/frontend/openapi.json"
+
+      - name: Commit updated schema
+        # On push to main/develop, commit the regenerated schema back so the
+        # Vercel deploy always has a fresh contract with no manual step.
+        # Skipped on pull_request events; no-op when the schema is unchanged.
+        if: github.event_name == 'push'
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! git diff --quiet -- frontend/openapi.json; then
+            git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+            git config user.name "${{ github.actor }}"
+            git add frontend/openapi.json
+            git commit -m "chore: update generated OpenAPI schema [skip ci]"
+            
+            # Pull with rebase to handle any concurrent changes, then push
+            # Retry up to 3 times in case of conflicts
+            max_retries=3
+            retry_count=0
+            while [ $retry_count -lt $max_retries ]; do
+              if git pull --rebase origin ${GITHUB_REF_NAME} && git push origin HEAD:${GITHUB_REF_NAME}; then
+                echo "Successfully pushed OpenAPI schema update"
+                exit 0
+              else
+                retry_count=$((retry_count + 1))
+                if [ $retry_count -lt $max_retries ]; then
+                  echo "Push failed, retrying ($retry_count/$max_retries)..."
+                  sleep 2
+                else
+                  echo "Error: Failed to push after $max_retries attempts"
+                  echo "This may indicate a merge conflict or concurrent push."
+                  echo "The schema update will need to be committed manually."
+                  exit 1
+                fi
+              fi
+            done
+          else
+            echo "OpenAPI schema unchanged; nothing to commit."
+          fi
 
       - name: Upload schema artifact
         uses: actions/upload-artifact@v4
         with:
           name: openapi-schema
-          path: openapi.json
+          path: frontend/openapi.json
           retention-days: 1
 
   lint-build:
@@ -63,7 +110,7 @@ jobs:
     env:
       # Generate contract types from the schema exported by the
       # openapi-schema job instead of hand-written interfaces.
-      VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/openapi.json
+      VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/frontend/openapi.json
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +124,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: openapi-schema
-          path: ${{ github.workspace }}
+          path: ${{ github.workspace }}/frontend
 
       - name: Install dependencies
         run: npm ci

@@ -66,7 +66,7 @@ jobs:
       # Postgres-guarded tests when DATABASE_URL starts with "postgresql";
       # the psycopg2 DSN also satisfies config.py's DSN validator.
       DATABASE_URL: postgresql+psycopg2://priori:test_password@localhost:5432/prioritech_test
-      JWT_SECRET_KEY: ci-test-secret-key-at-least-32-characters-long
+      JWT_SECRET_KEY: ci-test-secret-key-at-least-32-characters-long # gitleaks:allow
       SES_SENDER_EMAIL: noreply@ci.example.com
       ENVIRONMENT: test
       PGPASSWORD: test_password
