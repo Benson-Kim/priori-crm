@@ -17,9 +17,11 @@ from app.common.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    hash_password,
     verify_password,
 )
 from app.common.token_denylist import TokenDenylist, build_token_denylist
+from app.constants.enums import UserRole
 from app.lib.config import settings
 from app.lib.email import email_service
 from app.modules.auth.models import OTPCode, User
@@ -92,6 +94,66 @@ class AuthService:
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
         otp_code = self._create_otp(user)
+
+    # Registration
+
+    def register(
+        self,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        role: str = UserRole.ADMIN,
+    ) -> User:
+        """Register a new user (first admin only).
+
+        Only allows registration if no users exist in the database yet.
+        This is a temporary endpoint for creating the first admin user in production.
+
+        Args:
+            email: User's email address
+            password: Plain text password (will be hashed)
+            first_name: User's first name
+            last_name: User's last name
+            role: User role (defaults to admin)
+
+        Returns:
+            The created User object
+
+        Raises:
+            BadRequestException: If users already exist or email is taken
+        """
+        # Security check: only allow if no users exist
+        user_count = self._db.query(User).count()
+        if user_count > 0:
+            raise BadRequestException(
+                "Registration is disabled. Users already exist in the system."
+            )
+
+        # Check if email is already taken (shouldn't happen if no users exist, but be safe)
+        existing_user = self._get_user_by_email(email)
+        if existing_user:
+            raise BadRequestException("Email already registered.")
+
+        # Validate role
+        if role not in [r.value for r in UserRole]:
+            role = UserRole.ADMIN
+
+        # Create new user with hashed password
+        new_user = User(
+            email=email.lower().strip(),
+            password_hash=hash_password(password),
+            first_name=first_name.strip(),
+            last_name=last_name.strip(),
+            role=role,
+            is_active=True,
+        )
+
+        self._db.add(new_user)
+        self._db.flush()
+
+        logger.info("New user registered: %s (role: %s)", new_user.email, new_user.role)
+        return new_user
         self._send_otp_email(user.email, otp_code)
 
     # Verify OTP (Step 2)

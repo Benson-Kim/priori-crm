@@ -43,6 +43,24 @@ class LogoutRequest(BaseModel):
 
     refresh_token: str
 
+class RegisterRequest(BaseModel):
+    """Registration request for creating the first admin user."""
+
+    email: EmailStr
+    password: str = Field(
+        ..., min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH
+    )
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    role: str = Field(default="admin")
+
+    @field_validator("password")
+    @classmethod
+    def _check_password_policy(cls, v: str) -> str:
+        """Enforce the shared password policy."""
+        return validate_password_strength(v)
+
+
 
 # Response Schemas
 class MessageResponse(BaseModel):

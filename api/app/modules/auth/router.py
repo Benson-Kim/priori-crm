@@ -7,6 +7,7 @@ from app.modules.auth.schemas import (
     MessageResponse,
     RefreshResponse,
     RefreshTokenRequest,
+    RegisterRequest,
     TokenResponse,
     UserResponse,
     VerifyOTPRequest,
@@ -14,6 +15,26 @@ from app.modules.auth.schemas import (
 from app.modules.auth.service import AuthService
 
 router = APIRouter()
+
+@router.post("/register", response_model=UserResponse)
+def register(body: RegisterRequest, db: DbSession):
+    """Register the first admin user (temporary endpoint for production setup).
+
+    This endpoint is only available when no users exist in the database.
+    Once the first user is created, this endpoint will return an error.
+
+    This is a temporary solution for creating the initial admin user in production.
+    """
+    auth_service = AuthService(db)
+    user = auth_service.register(
+        email=body.email,
+        password=body.password,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        role=body.role,
+    )
+    return UserResponse.model_validate(user)
+
 
 
 @router.post("/login", response_model=MessageResponse)
