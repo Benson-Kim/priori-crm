@@ -53,6 +53,6 @@ export function Badge({ variant, children, value, className }: Readonly<BadgePro
       : children;
 
   return (
-    <span className={cn(variantStyles[variant], className)}>{content}</span>
+    <span className={cn(variantStyles[variant], className)}>{content as React.ReactNode}</span>
   );
 }

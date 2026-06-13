@@ -32,6 +32,7 @@ from app.common.middleware import (
 from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
+from app.modules.dashboard.router import router as dashboard_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
@@ -145,6 +146,9 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
     app.include_router(
         statements_router, prefix=f"{api_prefix}/statements", tags=["Statements"]
+    )
+    app.include_router(
+        dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
     )
     logger.info(
         "Registered routers: %s",

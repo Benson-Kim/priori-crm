@@ -26,6 +26,7 @@ from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
+from app.common.statistics import status_counts
 from app.constants.enums import Currency, ExpenseStatus, VendorStatus
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import (
@@ -404,32 +405,19 @@ class VendorService(StateMachineMixin, ServiceBase):
         """
         Get all vendor counts.
         """
-        try:
-            rows = (
-                self._db.query(
-                    Vendor.status,
-                    func.count(Vendor.id).label("cnt"),
-                )
-                .group_by(Vendor.status)
-                .all()
-            )
-
-            counts: dict[str, int] = {row.status: row.cnt for row in rows}
-            # `all` sums every returned status row rather than active +
-            # inactive, so it stays correct if the status set ever expands
-            total = sum(counts.values())
-            active = counts.get(VendorStatus.ACTIVE, 0)
-            inactive = counts.get(VendorStatus.INACTIVE, 0)
-
-            return VendorStatusCounts(
-                all=total,
-                active=active,
-                inactive=inactive,
-            )
-
-        except SQLAlchemyError as e:
-            logger.exception("Database error getting vendor status counts")
-            raise DatabaseException("Failed to get vendor status counts") from e
+        counts = status_counts(
+            self._db,
+            Vendor.status,
+            Vendor.id,
+            error_context="vendor",
+        )
+        # `all` sums every returned status row rather than active + inactive,
+        # so it stays correct if the status set ever expands.
+        return VendorStatusCounts(
+            all=sum(counts.values()),
+            active=counts.get(VendorStatus.ACTIVE, 0),
+            inactive=counts.get(VendorStatus.INACTIVE, 0),
+        )
 
     def get_vendor_transactions(
         self,

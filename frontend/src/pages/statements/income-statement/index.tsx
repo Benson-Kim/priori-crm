@@ -1,8 +1,7 @@
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table } from "@/components/ui/Table";
-import { formatCurrency } from "@/lib/utils";
+import { money } from "@/lib/utils";
 import {
-     DEFAULT_CURRENCY,
      getIncomeStatement,
      isPeriodReady,
      type IncomeStatement,
@@ -11,7 +10,7 @@ import {
 } from "@/services/statementsApi";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { OverviewComponent } from "./OverviewComponent";
+import { OverviewComponent } from "../components/OverviewComponent";
 
 export default function IncomeStatementsPage() {
      const navigate = useNavigate();
@@ -70,8 +69,6 @@ export default function IncomeStatementsPage() {
           [navigate, range, dateFrom, dateTo],
      );
 
-     const currency = statement?.currency ?? DEFAULT_CURRENCY;
-
      const buildColumns = (amountClass: string) => [
           {
                key: "number",
@@ -101,7 +98,7 @@ export default function IncomeStatementsPage() {
                className: "text-right",
                render: (item: IncomeStatementLine) => (
                     <span className={amountClass}>
-                         {formatCurrency(Number(item.amount), currency)}
+                         {money(Number(item.amount))}
                     </span>
                ),
           },
@@ -110,9 +107,6 @@ export default function IncomeStatementsPage() {
      const revenueColumns = buildColumns("text-success-600");
      const expenseColumns = buildColumns("text-error-600");
 
-     // Section totals come from the API, which guarantees
-     // total == sum(line amounts); the client must not recompute them and
-     // risk disagreeing with the server's Decimal arithmetic.
      const revenueFooter = statement ? (
           <tfoot>
                <tr className="bg-gray-50 border-t-2 border-green-200">
@@ -120,7 +114,7 @@ export default function IncomeStatementsPage() {
                          Total Operating Revenue
                     </td>
                     <td className="p-3 text-[16px] font-bold text-success-600 text-right">
-                         {formatCurrency(Number(statement.operating_revenue.total), currency)}
+                         {money(Number(statement.operating_revenue.total))}
                     </td>
                </tr>
           </tfoot>
@@ -133,7 +127,7 @@ export default function IncomeStatementsPage() {
                          Total Operating Expenses
                     </td>
                     <td className="p-3 text-[16px] font-bold text-error-600 text-right">
-                         {formatCurrency(Number(statement.operating_expenses.total), currency)}
+                         {money(Number(statement.operating_expenses.total))}
                     </td>
                </tr>
           </tfoot>

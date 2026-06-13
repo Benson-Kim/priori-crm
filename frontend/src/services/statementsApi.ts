@@ -17,6 +17,7 @@
 
 import { apiGet } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
+import { DEFAULT_CURRENCY } from "@/lib/constants";
 import type { PaginatedApiResponse } from "@/lib/types";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
@@ -27,8 +28,6 @@ export type CashflowEntry = Schema<"CashflowEntry">;
 export type CashflowCounts = Schema<"CashflowCounts">;
 
 export type CashflowCategory = "all" | "income" | "expense";
-
-export const DEFAULT_CURRENCY = "KES";
 
 export const RANGE_PRESETS = [
   "last_7_days",
@@ -67,10 +66,15 @@ export function isPeriodReady(period: PeriodFilter): boolean {
   );
 }
 
-function periodParams(period: PeriodFilter, currency: string) {
-  // The API rejects dateFrom/dateTo alongside non-custom presets (explicit
-  // 400 rather than silently ignored input), so strip them here once
-  // instead of relying on every caller to remember.
+/**
+ * Build the wire query params for a period + currency.
+ *
+ * The API rejects dateFrom/dateTo alongside non-custom presets (explicit
+ * 400 rather than silently ignored input), so strip them here once instead
+ * of relying on every caller to remember. Exported so the dashboard service
+ * reuses the exact same period contract (single source of truth).
+ */
+export function buildPeriodParams(period: PeriodFilter, currency: string) {
   return {
     range: period.range,
     dateFrom: period.range === "custom" ? period.dateFrom : undefined,
@@ -86,7 +90,7 @@ export function getStatementOverview(
 ) {
   return apiGet<StatementOverview>(
     "statements/overview",
-    periodParams(period, currency)
+    buildPeriodParams(period, currency)
   );
 }
 
@@ -97,7 +101,7 @@ export function getIncomeStatement(
 ) {
   return apiGet<IncomeStatement>(
     "statements/income-statement",
-    periodParams(period, currency)
+    buildPeriodParams(period, currency)
   );
 }
 
@@ -129,7 +133,7 @@ export function getCashflow({
   perPage = 10,
 }: CashflowListParams) {
   return apiGet<PaginatedApiResponse<CashflowEntry>>("statements/cashflow", {
-    ...periodParams(period, currency),
+    ...buildPeriodParams(period, currency),
     category,
     accountCategory,
     search,
@@ -157,7 +161,7 @@ export function getCashflowCounts({
   search,
 }: CashflowCountsParams) {
   return apiGet<CashflowCounts>("statements/cashflow/counts", {
-    ...periodParams(period, currency),
+    ...buildPeriodParams(period, currency),
     accountCategory,
     search,
   });
