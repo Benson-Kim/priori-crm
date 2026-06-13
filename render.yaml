@@ -1,0 +1,106 @@
+# Render deployment configuration for Priori CRM
+# https://render.com/docs/blueprint-spec
+
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: priori-crm-db
+    env: docker
+    plan: starter
+    region: frankfurt
+    databases:
+      - name: priori_crm
+        databaseName: priori_crm
+        user: priori
+
+  # Redis for rate limiting and token denylist
+  - type: redis
+    name: priori-crm-redis
+    plan: starter
+    region: frankfurt
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  # API Service
+  - type: web
+    name: priori-crm-api
+    env: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    healthCheckPath: /health
+    envVars:
+      # Application
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: APP_NAME
+        value: Priori CRM
+
+      # Database - auto-populated by Render
+      - key: DATABASE_URL
+        fromDatabase:
+          name: priori-crm-db
+          property: connectionString
+
+      # Redis - auto-populated by Render
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: priori-crm-redis
+          property: connectionString
+
+      # JWT - generate a secure key and add to Render dashboard
+      - key: JWT_SECRET_KEY
+        sync: false  # Must be set manually in Render dashboard
+
+      # AWS SES - add these to Render dashboard
+      - key: AWS_REGION
+        value: af-south-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false  # Must be set manually in Render dashboard
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false  # Must be set manually in Render dashboard
+      - key: SES_SENDER_EMAIL
+        sync: false  # Must be set manually in Render dashboard (e.g., noreply@yourdomain.com)
+
+      # Rate Limiting - use Redis in production
+      - key: RATE_LIMIT_ENABLED
+        value: true
+      - key: RATE_LIMIT_BACKEND
+        value: redis
+      - key: TOKEN_DENYLIST_BACKEND
+        value: redis
+      - key: RATE_LIMIT_PER_MINUTE
+        value: 60
+
+      # CORS - update with your frontend domain
+      - key: CORS_ORIGINS
+        value: https://your-frontend-domain.vercel.app,http://localhost:5173
+
+      # Storage - using local for now, can switch to S3
+      - key: STORAGE_BACKEND
+        value: local
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+
+      # Monitoring (optional)
+      - key: SENTRY_DSN
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+
+    # Persistent disk for file uploads (if using local storage)
+    disk:
+      name: uploads
+      mountPath: /var/data/uploads
+      sizeGB: 10
+
+# IMPORTANT: After deploying, you MUST set these environment variables in the Render dashboard:
+# 1. JWT_SECRET_KEY - Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# 2. AWS_ACCESS_KEY_ID - Your AWS IAM access key with SES permissions
+# 3. AWS_SECRET_ACCESS_KEY - Your AWS IAM secret key
+# 4. SES_SENDER_EMAIL - Verified email address in AWS SES (e.g., noreply@yourdomain.com)
+# 5. Update CORS_ORIGINS with your actual frontend domain

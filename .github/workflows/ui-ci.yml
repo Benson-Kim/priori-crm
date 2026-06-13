@@ -17,6 +17,11 @@ on:
     branches: [main, develop]
     paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
 
+# Prevent concurrent runs on the same branch to avoid race conditions
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   openapi-schema:
     runs-on: ubuntu-latest
@@ -59,11 +64,32 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           if ! git diff --quiet -- frontend/openapi.json; then
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git config user.name "github-actions[bot]"
+            git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+            git config user.name "${{ github.actor }}"
             git add frontend/openapi.json
             git commit -m "chore: update generated OpenAPI schema [skip ci]"
-            git push origin HEAD:${GITHUB_REF_NAME}
+            
+            # Pull with rebase to handle any concurrent changes, then push
+            # Retry up to 3 times in case of conflicts
+            max_retries=3
+            retry_count=0
+            while [ $retry_count -lt $max_retries ]; do
+              if git pull --rebase origin ${GITHUB_REF_NAME} && git push origin HEAD:${GITHUB_REF_NAME}; then
+                echo "Successfully pushed OpenAPI schema update"
+                exit 0
+              else
+                retry_count=$((retry_count + 1))
+                if [ $retry_count -lt $max_retries ]; then
+                  echo "Push failed, retrying ($retry_count/$max_retries)..."
+                  sleep 2
+                else
+                  echo "Error: Failed to push after $max_retries attempts"
+                  echo "This may indicate a merge conflict or concurrent push."
+                  echo "The schema update will need to be committed manually."
+                  exit 1
+                fi
+              fi
+            done
           else
             echo "OpenAPI schema unchanged; nothing to commit."
           fi
