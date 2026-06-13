@@ -18,10 +18,14 @@ node_modules/
 dist/
 build/
 .vercel/
+
 # Generated API contract types (produced from the OpenAPI schema by
 # `npm run gen:api` / CI; never hand-edited or committed).
 frontend/src/lib/api-schema.d.ts
-openapi.json
+# Transient schema artifact exported at the repo root during CI. The
+# committed, build-time copy lives at frontend/openapi.json (NOT ignored)
+# so Vercel can read it without a Python runtime.
+/openapi.json
 
 # Environment
 .env
