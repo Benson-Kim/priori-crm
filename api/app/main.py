@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,22 +104,26 @@ def create_app() -> FastAPI:
     # and throttled (429) paths.
     app.add_middleware(SecurityHeadersMiddleware)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
+    cors_kwargs: dict[str, Any] = {
+        "allow_origins": settings.cors_origins_list,
+        "allow_credentials": True,
         # Explicit allow-lists instead of "*": wildcards combined
         # with credentials are overly permissive.
-        allow_methods=settings.cors_allow_methods_list,
-        allow_headers=settings.cors_allow_headers_list,
-        expose_headers=[
+        "allow_methods": settings.cors_allow_methods_list,
+        "allow_headers": settings.cors_allow_headers_list,
+        "expose_headers": [
             "X-Request-ID",
             "X-Response-Time",
             "X-Truncated",
             "X-Export-Limit",
             "X-Delete-Type",
         ],
-    )
+    }
+
+    if settings.CORS_ORIGIN_REGEX:
+        cors_kwargs["allow_origin_regex"] = settings.CORS_ORIGIN_REGEX
+
+    app.add_middleware(CORSMiddleware, **cors_kwargs)
 
     register_exception_handlers(app)
     _register_routers(app)
