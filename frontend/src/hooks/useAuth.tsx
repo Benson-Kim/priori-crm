@@ -21,6 +21,7 @@ import { AuthContext, type AuthContextValue } from "@/hooks/auth-context";
 import { isAuthenticated as hasToken } from "@/lib/auth-storage";
 import {
   login as loginRequest,
+  resendOtp as resendOtpRequest,
   logout as logoutRequest,
   verifyOtp as verifyOtpRequest,
   type AuthUser,
@@ -32,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     await loginRequest(email, password);
+  }, []);
+
+  const resendOtp = useCallback(async (email: string) => {
+    await resendOtpRequest(email);
   }, []);
 
   const verifyOtp = useCallback(async (email: string, code: string) => {
@@ -48,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isAuthenticated: authed, login, verifyOtp, logout }),
-    [user, authed, login, verifyOtp, logout]
+    () => ({ user, isAuthenticated: authed, login, resendOtp, verifyOtp, logout }),
+    [user, authed, login, resendOtp, verifyOtp, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
