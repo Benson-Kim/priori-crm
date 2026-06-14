@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
+import { createSearchParams } from "@/lib/utils";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
 export type QuoteLineItem = Schema<"QuoteLineItemResponse">;
@@ -130,4 +131,17 @@ export function sendQuote(id: string, data: QuoteSendPayload = {}) {
 /** Download the quote PDF. Returns a Blob to save. */
 export function downloadQuotePdf(id: string) {
   return apiDownload(`quotes/${id}/pdf`);
+}
+
+/** Download the quote PDF. Returns a Blob to save. */
+export function exportQuotesExcel(params?: {
+  status?: string;
+  customerId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  includeLineItems?: boolean;
+}): Promise<Blob> {
+  const query = params ? createSearchParams(params) : "";
+  const path = query ? `quotes/export/excel?${query}` : "quotes/export/excel";
+  return apiDownload(path);
 }

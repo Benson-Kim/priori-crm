@@ -6,8 +6,9 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
+    exportInvoicesExcel,
     getInvoiceCounts,
     getInvoices,
     markAsSent,
@@ -29,6 +30,8 @@ export default function InvoicesPage() {
         all: 0, draft: 0, sent: 0, partial: 0, paid: 0, overdue: 0, canceled: 0,
     });
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
     const navigate = useNavigate();
 
     const fetchInvoices = useCallback(async () => {
@@ -49,6 +52,7 @@ export default function InvoicesPage() {
             setInvoices(data.items);
             setTotalPages(data.total_pages);
         } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load expenses");
             console.error("[InvoicesPage] Failed to fetch invoices:", err);
         } finally {
             setIsLoading(false);
@@ -61,6 +65,7 @@ export default function InvoicesPage() {
             setCounts(data);
         } catch (err) {
             console.error("[InvoicesPage] Failed to fetch counts:", err);
+            setError(err instanceof Error ? err.message : "Failed to fetch counts");
         }
     }, []);
 
@@ -84,6 +89,22 @@ export default function InvoicesPage() {
             fetchCounts();
         } catch (err) {
             console.error("[InvoicesPage] Approve failed:", err);
+            setError(err instanceof Error ? err.message : "Failed to load approve invoice");
+        }
+    };
+
+    const [isExporting, setIsExporting] = useState(false);
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await exportInvoicesExcel({
+                status: activeTab !== "all" ? activeTab : undefined,
+            });
+            saveBlob(blob, `Invoices_${new Date().toISOString().split("T")[0]}.xlsx`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export invoices");
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -141,7 +162,7 @@ export default function InvoicesPage() {
             header: "Customer Name",
             render: (item: InvoiceSummary) => (
                 <span
-                    className="font-medium text-gray-800 max-w-[200px] truncate block"
+                    className="font-medium text-gray-800 max-w-50 truncate block"
                     title={item.customer_name}
                 >
                     {item.customer_name}
@@ -153,7 +174,7 @@ export default function InvoicesPage() {
             header: "Invoice No.",
             render: (item: InvoiceSummary) => (
                 <span
-                    className="text-gray-500 max-w-[150px] truncate block"
+                    className="text-gray-500 max-w-37.5 truncate block"
                     title={item.invoice_number}
                 >
                     {item.invoice_number}
@@ -194,10 +215,20 @@ export default function InvoicesPage() {
 
             {/* Top Action Bar */}
             <div className="flex justify-end mt-4">
-                <Button variant="outline-secondary">
-                    <Download size={20} /> Export Excel
+                <Button
+                    variant="outline-secondary"
+                    onClick={handleExport}
+                    disabled={isExporting}
+                >
+                    <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
                 </Button>
             </div>
+
+            {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-danger">
+                    {error}
+                </div>
+            )}
 
             {/* Main Table Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">

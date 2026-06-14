@@ -10,6 +10,7 @@ import { apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/ap
 import type { Schema } from "@/lib/apiTypes";
 import type { CurrencyOption } from "@/lib/constants";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
+import { createSearchParams } from "@/lib/utils";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
 export type InvoiceLineItem = Schema<"InvoiceLineItemResponse">;
@@ -126,4 +127,16 @@ export interface InvoiceSendPayload {
 /** Send the invoice by email (POST /invoices/{id}/send). */
 export function sendInvoice(id: string, data: InvoiceSendPayload = {}) {
   return apiPost<InvoiceSendResult>(`invoices/${id}/send`, data);
+}
+
+export function exportInvoicesExcel(params?: {
+  status?: string;
+  customerId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  includeLineItems?: boolean;
+}): Promise<Blob> {
+  const query = params ? createSearchParams(params) : "";
+  const path = query ? `invoices/export/excel?${query}` : "invoices/export/excel";
+  return apiDownload(path);
 }
