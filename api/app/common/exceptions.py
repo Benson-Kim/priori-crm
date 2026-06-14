@@ -1,6 +1,7 @@
 """Custom exceptions and global error handlers."""
 
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -23,7 +24,15 @@ def _get_cors_headers(request: Request) -> dict[str, str]:
     origin = request.headers.get("origin", "")
 
     # Check if origin is in allowed list
-    if origin in settings.cors_origins_list:
+    allowed = origin in settings.cors_origins_list
+    if not allowed and settings.CORS_ORIGIN_REGEX:
+        try:
+            if re.match(settings.CORS_ORIGIN_REGEX, origin):
+                allowed = True
+        except re.error:
+            pass
+
+    if allowed:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
