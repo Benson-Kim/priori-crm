@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     SES_MAX_RETRIES: int = Field(default=3, ge=1, le=5)
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
-    CORS_ORIGIN_REGEX: str | None = None
+    CORS_ORIGINS: str = "https://priori-crm-ou38.vercel.app,http://localhost:3000,http://localhost:5173"
+    CORS_ORIGIN_REGEX: str | None = r"^https://priori-crm-ou38.*\.vercel\.app$"
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = (
         "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"

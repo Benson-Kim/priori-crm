@@ -96,9 +96,27 @@ class RedisRateLimitStore:
         global _REDIS_UNAVAILABLE_ERRORS
         if redis.RedisError not in _REDIS_UNAVAILABLE_ERRORS:
             _REDIS_UNAVAILABLE_ERRORS = (redis.RedisError, *_REDIS_UNAVAILABLE_ERRORS)
-            self._redis = redis.Redis.from_url(
-                redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
+        
+        # Handle empty or invalid redis_url gracefully
+        if not redis_url or not redis_url.strip():
+            logger.warning(
+                "RedisRateLimitStore initialized with empty redis_url; "
+                "will use in-memory fallback for all requests"
             )
+            self._redis = None
+        else:
+            try:
+                self._redis = redis.Redis.from_url(
+                    redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
+                )
+            except (ValueError, redis.RedisError) as exc:
+                logger.error(
+                    "Failed to initialize Redis connection with url=%s; "
+                    "will use in-memory fallback for all requests",
+                    redis_url,
+                    exc_info=exc,
+                )
+                self._redis = None
 
     @property
     def _fallback_store(self) -> "InMemoryRateLimitStore":
@@ -110,6 +128,10 @@ class RedisRateLimitStore:
         return fallback
 
     def hit(self, key: str, limit: int, window_seconds: int) -> RateLimitResult:
+        # If Redis was not initialized, use fallback immediately
+        if self._redis is None:
+            return self._fallback_store.hit(key, limit, window_seconds)
+        
         # Bucket the key by the current fixed window so the TTL and counter reset together.
         window_id = int(time.time()) // window_seconds
         redis_key = f"{self._key_prefix}:{key}:{window_id}"
