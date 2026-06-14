@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1, le=30)
 
     # AWS SES
-    AWS_REGION: str = "af-south-1"
+    AWS_REGION: str = "eu-north-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_SENDER_EMAIL: str = "noreply@example.com"
