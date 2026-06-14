@@ -14,6 +14,25 @@ from app.lib.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _get_cors_headers(request: Request) -> dict[str, str]:
+    """Get CORS headers for error responses.
+    
+    Ensures error responses include CORS headers so cross-origin requests
+    from the frontend can read the error details.
+    """
+    origin = request.headers.get("origin", "")
+    
+    # Check if origin is in allowed list
+    if origin in settings.cors_origins_list:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "X-Request-ID, X-Response-Time, X-Truncated, X-Export-Limit, X-Delete-Type",
+        }
+    
+    return {}
+
+
 class AppException(Exception):
     """Base application exception with status code and detail."""
 
@@ -196,13 +215,13 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         # Surface a Retry-After header for backoff-bearing responses
         # (429 rate limit, 503 export saturation) so clients honour it.
-        headers: dict[str, str] | None = None
+        headers = _get_cors_headers(request)
         retry_after = exc.extra.get("retry_after")
         if retry_after is not None:
-            headers = {"Retry-After": str(retry_after)}
+            headers["Retry-After"] = str(retry_after)
 
         return JSONResponse(
-            status_code=exc.status_code, content=response_data, headers=headers
+            status_code=exc.status_code, content=response_data, headers=headers or None
         )
 
     from fastapi.exceptions import RequestValidationError
@@ -230,6 +249,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             },
         )
 
+        headers = _get_cors_headers(request)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -239,6 +259,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "request_id": request_id,
                 "details": {"errors": errors},
             },
+            headers=headers or None,
         )
 
     @app.exception_handler(IntegrityError)
@@ -279,6 +300,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 detail = "Referenced record does not exist"
                 error_code = "INVALID_REFERENCE"
 
+        headers = _get_cors_headers(request)
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
@@ -287,6 +309,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "status_code": status.HTTP_409_CONFLICT,
                 "request_id": request_id,
             },
+            headers=headers or None,
         )
 
     @app.exception_handler(SQLAlchemyError)
@@ -305,6 +328,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             },
         )
 
+        headers = _get_cors_headers(request)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -313,6 +337,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "request_id": request_id,
             },
+            headers=headers or None,
         )
 
     @app.exception_handler(Exception)
@@ -347,7 +372,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "message": str(exc),
             }
 
+        headers = _get_cors_headers(request)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=response_data,
+            headers=headers or None,
         )
