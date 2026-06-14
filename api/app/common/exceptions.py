@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 
 def _get_cors_headers(request: Request) -> dict[str, str]:
     """Get CORS headers for error responses.
-    
+
     Ensures error responses include CORS headers so cross-origin requests
     from the frontend can read the error details.
     """
     origin = request.headers.get("origin", "")
-    
+
     # Check if origin is in allowed list
     if origin in settings.cors_origins_list:
         return {
@@ -29,7 +29,7 @@ def _get_cors_headers(request: Request) -> dict[str, str]:
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Expose-Headers": "X-Request-ID, X-Response-Time, X-Truncated, X-Export-Limit, X-Delete-Type",
         }
-    
+
     return {}
 
 
