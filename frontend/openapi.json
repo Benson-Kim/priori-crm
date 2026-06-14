@@ -5459,6 +5459,21 @@
         "title": "RefreshTokenRequest",
         "type": "object"
       },
+      "ResendOTPRequest": {
+        "description": "OTP resend request.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ResendOTPRequest",
+        "type": "object"
+      },
       "ResolvedPeriod": {
         "description": "A closed reporting window plus its equal-length predecessor.\n\n``previous_*`` is the window of identical length ending the day\nbefore ``date_from`` \u2014 the baseline for all change percentages.",
         "properties": {
@@ -6907,6 +6922,48 @@
           }
         },
         "summary": "Refresh Token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/resend-otp": {
+      "post": {
+        "description": "Resend OTP to user's email.",
+        "operationId": "resend_otp_api_v1_auth_resend_otp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resend Otp",
         "tags": [
           "Auth"
         ]
