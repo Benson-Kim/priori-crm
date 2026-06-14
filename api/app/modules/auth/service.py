@@ -94,6 +94,20 @@ class AuthService:
         otp_code = self._create_otp(user)
         self._send_otp_email(user.email, otp_code)
 
+    def resend_otp(self, email: str) -> None:
+        """Resend OTP code to an existing user."""
+        self._enforce_attempt_throttle(email)
+
+        user = self._get_user_by_email(email)
+        if user is None:
+            raise UnauthorizedException(_GENERIC_AUTH_ERROR)
+
+        if not user.is_active:
+            raise UnauthorizedException(_GENERIC_AUTH_ERROR)
+
+        otp_code = self._create_otp(user)
+        self._send_otp_email(user.email, otp_code)
+
     # Verify OTP (Step 2)
 
     def verify_otp(self, email: str, code: str) -> tuple[str, str, User]:

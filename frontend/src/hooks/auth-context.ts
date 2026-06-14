@@ -21,6 +21,7 @@ export interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  resendOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<AuthUser>;
   logout: () => void;
 }

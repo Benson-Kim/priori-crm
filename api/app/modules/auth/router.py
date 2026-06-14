@@ -7,6 +7,7 @@ from app.modules.auth.schemas import (
     MessageResponse,
     RefreshResponse,
     RefreshTokenRequest,
+    ResendOTPRequest,
     TokenResponse,
     UserResponse,
     VerifyOTPRequest,
@@ -39,6 +40,16 @@ def verify_otp(body: VerifyOTPRequest, db: DbSession):
         access_token=access_token,
         refresh_token=refresh_token,
         user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/resend-otp", response_model=MessageResponse)
+def resend_otp(body: ResendOTPRequest, db: DbSession):
+    """Resend OTP to user's email."""
+    auth_service = AuthService(db)
+    auth_service.resend_otp(body.email)
+    return MessageResponse(
+        message="If the account exists, a new verification code has been sent."
     )
 
 
