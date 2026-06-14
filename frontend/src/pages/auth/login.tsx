@@ -69,7 +69,8 @@ export default function LoginPage() {
       />
 
       {/* Login Card */}
-      <div className="w-full max-w-lg bg-gray-100 border border-gray-200 rounded-lg flex flex-col gap-8 p-12 z-10">
+      <div className="w-full max-w-156 bg-gray-100 border border-gray-200 rounded-4xl flex flex-col gap-8 p-12 z-10">
+
         <div className="space-y-8">
           <div className="flex justify-center">
             <img

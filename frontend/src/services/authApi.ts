@@ -31,6 +31,17 @@ export async function login(email: string, password: string): Promise<string> {
 }
 
 /**
+ * Resend the OTP verification code.
+ */
+export async function resendOtp(email: string): Promise<string> {
+  const result = await apiPost<MessageResponse>("auth/resend-otp", {
+    email,
+  });
+  return result.message;
+}
+
+
+/**
  * Step 2: verify the OTP. On success the access and refresh tokens are
  * persisted so every subsequent request carries the bearer header.
  */
