@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, useMatches, type UIMatch } from "react-router-dom";
 
 import type { RouteHandle } from "@/lib/types";
+import { useAuth } from "@/hooks/auth-context";
 import { OwnerProfileProvider } from "@/hooks/OwnerProfileProvider";
 import { Header } from "./header";
 import { HeaderContext, type HeaderOverride } from "./header-context";
@@ -16,8 +17,14 @@ const DefaultLayout = () => {
         .find((m) => m.handle?.header);
 
     const header = current?.handle?.header;
+    const { user } = useAuth();
 
-    const activeTitle = override?.title ?? header?.title;
+    const rawTitle = override?.title ?? header?.title;
+    const activeTitle = rawTitle?.startsWith("Welcome,")
+        ? user
+            ? `Welcome, ${user.first_name}`
+            : rawTitle
+        : rawTitle;
     const activeDescription = override !== null ? override.description : header?.description;
     const showHeader = !!activeTitle;
 

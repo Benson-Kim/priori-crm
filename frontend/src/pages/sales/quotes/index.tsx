@@ -12,11 +12,12 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
     approveQuote,
     deleteQuote,
     duplicateQuote,
+    exportQuotesExcel,
     getQuoteCounts,
     getQuotes,
     type QuoteStatusCounts,
@@ -47,7 +48,7 @@ export default function QuotesPage() {
         all: 0, draft: 0, sent: 0, approved: 0, invoiced: 0, expired: 0,
     });
     const [isLoading, setIsLoading] = useState(true);
-    const [listError, setListError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const { showConfirm, ConfirmDialog } = useConfirm();
 
     const navigate = useNavigate();
@@ -55,7 +56,7 @@ export default function QuotesPage() {
     // Data fetching 
     const fetchQuotes = useCallback(async () => {
         setIsLoading(true);
-        setListError(null);
+        setError(null);
         try {
             const data = await getQuotes({
                 page: currentPage,
@@ -66,7 +67,7 @@ export default function QuotesPage() {
             setQuotes(data.items);
             setTotalPages(data.total_pages);
         } catch (err) {
-            setListError(
+            setError(
                 err instanceof Error ? err.message : "Failed to load quotes"
             );
         } finally {
@@ -78,8 +79,9 @@ export default function QuotesPage() {
         try {
             const data = await getQuoteCounts();
             setCounts(data);
-        } catch {
-            // Non-critical — silently ignore
+        } catch (err) {
+            console.error("[QuotesPage] Failed to fetch counts:", err);
+            setError(err instanceof Error ? err.message : "Failed to load quotes");
         }
     }, []);
 
@@ -107,8 +109,12 @@ export default function QuotesPage() {
             description: `Approve quote ${quote.quote_number}? This will mark it as approved.`,
             confirmLabel: "Approve",
             onConfirm: async () => {
-                await approveQuote(quote.id);
-                refreshAll();
+                try {
+                    await approveQuote(quote.id);
+                    refreshAll();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to approve invoice");
+                }
             },
         });
     };
@@ -118,7 +124,7 @@ export default function QuotesPage() {
             const dup = await duplicateQuote(quote.id);
             navigate(`/quotes/${dup.new_quote_id}/edit`);
         } catch (err) {
-            setListError(
+            setError(
                 err instanceof Error ? err.message : "Failed to duplicate quote"
             );
         }
@@ -131,10 +137,29 @@ export default function QuotesPage() {
             confirmLabel: "Delete",
             variant: "danger",
             onConfirm: async () => {
-                await deleteQuote(quote.id);
-                refreshAll();
+                try {
+                    await deleteQuote(quote.id);
+                    refreshAll();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete invoice");
+                }
             },
         });
+    };
+
+    const [isExporting, setIsExporting] = useState(false);
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const blob = await exportQuotesExcel({
+                status: activeTab !== "all" ? activeTab : undefined,
+            });
+            saveBlob(blob, `Quotes_${new Date().toISOString().split("T")[0]}.xlsx`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export quotes");
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const getActions = (quote: QuoteSummary): DropdownItem[] => {
@@ -216,7 +241,7 @@ export default function QuotesPage() {
             key: "customer_name",
             header: "Customer Name",
             render: (item: QuoteSummary) => (
-                <span className="font-medium text-gray-800 max-w-[200px] truncate block">
+                <span className="font-medium text-gray-800 max-w-50 truncate block">
                     {item.customer_name}
                 </span>
             ),
@@ -225,7 +250,7 @@ export default function QuotesPage() {
             key: "quote_number",
             header: "Quote ID",
             render: (item: QuoteSummary) => (
-                <span className="text-gray-500 max-w-[150px] truncate block">
+                <span className="text-gray-500 max-w-37.5 truncate block">
                     {item.quote_number}
                 </span>
             ),
@@ -268,16 +293,19 @@ export default function QuotesPage() {
         <div className="flex flex-col h-full space-y-4 font-sans">
 
             {/* Export */}
-            <div className="flex justify-end">
-                <Button variant="outline-secondary">
-                    <Download size={20} /> Export Excel
+            <div className="flex justify-end mt-4">
+                <Button
+                    variant="outline-secondary"
+                    onClick={handleExport}
+                    disabled={isExporting}
+                >
+                    <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
                 </Button>
             </div>
 
-            {/* Error Banner */}
-            {listError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                    {listError}
+            {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-danger">
+                    {error}
                 </div>
             )}
 

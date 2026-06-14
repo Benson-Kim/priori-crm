@@ -19,7 +19,7 @@ import {
   type TopSales,
 } from "@/services/dashboardApi";
 import { isPeriodReady, type PeriodFilter } from "@/services/statementsApi";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   Bar,
   BarChart,
@@ -121,9 +121,10 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
 
 interface SummaryWidgetProps {
   currency: string;
+  onCurrencyChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }
 
-function SummaryWidget({ currency }: SummaryWidgetProps) {
+function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
   const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -160,14 +161,23 @@ function SummaryWidget({ currency }: SummaryWidgetProps) {
 
   return (
     <section>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Overview</h2>
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          placeholder="Select range"
-          selectWrapperClassName="min-w-[220px]"
-        />
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center mb-4">
+        <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold text-gray-800">Overview</h2>
+          <div className="flex items-center gap-3">
+            <Select
+              options={CURRENCY_OPTIONS}
+              value={currency}
+              onChange={onCurrencyChange}
+            />
+            <PeriodRangePicker
+              period={period}
+              onPeriodChange={setPeriod}
+              placeholder="Select range"
+              selectWrapperClassName="min-w-[220px]"
+            />
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -305,8 +315,8 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
               tick={{ fill: "#9ca3af", fontSize: 12 }}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
-            <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={10} />
-            <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={10} />
+              <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
+              <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -322,6 +332,7 @@ const SALES_COLUMNS = [
   {
     key: "product",
     header: "Product",
+    className: "font-normal bg-gray-50",
     render: (item: TopSaleLine) => (
       <div className="flex items-center space-x-3">
         <p
@@ -343,7 +354,8 @@ const SALES_COLUMNS = [
   },
   {
     key: "no_of_sales",
-    header: "Units Sold",
+    header: "Sales No.",
+    className: "font-normal bg-gray-50",
     render: (item: TopSaleLine) => (
       <span className="text-[16px] leading-6 text-gray-600">
         {Number(item.units_sold)}
@@ -353,6 +365,7 @@ const SALES_COLUMNS = [
   {
     key: "total_sale_amount",
     header: "Amount",
+    className: "font-normal bg-gray-50",
     render: (item: TopSaleLine) => (
       <span className="font-medium text-[16px] leading-6 text-gray-800">
         {money(item.amount)}
@@ -400,7 +413,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
   }, [periodReady, range, dateFrom, dateTo, currency]);
 
   return (
-    <section className="relative flex flex-col gap-4 p-6 justify-between rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
+    <section className="relative flex flex-col gap-4 p-6 rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
         <PeriodRangePicker
@@ -482,7 +495,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "number",
       header: "#",
-      className: "w-[64px]",
+      className: "w-[64px] font-normal bg-gray-50",
       render: (_item: DashboardTransaction, index: number) => (
         <span className="text-[16px] leading-6 text-gray-800">{index + 1}.</span>
       ),
@@ -490,6 +503,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "date",
       header: "Date & Time",
+      className: "font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span className="text-[16px] leading-6 text-gray-800">
           {formatDate(item.date)} - {formatTime(item.recorded_at)}
@@ -499,6 +513,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "id",
       header: "Reference",
+      className: "font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span className="text-[16px] leading-6 text-gray-600">{item.ref_no}</span>
       ),
@@ -506,6 +521,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "product",
       header: "Product",
+      className: "font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span className="text-[16px] leading-6 text-gray-800">
           {item.item_name ?? "\u2014"}
@@ -515,6 +531,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "customer",
       header: "Customer",
+      className: "font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span className="text-[16px] leading-6 text-gray-800">{item.entity_name}</span>
       ),
@@ -522,6 +539,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "website",
       header: "Website",
+      className: "font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span className="text-[16px] leading-6 text-gray-600">
           {item.website ?? "\u2014"}
@@ -531,12 +549,10 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "amount",
       header: "Amount",
-      className: "text-right",
+      className: "text-right font-normal bg-gray-50",
       render: (item: DashboardTransaction) => (
         <span
-          className={`text-[16px] leading-6 ${
-            Number(item.amount) < 0 ? "text-error-600" : "text-gray-800"
-          }`}
+          className="text-[16px] leading-6 text-gray-800"
         >
           {formatSignedMoney(item.amount, currency)}
         </span>
@@ -600,18 +616,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header: currency selector only (each section has its own period picker) */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-gray-500">Display currency</span>
-        <Select
-          options={CURRENCY_OPTIONS}
-          value={currency}
-          onChange={(event) => setCurrency(event.target.value)}
-        />
-      </div>
-
-      {/* Summary metric cards — own period state */}
-      <SummaryWidget currency={currency} />
+      <SummaryWidget
+        currency={currency}
+        onCurrencyChange={(event) => setCurrency(event.target.value)}
+      />
 
       {/* Cashflow chart + Top Sales — side by side, each with own period */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 w-full">
