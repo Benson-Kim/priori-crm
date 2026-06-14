@@ -142,11 +142,34 @@ class RedisTokenDenylist:
     def __init__(self, redis_url: str) -> None:
         import redis  # imported lazily so redis is only needed for this backend
 
-        self._redis = redis.Redis.from_url(
-            redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
-        )
+        self._fallback = InMemoryTokenDenylist()
+        self._redis: redis.Redis | None = None
+
+        # Handle empty or invalid redis_url gracefully
+        if not redis_url or not redis_url.strip():
+            logger.warning(
+                "RedisTokenDenylist initialized with empty redis_url; "
+                "will use in-memory fallback for all operations"
+            )
+            self._redis = None
+        else:
+            try:
+                self._redis = redis.Redis.from_url(
+                    redis_url, socket_timeout=0.25, socket_connect_timeout=0.25
+                )
+            except (ValueError, redis.RedisError) as exc:
+                logger.error(
+                    "Failed to initialize Redis connection with url=%s; "
+                    "will use in-memory fallback for all operations",
+                    redis_url,
+                    exc_info=exc,
+                )
+                self._redis = None
 
     def revoke(self, jti: str, ttl_seconds: int) -> None:
+        if self._redis is None:
+            self._fallback.revoke(jti, ttl_seconds)
+            return
         try:
             self._redis.set(f"{_KEY_PREFIX}:{jti}", "1", ex=max(1, ttl_seconds))
         except Exception as exc:
@@ -167,6 +190,8 @@ class RedisTokenDenylist:
         returns True (and logs), so an outage degrades to "reuse detection
         temporarily not enforced" rather than rejecting every refresh.
         """
+        if self._redis is None:
+            return self._fallback.revoke_if_new(jti, ttl_seconds)
         try:
             return bool(
                 self._redis.set(
@@ -181,8 +206,10 @@ class RedisTokenDenylist:
             return True
 
     def is_revoked(self, jti: str) -> bool:
+        if self._redis is None:
+            return self._fallback.is_revoked(jti)
         try:
-            return self._redis.exists(f"{_KEY_PREFIX}:{jti}") > 0
+            return self._redis.exists(f"{_KEY_PREFIX}:{jti}") > 0  # type: ignore[operator]
         except Exception as exc:
             logger.error(
                 "Token denylist Redis unavailable on check; failing open",
@@ -191,6 +218,9 @@ class RedisTokenDenylist:
             return False
 
     def set_fence(self, key: str, timestamp: float, ttl_seconds: int) -> None:
+        if self._redis is None:
+            self._fallback.set_fence(key, timestamp, ttl_seconds)
+            return
         try:
             self._redis.set(
                 f"{_FENCE_PREFIX}:{key}", repr(timestamp), ex=max(1, ttl_seconds)
@@ -202,9 +232,11 @@ class RedisTokenDenylist:
             )
 
     def get_fence(self, key: str) -> float | None:
+        if self._redis is None:
+            return self._fallback.get_fence(key)
         try:
             raw = self._redis.get(f"{_FENCE_PREFIX}:{key}")
-            return float(raw) if raw is not None else None
+            return float(raw) if raw is not None else None  # type: ignore[arg-type]
         except Exception as exc:
             logger.error(
                 "Token denylist Redis unavailable on get_fence; failing open",
