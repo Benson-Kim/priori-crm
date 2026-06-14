@@ -84,7 +84,7 @@ export function OTPInput({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex w-full max-w-[24rem] items-center justify-center gap-4 lg:gap-8 ">
         {values.map((val, i) => (
           <input
             key={i}
@@ -95,18 +95,19 @@ export function OTPInput({
             inputMode="numeric"
             maxLength={1}
             value={val}
+            placeholder="−"
             disabled={disabled}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onFocus={() => setActiveIndex(i)}
             onPaste={i === 0 ? handlePaste : undefined}
             className={cn(
-              "w-11 h-13 sm:w-12.5 sm:h-14 text-center text-xl font-bold rounded-sm border bg-white outline-none transition-all",
-              " ",
+              "flex-none h-14 w-15.25 text-center text-2xl font-bold rounded-lg border bg-white transition-all placeholder:font-bold placeholder:text-gray-800 placeholder:text-2xl",
+              val && activeIndex !== i && "border-2",
               activeIndex === i
-                ? "border-info ring-2 ring-info/30 text-info"
-                : "border-border text-content-priori-purple ",
-              error && "border-danger",
+                ? "text-sky-blue focus-within:border-sky-blue focus-within:ring-sky-blue placeholder:text-sky-blue"
+                : "border-gray-300 text-gray-800",
+              error && "border-danger placeholder:text-danger",
               disabled && "opacity-50 cursor-not-allowed"
             )}
             aria-label={`Digit ${i + 1}`}

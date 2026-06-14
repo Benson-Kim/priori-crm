@@ -32,6 +32,12 @@ class VerifyOTPRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
+class ResendOTPRequest(BaseModel):
+    """OTP resend request."""
+
+    email: EmailStr
+
+
 class RefreshTokenRequest(BaseModel):
     """Token refresh request."""
 
