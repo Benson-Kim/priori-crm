@@ -1,24 +1,30 @@
 """
 Purchase Order API endpoints — Purchases module.
 
-CRUD (create / get / get-by-number / update / delete) plus the
-totals-preview endpoint deferred from PO-02. List, export, send, convert,
-cancel and documents land in later issues.
+CRUD (create / get / get-by-number / update / delete), the totals-preview
+endpoint, and the list view (list / counts / Excel export).
+Send, convert, cancel and documents land in later issues.
 
 """
 
 import logging
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
+from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
     PurchaseOrderResponse,
+    PurchaseOrderStatusCounts,
+    PurchaseOrderSummary,
     PurchaseOrderUpdate,
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
@@ -54,6 +60,160 @@ def create_purchase_order(
 ) -> PurchaseOrderResponse:
     purchase_order = service.create(body, user_id=service.actor_id)
     return PurchaseOrderResponse.model_validate(purchase_order)
+
+
+# LIST & AGGREGATES  (fixed paths must precede /{po_id})
+
+
+@router.get(
+    "",
+    response_model=PaginatedResponse[PurchaseOrderSummary],
+    summary="List purchase orders",
+    description="Paginated, filterable list of purchase orders.",
+    responses={
+        200: {"description": "Paginated purchase-order list"},
+    },
+)
+def list_purchase_orders(
+    service: PurchaseOrderServiceDep,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
+    filter_status: Annotated[
+        str | None,
+        Query(alias="status", description="draft | sent | billed | canceled"),
+    ] = None,
+    vendor_id: Annotated[
+        UUID | None,
+        Query(alias="vendorId", description="Filter by vendor ID"),
+    ] = None,
+    date_from: Annotated[
+        date | None,
+        Query(alias="dateFrom", description="order_date >= this value"),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(alias="dateTo", description="order_date <= this value"),
+    ] = None,
+    delivery_date_from: Annotated[
+        date | None,
+        Query(alias="deliveryDateFrom", description="delivery_date >= this value"),
+    ] = None,
+    delivery_date_to: Annotated[
+        date | None,
+        Query(alias="deliveryDateTo", description="delivery_date <= this value"),
+    ] = None,
+    search: Annotated[
+        str | None,
+        Query(description="Search PO number, reference, or vendor name"),
+    ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
+) -> PaginatedResponse[PurchaseOrderSummary]:
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
+    filters = PurchaseOrderFilterParams(
+        status=filter_status,
+        vendor_id=vendor_id,
+        date_from=date_from,
+        date_to=date_to,
+        delivery_date_from=delivery_date_from,
+        delivery_date_to=delivery_date_to,
+        search=search,
+    )
+    return service.list_purchase_orders(params, filters)
+
+
+@router.get(
+    "/counts",
+    response_model=PurchaseOrderStatusCounts,
+    summary="Get purchase-order status counts",
+    description="Per-status counts for the filter-tab bar badges.",
+    responses={
+        200: {"description": "Counts by status"},
+    },
+)
+def get_purchase_order_counts(
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderStatusCounts:
+    return service.get_status_counts()
+
+
+@router.get(
+    "/export/excel",
+    summary="Export purchase orders to Excel",
+    description="Export the currently-filtered purchase orders as an .xlsx workbook.",
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+    },
+)
+async def export_purchase_orders_to_excel(
+    service: PurchaseOrderServiceDep,
+    filter_status: Annotated[str | None, Query(alias="status")] = None,
+    vendor_id: Annotated[UUID | None, Query(alias="vendorId")] = None,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+    delivery_date_from: Annotated[date | None, Query(alias="deliveryDateFrom")] = None,
+    delivery_date_to: Annotated[date | None, Query(alias="deliveryDateTo")] = None,
+    search: Annotated[str | None, Query()] = None,
+    include_line_items: Annotated[
+        bool,
+        Query(
+            alias="includeLineItems",
+            description="Include line items in a separate sheet",
+        ),
+    ] = False,
+) -> StreamingResponse:
+    import io
+
+    from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
+    from app.lib.config import settings
+
+    filters = PurchaseOrderFilterParams(
+        status=filter_status,
+        vendor_id=vendor_id,
+        date_from=date_from,
+        date_to=date_to,
+        delivery_date_from=delivery_date_from,
+        delivery_date_to=delivery_date_to,
+        search=search,
+    )
+
+    # Batch-load full ORM rows; fetch one beyond the cap so truncation is
+    # detectable, then trim to the cap for the workbook.
+    rows = service.list_for_export(
+        filters,
+        include_line_items=include_line_items,
+        limit=settings.BATCH_SIZE + 1,
+    )
+    truncated = len(rows) > settings.BATCH_SIZE
+    purchase_orders = rows[: settings.BATCH_SIZE]
+
+    # Cap concurrency and build the workbook off the event loop.
+    exporter = ExcelExporter()
+    xlsx_bytes = await run_export(
+        exporter.export_purchase_orders, purchase_orders, include_line_items
+    )
+
+    filename = f"PurchaseOrders_{date.today().strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
+    )
 
 
 # FIXED PATHS  (must precede /{po_id})
