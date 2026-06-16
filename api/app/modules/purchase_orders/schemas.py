@@ -358,7 +358,7 @@ class PurchaseOrderSummary(BaseModel):
 
 
 class PurchaseOrderStatusCounts(BaseModel):
-    """Status counts for the filter-tab bar (\"All (160)\").
+    """Status counts for the filter-tab bar ("All (160)").
 
     Mirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced
     via its own count and excluded from ``all`` (it is a voided PO).
@@ -412,6 +412,60 @@ class PurchaseOrderFilterParams(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
+
+
+# SEND ACTION SCHEMAS
+
+
+class PurchaseOrderSendRequest(BaseModel):
+    """Payload for sending a purchase order to its vendor by email (PRD §6.6).
+
+    All fields are optional: ``toEmail`` defaults to the vendor's email
+    (resolved server-side), and ``subject`` / ``body`` fall back to the
+    service-generated vendor-facing template when omitted.
+    """
+
+    to_email: str | None = Field(
+        None,
+        description="Override recipient email (defaults to the vendor email)",
+        alias="toEmail",
+    )
+    subject: str | None = Field(
+        None,
+        max_length=200,
+        description="Email subject (auto-generated if not provided)",
+    )
+    body: str | None = Field(
+        None,
+        max_length=5000,
+        description="Email body (uses the template if not provided)",
+    )
+    attach_pdf: bool = Field(
+        default=True,
+        description="Whether to attach the purchase-order PDF",
+        alias="attachPdf",
+    )
+
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "toEmail": "vendor@example.com",
+                "subject": "Purchase Order PO-000042 from Priori Technologies",
+                "body": "Please find attached our purchase order.",
+                "attachPdf": True,
+            }
+        },
+    }
+
+
+class PurchaseOrderSendResponse(BaseModel):
+    """Response returned after sending a purchase order."""
+
+    purchase_order_id: UUID
+    sent_to: str
+    sent_at: datetime
+    message: str = "Purchase order sent successfully"
 
 
 # CALCULATION PREVIEW
