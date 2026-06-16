@@ -1,4 +1,4 @@
-"""Duplicate a purchase order as a new DRAFT (PRD §6.10 / §14).
+"""Duplicate a purchase order as a new DRAFT.
 
 The duplicate runs through the shared reference generator (advisory lock)
 and the _with_reference_retry SAVEPOINT loop, both Postgres-only, so the
@@ -20,7 +20,6 @@ from app.constants.enums import (
     VendorStatus,
 )
 from app.modules.purchase_orders.models import (
-    PurchaseOrder,
     PurchaseOrderDocument,
 )
 from app.modules.purchase_orders.schemas import (
