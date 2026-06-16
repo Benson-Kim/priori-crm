@@ -2,10 +2,6 @@
 Purchase Order business logic — service layer.
 Purchase orders are vendor-facing.
 
-Scope by issue:
-- Later issues add list/export (PO-04), send (PO-06), convert (PO-07),
-  cancel (PO-08) and duplicate (PO-09).
-
 Financial contract (no discount in v1):
     line_total = quantity x unit_price
     tax_amount = line_total x tax_rate   (tax_rate from tax_type via get_tax_rate)
@@ -62,7 +58,7 @@ PO_EAGER_LOAD_OPTIONS = (
 )
 
 # Statuses from which a PO may be deleted. SENT / BILLED are
-# protected: a sent or billed PO must be Canceled (PO-08) or is immutable.
+# protected: a sent or billed PO must be Canceled or is immutable.
 _DELETABLE_STATUSES = frozenset(
     {PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED}
 )
@@ -98,7 +94,7 @@ class PurchaseOrderService(BaseDocumentService):
 
     # Locked-load wiring (DocumentSendMixin._get_locked). The send
     # draft/sent statuses are declared here so the inherited FOR UPDATE row
-    # loader and the Draft→Sent transition used by PO-06 resolve correctly.
+    # loader and the Draft→Sent transition resolve correctly.
     _send_model = PurchaseOrder
     _send_draft_status = PurchaseOrderStatus.DRAFT
     _send_sent_status = PurchaseOrderStatus.SENT
@@ -437,7 +433,7 @@ class PurchaseOrderService(BaseDocumentService):
         """Reject sends for non-Draft purchase orders (DocumentSendMixin hook).
 
         Send is a Draft-only action: a SENT / BILLED / CANCELED PO can never
-        be (re)sent (PRD §14 — resend after Sent is intentionally
+        be (re)sent — resend after Sent is intentionally
         unavailable). The locked row is checked under FOR UPDATE so the gate
         cannot act on a stale status.
         """
@@ -473,7 +469,7 @@ class PurchaseOrderService(BaseDocumentService):
         return recipient
 
     def _generate_email_subject(self, purchase_order: PurchaseOrder) -> str:
-        """Subject: 'Purchase Order {ref} from {Business Name}' (PRD §6.6)."""
+        """Subject: 'Purchase Order {ref} from {Business Name}'."""
         from app.lib.config import settings
 
         return f"Purchase Order {purchase_order.po_reference} from {settings.APP_NAME}"
@@ -674,6 +670,50 @@ Best regards,
                 "updated_fields": list(update_data.keys()),
                 "new_version": purchase_order.version,
             },
+        )
+        return purchase_order
+
+    # CANCEL
+
+    def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Cancel a purchase order: DRAFT | SENT -> CANCELED.
+
+        Cancel voids the PO while preserving the record: a
+        CANCELED PO is terminal and can never be re-opened or edited
+        (``is_editable`` already gates editing to DRAFT only). BILLED and
+        already-CANCELED purchase orders cannot be cancelled — the shared
+        ``_transition`` rejects those edges with a typed BadRequestException
+        (no silent no-op).
+
+        Locked load: serializes with send / convert / delete so the status
+        gate and transition cannot interleave with a concurrent transition
+        (race-condition contract — all status transitions load FOR UPDATE).
+        The audit row is written in the same locked transaction.
+        """
+        purchase_order = self._get_locked(po_id)
+
+        previous_status = purchase_order.status
+        # Route through the state machine so ALLOWED_TRANSITIONS is enforced
+        # and the version bump is owned in one place. BILLED/CANCELED have no
+        # CANCELED edge, so this raises BadRequestException for them.
+        self._transition(purchase_order, PurchaseOrderStatus.CANCELED)
+        self._db.flush()
+
+        # Durable audit trail, atomic with the transition.
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="canceled",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(PurchaseOrderStatus.CANCELED)},
+        )
+
+        logger.warning(
+            "Canceled purchase order: %s",
+            purchase_order.po_reference,
+            extra={"po_id": str(purchase_order.id)},
         )
         return purchase_order
 

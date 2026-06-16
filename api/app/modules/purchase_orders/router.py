@@ -354,6 +354,35 @@ def update_purchase_order(
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
+@router.post(
+    "/{po_id}/cancel",
+    response_model=PurchaseOrderResponse,
+    summary="Cancel purchase order",
+    description=(
+        "Cancel a purchase order (DRAFT or SENT only) -> CANCELED. The "
+        "record is preserved but becomes terminal: it can no longer be "
+        "edited, sent or converted. A BILLED or already-CANCELED purchase "
+        "order cannot be cancelled. A before/after-image audit row is "
+        "written atomically with the transition."
+    ),
+    responses={
+        200: {"description": "Purchase order canceled"},
+        400: {"description": "Invalid transition (BILLED or already CANCELED)"},
+        403: {"description": "Insufficient role to cancel purchase orders"},
+        404: {"description": "Purchase order not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def cancel_purchase_order(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderResponse:
+    service.cancel(po_id)
+    # Re-read with vendor + line items eager-loaded for the response.
+    purchase_order = service.get_by_id(po_id)
+    return PurchaseOrderResponse.model_validate(purchase_order)
+
+
 @router.delete(
     "/{po_id}",
     status_code=status.HTTP_204_NO_CONTENT,
