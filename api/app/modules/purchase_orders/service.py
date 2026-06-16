@@ -1,7 +1,7 @@
 """
 Purchase Order business logic — service layer.
 
-PO-02 scope: the totals/calculation engine. ``PurchaseOrderService`` extends
+the totals/calculation engine. ``PurchaseOrderService`` extends
 ``BaseDocumentService`` so the state-machine, reference-retry, email and
 two-phase-send mechanics are inherited rather than re-implemented (SOLID/DRY
 reuse mandate). This issue wires only the calculation surface and the static
@@ -38,7 +38,7 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle (PRD §9):
+    Lifecycle:
         DRAFT → SENT → BILLED
         DRAFT | SENT → CANCELED   (terminal)
     """

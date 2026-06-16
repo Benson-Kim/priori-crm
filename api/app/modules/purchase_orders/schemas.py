@@ -1,20 +1,4 @@
-"""
-Pydantic schemas for the Purchase Orders API.
-
-PO-02 scope: the line-item input used by the calculation engine and the
-calculation-preview response. Request/response schemas for full CRUD
-(create/update/get/list) are added in PO-03 / PO-04.
-
-Financial contract (no discount in v1, PRD §9):
-    line_total = quantity × unit_price
-    tax_amount = line_total × tax_rate  (tax_rate from tax_type via get_tax_rate)
-    subtotal   = Σ line_total
-    tax_total  = Σ tax_amount
-    total      = subtotal + tax_total
-
-Mirrors the Expenses module (vendor-facing analog). "Rate"/"Amount" are
-UI/PDF labels only; the wire/DB contract stays unit_price/line_total.
-"""
+"""Pydantic schemas for the Purchase Orders API"""
 
 from decimal import Decimal
 
