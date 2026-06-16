@@ -137,3 +137,19 @@ class DocumentSource(StrEnum):
     FORM = "form"
     VIEW = "view"
     PAYMENT_MODAL = "payment_modal"
+
+
+class PurchaseOrderStatus(StrEnum):
+    """Purchase Order lifecycle states.
+
+    NOTE: the cancelled state is spelled 'cancelled' (two L's) per the
+    PO-01 specification, which deliberately differs from the rest of the
+    codebase where the equivalent state is spelled 'canceled' (one L,
+    e.g. ExpenseStatus.CANCELED, InvoiceStatus.CANCELED). Reviewers should
+    be aware of this intentional inconsistency.
+    """
+
+    DRAFT = "draft"
+    SENT = "sent"
+    BILLED = "billed"
+    CANCELLED = "cancelled"
