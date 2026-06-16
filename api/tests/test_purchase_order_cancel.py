@@ -1,4 +1,4 @@
-"""Cancel lifecycle + state-machine enforcement (PRD §6.8 / §8 / §12).
+"""Cancel lifecycle + state-machine enforcement.
 
 Cancel re-reads the row FOR UPDATE and routes through the shared
 _transition() guard, so the suite is Postgres-guarded (DoD H1 — the SQLite
