@@ -418,7 +418,7 @@ class PurchaseOrderService(BaseDocumentService):
         """
         return PurchaseOrderStatisticsRepository(self._db).status_counts()
 
-    # SEND (DRAFT -> SENT) via the shared transactional outbox
+        # SEND (DRAFT -> SENT) via the shared transactional outbox
 
     def _capture_owner_snapshot(self, purchase_order: PurchaseOrder) -> None:
         """Stamp an immutable owner-header snapshot the first time the PO is
@@ -476,9 +476,7 @@ class PurchaseOrderService(BaseDocumentService):
         """Subject: 'Purchase Order {ref} from {Business Name}' (PRD §6.6)."""
         from app.lib.config import settings
 
-        return (
-            f"Purchase Order {purchase_order.po_reference} from {settings.APP_NAME}"
-        )
+        return f"Purchase Order {purchase_order.po_reference} from {settings.APP_NAME}"
 
     def _generate_email_body(
         self, purchase_order: PurchaseOrder, attached: bool = False
@@ -507,8 +505,7 @@ class PurchaseOrderService(BaseDocumentService):
         delivery_line = ""
         if purchase_order.delivery_date is not None:
             delivery_line = (
-                f"Delivery date: "
-                f"{purchase_order.delivery_date.strftime('%d %B %Y')}\n"
+                f"Delivery date: {purchase_order.delivery_date.strftime('%d %B %Y')}\n"
             )
         return f"""\
 Dear {vendor_name},
