@@ -33,12 +33,21 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.financial import build_line_items, sum_line_totals
+from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import PurchaseOrderStatus
 from app.modules.purchase_orders.models import PurchaseOrder, PurchaseOrderLineItem
+from app.modules.purchase_orders.queries import (
+    PurchaseOrderExportQuery,
+    PurchaseOrderStatisticsRepository,
+    apply_purchase_order_filters,
+)
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderStatusCounts,
+    PurchaseOrderSummary,
     PurchaseOrderUpdate,
 )
 
@@ -286,6 +295,117 @@ class PurchaseOrderService(BaseDocumentService):
         except SQLAlchemyError as exc:
             logger.exception("Database error retrieving purchase order %s", po_number)
             raise DatabaseException("Failed to retrieve purchase order") from exc
+
+    # LIST / AGGREGATES
+
+    # Single source of truth for purchase-order filtering, including the
+    # CANCELED-visibility rule — module-level in queries.py so the export
+    # query shares the identical function.
+    _apply_filters = staticmethod(apply_purchase_order_filters)
+
+    def list_purchase_orders(
+        self,
+        params: PaginationParams,
+        filters: PurchaseOrderFilterParams | None = None,
+    ) -> PaginatedResponse[PurchaseOrderSummary]:
+        """Paginated purchase-order list with filtering and full-text search.
+
+        Selects only the summary columns plus a single vendor join — line
+        items are never loaded here, so the list cost is constant in the
+        number of line items (no N+1). Ordered by created_at DESC (index
+        backed). COUNT(*) runs only when ``with_total`` is requested;
+        otherwise an over-fetched window of ``per_page + 1`` rows yields an
+        exact has_next without a count.
+        """
+        try:
+            from app.modules.vendors.models import Vendor
+
+            query = self._db.query(
+                PurchaseOrder.id,
+                PurchaseOrder.po_number,
+                PurchaseOrder.po_reference,
+                PurchaseOrder.vendor_id,
+                PurchaseOrder.order_date,
+                PurchaseOrder.delivery_date,
+                PurchaseOrder.status,
+                PurchaseOrder.currency,
+                PurchaseOrder.total,
+                PurchaseOrder.is_recurring,
+                PurchaseOrder.converted_bill_id,
+                PurchaseOrder.created_at,
+                Vendor.vendor_name.label("vendor_name"),
+            ).join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
+
+            query = self._apply_filters(query, filters)
+
+            total = query.count() if params.with_total else None
+
+            rows = (
+                query.order_by(PurchaseOrder.created_at.desc())
+                .offset(params.offset)
+                .limit(params.fetch_limit)
+                .all()
+            )
+
+            items = [
+                PurchaseOrderSummary(
+                    id=row.id,
+                    po_number=row.po_number,
+                    po_reference=row.po_reference,
+                    vendor_id=row.vendor_id,
+                    vendor_name=row.vendor_name,
+                    order_date=row.order_date,
+                    delivery_date=row.delivery_date,
+                    status=row.status,
+                    currency=row.currency,
+                    total=row.total,
+                    is_recurring=row.is_recurring,
+                    converted_bill_id=row.converted_bill_id,
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
+
+            logger.debug(
+                "Listed purchase orders (page %d, total %s)",
+                params.page,
+                total,
+                extra={
+                    "page": params.page,
+                    "per_page": params.per_page,
+                    "total": total,
+                    "filters": filters.model_dump() if filters else None,
+                },
+            )
+            return PaginatedResponse.create_from_window(
+                rows=items, params=params, total=total
+            )
+
+        except SQLAlchemyError as exc:
+            logger.exception("Database error listing purchase orders")
+            raise DatabaseException("Failed to list purchase orders") from exc
+
+    def list_for_export(
+        self,
+        filters: PurchaseOrderFilterParams | None = None,
+        include_line_items: bool = False,
+        limit: int | None = None,
+    ) -> list[PurchaseOrder]:
+        """Return full PurchaseOrder ORM rows for Excel export, batch-loaded.
+
+        Delegates to PurchaseOrderExportQuery so the export shares the
+        identical filter function as the list view.
+        """
+        return PurchaseOrderExportQuery(self._db).list(
+            filters, include_line_items=include_line_items, limit=limit
+        )
+
+    def get_status_counts(self) -> PurchaseOrderStatusCounts:
+        """Per-status counts for the filter-tab badges.
+
+        Delegates to PurchaseOrderStatisticsRepository (single grouped query).
+        """
+        return PurchaseOrderStatisticsRepository(self._db).status_counts()
 
     # UPDATE
 
