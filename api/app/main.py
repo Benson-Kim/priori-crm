@@ -19,6 +19,7 @@ import app.modules.customers.models
 import app.modules.expenses.models
 import app.modules.invoices.models
 import app.modules.owner.models
+import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
 from app.common.database import engine
