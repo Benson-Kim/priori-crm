@@ -1,8 +1,7 @@
 """
-PO-02: Purchase Order totals & calculation engine.
+Purchase Order totals & calculation engine.
 
-Proves the acceptance criteria of issue #3:
-- line_total = quantity × unit_price; tax_amount = line_total × tax_rate;
+- line_total = quantity x unit_price; tax_amount = line_total x tax_rate;
   subtotal = Σ line_total; tax_total = Σ tax_amount; total = subtotal + tax_total.
 - All money is Decimal, quantized to 2 dp.
 - tax_rate derives from tax_type via get_tax_rate; zero-rated allowed.
@@ -13,6 +12,7 @@ Pure-function tests — no database required (calculate_totals is a classmethod)
 """
 
 from decimal import Decimal
+from typing import ClassVar
 
 from app.constants.enums import TaxType
 from app.modules.expenses.schemas import ExpenseLineItemCreate
@@ -47,7 +47,7 @@ class TestPurchaseOrderCalculateTotals:
         result = PurchaseOrderService.calculate_totals(
             [_po_item(quantity=Decimal("2"), unit_price=Decimal("100.00"))]
         )
-        # line_total = 2 × 100 = 200.00; tax = 200 × 0.16 = 32.00
+        # line_total = 2 x 100 = 200.00; tax = 200 x 0.16 = 32.00
         assert result.subtotal == Decimal("200.00")
         assert result.tax_total == Decimal("32.00")
         assert result.total == Decimal("232.00")
@@ -85,7 +85,7 @@ class TestPurchaseOrderCalculateTotals:
         result = PurchaseOrderService.calculate_totals(
             [_po_item(quantity=Decimal("100000"), unit_price=Decimal("999.99"))]
         )
-        # 100000 × 999.99 = 99,999,000.00; tax = × 0.16 = 15,999,840.00
+        # 100000 x 999.99 = 99,999,000.00; tax = x 0.16 = 15,999,840.00
         assert result.subtotal == Decimal("99999000.00")
         assert result.tax_total == Decimal("15999840.00")
         assert result.total == Decimal("115998840.00")
@@ -102,7 +102,7 @@ class TestPurchaseOrderCalculateTotals:
 class TestExpenseParity:
     """PO totals must be byte-for-byte identical to Expenses for same inputs."""
 
-    INPUTS = [
+    INPUTS: ClassVar = [
         {
             "item_name": "A",
             "description": "d",
