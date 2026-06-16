@@ -2,24 +2,37 @@
 Purchase Order API endpoints — Purchases module.
 
 CRUD (create / get / get-by-number / update / delete), the totals-preview
-endpoint, and the list view (list / counts / Excel export).
-Send, convert, cancel and documents land in later issues.
+endpoint, the list view (list / counts / Excel export), send, cancel, PDF,
+and per-PO document attachments (upload / list / download / delete).
 
 """
 
 import logging
+import secrets
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.uploads import validate_upload
+from app.lib.storage import storage_service
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderDocumentResponse,
     PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
