@@ -1,10 +1,11 @@
-"""Shared PDF orchestration for customer-facing documents.
+"""Shared PDF orchestration for branded documents.
 
-Invoices and quotes carried near-identical ``_render_pdf``/``generate_pdf``
-implementations: resolve the owner header (the document's immutable snapshot
-when issued, else the live profile), read the logo bytes, then call the
-matching ``DocumentPDFGenerator`` method. ``DocumentPdfRenderer`` owns that
-orchestration in one place; the services delegate to it.
+Invoices, quotes and purchase orders carried near-identical
+``_render_pdf``/``generate_pdf`` implementations: resolve the owner header
+(the document's immutable snapshot when issued, else the live profile), read
+the logo bytes, then call the matching ``DocumentPDFGenerator`` method.
+``DocumentPdfRenderer`` owns that orchestration in one place; the services
+delegate to it.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 
 class DocumentPdfRenderer:
-    """Render invoice/quote PDFs with shared owner-branding resolution."""
+    """Render invoice/quote/PO PDFs with shared owner-branding resolution."""
 
     def __init__(self, db: Session) -> None:
         self._db = db
@@ -56,4 +57,17 @@ class DocumentPdfRenderer:
         owner_info, logo_bytes = self.load_owner_branding(quote)
         return DocumentPDFGenerator().generate_quote_pdf(
             quote, owner=owner_info, logo_bytes=logo_bytes
+        )
+
+    def render_purchase_order(self, purchase_order: Any) -> bytes:
+        """Render a PDF for an already-loaded purchase order.
+
+        Owner branding resolves from the PO's immutable snapshot once sent,
+        else the live profile (Draft preview) — shared with invoices/quotes.
+        """
+        from app.common.pdf import DocumentPDFGenerator
+
+        owner_info, logo_bytes = self.load_owner_branding(purchase_order)
+        return DocumentPDFGenerator().generate_purchase_order_pdf(
+            purchase_order, owner=owner_info, logo_bytes=logo_bytes
         )
