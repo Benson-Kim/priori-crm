@@ -234,11 +234,11 @@ ui:lint-build:
   variables:
     # Generate contract types from the schema exported by api:openapi-schema
     # instead of hand-written interfaces. Points gen:api at the artifact.
-    VITE_OPENAPI_SCHEMA: "$CI_PROJECT_DIR/openapi.json"
+    VITE_OPENAPI_SCHEMA: "$CI_PROJECT_DIR/frontend/openapi.json"
   before_script:
     - cd frontend
     - npm ci
-    # - npm run gen:api
+    - npm run gen:api
   script:
     - npm run lint
     - npx tsc --noEmit
