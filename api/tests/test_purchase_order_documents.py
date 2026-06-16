@@ -307,16 +307,11 @@ class TestHardDeletePurge:
 
         fake = FakeStorage()
         svc = PurchaseOrderService(db)
-        with patch(
-            "app.modules.purchase_orders.service.storage_service",
-            fake,
-            create=True,
-        ):
-            # _purge_storage_objects imports storage_service lazily from
-            # app.lib.storage, so patch there too.
-            with patch("app.lib.storage.storage_service", fake):
-                assert svc.delete(po_id) is False
-                db.commit()
+        # _purge_storage_objects imports storage_service lazily from
+        # app.lib.storage, so patching that single target is sufficient.
+        with patch("app.lib.storage.storage_service", fake):
+            assert svc.delete(po_id) is False
+            db.commit()
 
         # Object purged, no orphan left behind.
         assert key in fake.deleted
