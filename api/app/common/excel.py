@@ -188,6 +188,60 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    def export_purchase_orders(
+        self,
+        purchase_orders: list,
+        include_line_items: bool = False,
+    ) -> bytes:
+        """Export purchase-order records to .xlsx bytes.
+
+        Mirrors export_expenses (vendor-facing). No discount in v1, so the
+        money columns are Subtotal / Tax / Total only.
+        """
+        headers = [
+            "PO #",
+            "Reference",
+            "Vendor",
+            "Order Date",
+            "Delivery Date",
+            "Status",
+            "Currency",
+            "Subtotal",
+            "Tax",
+            "Total",
+        ]
+
+        def row_fn(po):
+            vendor_name = getattr(po, "vendor_name", None)
+            if not vendor_name and hasattr(po, "vendor"):
+                vendor_name = getattr(po.vendor, "vendor_name", str(po.vendor_id))
+            return [
+                po.po_number,
+                po.po_reference,
+                vendor_name or str(po.vendor_id),
+                po.order_date,
+                po.delivery_date,
+                po.status,
+                po.currency,
+                po.subtotal,
+                po.tax_total,
+                po.total,
+            ]
+
+        wb = self._build_workbook(
+            sheet_name="Purchase Orders",
+            headers=headers,
+            records=purchase_orders,
+            row_fn=row_fn,
+            money_cols=[8, 9, 10],
+            date_cols=[4, 5],
+        )
+
+        if include_line_items and purchase_orders:
+            self._add_line_items_sheet(wb, purchase_orders, "purchase_order")
+
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(
