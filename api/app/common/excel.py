@@ -238,7 +238,9 @@ class ExcelExporter:
         )
 
         if include_line_items and purchase_orders:
-            self._add_line_items_sheet(wb, purchase_orders, "purchase_order")
+            # doc_type "po" → the sheet resolves the document number via
+            # getattr(record, "po_number"), which is the PO's actual attr.
+            self._add_line_items_sheet(wb, purchase_orders, "po")
 
         return self._to_bytes(wb)
 
