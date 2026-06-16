@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime  # noqa: F401  (datetime used via sent_at)
 from decimal import Decimal
 from typing import Any, ClassVar
 
