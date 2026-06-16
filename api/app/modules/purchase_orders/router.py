@@ -20,6 +20,7 @@ from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
     PurchaseOrderResponse,
@@ -275,6 +276,35 @@ def send_purchase_order(
         attach_pdf=request_data.attach_pdf,
     )
     return PurchaseOrderSendResponse(**result)
+
+
+@router.post(
+    "/{po_id}/duplicate",
+    response_model=PurchaseOrderDuplicateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Duplicate purchase order",
+    description=(
+        "Create a copy of a purchase order as a new DRAFT. Copies line "
+        "items, currency, notes, Terms & Conditions and the delivery date; "
+        "order_date is reset to today. The Compliance Ref is cleared and "
+        "attached documents are not copied. Available at any status."
+    ),
+    responses={
+        201: {"description": "Purchase order duplicated successfully"},
+        404: {"description": "Purchase order not found"},
+    },
+)
+def duplicate_purchase_order(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderDuplicateResponse:
+    duplicate = service.duplicate(po_id, service.actor_id)
+    return PurchaseOrderDuplicateResponse(
+        original_po_id=po_id,
+        new_po_id=duplicate.id,
+        new_po_reference=duplicate.po_reference,
+        message="Purchase order duplicated successfully",
+    )
 
 
 @router.get(

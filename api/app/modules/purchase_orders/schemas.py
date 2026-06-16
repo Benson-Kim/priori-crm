@@ -468,6 +468,23 @@ class PurchaseOrderSendResponse(BaseModel):
     message: str = "Purchase order sent successfully"
 
 
+# DUPLICATE ACTION SCHEMA
+
+
+class PurchaseOrderDuplicateResponse(BaseModel):
+    """Response returned after duplicating a purchase order (PRD §6.10).
+
+    Mirrors the Quote duplicate response: returns the original and the new
+    DRAFT identifiers plus the new system reference so the frontend can
+    redirect straight to the editable copy.
+    """
+
+    original_po_id: UUID
+    new_po_id: UUID
+    new_po_reference: str
+    message: str = "Purchase order duplicated successfully"
+
+
 # CALCULATION PREVIEW
 
 
