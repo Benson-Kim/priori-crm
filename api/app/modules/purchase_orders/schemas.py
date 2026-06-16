@@ -1,9 +1,9 @@
 """
 Pydantic schemas for the Purchase Orders API.
 
-Financial contract (no discount in v1, PRD §9):
-    line_total = quantity × unit_price
-    tax_amount = line_total × tax_rate  (tax_rate from tax_type via get_tax_rate)
+Financial contract (no discount in v1):
+    line_total = quantity x unit_price
+    tax_amount = line_total x tax_rate  (tax_rate from tax_type via get_tax_rate)
     subtotal   = Σ line_total
     tax_total  = Σ tax_amount
     total      = subtotal + tax_total
@@ -14,9 +14,7 @@ are guaranteed identical across the two vendor-facing document types. "Rate"/
 unit_price/line_total.
 
 Scope:
-- PO-02 added PurchaseOrderLineItemCreate + PurchaseOrderCalculationResponse.
-- PO-03 adds the CRUD request/response schemas (create / update / get).
-  currency is deliberately absent from PurchaseOrderUpdate — it is locked
+- Currency is deliberately absent from PurchaseOrderUpdate — it is locked
   after first save (the service enforces this by only applying supplied
   fields).
 """
@@ -30,7 +28,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator, model_va
 from app.common.validators import empty_str_to_none as normalize_empty_str
 from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
 
-# TERMS & CONDITIONS length cap (PO-03 acceptance criteria).
+# TERMS & CONDITIONS length cap.
 MAX_TERMS_AND_CONDITIONS_LENGTH = 2000
 
 
@@ -339,8 +337,7 @@ class PurchaseOrderCalculationResponse(BaseModel):
 
     No discount in v1: total = subtotal + tax_total. The field is named
     ``total`` (not ``total_due``) because a purchase order is a commitment
-    to pay a vendor, not a receivable with a running balance — this matches
-    the PurchaseOrder.total column added in PO-01.
+    to pay a vendor, not a receivable with a running balance
     """
 
     subtotal: Decimal

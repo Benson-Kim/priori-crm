@@ -1,8 +1,6 @@
 """
-PO-03: Purchase Order CRUD + reference generation + optimistic locking.
+Purchase Order CRUD + reference generation + optimistic locking.
 
-Proves the acceptance criteria of issue #4 (work item /work_items/4). Each
-checkbox in the issue maps to at least one named test here (DoD H.5):
 
 - Reference generation: po_number date-scoped, po_reference monotonic
   PO-NNNNNN, never reused after hard delete.
@@ -19,7 +17,7 @@ Pure-logic tests run everywhere; the FOR UPDATE row-lock and advisory-lock
 paths are Postgres-only and are guarded with skipif(not USING_POSTGRES).
 """
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -42,7 +40,6 @@ from app.modules.purchase_orders.schemas import (
 from app.modules.purchase_orders.service import PurchaseOrderService
 from app.modules.vendors.models import Vendor
 from tests.conftest import USING_POSTGRES, TestingSessionLocal
-
 
 # FIXTURES / HELPERS
 
@@ -183,7 +180,7 @@ class TestReferenceGeneration:
         assert first_ref != second_ref
 
         # Hard-delete the most recent PO, then create again: the suffix must
-        # advance, never reuse the freed number (PRD D7).
+        # advance, never reuse the freed number.
         svc.delete(second.id)
         db.flush()
 
@@ -199,9 +196,7 @@ class TestCurrencyLock:
         vendor = _vendor(db, currency=Currency.KES)
         svc = PurchaseOrderService(db)
         with pytest.raises(BadRequestException):
-            svc.create(
-                _create_payload(vendor_id=vendor.id, currency=Currency.USD)
-            )
+            svc.create(_create_payload(vendor_id=vendor.id, currency=Currency.USD))
 
     def test_currency_absent_from_update_schema(self):
         # currency is locked: the update schema must not even accept it.
@@ -334,9 +329,7 @@ class TestDelete:
         soft = svc.delete(po_id)
         assert soft is False  # hard delete in v1
 
-        assert (
-            db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first() is None
-        )
+        assert db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first() is None
 
         audit = (
             db.query(AuditEvent)
