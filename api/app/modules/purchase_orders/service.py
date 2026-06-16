@@ -577,6 +577,91 @@ class PurchaseOrderService(BaseDocumentService):
             logger.exception("Error deleting purchase order %s", po_id)
             raise DatabaseException("Failed to delete purchase order") from exc
 
+    # DUPLICATE
+
+    def duplicate(
+        self,
+        po_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+    ) -> PurchaseOrder:
+        """Duplicate an existing purchase order as a new DRAFT.
+
+        Re-raise an order quickly; also the documented path to "resend" a
+        Sent PO (PRD §6.10, §14). Available at any status.
+
+        Reuse-first: fresh references come from the shared reference
+        generators and the create runs inside the shared
+        ``_with_reference_retry`` SAVEPOINT loop — no copied reference or
+        retry logic.
+
+        Copy rules (PRD §6.10 / §14):
+        - copied: line items (incl. tax rows), currency, notes, Terms &
+          Conditions, delivery_date, is_recurring;
+        - order_date is reset to today;
+        - compliance_ref is CLEARED (specific to the original);
+        - attached documents are NOT copied.
+        """
+        from datetime import date
+
+        try:
+            original = self.get_by_id(po_id)
+
+            def _build() -> PurchaseOrder:
+                duplicate = PurchaseOrder(
+                    po_number=self._generate_po_number(),
+                    po_reference=self._generate_po_reference(),
+                    vendor_id=original.vendor_id,
+                    order_date=date.today(),
+                    delivery_date=original.delivery_date,
+                    currency=original.currency,
+                    status=PurchaseOrderStatus.DRAFT,
+                    is_recurring=original.is_recurring,
+                    subtotal=original.subtotal,
+                    tax_total=original.tax_total,
+                    total=original.total,
+                    compliance_ref=None,  # cleared — specific to the original
+                    notes=original.notes,
+                    terms_and_conditions=original.terms_and_conditions,
+                    created_by=user_id,
+                )
+                self._db.add(duplicate)
+                self._db.flush()
+
+                for orig_item in original.line_items:
+                    self._db.add(
+                        PurchaseOrderLineItem(
+                            po_id=duplicate.id,
+                            line_number=orig_item.line_number,
+                            item_name=orig_item.item_name,
+                            description=orig_item.description,
+                            quantity=orig_item.quantity,
+                            unit_price=orig_item.unit_price,
+                            line_total=orig_item.line_total,
+                            tax_type=orig_item.tax_type,
+                            tax_amount=orig_item.tax_amount,
+                        )
+                    )
+                self._db.flush()
+
+                logger.info(
+                    "Duplicated purchase order %s → %s",
+                    original.po_number,
+                    duplicate.po_number,
+                    extra={
+                        "original_id": str(original.id),
+                        "duplicate_id": str(duplicate.id),
+                    },
+                )
+                return duplicate
+
+            return self._with_reference_retry(_build, "purchase_order")
+
+        except NotFoundException:
+            raise
+        except SQLAlchemyError as exc:
+            logger.exception("Error duplicating purchase order %s", po_id)
+            raise DatabaseException("Failed to duplicate purchase order") from exc
+
     # CALCULATION PREVIEW
 
     @classmethod
