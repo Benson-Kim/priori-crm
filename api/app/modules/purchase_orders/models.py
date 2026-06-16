@@ -1,9 +1,9 @@
 """
 Purchase Order ORM models — Purchases module.
 
-Lifecycle: DRAFT → SENT → BILLED; DRAFT | SENT → CANCELLED
+Lifecycle: DRAFT → SENT → BILLED; DRAFT | SENT → CANCELED
 No discount field in v1. No payments table in v1.
-CANCELLED is a terminal state (voided).
+CANCELED is a terminal state (voided).
 
 Mirrors the Expense models (vendor-facing, document attachments) rather
 than the Quote/Invoice (customer-facing) models. Purchase Orders are
@@ -47,13 +47,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
+from app.common.financial import get_tax_rate
 from app.constants.enums import (
     Currency,
     DocumentSource,
     PurchaseOrderStatus,
     TaxType,
 )
-from app.common.financial import get_tax_rate
 
 
 class PurchaseOrder(Base):
@@ -67,7 +67,7 @@ class PurchaseOrder(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'sent', 'billed', 'cancelled')",
+            "status IN ('draft', 'sent', 'billed', 'canceled')",
             name="ck_purchase_orders_valid_status",
         ),
         CheckConstraint(

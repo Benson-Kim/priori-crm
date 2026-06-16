@@ -140,16 +140,9 @@ class DocumentSource(StrEnum):
 
 
 class PurchaseOrderStatus(StrEnum):
-    """Purchase Order lifecycle states.
+    """Purchase Order lifecycle states"""
 
-    NOTE: the cancelled state is spelled 'cancelled' (two L's) per the
-    PO-01 specification, which deliberately differs from the rest of the
-    codebase where the equivalent state is spelled 'canceled' (one L,
-    e.g. ExpenseStatus.CANCELED, InvoiceStatus.CANCELED). Reviewers should
-    be aware of this intentional inconsistency.
-    """
-
-    DRAFT = "draft"
-    SENT = "sent"
-    BILLED = "billed"
-    CANCELLED = "cancelled"
+    DRAFT = "draft"  # Created but not yet sent
+    SENT = "sent"  # Sent to the vendor by email
+    BILLED = "billed"  # PO has been converted to a Bill
+    CANCELED = "canceled"  # PO has been voided
