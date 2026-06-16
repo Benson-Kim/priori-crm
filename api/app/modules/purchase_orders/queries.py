@@ -57,9 +57,7 @@ def apply_purchase_order_filters(query, filters: PurchaseOrderFilterParams | Non
     if filters.date_to:
         query = query.filter(PurchaseOrder.order_date <= filters.date_to)
     if filters.delivery_date_from:
-        query = query.filter(
-            PurchaseOrder.delivery_date >= filters.delivery_date_from
-        )
+        query = query.filter(PurchaseOrder.delivery_date >= filters.delivery_date_from)
     if filters.delivery_date_to:
         query = query.filter(PurchaseOrder.delivery_date <= filters.delivery_date_to)
     if filters.search:
