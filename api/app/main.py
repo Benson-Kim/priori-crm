@@ -39,6 +39,7 @@ from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
 from app.modules.owner.router import router as owner_router
+from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.statements.router import router as statements_router
 from app.modules.vendors.router import router as vendors_router
@@ -148,6 +149,11 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
     app.include_router(
         expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"]
+    )
+    app.include_router(
+        purchase_orders_router,
+        prefix=f"{api_prefix}/purchase-orders",
+        tags=["Purchase Orders"],
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
     app.include_router(
