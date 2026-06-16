@@ -200,6 +200,12 @@ class Vendor(Base):
         lazy="noload",
     )
 
+    purchase_orders = relationship(
+        "PurchaseOrder",
+        back_populates="vendor",
+        lazy="noload",
+    )
+
     @validates("vendor_name")
     def validate_vendor_name_not_blank(self, key: str, value: str) -> str:
         """Reject blank-whitespace-only vendor names"""

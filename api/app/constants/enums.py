@@ -137,3 +137,12 @@ class DocumentSource(StrEnum):
     FORM = "form"
     VIEW = "view"
     PAYMENT_MODAL = "payment_modal"
+
+
+class PurchaseOrderStatus(StrEnum):
+    """Purchase Order lifecycle states"""
+
+    DRAFT = "draft"  # Created but not yet sent
+    SENT = "sent"  # Sent to the vendor by email
+    BILLED = "billed"  # PO has been converted to a Bill
+    CANCELED = "canceled"  # PO has been voided

@@ -12,6 +12,7 @@ from app.modules.auth.models import OTPCode, User  # noqa: F401
 from app.modules.customers.models import Customer  # noqa: F401
 from app.modules.expenses.models import Expense  # noqa: F401
 from app.modules.invoices.models import Invoice  # noqa: F401
+from app.modules.purchase_orders.models import PurchaseOrder  # noqa: F401
 from app.modules.quotes.models import Quote  # noqa: F401
 from app.modules.vendors.models import Vendor  # noqa: F401
 
