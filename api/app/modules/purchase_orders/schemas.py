@@ -328,6 +328,92 @@ class PurchaseOrderResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# LIST / FILTER SCHEMAS
+
+
+class PurchaseOrderSummary(BaseModel):
+    """Lightweight row for the paginated list view (PRD §6.1).
+
+    Built from a summary-column projection query joined to the vendor name
+    — never a full ORM instance, so the list never loads line items (no
+    N+1). Mirrors ExpenseSummary adapted to the PO domain.
+    """
+
+    id: UUID
+    po_number: str
+    po_reference: str
+    vendor_id: UUID
+    vendor_name: str  # joined from the vendors table in the list query
+
+    order_date: date
+    delivery_date: date | None = None
+    status: str
+    currency: str
+    total: Decimal
+    is_recurring: bool
+    converted_bill_id: UUID | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PurchaseOrderStatusCounts(BaseModel):
+    """Status counts for the filter-tab bar ("All (160)").
+
+    Mirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced
+    via its own count and excluded from ``all`` (it is a voided PO).
+    """
+
+    all: int = 0
+    draft: int = 0
+    sent: int = 0
+    billed: int = 0
+    canceled: int = 0  # voided POs (excluded from `all`)
+
+
+class PurchaseOrderFilterParams(BaseModel):
+    """Query parameters for filtering the purchase-orders list.
+
+    Single contract shared by the list view and the Excel export so the two
+    can never drift. Mirrors ExpenseFilterParams adapted to PO dates
+    (order_date / delivery_date).
+    """
+
+    status: PurchaseOrderStatus | None = Field(None, description="Filter by status")
+    vendor_id: UUID | None = Field(
+        None,
+        alias="vendorId",
+        description="Filter by vendor",
+    )
+    date_from: date | None = Field(
+        None,
+        alias="dateFrom",
+        description="order_date >= this value",
+    )
+    date_to: date | None = Field(
+        None,
+        alias="dateTo",
+        description="order_date <= this value",
+    )
+    delivery_date_from: date | None = Field(
+        None,
+        alias="deliveryDateFrom",
+        description="delivery_date >= this value",
+    )
+    delivery_date_to: date | None = Field(
+        None,
+        alias="deliveryDateTo",
+        description="delivery_date <= this value",
+    )
+    search: str | None = Field(
+        None,
+        max_length=100,
+        description="Search po_number, po_reference, or vendor name",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 # CALCULATION PREVIEW
 
 
