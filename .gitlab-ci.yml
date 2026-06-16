@@ -238,7 +238,7 @@ ui:lint-build:
   before_script:
     - cd frontend
     - npm ci
-    - npm run gen:api
+    # - npm run gen:api
   script:
     - npm run lint
     - npx tsc --noEmit
