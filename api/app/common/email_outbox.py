@@ -67,7 +67,10 @@ class EmailOutbox(Base):
     document_type: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
-        comment="Source document noun ('invoice', 'quote') for PDF rendering",
+        comment=(
+            "Source document noun ('invoice', 'quote', 'purchase_order') "
+            "for PDF rendering"
+        ),
     )
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
@@ -273,6 +276,20 @@ class EmailOutboxService:
                 (
                     f"Quote_{quote.quote_reference}.pdf",
                     service.generate_pdf(row.document_id),
+                    "application/pdf",
+                )
+            ]
+
+        if row.document_type == "purchase_order":
+            from app.modules.purchase_orders.service import PurchaseOrderService
+
+            pdf_bytes, purchase_order = PurchaseOrderService(
+                self._db
+            ).generate_pdf_for_download(row.document_id)
+            return [
+                (
+                    f"PurchaseOrder_{purchase_order.po_reference}.pdf",
+                    pdf_bytes,
                     "application/pdf",
                 )
             ]
