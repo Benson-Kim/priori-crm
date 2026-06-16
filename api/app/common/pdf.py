@@ -1,8 +1,8 @@
 """
-PDF generation for invoices and quotes using ReportLab.
+PDF generation for invoices, quotes and purchase orders using ReportLab.
 
-Deep module: small interface (generate_invoice_pdf / generate_quote_pdf),
-concentrated implementation behind it.
+Deep module: small interface (generate_invoice_pdf / generate_quote_pdf /
+generate_purchase_order_pdf), concentrated implementation behind it.
 """
 
 import io
@@ -115,7 +115,217 @@ class DocumentPDFGenerator:
             notes=quote.notes,
         )
 
+    def generate_purchase_order_pdf(
+        self, purchase_order, owner=None, logo_bytes=None
+    ) -> bytes:
+        """Return PDF bytes for a purchase-order ORM object.
+
+        Vendor-facing document (PRD §6.9). Distinct from the customer-facing
+        invoice/quote layout: it renders a "Vendor Address:" block, the
+        "PURCHASE ORDER" label, an Item | Description | Qty | Rate | Amount
+        table and a Sub Total / VAT / TOTAL summary (no discount in v1).
+        "Rate" and "Amount" are display labels for unit_price / line_total.
+        Excludes any edit controls, action buttons or attachments list.
+
+        ``owner`` is an optional OwnerInfo DTO (the PO's immutable snapshot
+        when sent, else the live profile for a Draft preview); ``logo_bytes``
+        is the optional header logo binary.
+        """
+        return self._build_purchase_order_pdf(
+            owner=owner,
+            logo_bytes=logo_bytes,
+            purchase_order=purchase_order,
+        )
+
     # private implementation
+
+    def _build_purchase_order_pdf(
+        self,
+        *,
+        owner,
+        logo_bytes: bytes | None,
+        purchase_order,
+    ) -> bytes:
+        po = purchase_order
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        elements: list = []
+
+        # header — optional logo, then owner identity from the injected DTO
+        # (snapshot for sent POs), falling back to the app name when none.
+        logo_flowable = self._build_logo(logo_bytes)
+        if logo_flowable is not None:
+            elements.append(logo_flowable)
+            elements.append(Spacer(1, 3 * mm))
+
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+        elements.append(Paragraph(owner_name, _HEADER_STYLE))
+
+        if owner is not None:
+            owner_lines = [
+                line
+                for line in (
+                    getattr(owner, "address", None),
+                    getattr(owner, "email", None),
+                    getattr(owner, "phone", None),
+                    (
+                        f"Tax PIN: {owner.tax_pin}"
+                        if getattr(owner, "tax_pin", None)
+                        else None
+                    ),
+                    getattr(owner, "website", None),
+                )
+                if line
+            ]
+            for line in owner_lines:
+                elements.append(Paragraph(str(line), _SUB_STYLE))
+            if getattr(owner, "location_watermark", None):
+                elements.append(Paragraph(str(owner.location_watermark), _SUB_STYLE))
+
+        elements.append(Spacer(1, 6 * mm))
+        elements.append(Paragraph(f"PURCHASE ORDER  •  {po.po_reference}", _HEADER_STYLE))
+        elements.append(Spacer(1, 4 * mm))
+
+        # vendor address block
+        vendor = po.vendor
+        vendor_name = getattr(vendor, "vendor_name", str(po.vendor_id))
+        elements.append(Paragraph("Vendor Address:", _SUB_STYLE))
+        elements.append(Paragraph(str(vendor_name), _BODY_STYLE))
+        for line in (
+            getattr(vendor, "address", None),
+            getattr(vendor, "email", None),
+            getattr(vendor, "phone_primary", None),
+        ):
+            if line:
+                elements.append(Paragraph(str(line), _SUB_STYLE))
+        elements.append(Spacer(1, 6 * mm))
+
+        # metadata table — the Compliance Ref row is included only when set
+        # (PRD §6.4.3 / §15: omitted entirely when blank).
+        delivery = (
+            po.delivery_date.strftime("%d %b %Y") if po.delivery_date else "—"
+        )
+        meta_data = [
+            ["PO #", po.po_number, "Order Date", po.order_date.strftime("%d %b %Y")],
+            ["Currency", po.currency, "Delivery Date", delivery],
+        ]
+        if po.compliance_ref:
+            meta_data.append(["Compliance Ref", str(po.compliance_ref), "", ""])
+        meta_table = Table(meta_data, colWidths=[28 * mm, 52 * mm, 28 * mm, 52 * mm])
+        meta_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#6B7280")),
+                    ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#6B7280")),
+                    ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (3, 0), (3, -1), "Helvetica-Bold"),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        elements.append(meta_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        # line items table — "Rate"/"Amount" label unit_price/line_total.
+        header_row = ["#", "Item", "Description", "Qty", "Rate", "Amount"]
+        rows = [header_row]
+        for item in po.line_items:
+            rows.append(
+                [
+                    str(item.line_number),
+                    str(item.item_name),
+                    str(item.description)[:48],
+                    f"{item.quantity:,.2f}",
+                    f"{item.unit_price:,.2f}",
+                    f"{item.line_total:,.2f}",
+                ]
+            )
+        col_widths = [8 * mm, 40 * mm, 56 * mm, 20 * mm, 23 * mm, 23 * mm]
+        items_table = Table(rows, colWidths=col_widths, repeatRows=1)
+        items_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A1A2E")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 8),
+                    ("FONTSIZE", (0, 1), (-1, -1), 8),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#F9FAFB")],
+                    ),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+                    ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+        elements.append(items_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        # summary — Sub Total / VAT / TOTAL (no discount in v1).
+        totals_rows = [
+            ["Sub Total", f"{po.currency} {po.subtotal:,.2f}"],
+            ["VAT", f"{po.currency} {po.tax_total:,.2f}"],
+            ["TOTAL", f"{po.currency} {po.total:,.2f}"],
+        ]
+        totals_table = Table(totals_rows, colWidths=[40 * mm, 45 * mm], hAlign="RIGHT")
+        totals_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                    ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                    ("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#1A1A2E")),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+        elements.append(totals_table)
+
+        # notes
+        if po.notes:
+            elements.append(Spacer(1, 8 * mm))
+            elements.append(Paragraph("Notes", _SUB_STYLE))
+            elements.append(Spacer(1, 2 * mm))
+            elements.append(Paragraph(str(po.notes), _BODY_STYLE))
+
+        # terms & conditions
+        if po.terms_and_conditions:
+            elements.append(Spacer(1, 6 * mm))
+            elements.append(Paragraph("Terms & Conditions", _SUB_STYLE))
+            elements.append(Spacer(1, 2 * mm))
+            elements.append(Paragraph(str(po.terms_and_conditions), _BODY_STYLE))
+
+        # footer
+        elements.append(Spacer(1, 12 * mm))
+        footer_text = (
+            f"Generated by {owner_name} • {date.today().strftime('%d %b %Y')}"
+        )
+        elements.append(Paragraph(footer_text, _SUB_STYLE))
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+
+        logger.info(
+            "Generated purchase_order PDF: %s (%d bytes)",
+            po.po_reference,
+            len(pdf_bytes),
+        )
+        return pdf_bytes
 
     def _build_pdf(
         self,
