@@ -256,9 +256,7 @@ def calculate_purchase_order_totals(
     responses={
         200: {"description": "Purchase order sent (or durably queued)"},
         400: {
-            "description": (
-                "Not DRAFT, or the vendor has no email address on record"
-            )
+            "description": ("Not DRAFT, or the vendor has no email address on record")
         },
         404: {"description": "Purchase order not found"},
     },
