@@ -1,6 +1,5 @@
-"""PO-05 — purchase-order View/Preview PDF (DocumentPdfRenderer reuse).
+"""Purchase-order View/Preview PDF (DocumentPdfRenderer reuse).
 
-Every PO-05 acceptance criterion maps to at least one named test (DoD H5).
 The renderer resolves the owner snapshot via the live OwnerService and the
 PO is read through Postgres UUID columns / server defaults, so the suite is
 Postgres-guarded (DoD H1 — SQLite fallback is not sufficient).
@@ -15,8 +14,8 @@ from app.common.exceptions import AppException
 from app.constants.enums import Currency, PurchaseOrderStatus, TaxType, VendorStatus
 from app.modules.owner.models import OwnerProfileSnapshot
 from app.modules.purchase_orders.models import PurchaseOrder, PurchaseOrderLineItem
-from app.modules.purchase_orders.service import PurchaseOrderService
 from app.modules.purchase_orders.router import _safe_filename_token
+from app.modules.purchase_orders.service import PurchaseOrderService
 from app.modules.vendors.models import Vendor
 from tests.conftest import USING_POSTGRES
 
