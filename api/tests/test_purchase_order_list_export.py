@@ -1,10 +1,9 @@
-"""PO-04 — list view, status counts and Excel export.
+"""list view, status counts and Excel export.
 
-Every acceptance criterion in PO-04 maps to at least one named test here
-(DoD H5). The list/counts/export paths use the summary projection, a single
+The list/counts/export paths use the summary projection, a single
 vendor join, a grouped COUNT and ``with_for_update``-free reads; run them
 against Postgres so UUID columns, server defaults and the index-backed
-ordering match production (DoD H1 — SQLite fallback is not sufficient).
+ordering match production.
 """
 
 from datetime import date, timedelta
@@ -91,19 +90,31 @@ def _seed_one_per_status(db, vendor) -> dict[str, PurchaseOrder]:
     today = date.today().strftime("%Y%m%d")
     return {
         "draft": _po(
-            db, vendor, number=f"PO-{today}-001", reference="PO-000001",
+            db,
+            vendor,
+            number=f"PO-{today}-001",
+            reference="PO-000001",
             status=PurchaseOrderStatus.DRAFT,
         ),
         "sent": _po(
-            db, vendor, number=f"PO-{today}-002", reference="PO-000002",
+            db,
+            vendor,
+            number=f"PO-{today}-002",
+            reference="PO-000002",
             status=PurchaseOrderStatus.SENT,
         ),
         "billed": _po(
-            db, vendor, number=f"PO-{today}-003", reference="PO-000003",
+            db,
+            vendor,
+            number=f"PO-{today}-003",
+            reference="PO-000003",
             status=PurchaseOrderStatus.BILLED,
         ),
         "canceled": _po(
-            db, vendor, number=f"PO-{today}-004", reference="PO-000004",
+            db,
+            vendor,
+            number=f"PO-{today}-004",
+            reference="PO-000004",
             status=PurchaseOrderStatus.CANCELED,
         ),
     }
@@ -148,7 +159,9 @@ def test_list_hides_canceled_by_default(db):
     vendor = _vendor(db)
     seeded = _seed_one_per_status(db, vendor)
 
-    result = service.list_purchase_orders(PaginationParams(), PurchaseOrderFilterParams())
+    result = service.list_purchase_orders(
+        PaginationParams(), PurchaseOrderFilterParams()
+    )
     ids = {item.id for item in result.items}
     assert seeded["canceled"].id not in ids
     assert seeded["draft"].id in ids
@@ -177,11 +190,17 @@ def test_list_filters_by_order_date_range(db):
     today = date.today()
     stamp = today.strftime("%Y%m%d")
     old = _po(
-        db, vendor, number=f"PO-{stamp}-001", reference="PO-000001",
+        db,
+        vendor,
+        number=f"PO-{stamp}-001",
+        reference="PO-000001",
         order_date=today - timedelta(days=40),
     )
     recent = _po(
-        db, vendor, number=f"PO-{stamp}-002", reference="PO-000002",
+        db,
+        vendor,
+        number=f"PO-{stamp}-002",
+        reference="PO-000002",
         order_date=today - timedelta(days=5),
     )
 
@@ -200,11 +219,17 @@ def test_list_filters_by_delivery_date_range(db):
     today = date.today()
     stamp = today.strftime("%Y%m%d")
     near = _po(
-        db, vendor, number=f"PO-{stamp}-001", reference="PO-000001",
+        db,
+        vendor,
+        number=f"PO-{stamp}-001",
+        reference="PO-000001",
         delivery_date=today + timedelta(days=3),
     )
     far = _po(
-        db, vendor, number=f"PO-{stamp}-002", reference="PO-000002",
+        db,
+        vendor,
+        number=f"PO-{stamp}-002",
+        reference="PO-000002",
         delivery_date=today + timedelta(days=60),
     )
 
@@ -319,7 +344,9 @@ def test_summary_excludes_line_items(db):
     today = date.today().strftime("%Y%m%d")
     _po(db, vendor, number=f"PO-{today}-001", reference="PO-000001")
 
-    result = service.list_purchase_orders(PaginationParams(), PurchaseOrderFilterParams())
+    result = service.list_purchase_orders(
+        PaginationParams(), PurchaseOrderFilterParams()
+    )
     assert len(result.items) == 1
     assert not hasattr(result.items[0], "line_items")
     assert result.items[0].vendor_name == vendor.vendor_name
@@ -388,7 +415,10 @@ def test_export_honours_limit(db):
     today = date.today().strftime("%Y%m%d")
     for i in range(1, 4):
         _po(
-            db, vendor, number=f"PO-{today}-00{i}", reference=f"PO-00000{i}",
+            db,
+            vendor,
+            number=f"PO-{today}-00{i}",
+            reference=f"PO-00000{i}",
             with_line=False,
         )
 
