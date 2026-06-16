@@ -28,6 +28,7 @@ from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     DatabaseException,
     NotFoundException,
@@ -501,10 +502,28 @@ class PurchaseOrderService(BaseDocumentService):
 
         Orchestration (owner branding + ReportLab generator) is shared with
         invoices/quotes via DocumentPdfRenderer — no PO-specific copy.
+
+        A rendering failure is not swallowed: it surfaces as an explicit 500
+        carrying the PRD §13 message so the UI can show "PDF could not be
+        generated. Please try again." instead of leaking a stack trace.
         """
         from app.common.pdf_renderer import DocumentPdfRenderer
 
-        return DocumentPdfRenderer(self._db).render_purchase_order(purchase_order)
+        try:
+            return DocumentPdfRenderer(self._db).render_purchase_order(
+                purchase_order
+            )
+        except Exception as exc:
+            logger.exception(
+                "Failed to render purchase-order PDF %s",
+                purchase_order.po_reference,
+                extra={"po_id": str(purchase_order.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc
 
     def generate_pdf(self, po_id: uuid.UUID) -> bytes:
         """Generate the PDF for a purchase order by id."""
