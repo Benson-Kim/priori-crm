@@ -898,6 +898,10 @@ Best regards,
             )
 
         try:
+            # Capture storage keys before the cascading DB delete so the
+            # underlying objects can be purged afterward (no orphaned blobs).
+            storage_keys = [doc.storage_key for doc in purchase_order.documents]
+
             # Before-image audit row — flushed in the same transaction as the
             # delete so the trail can never disagree with the ledger.
             record_audit_event(
@@ -917,10 +921,16 @@ Best regards,
             self._db.delete(purchase_order)
             self._db.flush()
 
+            # Best-effort purge after the row is gone — coordinates with PO-08.
+            self._purge_storage_objects(storage_keys)
+
             logger.info(
                 "Hard-deleted purchase order: %s",
                 purchase_order.po_reference,
-                extra={"po_id": str(po_id)},
+                extra={
+                    "po_id": str(po_id),
+                    "purged_objects": len(storage_keys),
+                },
             )
             return False
 
