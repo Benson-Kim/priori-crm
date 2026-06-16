@@ -23,6 +23,8 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
     PurchaseOrderResponse,
+    PurchaseOrderSendRequest,
+    PurchaseOrderSendResponse,
     PurchaseOrderStatusCounts,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
@@ -237,6 +239,44 @@ def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
 ) -> PurchaseOrderCalculationResponse:
     return PurchaseOrderService.calculate_totals(line_items)
+
+
+@router.post(
+    "/{po_id}/send",
+    response_model=PurchaseOrderSendResponse,
+    summary="Send purchase order to the vendor by email",
+    description=(
+        "Send a DRAFT purchase order to its vendor by email and transition "
+        "it to SENT. The status change and the queued email are committed "
+        "atomically (transactional outbox); SES dispatch then runs outside "
+        "the row lock, and a failed first attempt is retried automatically "
+        "by the outbox drainer. The recipient defaults to the vendor email "
+        "and can be overridden in the request."
+    ),
+    responses={
+        200: {"description": "Purchase order sent (or durably queued)"},
+        400: {
+            "description": (
+                "Not DRAFT, or the vendor has no email address on record"
+            )
+        },
+        404: {"description": "Purchase order not found"},
+    },
+)
+def send_purchase_order(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+    body: PurchaseOrderSendRequest | None = None,
+) -> PurchaseOrderSendResponse:
+    request_data = body or PurchaseOrderSendRequest()
+    result = service.send_purchase_order(
+        po_id,
+        to_email=request_data.to_email,
+        subject=request_data.subject,
+        body=request_data.body,
+        attach_pdf=request_data.attach_pdf,
+    )
+    return PurchaseOrderSendResponse(**result)
 
 
 @router.get(
