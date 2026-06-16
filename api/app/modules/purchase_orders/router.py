@@ -342,3 +342,60 @@ def delete_purchase_order(
 ) -> None:
     soft_deleted = service.delete(po_id)
     response.headers["X-Delete-Type"] = "soft" if soft_deleted else "hard"
+
+
+def _safe_filename_token(value: str) -> str:
+    """Reduce a free-text value to a safe Content-Disposition filename token.
+
+    Keeps alphanumerics, dash and underscore; collapses everything else to
+    underscores so a vendor name with spaces, slashes or quotes can never
+    break the header or escape the filename.
+    """
+    import re
+
+    token = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_")
+    return token or "vendor"
+
+
+@router.get(
+    "/{po_id}/pdf",
+    summary="Download purchase order as PDF",
+    description=(
+        "Generate and stream the purchase-order PDF. The document is "
+        "read-only: no edit controls, action buttons or attachments list. "
+        "Available at any status. Owner branding comes from the PO's "
+        "immutable snapshot once sent, else the live profile for a Draft "
+        "preview."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Purchase order not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_purchase_order_pdf(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.export_limiter import run_export
+
+    # Cap concurrent PDF builds and run the blocking render in a worker
+    # thread. Loads the PO once (no second query just for the filename).
+    pdf_data, purchase_order = await run_export(
+        service.generate_pdf_for_download, po_id
+    )
+
+    vendor_name = getattr(purchase_order.vendor, "vendor_name", "vendor")
+    filename = (
+        f"PurchaseOrder_{purchase_order.po_reference}_"
+        f"{_safe_filename_token(vendor_name)}.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

@@ -28,6 +28,7 @@ from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     DatabaseException,
     NotFoundException,
@@ -613,3 +614,47 @@ class PurchaseOrderService(BaseDocumentService):
             total=subtotal + tax_total,
             line_items=formatted_items,
         )
+
+    # PDF GENERATION
+
+    def _render_pdf(self, purchase_order: PurchaseOrder) -> bytes:
+        """Render a PDF for an already-loaded purchase order.
+
+        Orchestration (owner branding + ReportLab generator) is shared with
+        invoices/quotes via DocumentPdfRenderer — no PO-specific copy.
+
+        A rendering failure is not swallowed: it surfaces as an explicit 500
+        carrying the message so the UI can show "PDF could not be
+        generated. Please try again." instead of leaking a stack trace.
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        try:
+            return DocumentPdfRenderer(self._db).render_purchase_order(purchase_order)
+        except Exception as exc:
+            logger.exception(
+                "Failed to render purchase-order PDF %s",
+                purchase_order.po_reference,
+                extra={"po_id": str(purchase_order.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc
+
+    def generate_pdf(self, po_id: uuid.UUID) -> bytes:
+        """Generate the PDF for a purchase order by id."""
+        return self._render_pdf(self.get_by_id(po_id))
+
+    def generate_pdf_for_download(
+        self, po_id: uuid.UUID
+    ) -> tuple[bytes, PurchaseOrder]:
+        """Generate the PO PDF and return it with the loaded purchase order.
+
+        Loads the PO once and renders from it, so the download endpoint does
+        not re-query just for the attachment filename (mirrors
+        QuoteService.generate_pdf_for_download).
+        """
+        purchase_order = self.get_by_id(po_id)
+        return self._render_pdf(purchase_order), purchase_order

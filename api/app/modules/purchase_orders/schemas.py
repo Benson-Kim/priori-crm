@@ -358,7 +358,7 @@ class PurchaseOrderSummary(BaseModel):
 
 
 class PurchaseOrderStatusCounts(BaseModel):
-    """Status counts for the filter-tab bar ("All (160)").
+    """Status counts for the filter-tab bar (\"All (160)\").
 
     Mirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced
     via its own count and excluded from ``all`` (it is a voided PO).
