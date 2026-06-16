@@ -375,8 +375,12 @@ def deactivate_vendor(
     response_model=PaginatedResponse[VendorTransactionSummary],
     summary="Get vendor transaction list",
     description=(
-        "Paginated list of all expenses and bills linked to this vendor. "
-        "Includes computed days_overdue and status_display fields."
+        "Paginated list of the vendor's transactions — expenses and purchase "
+        "orders (and bills once that module lands) — in one source-tagged "
+        "list. Each row carries transaction_type ('expense' | "
+        "'purchase_order') plus computed days_overdue and status_display "
+        "fields. Purchase orders are non-payable commitments and report a "
+        "0.00 balance."
     ),
     responses={
         200: {"description": "Paginated transaction list"},
@@ -393,7 +397,19 @@ def get_vendor_transactions(
         Query(
             alias="status",
             description=(
-                "Filter by transaction status: 'paid' | 'pending' | 'overdue'. "
+                "Filter by transaction status. Payable: 'paid' | 'pending' | "
+                "'overdue'. Purchase order: 'draft' | 'sent' | 'billed' | "
+                "'canceled'. Omit for all."
+            ),
+        ),
+    ] = None,
+    type_filter: Annotated[
+        str | None,
+        Query(
+            alias="type",
+            description=(
+                "Filter by source type: 'expense' | 'purchase_order'. "
+                "Omit for all."
             ),
         ),
     ] = None,
@@ -402,7 +418,10 @@ def get_vendor_transactions(
     Get the paginated transaction list for a vendor.
     """
     params = PaginationParams(page=page, per_page=per_page)
-    filters = VendorTransactionFilterParams(status=status_filter)
+    filters = VendorTransactionFilterParams(
+        status=status_filter,
+        transaction_type=type_filter,
+    )
     return service.get_vendor_transactions(vendor_id, params, filters)
 
 
