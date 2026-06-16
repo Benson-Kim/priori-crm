@@ -1,34 +1,17 @@
 """
 Purchase Order business logic — service layer.
-
-``PurchaseOrderService`` extends ``BaseDocumentService`` so the state-machine,
-reference-retry, email and two-phase-send mechanics are inherited rather than
-re-implemented (SOLID/DRY reuse mandate). Purchase orders are vendor-facing.
+Purchase orders are vendor-facing.
 
 Scope by issue:
-- PO-02: the totals/calculation engine (``calculate_totals`` + the static
-  state-machine declarations).
-- PO-03: CRUD (create / get / get-by-number / update / delete) with
-  reference generation, currency lock, the DRAFT-only edit gate, optimistic
-  locking and a delete audit trail.
 - Later issues add list/export (PO-04), send (PO-06), convert (PO-07),
   cancel (PO-08) and duplicate (PO-09).
 
 Financial contract (no discount in v1):
-    line_total = quantity × unit_price
-    tax_amount = line_total × tax_rate   (tax_rate from tax_type via get_tax_rate)
+    line_total = quantity x unit_price
+    tax_amount = line_total x tax_rate   (tax_rate from tax_type via get_tax_rate)
     subtotal   = Σ line_total
     tax_total  = Σ tax_amount
     total      = subtotal + tax_total
-
-All money flows through ``app.common.financial`` (``build_line_items`` +
-``sum_line_totals``); there is deliberately NO arithmetic in this module other
-than the discount-free ``subtotal + tax_total`` roll-up — a divergent money
-path is the exact bug PO-02 exists to prevent.
-
-Atomicity contract: every mutating method calls ``self._db.flush()`` only;
-the session commit/rollback is owned by ``get_db()``. Multi-step work uses
-``begin_nested()`` (the reference-retry SAVEPOINT lives in the shared mixin).
 """
 
 from __future__ import annotations
@@ -68,7 +51,7 @@ PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.line_items),
 )
 
-# Statuses from which a PO may be deleted (PRD §12). SENT / BILLED are
+# Statuses from which a PO may be deleted. SENT / BILLED are
 # protected: a sent or billed PO must be Canceled (PO-08) or is immutable.
 _DELETABLE_STATUSES = frozenset(
     {PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED}
@@ -82,7 +65,7 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle (PRD §9):
+    Lifecycle:
         DRAFT → SENT → BILLED
         DRAFT | SENT → CANCELED   (terminal)
     """
@@ -137,7 +120,7 @@ class PurchaseOrderService(BaseDocumentService):
         """Generate a unique, monotonic PO reference (e.g. PO-000042).
 
         Uses the MAX strategy so the numeric suffix is NEVER reused even
-        after the most recent PO is hard-deleted (PRD §12 / §16 D7). Mirrors
+        after the most recent PO is hard-deleted. Mirrors
         ExpenseService._generate_expense_reference.
         """
         return self._ref_gen().generate(
@@ -172,7 +155,7 @@ class PurchaseOrderService(BaseDocumentService):
     ) -> PurchaseOrder:
         """Create a new DRAFT purchase order with line items.
 
-        Validations (PRD §12): vendor must exist and be active; >=1 line item
+        Validations: vendor must exist and be active; >=1 line item
         (schema-enforced); delivery_date >= order_date (schema + DB CHECK);
         qty > 0 and unit_price >= 0 (schema + DB CHECK). Currency is pinned to
         the vendor's currency so a schema default can never silently drift it.
@@ -240,9 +223,7 @@ class PurchaseOrderService(BaseDocumentService):
             self._db.flush()
 
             for item in line_items_data:
-                self._db.add(
-                    PurchaseOrderLineItem(po_id=purchase_order.id, **item)
-                )
+                self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
             self._db.flush()
             return purchase_order
 
@@ -303,9 +284,7 @@ class PurchaseOrderService(BaseDocumentService):
         except NotFoundException:
             raise
         except SQLAlchemyError as exc:
-            logger.exception(
-                "Database error retrieving purchase order %s", po_number
-            )
+            logger.exception("Database error retrieving purchase order %s", po_number)
             raise DatabaseException("Failed to retrieve purchase order") from exc
 
     # UPDATE

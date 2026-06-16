@@ -1,13 +1,10 @@
 """
 Purchase Order API endpoints — Purchases module.
 
-PO-03 scope: CRUD (create / get / get-by-number / update / delete) plus the
+CRUD (create / get / get-by-number / update / delete) plus the
 totals-preview endpoint deferred from PO-02. List, export, send, convert,
 cancel and documents land in later issues.
 
-Route ordering mirrors the Expenses router: fixed paths (``/calculate``,
-``/number/{po_number}``) are declared before the ``/{po_id}`` catch-all so
-they are never shadowed.
 """
 
 import logging
@@ -108,8 +105,7 @@ def get_purchase_order_by_number(
     response_model=PurchaseOrderResponse,
     summary="Get purchase order details",
     description=(
-        "Retrieve a complete purchase order including its vendor and line "
-        "items."
+        "Retrieve a complete purchase order including its vendor and line items."
     ),
     responses={
         200: {"description": "Purchase order details"},
