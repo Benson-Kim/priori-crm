@@ -677,6 +677,50 @@ Best regards,
         )
         return purchase_order
 
+    # CANCEL
+
+    def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Cancel a purchase order: DRAFT | SENT -> CANCELED.
+
+        Cancel voids the PO while preserving the record (PRD §12): a
+        CANCELED PO is terminal and can never be re-opened or edited
+        (``is_editable`` already gates editing to DRAFT only). BILLED and
+        already-CANCELED purchase orders cannot be cancelled — the shared
+        ``_transition`` rejects those edges with a typed BadRequestException
+        (no silent no-op).
+
+        Locked load: serializes with send / convert / delete so the status
+        gate and transition cannot interleave with a concurrent transition
+        (race-condition contract — all status transitions load FOR UPDATE).
+        The audit row is written in the same locked transaction.
+        """
+        purchase_order = self._get_locked(po_id)
+
+        previous_status = purchase_order.status
+        # Route through the state machine so ALLOWED_TRANSITIONS is enforced
+        # and the version bump is owned in one place. BILLED/CANCELED have no
+        # CANCELED edge, so this raises BadRequestException for them.
+        self._transition(purchase_order, PurchaseOrderStatus.CANCELED)
+        self._db.flush()
+
+        # Durable audit trail, atomic with the transition.
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="canceled",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(PurchaseOrderStatus.CANCELED)},
+        )
+
+        logger.warning(
+            "Canceled purchase order: %s",
+            purchase_order.po_reference,
+            extra={"po_id": str(purchase_order.id)},
+        )
+        return purchase_order
+
     # DELETE
 
     def delete(self, po_id: uuid.UUID) -> bool:
