@@ -110,7 +110,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "status IN ('draft', 'sent', 'billed', 'cancelled')",
+            "status IN ('draft', 'sent', 'billed', 'canceled')",
             name="ck_purchase_orders_valid_status",
         ),
         sa.CheckConstraint(
@@ -123,9 +123,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "tax_total >= 0", name="ck_purchase_orders_tax_total_non_negative"
         ),
-        sa.CheckConstraint(
-            "total >= 0", name="ck_purchase_orders_total_non_negative"
-        ),
+        sa.CheckConstraint("total >= 0", name="ck_purchase_orders_total_non_negative"),
         sa.CheckConstraint(
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_purchase_orders_valid_currency",
@@ -235,18 +233,14 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "quantity > 0", name="ck_po_line_items_quantity_positive"
-        ),
+        sa.CheckConstraint("quantity > 0", name="ck_po_line_items_quantity_positive"),
         sa.CheckConstraint(
             "unit_price >= 0", name="ck_po_line_items_price_non_negative"
         ),
         sa.CheckConstraint(
             "line_total >= 0", name="ck_po_line_items_total_non_negative"
         ),
-        sa.CheckConstraint(
-            "tax_amount >= 0", name="ck_po_line_items_tax_non_negative"
-        ),
+        sa.CheckConstraint("tax_amount >= 0", name="ck_po_line_items_tax_non_negative"),
         sa.ForeignKeyConstraint(
             ["po_id"],
             ["purchase_orders.id"],
@@ -333,21 +327,13 @@ def downgrade() -> None:
     op.drop_index(
         "ix_purchase_orders_status_delivery_date", table_name="purchase_orders"
     )
-    op.drop_index(
-        "ix_purchase_orders_vendor_status", table_name="purchase_orders"
-    )
+    op.drop_index("ix_purchase_orders_vendor_status", table_name="purchase_orders")
     op.drop_index(
         op.f("ix_purchase_orders_converted_bill_id"),
         table_name="purchase_orders",
     )
     op.drop_index(op.f("ix_purchase_orders_status"), table_name="purchase_orders")
-    op.drop_index(
-        op.f("ix_purchase_orders_vendor_id"), table_name="purchase_orders"
-    )
-    op.drop_index(
-        op.f("ix_purchase_orders_po_reference"), table_name="purchase_orders"
-    )
-    op.drop_index(
-        op.f("ix_purchase_orders_po_number"), table_name="purchase_orders"
-    )
+    op.drop_index(op.f("ix_purchase_orders_vendor_id"), table_name="purchase_orders")
+    op.drop_index(op.f("ix_purchase_orders_po_reference"), table_name="purchase_orders")
+    op.drop_index(op.f("ix_purchase_orders_po_number"), table_name="purchase_orders")
     op.drop_table("purchase_orders")
