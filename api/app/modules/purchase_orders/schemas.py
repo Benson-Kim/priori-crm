@@ -414,6 +414,18 @@ class PurchaseOrderFilterParams(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+# DUPLICATE ACTION SCHEMA
+
+
+class PurchaseOrderDuplicateResponse(BaseModel):
+    """Response returned after duplicating a purchase order."""
+
+    original_po_id: UUID
+    new_po_id: UUID
+    new_po_reference: str
+    message: str = "Purchase order duplicated successfully"
+
+
 # CALCULATION PREVIEW
 
 
