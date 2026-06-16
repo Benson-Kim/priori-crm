@@ -2,10 +2,6 @@
 Purchase Order business logic — service layer.
 Purchase orders are vendor-facing.
 
-Scope by issue:
-- Later issues add list/export (PO-04), send (PO-06), convert (PO-07),
-  cancel (PO-08) and duplicate (PO-09).
-
 Financial contract (no discount in v1):
     line_total = quantity x unit_price
     tax_amount = line_total x tax_rate   (tax_rate from tax_type via get_tax_rate)
@@ -19,7 +15,7 @@ from __future__ import annotations
 import logging
 import uuid
 from decimal import Decimal
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
@@ -62,7 +58,7 @@ PO_EAGER_LOAD_OPTIONS = (
 )
 
 # Statuses from which a PO may be deleted. SENT / BILLED are
-# protected: a sent or billed PO must be Canceled (PO-08) or is immutable.
+# protected: a sent or billed PO must be Canceled or is immutable.
 _DELETABLE_STATUSES = frozenset(
     {PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED}
 )
@@ -86,9 +82,19 @@ class PurchaseOrderService(BaseDocumentService):
     _document_noun = "purchase_order"
     _reference_collision_markers = ("po_number", "po_reference")
 
+    # Vendor-facing email wording. The shared DocumentEmailMixin template
+    # assumes customer-facing fields (customer.display_name / due_date /
+    # total_due) a PO does not have, so the subject/body builders are
+    # overridden below; this mapping only supplies the human noun.
+    _email_terms: ClassVar[dict[str, str]] = {
+        "noun": "purchase_order",
+        "date_label": "Delivery date",
+        "closing": "Thank you.",
+    }
+
     # Locked-load wiring (DocumentSendMixin._get_locked). The send
     # draft/sent statuses are declared here so the inherited FOR UPDATE row
-    # loader and the Draft→Sent transition used by PO-06 resolve correctly.
+    # loader and the Draft→Sent transition resolve correctly.
     _send_model = PurchaseOrder
     _send_draft_status = PurchaseOrderStatus.DRAFT
     _send_sent_status = PurchaseOrderStatus.SENT
@@ -408,6 +414,157 @@ class PurchaseOrderService(BaseDocumentService):
         """
         return PurchaseOrderStatisticsRepository(self._db).status_counts()
 
+        # SEND (DRAFT -> SENT) via the shared transactional outbox
+
+    def _capture_owner_snapshot(self, purchase_order: PurchaseOrder) -> None:
+        """Stamp an immutable owner-header snapshot the first time the PO is
+        sent, so editing the live owner profile cannot re-brand a sent PO.
+
+        Mirrors QuoteService._capture_owner_snapshot.
+        """
+        if purchase_order.owner_snapshot_id is not None:
+            return
+        from app.modules.owner.service import OwnerService
+
+        snapshot = OwnerService(self._db).snapshot_current()
+        purchase_order.owner_snapshot_id = snapshot.id
+
+    def _validate_sendable(self, purchase_order: PurchaseOrder) -> None:
+        """Reject sends for non-Draft purchase orders (DocumentSendMixin hook).
+
+        Send is a Draft-only action: a SENT / BILLED / CANCELED PO can never
+        be (re)sent — resend after Sent is intentionally
+        unavailable). The locked row is checked under FOR UPDATE so the gate
+        cannot act on a stale status.
+        """
+        if purchase_order.status != PurchaseOrderStatus.DRAFT:
+            raise BadRequestException(
+                detail=(
+                    f"Cannot send a purchase order in "
+                    f"'{purchase_order.status}' status. Only DRAFT purchase "
+                    "orders can be sent."
+                ),
+                field="status",
+            )
+
+    def _resolve_recipient(
+        self, purchase_order: PurchaseOrder, to_email: str | None
+    ) -> str:
+        """Resolve the send recipient from the VENDOR (POs are vendor-facing).
+
+        Overrides the customer-based default in DocumentSendMixin. An
+        explicit ``to_email`` (the editable modal field) wins; otherwise the
+        vendor's email is used. A vendor with no email on record blocks Send
+        with a typed 400 (defence in depth behind the disabled UI button).
+        """
+        recipient = to_email or getattr(purchase_order.vendor, "email", None)
+        if not recipient:
+            raise BadRequestException(
+                detail=(
+                    "This vendor has no email address on record, so this "
+                    "purchase order cannot be sent."
+                ),
+                field="to_email",
+            )
+        return recipient
+
+    def _generate_email_subject(self, purchase_order: PurchaseOrder) -> str:
+        """Subject: 'Purchase Order {ref} from {Business Name}'."""
+        from app.lib.config import settings
+
+        return f"Purchase Order {purchase_order.po_reference} from {settings.APP_NAME}"
+
+    def _generate_email_body(
+        self, purchase_order: PurchaseOrder, attached: bool = False
+    ) -> str:
+        """Vendor-facing plain-text body.
+
+        Overrides the customer-facing DocumentEmailMixin template, which
+        references customer.display_name / due_date / total_due — none of
+        which apply to a vendor-facing PO.
+        """
+        from app.lib.config import settings
+
+        vendor_name = getattr(purchase_order.vendor, "vendor_name", "")
+        if attached:
+            intro = (
+                f"Please find attached purchase order "
+                f"{purchase_order.po_reference} for "
+                f"{purchase_order.currency} {purchase_order.total}."
+            )
+        else:
+            intro = (
+                f"Please find the details of purchase order "
+                f"{purchase_order.po_reference} for "
+                f"{purchase_order.currency} {purchase_order.total} below."
+            )
+        delivery_line = ""
+        if purchase_order.delivery_date is not None:
+            delivery_line = (
+                f"Delivery date: {purchase_order.delivery_date.strftime('%d %B %Y')}\n"
+            )
+        return f"""\
+Dear {vendor_name},
+
+{intro}
+{delivery_line}
+Thank you.
+
+Best regards,
+{settings.APP_NAME}
+"""
+
+    def send_purchase_order(
+        self,
+        po_id: uuid.UUID,
+        to_email: str | None = None,
+        subject: str | None = None,
+        body: str | None = None,
+        attach_pdf: bool = True,
+    ) -> dict[str, Any]:
+        """Send a purchase order to its vendor by email (two-phase).
+
+        Phase 1 (shared DocumentSendMixin._prepare_and_mark_sent, locked):
+        re-read FOR UPDATE, validate Draft, transition Draft->Sent, stamp
+        sent_at, capture the owner snapshot, enqueue the outbox row and
+        COMMIT — releasing the row lock and making the SENT transition + the
+        durable email record atomic.
+
+        Phase 2 (no lock held): best-effort immediate delivery via
+        deliver_now. A failed first attempt is NOT raised: the queued row is
+        durable and the outbox drainer retries it (dead-letter after 5),
+        so the action never silently loses the email.
+        """
+        recipient, _subject, _body, sent_at, outbox_id = self._prepare_and_mark_sent(
+            po_id, to_email, subject, body, attach_pdf=attach_pdf
+        )
+
+        from app.common.email_outbox import EmailOutboxService
+
+        delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
+
+        logger.info(
+            "Sent purchase order: %s",
+            po_id,
+            extra={
+                "po_id": str(po_id),
+                "recipient_email_present": bool(recipient),
+                "attached_pdf": attach_pdf,
+                "delivered": delivered,
+            },
+        )
+        return {
+            "purchase_order_id": po_id,
+            "sent_to": recipient,
+            "sent_at": sent_at,
+            "message": (
+                "Purchase order sent successfully"
+                if delivered
+                else "Purchase order queued for delivery; the first attempt "
+                "failed and will be retried automatically"
+            ),
+        }
+
     # UPDATE
 
     def update(
@@ -516,6 +673,50 @@ class PurchaseOrderService(BaseDocumentService):
         )
         return purchase_order
 
+    # CANCEL
+
+    def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Cancel a purchase order: DRAFT | SENT -> CANCELED.
+
+        Cancel voids the PO while preserving the record: a
+        CANCELED PO is terminal and can never be re-opened or edited
+        (``is_editable`` already gates editing to DRAFT only). BILLED and
+        already-CANCELED purchase orders cannot be cancelled — the shared
+        ``_transition`` rejects those edges with a typed BadRequestException
+        (no silent no-op).
+
+        Locked load: serializes with send / convert / delete so the status
+        gate and transition cannot interleave with a concurrent transition
+        (race-condition contract — all status transitions load FOR UPDATE).
+        The audit row is written in the same locked transaction.
+        """
+        purchase_order = self._get_locked(po_id)
+
+        previous_status = purchase_order.status
+        # Route through the state machine so ALLOWED_TRANSITIONS is enforced
+        # and the version bump is owned in one place. BILLED/CANCELED have no
+        # CANCELED edge, so this raises BadRequestException for them.
+        self._transition(purchase_order, PurchaseOrderStatus.CANCELED)
+        self._db.flush()
+
+        # Durable audit trail, atomic with the transition.
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="canceled",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(PurchaseOrderStatus.CANCELED)},
+        )
+
+        logger.warning(
+            "Canceled purchase order: %s",
+            purchase_order.po_reference,
+            extra={"po_id": str(purchase_order.id)},
+        )
+        return purchase_order
+
     # DELETE
 
     def delete(self, po_id: uuid.UUID) -> bool:
@@ -587,14 +788,14 @@ class PurchaseOrderService(BaseDocumentService):
         """Duplicate an existing purchase order as a new DRAFT.
 
         Re-raise an order quickly; also the documented path to "resend" a
-        Sent PO (PRD §6.10, §14). Available at any status.
+        Sent PO. Available at any status.
 
         Reuse-first: fresh references come from the shared reference
         generators and the create runs inside the shared
         ``_with_reference_retry`` SAVEPOINT loop — no copied reference or
         retry logic.
 
-        Copy rules (PRD §6.10 / §14):
+        Copy rules:
         - copied: line items (incl. tax rows), currency, notes, Terms &
           Conditions, delivery_date, is_recurring;
         - order_date is reset to today;

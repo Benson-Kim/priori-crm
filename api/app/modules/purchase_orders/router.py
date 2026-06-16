@@ -20,10 +20,12 @@ from app.common.pagination import PaginatedResponse, PaginationParams
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
-    PurchaseOrderDuplicateResponse,
     PurchaseOrderResponse,
+    PurchaseOrderSendRequest,
+    PurchaseOrderSendResponse,
     PurchaseOrderStatusCounts,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
@@ -241,6 +243,42 @@ def calculate_purchase_order_totals(
 
 
 @router.post(
+    "/{po_id}/send",
+    response_model=PurchaseOrderSendResponse,
+    summary="Send purchase order to the vendor by email",
+    description=(
+        "Send a DRAFT purchase order to its vendor by email and transition "
+        "it to SENT. The status change and the queued email are committed "
+        "atomically (transactional outbox); SES dispatch then runs outside "
+        "the row lock, and a failed first attempt is retried automatically "
+        "by the outbox drainer. The recipient defaults to the vendor email "
+        "and can be overridden in the request."
+    ),
+    responses={
+        200: {"description": "Purchase order sent (or durably queued)"},
+        400: {
+            "description": ("Not DRAFT, or the vendor has no email address on record")
+        },
+        404: {"description": "Purchase order not found"},
+    },
+)
+def send_purchase_order(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+    body: PurchaseOrderSendRequest | None = None,
+) -> PurchaseOrderSendResponse:
+    request_data = body or PurchaseOrderSendRequest()
+    result = service.send_purchase_order(
+        po_id,
+        to_email=request_data.to_email,
+        subject=request_data.subject,
+        body=request_data.body,
+        attach_pdf=request_data.attach_pdf,
+    )
+    return PurchaseOrderSendResponse(**result)
+
+
+@router.post(
     "/{po_id}/duplicate",
     response_model=PurchaseOrderDuplicateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -343,6 +381,35 @@ def update_purchase_order(
     ] = None,
 ) -> PurchaseOrderResponse:
     purchase_order = service.update(po_id, body, expected_version)
+    return PurchaseOrderResponse.model_validate(purchase_order)
+
+
+@router.post(
+    "/{po_id}/cancel",
+    response_model=PurchaseOrderResponse,
+    summary="Cancel purchase order",
+    description=(
+        "Cancel a purchase order (DRAFT or SENT only) -> CANCELED. The "
+        "record is preserved but becomes terminal: it can no longer be "
+        "edited, sent or converted. A BILLED or already-CANCELED purchase "
+        "order cannot be cancelled. A before/after-image audit row is "
+        "written atomically with the transition."
+    ),
+    responses={
+        200: {"description": "Purchase order canceled"},
+        400: {"description": "Invalid transition (BILLED or already CANCELED)"},
+        403: {"description": "Insufficient role to cancel purchase orders"},
+        404: {"description": "Purchase order not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def cancel_purchase_order(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderResponse:
+    service.cancel(po_id)
+    # Re-read with vendor + line items eager-loaded for the response.
+    purchase_order = service.get_by_id(po_id)
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
