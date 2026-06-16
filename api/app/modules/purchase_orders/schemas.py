@@ -39,7 +39,7 @@ class VendorSummary(BaseModel):
     """Vendor fields surfaced on purchase-order responses.
 
     Mirrors the Expenses VendorSummary. ``email`` is included because the
-    PO Send flow (PO-06) resolves the recipient from the vendor.
+    PO Send flow resolves the recipient from the vendor.
     """
 
     id: UUID
