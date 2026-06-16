@@ -1,9 +1,9 @@
 """
 Purchase Order API endpoints — Purchases module.
 
-CRUD (create / get / get-by-number / update / delete) plus the
-totals-preview endpoint deferred from PO-02. List, export, send, convert,
-cancel and documents land in later issues.
+CRUD (create / get / get-by-number / update / delete), the totals-preview
+endpoint deferred from PO-02, and the list view (list / counts / Excel
+export, PO-04). Send, convert, cancel and documents land in later issues.
 
 """
 
