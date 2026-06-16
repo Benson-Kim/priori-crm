@@ -136,6 +136,20 @@ def get_expense_service(db: DbSession, current_user: CurrentUser) -> "ExpenseSer
 ExpenseServiceDep = Annotated["ExpenseService", Depends(get_expense_service)]  # noqa: F821
 
 
+def get_purchase_order_service(
+    db: DbSession, current_user: CurrentUser
+) -> "PurchaseOrderService":  # noqa: F821
+    """Provide a PurchaseOrderService scoped to the request and acting user."""
+    from app.modules.purchase_orders.service import PurchaseOrderService
+
+    return PurchaseOrderService(db, current_user=current_user)
+
+
+PurchaseOrderServiceDep = Annotated[
+    "PurchaseOrderService", Depends(get_purchase_order_service)  # noqa: F821
+]
+
+
 def get_vendor_service(db: DbSession, current_user: CurrentUser):
     """Provide a VendorService scoped to the current request and acting user."""
     from app.modules.vendors.service import VendorService
