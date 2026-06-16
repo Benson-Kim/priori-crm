@@ -426,12 +426,27 @@ class VendorService(StateMachineMixin, ServiceBase):
         filters: VendorTransactionFilterParams | None = None,
     ) -> PaginatedResponse[VendorTransactionSummary]:
         """
-        Return a paginated, optionally filtered list of the vendor's expenses.
+        Return a paginated, filtered list of the vendor's transactions.
+
+        Combines expenses and purchase orders into one source-tagged list
+        (transaction_type = 'expense' | 'purchase_order'). Both legs are
+        projected to the identical column shape and UNION-ed, so the whole
+        list is a single paginated query — there is no per-source N+1 and no
+        PO-specific list builder. The expense leg filters on vendor_id; the
+        PO leg filters on vendor_id and is backed by the (vendor_id, status)
+        index. (Bills join here once that module lands, same shape.)
+
+        A purchase order is a non-payable commitment — only the Bill it is
+        converted to drives financials (PRD D9) — so its balance is reported
+        as 0.00, mirroring how non-payable docs present a balance. POs are
+        deliberately absent from generate_statement / the cashflow
+        aggregates, which query expenses only.
         """
         # Confirm vendor exists first so we return 404, not an empty list
         self._get_vendor_or_404(vendor_id)
 
         from app.modules.expenses.models import Expense
+        from app.modules.purchase_orders.models import PurchaseOrder
 
         try:
             expense_q = self._db.query(
@@ -445,7 +460,21 @@ class VendorService(StateMachineMixin, ServiceBase):
                 Expense.due_date.label("due_date"),
             ).filter(Expense.vendor_id == vendor_id)
 
-            union_q = expense_q.subquery()
+            # PO leg: same column shape. balance is a literal 0.00 (non-payable
+            # commitment); delivery_date maps to the shared due_date column for
+            # display parity with the payable rows.
+            po_q = self._db.query(
+                PurchaseOrder.id.label("id"),
+                literal_column("'purchase_order'").label("transaction_type"),
+                PurchaseOrder.po_reference.label("ref_no"),
+                PurchaseOrder.order_date.label("date"),
+                PurchaseOrder.total.label("amount"),
+                literal_column("0.00").label("balance"),
+                PurchaseOrder.status.label("status"),
+                PurchaseOrder.delivery_date.label("due_date"),
+            ).filter(PurchaseOrder.vendor_id == vendor_id)
+
+            union_q = expense_q.union_all(po_q).subquery()
 
             count_q = self._db.query(func.count()).select_from(union_q)
             data_q = self._db.query(union_q)
@@ -454,6 +483,15 @@ class VendorService(StateMachineMixin, ServiceBase):
             if filters and filters.status:
                 count_q = count_q.filter(union_q.c.status == filters.status)
                 data_q = data_q.filter(union_q.c.status == filters.status)
+
+            # Apply transaction-type filter (expense | purchase_order)
+            if filters and filters.transaction_type:
+                count_q = count_q.filter(
+                    union_q.c.transaction_type == filters.transaction_type
+                )
+                data_q = data_q.filter(
+                    union_q.c.transaction_type == filters.transaction_type
+                )
 
             total = count_q.scalar() or 0
 
