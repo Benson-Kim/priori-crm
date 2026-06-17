@@ -2,7 +2,7 @@
 Purchase Order API endpoints — Purchases module.
 
 CRUD (create / get / get-by-number / update / delete), the totals-preview
-endpoint, the list view (list / counts / Excel export), send, cancel, PDF,
+endpoint, and the list view (list / counts / Excel export), send, cancel, PDF,
 and per-PO document attachments (upload / list / download / delete).
 
 """
@@ -511,7 +511,7 @@ async def download_purchase_order_pdf(
     )
 
 
-# DOCUMENT MANAGEMENT  (per-PO attachments — PRD §6.2.7 / §6.4.7)
+# DOCUMENT MANAGEMENT  (per-PO attachments)
 
 
 @router.get(
@@ -645,9 +645,7 @@ def download_purchase_order_document(
     return StreamingResponse(
         file_stream,
         media_type=document.mime_type,
-        headers={
-            "Content-Disposition": f'attachment; filename="{document.filename}"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{document.filename}"'},
     )
 
 
@@ -681,7 +679,6 @@ def delete_purchase_order_document(
         )
     else:
         logger.warning(
-            "Failed to delete document file from storage — orphaned file may "
-            "remain",
+            "Failed to delete document file from storage — orphaned file may remain",
             extra={"storage_key": storage_key},
         )

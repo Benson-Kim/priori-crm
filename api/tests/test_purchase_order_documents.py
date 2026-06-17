@@ -1,5 +1,5 @@
 """
-Purchase Order document attachments (PO-12).
+Purchase Order document attachments.
 
 Covers upload/list/download/delete of per-PO attachments, mirroring the
 Expenses Documents behaviour and reusing BaseDocumentService + the shared
@@ -316,9 +316,7 @@ class TestHardDeletePurge:
         # Object purged, no orphan left behind.
         assert key in fake.deleted
         # PO and its document are gone.
-        assert (
-            db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first() is None
-        )
+        assert db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first() is None
         # The before-image audit row survives the delete.
         audit = (
             db.query(AuditEvent)
