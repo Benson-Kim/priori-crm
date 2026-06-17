@@ -2,13 +2,15 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
 import {
-  addDays,
-  getDefaultDueDate,
-  getTodayString,
-  isDueDateBeforeTransactionDate,
-} from "@/lib/dateUtils";
+  getComplianceRefLabel,
+  getComplianceRefTooltip,
+  resolveDefaultTerms,
+  resolveOrgJurisdiction,
+} from "@/lib/compliance";
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
+import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
+import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
 import { PaperclipIcon, Plus, Save, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -19,13 +21,12 @@ import {
   buildVatLabel,
   calculateTotals,
   createEmptyRow,
-  validateDocument,
   type LineItemRow,
 } from "./utils";
 
 // Types
 
-export interface ExpenseLineItemPayload {
+export interface PurchaseOrderLineItemPayload {
   itemName: string;
   description: string;
   quantity: number;
@@ -33,19 +34,21 @@ export interface ExpenseLineItemPayload {
   taxType: string;
 }
 
-export interface ExpensePayload {
+export interface PurchaseOrderPayload {
   vendorId: string;
-  expenseDate: string;
-  dueDate: string;
+  orderDate: string;
+  deliveryDate?: string | null;
   currency: string;
   isRecurring: boolean;
+  complianceRef?: string | null;
   notes?: string;
-  lineItems: ExpenseLineItemPayload[];
+  termsAndConditions?: string | null;
+  lineItems: PurchaseOrderLineItemPayload[];
   files?: File[];
 }
 
-export interface ExpenseInitialData {
-  expenseReference?: string;
+export interface PurchaseOrderInitialData {
+  poReference?: string;
   vendorId?: string;
   vendor?: {
     vendor_name: string;
@@ -54,11 +57,13 @@ export interface ExpenseInitialData {
     phone_secondary?: string | null;
     address?: string;
   };
-  expenseDate?: string;
-  dueDate?: string;
+  orderDate?: string;
+  deliveryDate?: string | null;
   currency?: string;
   isRecurring?: boolean;
+  complianceRef?: string | null;
   notes?: string;
+  termsAndConditions?: string | null;
   lineItems?: {
     id?: string;
     itemName?: string;
@@ -69,47 +74,60 @@ export interface ExpenseInitialData {
   }[];
 }
 
-interface ExpenseEditorProps {
-  initialData?: ExpenseInitialData;
-  onSave: (payload: ExpensePayload) => Promise<void>;
+interface PurchaseOrderEditorProps {
+  initialData?: PurchaseOrderInitialData;
+  onSave: (payload: PurchaseOrderPayload) => Promise<void>;
   isLoading: boolean;
   restrictedMode?: boolean;
 }
 
 // Component
 
-export function ExpenseEditor({
+export function PurchaseOrderEditor({
   initialData,
   onSave,
   isLoading,
   restrictedMode = false,
-}: Readonly<ExpenseEditorProps>) {
+}: Readonly<PurchaseOrderEditorProps>) {
+  // Org-scoped Settings defaults (PO-11), resolved from the persisted owner
+  // profile with the built-in constants as fallback.
+  const { profile } = useOwnerProfile();
+  const orgJurisdiction = resolveOrgJurisdiction(profile?.jurisdiction);
+  const orgDefaultTerms = resolveDefaultTerms(
+    profile?.defaultTermsAndConditions
+  );
+
   // State
   const [vendorId, setVendorId] = useState(initialData?.vendorId ?? "");
-  const [expenseDate, setExpenseDate] = useState<string>(() => {
+  const [orderDate, setOrderDate] = useState<string>(() => {
     const now = Date.now();
-    return initialData?.expenseDate ?? getTodayString(now);
+    return initialData?.orderDate ?? getTodayString(now);
   });
+  // Delivery date is optional for a purchase order.
+  const [deliveryDate, setDeliveryDate] = useState<string>(
+    initialData?.deliveryDate ?? ""
+  );
 
-  const [dueDate, setDueDate] = useState<string>(() => {
-    const now = Date.now();
-    return initialData?.dueDate ?? getDefaultDueDate(30, now);
-  });
-
-  function handleExpenseDateChange(newDate: string) {
-    setExpenseDate(newDate);
-
-    // Auto-correct due date if it would become invalid
-    if (isDueDateBeforeTransactionDate(dueDate, newDate)) {
-      setDueDate(addDays(newDate, 30));
-    }
-  }
-
-  const [currency, setCurrency] = useState(initialData?.currency ?? DEFAULT_CURRENCY);
+  const [currency, setCurrency] = useState(initialData?.currency ?? "KES");
   const [isRecurring, setIsRecurring] = useState(
     initialData?.isRecurring ?? false
   );
+  const [complianceRef, setComplianceRef] = useState(
+    initialData?.complianceRef ?? ""
+  );
   const [notes, setNotes] = useState(initialData?.notes ?? "");
+  // T&C is prefilled with the org default on new POs only (PO-11); on edit it
+  // shows the PO's saved value (which may be intentionally blank) and the
+  // default is never re-applied.
+  const isEditing = !!initialData?.poReference;
+  const [termsAndConditions, setTermsAndConditions] = useState(
+    initialData?.termsAndConditions ?? (isEditing ? "" : orgDefaultTerms)
+  );
+
+  // Jurisdiction-aware Compliance Ref label/tooltip (PO-10), resolved from the
+  // org's persisted jurisdiction so the form, View and PDF agree.
+  const complianceRefLabel = getComplianceRefLabel(orgJurisdiction);
+  const complianceRefTooltip = getComplianceRefTooltip(orgJurisdiction);
   const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading] = useState(false);
@@ -131,7 +149,7 @@ export function ExpenseEditor({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Derived totals
+  // Derived totals (client-side preview; server is the source of truth on save).
   const totals = useMemo(
     () => calculateTotals(lineItems, null, ""),
     [lineItems]
@@ -153,19 +171,45 @@ export function ExpenseEditor({
       prev.map((r) => (r.key === key ? { ...r, [field]: value } : r))
     );
 
+  // Validation: order date required; delivery date optional but, when set,
+  // must be on or after the order date (mirrors the backend CHECK). At least
+  // one line item with a name/description, positive quantity, non-negative
+  // price.
+  const validate = (): Record<string, string> => {
+    const v: Record<string, string> = {};
+    if (!vendorId) v.vendor = "Vendor is required";
+    if (!orderDate) v.orderDate = "Order date is required";
+    if (deliveryDate && orderDate && deliveryDate < orderDate) {
+      v.deliveryDate = "Delivery date must be on or after the order date";
+    }
+
+    const validItems = lineItems.filter(
+      (r) => r.description.trim() || r.itemName.trim()
+    );
+    if (validItems.length === 0) {
+      v.lineItems = "At least one line item is required";
+    }
+    for (const item of validItems) {
+      const qty = Number.parseFloat(item.quantity);
+      const price = Number.parseFloat(item.unitPrice);
+      if (!item.itemName.trim()) {
+        v[`item_${item.key}_name`] = "Item name is required";
+      }
+      if (Number.isNaN(qty) || qty <= 0) {
+        v[`item_${item.key}_qty`] = "Quantity must be greater than 0";
+      }
+      if (Number.isNaN(price) || price < 0) {
+        v[`item_${item.key}_price`] = "Price must be 0 or greater";
+      }
+    }
+    return v;
+  };
+
   // Submit
   const handleSubmit = async () => {
     setSubmitError(null);
 
-    const validationErrors = validateDocument(
-      vendorId,
-      expenseDate,
-      dueDate,
-      lineItems,
-      true,
-      "Vendor"
-    );
-
+    const validationErrors = validate();
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
@@ -173,7 +217,7 @@ export function ExpenseEditor({
       (r) => r.description.trim() || r.itemName.trim()
     );
 
-    const items: ExpenseLineItemPayload[] = validItems.map((r) => ({
+    const items: PurchaseOrderLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
       description: r.description.trim(),
       quantity: Number.parseFloat(r.quantity),
@@ -181,14 +225,16 @@ export function ExpenseEditor({
       taxType: r.taxType || "no_tax",
     }));
 
-    const payload: ExpensePayload = {
+    const payload: PurchaseOrderPayload = {
       vendorId,
-      expenseDate,
-      dueDate,
+      orderDate,
+      deliveryDate: deliveryDate || null,
       currency,
       isRecurring,
-      lineItems: items,
+      complianceRef: complianceRef.trim() || null,
       notes: notes.trim() || undefined,
+      termsAndConditions: termsAndConditions.trim() || null,
+      lineItems: items,
       files: queuedFiles.length > 0 ? queuedFiles : undefined,
     };
 
@@ -248,56 +294,53 @@ export function ExpenseEditor({
             {/* Metadata */}
             <div className="flex flex-col gap-2 items-end">
               <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
-                EXPENSE
+                PURCHASE ORDER
               </h2>
-              {/* Reference */}
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
+                {/* Reference */}
                 <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
                   Reference
                 </label>
                 <Input
-                  value={initialData?.expenseReference ?? "Autogenerated"}
+                  value={initialData?.poReference ?? "Autogenerated"}
                   disabled
                   readOnly
-                  className=""
                 />
 
-                {/* Expense Date */}
+                {/* Order Date */}
                 <label
-                  htmlFor="expense-date"
+                  htmlFor="order-date"
                   className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                 >
-                  Expense Date
+                  Order Date
                 </label>
                 <Input
-                  id="expense-date"
+                  id="order-date"
                   type="date"
-                  value={expenseDate}
-                  onChange={(e) => handleExpenseDateChange(e.target.value)}
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
                   disabled={restrictedMode}
-                  error={errors.transactionDate}
+                  error={errors.orderDate}
                 />
 
-                {/* Due Date */}
-
+                {/* Delivery Date (optional) */}
                 <label
-                  htmlFor="due-date"
+                  htmlFor="delivery-date"
                   className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                 >
-                  Due Date
+                  Delivery Date
                 </label>
                 <Input
-                  id="due-date"
+                  id="delivery-date"
                   type="date"
-                  value={dueDate}
-                  min={expenseDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  value={deliveryDate}
+                  min={orderDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
                   disabled={restrictedMode}
-                  error={errors.dueDate}
+                  error={errors.deliveryDate}
                 />
 
                 {/* Currency */}
-
                 <label
                   htmlFor="currency-select"
                   className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
@@ -308,13 +351,30 @@ export function ExpenseEditor({
                   id="currency-select"
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  disabled={restrictedMode || !!initialData?.expenseReference}
+                  disabled={restrictedMode || !!initialData?.poReference}
                   options={CURRENCY_OPTIONS}
                 />
 
-                {/* Recurring Bill */}
+                {/* Compliance Ref (jurisdiction-aware label/tooltip) */}
+                <label
+                  htmlFor="compliance-ref"
+                  title={complianceRefTooltip}
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap cursor-help"
+                >
+                  {complianceRefLabel}
+                </label>
+                <Input
+                  id="compliance-ref"
+                  value={complianceRef}
+                  onChange={(e) => setComplianceRef(e.target.value)}
+                  disabled={restrictedMode}
+                  placeholder="Optional"
+                  title={complianceRefTooltip}
+                />
+
+                {/* Recurring */}
                 <span className="text-base font-bold leading-6 text-gray-800 text-right flex-1 whitespace-nowrap">
-                  Recurring Bill?
+                  Recurring?
                 </span>
                 <label className="relative inline-flex items-center text-right cursor-pointer shrink-0">
                   <input
@@ -354,10 +414,9 @@ export function ExpenseEditor({
             onUpdateRow={updateRow}
           />
 
-          {/* Expense Totals */}
+          {/* Purchase Order Totals (no Amount Paid / Balance Due). */}
           <div className="w-full flex justify-end">
             <div className="min-w-80 flex flex-col gap-4 text-gray-800">
-              {/* Subtotal */}
               <div className="flex justify-between items-center font-bold">
                 <span>Subtotal</span>
                 <span>
@@ -365,7 +424,6 @@ export function ExpenseEditor({
                 </span>
               </div>
 
-              {/* VAT - Only show if restricted mode (view mode) or if there is actually tax */}
               {(restrictedMode || totals.taxTotal > 0) && (
                 <>
                   <Divider />
@@ -380,36 +438,57 @@ export function ExpenseEditor({
 
               <Divider />
 
-              {/* Total Due */}
               <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
-                <span>Total Due</span>
+                <span>Total</span>
                 <span>
-                  {formatCurrency(totals.totalDue, currency ?? "Ksh")}
+                  {formatCurrency(totals.subtotal + totals.taxTotal, currency ?? "Ksh")}
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Notes & Attachments */}
-        <div className="p-6">
-          <label
-            htmlFor="notes-input"
-            className="block text-[16px] font-bold text-gray-800 mb-3"
-          >
-            Notes
-          </label>
-          <textarea
-            id="notes-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add notes here"
-            rows={2}
-            disabled={restrictedMode}
-            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
-          />
+        {/* Notes & Terms */}
+        <div className="p-6 flex flex-col gap-6">
+          <div>
+            <label
+              htmlFor="notes-input"
+              className="block text-[16px] font-bold text-gray-800 mb-3"
+            >
+              Notes
+            </label>
+            <textarea
+              id="notes-input"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes here"
+              rows={2}
+              disabled={restrictedMode}
+              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="terms-input"
+              className="block text-[16px] font-bold text-gray-800 mb-3"
+            >
+              Terms &amp; Conditions
+            </label>
+            <textarea
+              id="terms-input"
+              value={termsAndConditions}
+              onChange={(e) => setTermsAndConditions(e.target.value)}
+              placeholder="Add terms & conditions here"
+              rows={2}
+              maxLength={2000}
+              disabled={restrictedMode}
+              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
+            />
+          </div>
         </div>
       </div>
+
       {!restrictedMode && (
         <div className="flex flex-col h-full min-h-30">
           <div className="flex items-center justify-between py-4">

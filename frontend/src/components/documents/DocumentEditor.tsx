@@ -11,6 +11,7 @@ import { CustomerSelector } from "@/components/modals/CustomerSelector";
 import { Button } from "@/components/ui/Button";
 import {
   CURRENCY_OPTIONS,
+  DEFAULT_CURRENCY,
   DEFAULT_DUE_DATE_DAYS,
   type CurrencyOption,
 } from "@/lib/constants";
@@ -117,7 +118,7 @@ export function DocumentEditor({
     );
   });
 
-  const [currency, setCurrency] = useState(initialData?.currency ?? "KES");
+  const [currency, setCurrency] = useState(initialData?.currency ?? DEFAULT_CURRENCY);
   const [rfqNumber, setRfqNumber] = useState(initialData?.rfqNumber ?? "");
   const [notes, setNotes] = useState(initialData?.notes ?? "");
 
@@ -462,7 +463,7 @@ interface DateFieldProps {
   colSpan?: string;
 }
 
-function DateField({
+export function DateField({
   label,
   value,
   onChange,

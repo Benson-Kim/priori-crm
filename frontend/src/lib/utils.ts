@@ -102,9 +102,9 @@ export const formatDisplayDate = (dateString: string): string => {
 
 export function formatCurrency(
   amount: number,
-  currency: string = "KES"
+  currency: string = DEFAULT_CURRENCY
 ): string {
-  const prefix = currency === "KES" ? "Ksh" : currency;
+  const prefix = currency === DEFAULT_CURRENCY ? "Ksh" : currency;
 
   return `${prefix} ${amount.toLocaleString("en-KE", {
     minimumFractionDigits: 2,

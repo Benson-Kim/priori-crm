@@ -82,7 +82,7 @@ function formatSignedMoney(
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const prefix = currency === "KES" ? "Ksh" : currency;
+  const prefix = currency === DEFAULT_CURRENCY ? "Ksh" : currency;
   return n < 0 ? `- ${prefix} ${abs}` : `${prefix} ${abs}`;
 }
 
@@ -315,8 +315,8 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
               tick={{ fill: "#9ca3af", fontSize: 12 }}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
-              <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
-              <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
+            <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
+            <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -336,9 +336,8 @@ const SALES_COLUMNS = [
     render: (item: TopSaleLine) => (
       <div className="flex items-center space-x-3">
         <p
-          className={`h-10 w-10 flex items-center justify-center text-white ${
-            badgeForName(item.item_name)
-          }`}
+          className={`h-10 w-10 flex items-center justify-center text-white ${badgeForName(item.item_name)
+            }`}
         >
           {getNameInitials(item.item_name).slice(0, 1) || "?"}
         </p>
