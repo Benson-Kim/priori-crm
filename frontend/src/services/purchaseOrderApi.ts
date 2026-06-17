@@ -5,9 +5,6 @@
  * (`@/lib/apiTypes`) rather than hand-mirrored Pydantic schemas.
  * Request *payloads* stay hand-written as the camelCase transport shape the
  * API maps onto its snake_case fields via Pydantic aliases.
- *
- * Mirrors `expenseApi.ts` (the vendor-facing sibling) so the two stay
- * structurally identical.
  */
 
 import {
@@ -25,19 +22,20 @@ import { createSearchParams } from "@/lib/utils";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
 export type PurchaseOrderResponse = Schema<"PurchaseOrderResponse">;
-// VendorSummary is defined in several modules; the PO-flavoured one is only
-// ever PurchaseOrderResponse.vendor, so derive it from there to avoid the
-// ambiguous bare Schema<"VendorSummary"> lookup (same approach as expenseApi).
+// Two VendorSummary schemas exist (vendors + purchase_orders modules); the
+// purchase-order-flavoured one is only ever PurchaseOrderResponse.vendor, so derive it
+// from there to avoid the ambiguous bare Schema<"VendorSummary"> lookup.
 export type VendorSummary = PurchaseOrderResponse["vendor"];
 export type PurchaseOrderLineItem = Schema<"PurchaseOrderLineItemResponse">;
 export type PurchaseOrderDocument = Schema<"PurchaseOrderDocumentResponse">;
 export type PurchaseOrderSummary = Schema<"PurchaseOrderSummary">;
 export type PurchaseOrderStatusCounts = Schema<"PurchaseOrderStatusCounts">;
+export type PurchaseOrderStatistics = Schema<"PurchaseOrderStatisticsResponse">;
 export type PurchaseOrderCalculationResponse =
   Schema<"PurchaseOrderCalculationResponse">;
-export type PurchaseOrderSendResponse = Schema<"PurchaseOrderSendResponse">;
 export type PurchaseOrderDuplicateResponse =
   Schema<"PurchaseOrderDuplicateResponse">;
+export type PurchaseOrderSendResponse = Schema<"PurchaseOrderSendResponse">;
 
 // Payloads (hand-written camelCase transport shape).
 
@@ -64,8 +62,8 @@ export interface PurchaseOrderCreatePayload {
   currency?: string;
   isRecurring?: boolean;
   lineItems: PurchaseOrderLineItemPayload[];
-  complianceRef?: string | null;
   notes?: string | null;
+  complianceRef?: string | null;
   termsAndConditions?: string | null;
 }
 
@@ -146,27 +144,15 @@ export function getPurchaseOrderCounts() {
   return apiGet<PurchaseOrderStatusCounts>("purchase-orders/counts");
 }
 
-/**
- * Preview PO totals. Posts the camelCase PurchaseOrderLineItemPayload shape
- * (the documented POST /purchase-orders/calculate contract).
- */
-export function calculatePurchaseOrderTotals(
-  data: PurchaseOrderLineItemPayload[]
-) {
-  return apiPost<PurchaseOrderCalculationResponse>(
-    "purchase-orders/calculate",
-    data
-  );
+export function getPurchaseOrderStatistics() {
+  return apiGet<PurchaseOrderStatistics>("purchase-orders/stats/summary");
 }
 
 /**
  * Send a purchase order to its vendor by email (Draft -> Sent). The recipient
  * defaults to the vendor email server-side when `toEmail` is omitted.
  */
-export function sendPurchaseOrder(
-  id: string,
-  data?: PurchaseOrderSendPayload
-) {
+export function sendPurchaseOrder(id: string, data?: PurchaseOrderSendPayload) {
   return apiPost<PurchaseOrderSendResponse>(
     `purchase-orders/${id}/send`,
     data || {}
@@ -186,15 +172,16 @@ export function cancelPurchaseOrder(id: string) {
   return apiPost<PurchaseOrderResponse>(`purchase-orders/${id}/cancel`, {});
 }
 
+export function convertToBill(id: string) {
+  return apiPost<PurchaseOrderResponse>(
+    `purchase-orders/${id}/convert-to-bill`,
+    {}
+  );
+}
+
 /** Download the purchase-order PDF as a Blob (caller saves with `saveBlob`). */
 export function downloadPurchaseOrderPdf(id: string): Promise<Blob> {
   return apiDownload(`purchase-orders/${id}/pdf`);
-}
-
-// Documents (per-PO attachments)
-
-export function getPurchaseOrderDocuments(id: string) {
-  return apiGet<PurchaseOrderDocument[]>(`purchase-orders/${id}/documents`);
 }
 
 export async function uploadPurchaseOrderDocument(
@@ -215,12 +202,26 @@ export function deletePurchaseOrderDocument(id: string, documentId: string) {
   return apiDelete<void>(`purchase-orders/${id}/documents/${documentId}`);
 }
 
+export function getPurchaseOrderDocuments(id: string) {
+  return apiGet<PurchaseOrderDocument[]>(`purchase-orders/${id}/documents`);
+}
+
 export function downloadPurchaseOrderDocument(
   id: string,
   documentId: string
 ): Promise<Blob> {
-  return apiDownload(
-    `purchase-orders/${id}/documents/${documentId}/download`
+  return apiDownload(`purchase-orders/${id}/documents/${documentId}/download`);
+}
+
+/**
+ * Preview purchase order totals. Posts the camelCase PurchaseOrderLineItemPayload shape
+ * (the documented POST /purchase-orders/calculate contract), not snake_case keys
+ * relying on the backend's populate_by_name fallback.
+ */
+export function calculateTotals(data: PurchaseOrderLineItemPayload[]) {
+  return apiPost<PurchaseOrderCalculationResponse>(
+    "purchase-orders/calculate",
+    data
   );
 }
 
