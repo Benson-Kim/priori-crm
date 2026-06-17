@@ -147,11 +147,10 @@ class OwnerProfileSnapshot(Base):
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Snapshotted so the issued document's jurisdiction-aware compliance label
-    # (PO-10) is frozen at issue time and a later Settings change cannot
-    # re-label an already-sent document. The two PO-create defaults
+    # is frozen at issue time and a later Settings change cannot re-label
+    # an already-sent document. The two PO-create defaults
     # (default_terms_and_conditions / default_send_message) are NOT snapshotted:
-    # they are create-time inputs copied onto the PO row itself, not part of the
-    # rendered header.
+    # they are create-time inputs copied onto the PO row itself, not part of the rendered header.
     jurisdiction: Mapped[str | None] = mapped_column(String(2), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

@@ -235,21 +235,14 @@ class PurchaseOrderService(BaseDocumentService):
             )
         po_currency = vendor.currency or data.currency
 
-        # Apply org-scoped Settings defaults at CREATE TIME ONLY (PO-11). Only
-        # a Terms & Conditions value that was not supplied at all falls back to
-        # the org default; an explicitly-supplied value (including an explicit
-        # blank, normalised to None by the schema) is honoured untouched, and a
-        # later Settings change never affects this PO. The org default is
-        # already capped at 2,000 chars on the Settings side, so copying it can
-        # never exceed the PO-level cap.
-        terms_and_conditions = data.terms_and_conditions
-        if "terms_and_conditions" not in data.model_fields_set:
-            terms_and_conditions = self._owner_defaults().terms_and_conditions
-
         # Deterministic, no DB writes — computed once outside the retry loop.
         line_items_data = self._build_line_items(data.line_items)
         subtotal, tax_total = self._sum_line_totals(line_items_data)
         total = subtotal + tax_total
+
+        terms_and_conditions = data.terms_and_conditions
+        if "terms_and_conditions" not in data.model_fields_set:
+            terms_and_conditions = self._owner_defaults().terms_and_conditions
 
         def _build() -> PurchaseOrder:
             purchase_order = PurchaseOrder(
