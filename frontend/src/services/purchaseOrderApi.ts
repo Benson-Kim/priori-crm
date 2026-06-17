@@ -86,6 +86,7 @@ export interface PurchaseOrderSendPayload {
 }
 
 export interface PurchaseOrderListParams {
+  [key: string]: string | number | boolean | undefined;
   page?: number;
   per_page?: number;
   status?: string;
