@@ -20,6 +20,11 @@ from typing import Any, ClassVar
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
+from app.common.analytics import (
+    PurchaseOrderEvent,
+    emit_event,
+    sanitize_error_reason,
+)
 from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
@@ -258,6 +263,19 @@ class PurchaseOrderService(BaseDocumentService):
                 "vendor_id": str(data.vendor_id),
                 "total": float(total),
                 "created_by": str(user_id) if user_id else None,
+            },
+        )
+
+        # Fire-and-forget analytics (PRD §17). Emitted last so a failing
+        # emitter can never affect the created PO.
+        emit_event(
+            PurchaseOrderEvent.PO_CREATED,
+            {
+                "po_id": str(purchase_order.id),
+                "vendor_id": str(data.vendor_id),
+                "currency": str(po_currency),
+                "item_count": len(line_items_data),
+                "recurring": bool(purchase_order.is_recurring),
             },
         )
         return purchase_order
