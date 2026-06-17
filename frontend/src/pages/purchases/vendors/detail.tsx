@@ -1,6 +1,6 @@
 import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { VendorModal } from "@/components/modals/VendorModal";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Divider } from "@/components/ui/Divider";
@@ -20,7 +20,7 @@ import {
   type VendorStatement,
   type VendorTransactionSummary,
 } from "@/services/vendorApi";
-import { ChevronLeft, ChevronRight, Pencil, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Pencil, Printer } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -43,6 +43,8 @@ export default function VendorDetailPage() {
 
   // Transaction table state
   const [activeTab, setActiveTab] = useState("all");
+  // Source filter: all | expense | purchase_order (PO-13).
+  const [typeTab, setTypeTab] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [transactions, setTransactions] = useState<VendorTransactionSummary[]>(
@@ -89,6 +91,7 @@ export default function VendorDetailPage() {
         page: currentPage,
         per_page: perPage,
         status: statusMap[activeTab],
+        type: typeTab !== "all" ? typeTab : undefined,
       });
       setTransactions(data.items);
       setTotalPages(data.total_pages);
@@ -97,7 +100,7 @@ export default function VendorDetailPage() {
     } finally {
       setIsLoadingTransactions(false);
     }
-  }, [id, currentPage, perPage, activeTab]);
+  }, [id, currentPage, perPage, activeTab, typeTab]);
 
   const fetchStatement = useCallback(
     async (months?: number) => {
@@ -140,7 +143,7 @@ export default function VendorDetailPage() {
 
   useEffect(() => {
     startTransition(() => { setCurrentPage(1); });
-  }, [activeTab]);
+  }, [activeTab, typeTab]);
 
   const actions: DropdownItem[] = [
     {
@@ -157,16 +160,32 @@ export default function VendorDetailPage() {
         <Badge variant="overdue">Overdue ({item.days_overdue} days)</Badge>
       );
     }
-    const status = item.status.toLowerCase() as "paid" | "pending";
+    const status = item.status.toLowerCase();
+    // Covers both the payable (expense) statuses and the PO lifecycle
+    // (draft / sent / billed / canceled) — all backed by shared Badge variants.
     const labelMap: Record<string, string> = {
       paid: "Paid",
       pending: "Pending",
+      draft: "Draft",
+      sent: "Sent",
+      billed: "Billed",
+      canceled: "Canceled",
     };
+    const variant = (status === "pending" ? "draft" : status) as BadgeVariant;
     return (
-      <Badge variant={status === "paid" ? "paid" : "draft"}>
+      <Badge variant={variant}>
         {labelMap[status] ?? item.status}
       </Badge>
     );
+  };
+
+  // Route a transaction row to its source document's View.
+  const handleViewTransaction = (item: VendorTransactionSummary) => {
+    if (item.transaction_type === "purchase_order") {
+      navigate(`/purchase-orders/${item.id}`);
+    } else {
+      navigate(`/expenses/${item.id}`);
+    }
   };
 
   if (isFetching) {
@@ -199,6 +218,13 @@ export default function VendorDetailPage() {
     { key: "pending", label: "Pending" },
     { key: "paid", label: "Paid" },
     { key: "overdue", label: "Overdue" },
+  ];
+
+  // Source filter (PO-13): isolate Expenses or Purchase Orders.
+  const TYPE_TABS = [
+    { key: "all", label: "All Types" },
+    { key: "expense", label: "Expenses" },
+    { key: "purchase_order", label: "Purchase Orders" },
   ];
 
   const columns = [
@@ -255,6 +281,23 @@ export default function VendorDetailPage() {
       key: "status",
       header: "Status",
       render: (item: VendorTransactionSummary) => getStatusBadge(item),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "w-[120px]",
+      render: (item: VendorTransactionSummary) => (
+        <Dropdown
+          items={[
+            {
+              key: "view",
+              label: "View",
+              icon: <Eye size={16} />,
+              onClick: () => handleViewTransaction(item),
+            },
+          ]}
+        />
+      ),
     },
   ];
 
@@ -436,6 +479,11 @@ export default function VendorDetailPage() {
                   tabs={TABS}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
+                />
+                <FilterTabs
+                  tabs={TYPE_TABS}
+                  activeTab={typeTab}
+                  onTabChange={setTypeTab}
                 />
               </div>
 

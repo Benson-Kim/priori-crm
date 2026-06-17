@@ -1,0 +1,98 @@
+# Scheduled internal-job caller
+#
+# These jobs run ONLY on GitLab *scheduled* pipelines
+# (CI_PIPELINE_SOURCE == "schedule"). They never run on merge-request or
+# branch pipelines, so they cannot interfere with the lint/test/contract
+# stages in .gitlab-ci.yml.
+#
+# Each job is a thin, dependency-free `curl` caller for one of the API's
+# machine-to-machine endpoints (all gated by the X-Internal-Secret header
+# via app.common.dependencies.verify_internal_secret):
+#
+#   - POST /api/v1/internal/email-outbox/drain          (frequent: ~every 5 min)
+#   - POST /api/v1/invoices/internal/transition-overdue (nightly)
+#   - POST /api/v1/quotes/internal/transition-expired   (nightly)
+#   - POST /api/v1/auth/internal/purge-otps             (nightly)
+#
+# Set up one GitLab pipeline schedule per task
+# (CI/CD > Schedules), each with a SCHEDULED_TASK variable selecting the job:
+#
+#   SCHEDULED_TASK=drain                 cron: */5 * * * *
+#   SCHEDULED_TASK=nightly-transitions   cron: 0 2 * * *   (drives all 3 nightly jobs)
+#
+# Required CI/CD variables (Settings > CI/CD > Variables; masked, not in repo):
+#   - API_BASE_URL        e.g. https://priori-crm-api.onrender.com
+#   - INTERNAL_API_SECRET must equal the API's INTERNAL_API_SECRET env var
+#
+# Alerting: any non-2xx response fails the job. Configure pipeline-failure
+# notifications / an integration on these scheduled pipelines so a missed or
+# failing run pages on-call (AC: alert if a job has not run in its window).
+
+.scheduled-base:
+  stage: scheduled
+  image: curlimages/curl:8.11.1
+  # Only on scheduled pipelines. The per-job `SCHEDULED_TASK` match keeps each
+  # schedule running exactly one task.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+  variables:
+    # Fail the whole job if any curl in the script returns non-zero.
+    GIT_STRATEGY: none
+  before_script:
+    - |
+      if [ -z "$API_BASE_URL" ] || [ -z "$INTERNAL_API_SECRET" ]; then
+        echo "API_BASE_URL and INTERNAL_API_SECRET must be set as CI/CD variables." >&2
+        exit 1
+      fi
+
+# Reusable POST helper: calls an internal endpoint, prints the body, and fails
+# the job on any non-2xx status so the scheduled pipeline goes red (alerting).
+# Usage in script:  call_internal "<path>"
+.call-internal: &call-internal
+  - |
+    call_internal() {
+      path="$1"
+      url="${API_BASE_URL%/}${path}"
+      echo "POST ${url}"
+      body=$(mktemp)
+      code=$(curl -sS -o "$body" -w "%{http_code}" -X POST "$url" \
+        -H "X-Internal-Secret: ${INTERNAL_API_SECRET}" \
+        -H "Content-Type: application/json" \
+        --max-time 120 --retry 2 --retry-connrefused)
+      echo "HTTP ${code}"
+      cat "$body"; echo
+      if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+        echo "Internal call to ${path} failed with HTTP ${code}" >&2
+        return 1
+      fi
+      # Surface dead-lettered outbox rows as a job failure (delivery exhausted).
+      if grep -q '"dead"[[:space:]]*:[[:space:]]*[1-9]' "$body"; then
+        echo "Outbox reported dead-lettered rows — investigate delivery." >&2
+        return 1
+      fi
+      return 0
+    }
+
+# Frequent: drain the transactional email outbox (retry pending/failed,
+# dead-letter after MAX_DELIVERY_ATTEMPTS). Schedule ~every 5 minutes.
+scheduled:email-outbox-drain:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "drain"'
+  script:
+    - *call-internal
+    - call_internal "/api/v1/internal/email-outbox/drain?limit=100"
+
+# Nightly maintenance: overdue invoices, expired quotes, OTP purge, plus a
+# final outbox drain. A failure in any step fails the job (alerting).
+scheduled:nightly-transitions:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "nightly-transitions"'
+  script:
+    - *call-internal
+    - call_internal "/api/v1/invoices/internal/transition-overdue"
+    - call_internal "/api/v1/quotes/internal/transition-expired"
+    - call_internal "/api/v1/auth/internal/purge-otps"
+    - call_internal "/api/v1/internal/email-outbox/drain?limit=200"
