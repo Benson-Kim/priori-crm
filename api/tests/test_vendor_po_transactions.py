@@ -1,10 +1,10 @@
 """
-Purchase orders in the Vendor Detail transaction list.
+PO-13 — Purchase orders in the Vendor Detail transaction list.
 
 Proves the shared vendor transaction-list builder now surfaces PO rows
 alongside expenses (source_type/transaction_type = 'purchase_order'), in a
 single paginated query, and that purchase orders stay OUT of the vendor
-statement (Only the resulting Bill drives financials).
+statement (PRD D9 — only the resulting Bill drives financials).
 
 The union uses portable SQL, so these run on SQLite and Postgres alike; the
 no-N+1 assertion counts emitted statements and is dialect-independent.
@@ -13,11 +13,13 @@ no-N+1 assertion counts emitted statements and is dialect-independent.
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import event
 
 from app.common.pagination import PaginationParams
 from app.constants.enums import (
     Currency,
+    ExpenseStatus,
     PurchaseOrderStatus,
     TaxType,
     VendorStatus,
@@ -123,11 +125,13 @@ class TestPurchaseOrdersInList:
 
     def test_po_amount_is_total_balance_is_zero(self, db):
         vendor = _vendor(db)
+        po = _make_po(db, vendor)
 
         page = _txn_list(db, vendor.id)
         row = next(r for r in page.items if r.transaction_type == "purchase_order")
 
         # 2 x 100 = 200 + 16% tax = 232 total; PO is non-payable -> balance 0.
+        assert row.reference == po.reference
         assert row.amount == Decimal("232.00")
         assert row.balance == Decimal("0.00")
 
@@ -220,7 +224,7 @@ class TestNoNPlusOne:
         assert len(statements) <= 4, statements
 
 
-# PO EXCLUDED FROM STATEMENTS / CASHFLOW
+# PO EXCLUDED FROM STATEMENTS / CASHFLOW (PRD D9)
 
 
 class TestStatementExclusion:
@@ -236,7 +240,9 @@ class TestStatementExclusion:
         # No PO line and a zero invoiced amount: only expenses/bills move the
         # vendor balance; the PO is invisible to financials until billed.
         assert statement.summary.invoiced_amount == Decimal("0.00")
-        assert all("PO-" not in t.description for t in statement.transactions)
+        assert all(
+            "PO-" not in t.description for t in statement.transactions
+        )
 
     def test_statement_counts_expense_but_not_po(self, db):
         vendor = _vendor(db)
