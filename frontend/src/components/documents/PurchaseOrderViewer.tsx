@@ -1,3 +1,4 @@
+import { getComplianceRefLabel, getComplianceRefTooltip } from "@/lib/compliance";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -103,7 +104,10 @@ export function PurchaseOrderViewer({
               <MetaField label="Currency">{data.currency ?? "-"}</MetaField>
 
               {data.complianceRef && (
-                <MetaField label="Compliance Ref">
+                <MetaField
+                  label={getComplianceRefLabel()}
+                  tooltip={getComplianceRefTooltip()}
+                >
                   {data.complianceRef}
                 </MetaField>
               )}
@@ -223,13 +227,18 @@ export function PurchaseOrderViewer({
 function MetaField({
   label,
   children,
+  tooltip,
 }: {
   label: string;
   children: React.ReactNode;
+  tooltip?: string;
 }) {
   return (
     <>
-      <span className="text-[16px] font-bold text-gray-800 whitespace-nowrap">
+      <span
+        title={tooltip}
+        className={`text-[16px] font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
+      >
         {label}
       </span>
 
