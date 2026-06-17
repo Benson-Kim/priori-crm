@@ -3,10 +3,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import {
-  DEFAULT_PURCHASE_ORDER_TERMS,
   getComplianceRefLabel,
   getComplianceRefTooltip,
+  resolveDefaultTerms,
+  resolveOrgJurisdiction,
 } from "@/lib/compliance";
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
@@ -87,6 +89,14 @@ export function PurchaseOrderEditor({
   isLoading,
   restrictedMode = false,
 }: Readonly<PurchaseOrderEditorProps>) {
+  // Org-scoped Settings defaults (PO-11), resolved from the persisted owner
+  // profile with the built-in constants as fallback.
+  const { profile } = useOwnerProfile();
+  const orgJurisdiction = resolveOrgJurisdiction(profile?.jurisdiction);
+  const orgDefaultTerms = resolveDefaultTerms(
+    profile?.defaultTermsAndConditions
+  );
+
   // State
   const [vendorId, setVendorId] = useState(initialData?.vendorId ?? "");
   const [orderDate, setOrderDate] = useState<string>(() => {
@@ -111,13 +121,13 @@ export function PurchaseOrderEditor({
   // default is never re-applied.
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
-    initialData?.termsAndConditions ?? (isEditing ? "" : DEFAULT_PURCHASE_ORDER_TERMS)
+    initialData?.termsAndConditions ?? (isEditing ? "" : orgDefaultTerms)
   );
 
   // Jurisdiction-aware Compliance Ref label/tooltip (PO-10), resolved from the
-  // shared config so the form, View and PDF agree.
-  const complianceRefLabel = getComplianceRefLabel();
-  const complianceRefTooltip = getComplianceRefTooltip();
+  // org's persisted jurisdiction so the form, View and PDF agree.
+  const complianceRefLabel = getComplianceRefLabel(orgJurisdiction);
+  const complianceRefTooltip = getComplianceRefTooltip(orgJurisdiction);
   const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading] = useState(false);

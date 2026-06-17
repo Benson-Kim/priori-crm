@@ -8,10 +8,11 @@
  * the map (open/closed); an unknown jurisdiction falls back to the generic
  * entry.
  *
- * The jurisdiction is org-scoped Settings data. Until a Settings API exposes
- * it, DEFAULT_ORG_JURISDICTION below is the single place the value is read
- * from, so wiring it to Settings later is a one-line change with no form
- * edits.
+ * The jurisdiction is org-scoped Settings data, now persisted on the owner
+ * profile (PO-11). DEFAULT_ORG_JURISDICTION / DEFAULT_PURCHASE_ORDER_TERMS
+ * below are the built-in fallbacks used only when the org never configured a
+ * value; resolveOrgJurisdiction / resolveDefaultTerms prefer the persisted
+ * Settings value and fall back to these constants.
  */
 
 export interface ComplianceRefConfig {
@@ -69,4 +70,28 @@ export function getComplianceRefTooltip(
   jurisdiction?: string
 ): string {
   return getComplianceRefConfig(jurisdiction).tooltip;
+}
+
+/**
+ * Resolve the org jurisdiction from the persisted Settings value, falling
+ * back to the built-in default when the org never configured one. The owner
+ * profile endpoint already returns a resolved (non-null) value, but the
+ * fallback keeps callers safe before the profile has loaded.
+ */
+export function resolveOrgJurisdiction(
+  jurisdiction?: string | null
+): string {
+  const trimmed = jurisdiction?.trim();
+  return trimmed ? trimmed : DEFAULT_ORG_JURISDICTION;
+}
+
+/**
+ * Resolve the create-time default Terms & Conditions from the persisted
+ * Settings value, falling back to the built-in default text when unset.
+ */
+export function resolveDefaultTerms(
+  defaultTermsAndConditions?: string | null
+): string {
+  const trimmed = defaultTermsAndConditions?.trim();
+  return trimmed ? trimmed : DEFAULT_PURCHASE_ORDER_TERMS;
 }

@@ -8,7 +8,12 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { COUNTRY_OPTIONS } from "@/lib/constants";
 import type { OwnerProfile, OwnerProfileUpdate } from "@/services/ownerApi";
+
+// Mirror the backend PO Terms & Conditions cap (api schema MAX_DEFAULT_TERMS_LENGTH).
+const MAX_DEFAULT_TERMS_LENGTH = 2000;
 
 interface OwnerProfileModalProps {
   profile: OwnerProfile | null;
@@ -39,6 +44,12 @@ export function OwnerProfileModal({
     phone: profile?.phone ?? "",
     taxPin: profile?.taxPin ?? "",
     website: profile?.website ?? "",
+    // Org-scoped document-settings defaults (PO-11). The GET/PUT response
+    // returns resolved values, so these prefill with the persisted value or
+    // the built-in default.
+    defaultTermsAndConditions: profile?.defaultTermsAndConditions ?? "",
+    defaultSendMessage: profile?.defaultSendMessage ?? "",
+    jurisdiction: profile?.jurisdiction ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +93,52 @@ export function OwnerProfileModal({
               />
             </label>
           ))}
+
+          {/* Org-scoped Purchase Order defaults (PO-11). Stored once at org
+              scope; applied to new POs at create time only. */}
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-gray-600">
+              Jurisdiction
+            </span>
+            <Select
+              value={form.jurisdiction ?? ""}
+              onChange={(e) => update("jurisdiction", e.target.value)}
+              options={COUNTRY_OPTIONS}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-gray-600">
+              Default Terms &amp; Conditions
+            </span>
+            <textarea
+              value={form.defaultTermsAndConditions ?? ""}
+              onChange={(e) =>
+                update("defaultTermsAndConditions", e.target.value)
+              }
+              rows={3}
+              maxLength={MAX_DEFAULT_TERMS_LENGTH}
+              placeholder="Prefilled on new purchase orders"
+              className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-priori-purple resize-none"
+            />
+            <span className="text-xs text-gray-400 self-end">
+              {(form.defaultTermsAndConditions ?? "").length}/
+              {MAX_DEFAULT_TERMS_LENGTH}
+            </span>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-gray-600">
+              Default Send Message
+            </span>
+            <textarea
+              value={form.defaultSendMessage ?? ""}
+              onChange={(e) => update("defaultSendMessage", e.target.value)}
+              rows={3}
+              placeholder="Default message used when sending a purchase order"
+              className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-priori-purple resize-none"
+            />
+          </label>
         </div>
 
         {error && (
