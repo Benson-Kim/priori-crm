@@ -1,0 +1,107 @@
+name: Scheduled internal jobs
+
+# GitHub-side mirror of .gitlab/ci/scheduled-jobs.yml.
+# .gitlab-ci.yml remains the authoritative pipeline; this workflow is kept
+# in sync so the internal machine-to-machine jobs still run if GitHub
+# becomes the default VCS.
+#
+# Calls the API's internal endpoints (all POST, all gated by the
+# X-Internal-Secret header via app.common.dependencies.verify_internal_secret):
+#   - /api/v1/internal/email-outbox/drain          (frequent: every 5 min)
+#   - /api/v1/invoices/internal/transition-overdue (nightly)
+#   - /api/v1/quotes/internal/transition-expired   (nightly)
+#   - /api/v1/auth/internal/purge-otps             (nightly)
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   - API_BASE_URL        e.g. https://priori-crm-api.onrender.com
+#   - INTERNAL_API_SECRET must equal the API's INTERNAL_API_SECRET env var
+#
+# Alerting: any non-2xx response fails the step, so the scheduled run goes
+# red. Configure failed-run notifications so a missed/failing run pages
+# on-call (AC: alert if a job has not run in its window).
+
+on:
+  schedule:
+    # Outbox drain — every 5 minutes.
+    - cron: "*/5 * * * *"
+    # Nightly maintenance — 02:00 UTC.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Which task to run"
+        required: true
+        default: "drain"
+        type: choice
+        options:
+          - drain
+          - nightly-transitions
+
+jobs:
+  internal-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve task
+        id: task
+        # The 5-min cron runs the drain; the 02:00 cron runs the nightly set.
+        # workflow_dispatch uses the chosen input.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            task="${{ github.event.inputs.task }}"
+          elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
+            task="nightly-transitions"
+          else
+            task="drain"
+          fi
+          echo "task=$task" >> "$GITHUB_OUTPUT"
+          echo "Resolved scheduled task: $task"
+
+      - name: Validate configuration
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$INTERNAL_API_SECRET" ]; then
+            echo "API_BASE_URL and INTERNAL_API_SECRET repository secrets must be set." >&2
+            exit 1
+          fi
+
+      - name: Run internal job(s)
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          TASK: ${{ steps.task.outputs.task }}
+        run: |
+          set -eu
+
+          # POST an internal endpoint; print the body and fail on any non-2xx
+          # status (alerting). For the drain, also fail on dead-lettered rows.
+          call_internal() {
+            path="$1"
+            url="${API_BASE_URL%/}${path}"
+            echo "POST ${url}"
+            body="$(mktemp)"
+            code="$(curl -sS -o "$body" -w '%{http_code}' -X POST "$url" \
+              -H "X-Internal-Secret: ${INTERNAL_API_SECRET}" \
+              -H "Content-Type: application/json" \
+              --max-time 120 --retry 2 --retry-connrefused)"
+            echo "HTTP ${code}"
+            cat "$body"; echo
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              echo "Internal call to ${path} failed with HTTP ${code}" >&2
+              exit 1
+            fi
+            if grep -q '"dead"[[:space:]]*:[[:space:]]*[1-9]' "$body"; then
+              echo "Outbox reported dead-lettered rows — investigate delivery." >&2
+              exit 1
+            fi
+          }
+
+          if [ "$TASK" = "nightly-transitions" ]; then
+            call_internal "/api/v1/invoices/internal/transition-overdue"
+            call_internal "/api/v1/quotes/internal/transition-expired"
+            call_internal "/api/v1/auth/internal/purge-otps"
+            call_internal "/api/v1/internal/email-outbox/drain?limit=200"
+          else
+            call_internal "/api/v1/internal/email-outbox/drain?limit=100"
+          fi
