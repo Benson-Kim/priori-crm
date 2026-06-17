@@ -129,7 +129,7 @@ class TestPurchaseOrdersInList:
         row = next(r for r in page.items if r.transaction_type == "purchase_order")
 
         # 2 x 100 = 200 + 16% tax = 232 total; PO is non-payable -> balance 0.
-        assert row.reference == po.reference
+        assert row.ref_no == po.po_reference
         assert row.amount == Decimal("232.00")
         assert row.balance == Decimal("0.00")
 
