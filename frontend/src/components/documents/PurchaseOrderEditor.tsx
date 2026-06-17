@@ -2,6 +2,11 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import {
+  DEFAULT_PURCHASE_ORDER_TERMS,
+  getComplianceRefLabel,
+  getComplianceRefTooltip,
+} from "@/lib/compliance";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
@@ -101,9 +106,18 @@ export function PurchaseOrderEditor({
     initialData?.complianceRef ?? ""
   );
   const [notes, setNotes] = useState(initialData?.notes ?? "");
+  // T&C is prefilled with the org default on new POs only (PO-11); on edit it
+  // shows the PO's saved value (which may be intentionally blank) and the
+  // default is never re-applied.
+  const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
-    initialData?.termsAndConditions ?? ""
+    initialData?.termsAndConditions ?? (isEditing ? "" : DEFAULT_PURCHASE_ORDER_TERMS)
   );
+
+  // Jurisdiction-aware Compliance Ref label/tooltip (PO-10), resolved from the
+  // shared config so the form, View and PDF agree.
+  const complianceRefLabel = getComplianceRefLabel();
+  const complianceRefTooltip = getComplianceRefTooltip();
   const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading] = useState(false);
@@ -331,12 +345,13 @@ export function PurchaseOrderEditor({
                   options={CURRENCY_OPTIONS}
                 />
 
-                {/* Compliance Ref */}
+                {/* Compliance Ref (jurisdiction-aware label/tooltip) */}
                 <label
                   htmlFor="compliance-ref"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  title={complianceRefTooltip}
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap cursor-help"
                 >
-                  Compliance Ref
+                  {complianceRefLabel}
                 </label>
                 <Input
                   id="compliance-ref"
@@ -344,6 +359,7 @@ export function PurchaseOrderEditor({
                   onChange={(e) => setComplianceRef(e.target.value)}
                   disabled={restrictedMode}
                   placeholder="Optional"
+                  title={complianceRefTooltip}
                 />
 
                 {/* Recurring */}
