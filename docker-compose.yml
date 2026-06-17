@@ -27,7 +27,26 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Secrets and full config come from ./api/.env. The values below document
+    # the env vars the PO module relies on and give safe local defaults;
+    # anything sensitive (AWS keys, INTERNAL_API_SECRET) must come from .env
+    # or the shell and is intentionally left unset here.
     env_file: ./api/.env
+    environment:
+      # Email delivery (PO Send / transactional outbox) — credentials via .env.
+      AWS_REGION: ${AWS_REGION:-af-south-1}
+      SES_SENDER_EMAIL: ${SES_SENDER_EMAIL:-noreply@example.com}
+      # Object storage for PO document attachments. Local backend by default;
+      # set STORAGE_BACKEND=s3 + S3_BUCKET/S3_REGION for the S3 backend.
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      # Shared secret gating the internal scheduler endpoints (outbox drain,
+      # nightly transitions, OTP purge). Must match the scheduler's value.
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-}
+      # Export truncation cap (Excel/PDF).
+      BATCH_SIZE: ${BATCH_SIZE:-1000}
     volumes:
       - ./api:/app
     networks:
