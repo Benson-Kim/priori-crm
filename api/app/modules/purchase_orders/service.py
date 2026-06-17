@@ -160,6 +160,19 @@ class PurchaseOrderService(BaseDocumentService):
             strip_prefix_len=3,
         )
 
+    def _owner_defaults(self):
+        """Resolve the org-scoped PO Settings defaults (PO-11).
+
+        Thin wrapper over OwnerService so create() reads the org default T&C /
+        send message / jurisdiction from the single authoritative source.
+        Imported lazily to avoid a module-level import cycle
+        (owner.service already imports purchase_orders indirectly via the PDF
+        renderer path).
+        """
+        from app.modules.owner.service import OwnerService
+
+        return OwnerService(self._db).purchase_order_defaults()
+
     @staticmethod
     def _build_line_items(
         raw_items: list[PurchaseOrderLineItemCreate],
@@ -222,6 +235,17 @@ class PurchaseOrderService(BaseDocumentService):
             )
         po_currency = vendor.currency or data.currency
 
+        # Apply org-scoped Settings defaults at CREATE TIME ONLY (PO-11). Only
+        # a Terms & Conditions value that was not supplied at all falls back to
+        # the org default; an explicitly-supplied value (including an explicit
+        # blank, normalised to None by the schema) is honoured untouched, and a
+        # later Settings change never affects this PO. The org default is
+        # already capped at 2,000 chars on the Settings side, so copying it can
+        # never exceed the PO-level cap.
+        terms_and_conditions = data.terms_and_conditions
+        if "terms_and_conditions" not in data.model_fields_set:
+            terms_and_conditions = self._owner_defaults().terms_and_conditions
+
         # Deterministic, no DB writes — computed once outside the retry loop.
         line_items_data = self._build_line_items(data.line_items)
         subtotal, tax_total = self._sum_line_totals(line_items_data)
@@ -242,7 +266,7 @@ class PurchaseOrderService(BaseDocumentService):
                 total=total,
                 compliance_ref=data.compliance_ref,
                 notes=data.notes,
-                terms_and_conditions=data.terms_and_conditions,
+                terms_and_conditions=terms_and_conditions,
                 created_by=user_id,
             )
             self._db.add(purchase_order)
