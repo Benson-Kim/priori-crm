@@ -14,12 +14,17 @@ include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Dependency-Scanning.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
+  # PO-15: schedule-only callers for the internal machine-to-machine jobs
+  # (outbox drain, nightly transitions, OTP purge). Gated to scheduled
+  # pipelines so they never run on MR/branch pipelines.
+  - local: .gitlab/ci/scheduled-jobs.yml
 
 stages:
   - lint
   - contract
   - test
   - security
+  - scheduled
 
 variables:
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
@@ -35,6 +40,9 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "main"'
+    # PO-15: allow GitLab CI/CD scheduled pipelines, which run the
+    # internal-job callers in .gitlab/ci/scheduled-jobs.yml.
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 # ---------------------------------------------------------------------------
 # Security scanning
