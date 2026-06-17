@@ -562,7 +562,7 @@ Best regards,
             po_id, to_email, subject, body, attach_pdf=attach_pdf
         )
 
-        from app.common.email_outbox import EmailOutboxService
+        from app.common.email_outbox import EmailOutbox, EmailOutboxService
 
         delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
 
@@ -576,6 +576,39 @@ Best regards,
                 "delivered": delivered,
             },
         )
+
+        # Fire-and-forget analytics (PRD §17). The PO is already SENT and the
+        # email durably queued regardless of the first-attempt outcome, so
+        # these emits never affect delivery. recipient_email_present is a
+        # boolean — the raw address is never sent.
+        vendor_id = getattr(
+            getattr(self.get_by_id(po_id), "vendor_id", None), "__str__", lambda: None
+        )()
+        if delivered:
+            emit_event(
+                PurchaseOrderEvent.PO_SENT,
+                {
+                    "po_id": str(po_id),
+                    "vendor_id": vendor_id,
+                    "recipient_email_present": bool(recipient),
+                },
+            )
+        else:
+            # First attempt failed (row stays queued for retry). Classify the
+            # durable last_error into a stable, PII-free category.
+            failed_row = (
+                self._db.query(EmailOutbox)
+                .filter(EmailOutbox.id == outbox_id)
+                .first()
+            )
+            last_error = getattr(failed_row, "last_error", None)
+            emit_event(
+                PurchaseOrderEvent.PO_SEND_FAILED,
+                {
+                    "po_id": str(po_id),
+                    "error_reason": sanitize_error_reason(last_error),
+                },
+            )
         return {
             "purchase_order_id": po_id,
             "sent_to": recipient,
