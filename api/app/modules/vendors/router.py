@@ -408,8 +408,7 @@ def get_vendor_transactions(
         Query(
             alias="type",
             description=(
-                "Filter by source type: 'expense' | 'purchase_order'. "
-                "Omit for all."
+                "Filter by source type: 'expense' | 'purchase_order'. Omit for all."
             ),
         ),
     ] = None,
