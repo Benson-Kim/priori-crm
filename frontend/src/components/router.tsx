@@ -4,6 +4,7 @@ import ExpensesPage from "@/pages/purchases/expenses";
 import AddExpensePage from "@/pages/purchases/expenses/add";
 import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
 import EditExpensePage from "@/pages/purchases/expenses/edit";
+import PurchaseOrdersPage from "@/pages/purchases/purchase-orders";
 import VendorsPage from "@/pages/purchases/vendors";
 import VendorDetailPage from "@/pages/purchases/vendors/detail";
 import CustomersPage from "@/pages/sales/customers";
@@ -264,6 +265,21 @@ const routes = [
                                     header: {
                                         title: "Edit Expense",
                                         description: "Update expense details.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "purchase-orders",
+                        children: [
+                            {
+                                index: true,
+                                element: <PurchaseOrdersPage />,
+                                handle: {
+                                    header: {
+                                        title: "Purchase Orders",
+                                        description: "Raise and manage purchase orders to your vendors.",
                                     },
                                 },
                             },
