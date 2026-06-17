@@ -9,7 +9,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.common.validators import empty_str_to_none, normalize_phone
+from app.common.validators import (
+    empty_str_to_none,
+    normalize_phone,
+    validate_country_code,
+)
+from app.constants.settings_defaults import (
+    MAX_DEFAULT_SEND_MESSAGE_LENGTH,
+    MAX_DEFAULT_TERMS_LENGTH,
+)
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -37,15 +45,41 @@ class OwnerProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=30)
     tax_pin: str | None = Field(None, max_length=50, alias="taxPin")
     website: str | None = Field(None, max_length=255)
+    # Org-scoped document-settings defaults
+    default_terms_and_conditions: str | None = Field(
+        None,
+        max_length=MAX_DEFAULT_TERMS_LENGTH,
+        alias="defaultTermsAndConditions",
+    )
+    default_send_message: str | None = Field(
+        None,
+        max_length=MAX_DEFAULT_SEND_MESSAGE_LENGTH,
+        alias="defaultSendMessage",
+    )
+    jurisdiction: str | None = Field(None, max_length=2)
 
     model_config = {"populate_by_name": True}
 
     @field_validator(
-        "full_name", "location_watermark", "address", "tax_pin", mode="before"
+        "full_name",
+        "location_watermark",
+        "address",
+        "tax_pin",
+        "default_terms_and_conditions",
+        "default_send_message",
+        mode="before",
     )
     @classmethod
     def _blank_to_none(cls, v: str | None) -> str | None:
         return empty_str_to_none(v)
+
+    @field_validator("jurisdiction", mode="before")
+    @classmethod
+    def _normalise_jurisdiction(cls, v: str | None) -> str | None:
+        # Reuse the shared ISO 3166-1 alpha-2 validator (uppercases, blank ->
+        # None, rejects non 2-letter codes) so the jurisdiction contract is
+        # identical wherever a country code is accepted.
+        return validate_country_code(v)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -77,6 +111,15 @@ class OwnerProfileResponse(BaseModel):
     phone: str | None = None
     tax_pin: str | None = Field(None, alias="taxPin")
     website: str | None = None
+    # Org-scoped document-settings defaults
+    # Returned as the resolved values (persisted value, or the built-in
+    # fallback when never set) so the frontend Settings screen and the PO
+    # create form read a single authoritative source.
+    default_terms_and_conditions: str | None = Field(
+        None, alias="defaultTermsAndConditions"
+    )
+    default_send_message: str | None = Field(None, alias="defaultSendMessage")
+    jurisdiction: str | None = None
     # True when a logo is set; the binary is served from a dedicated endpoint
     # so the JSON never carries a path.
     has_logo: bool = Field(False, alias="hasLogo")
@@ -100,5 +143,22 @@ class OwnerInfo(BaseModel):
     tax_pin: str | None = None
     website: str | None = None
     logo_storage_key: str | None = None
+    # Jurisdiction (frozen on the snapshot at issue time) so the renderer can
+    # resolve the jurisdiction-aware compliance-reference label (PO-10)
+    # without reading the live profile.
+    jurisdiction: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class PurchaseOrderSettingsDefaults(BaseModel):
+    """Resolved org-scoped defaults applied when creating a Purchase Order.
+
+    Built by the owner service from the live profile, with the built-in
+    constants substituted whenever a field was never set. Consumed by
+    ``PurchaseOrderService.create`` to fill omitted fields at create time only.
+    """
+
+    terms_and_conditions: str
+    send_message: str | None = None
+    jurisdiction: str

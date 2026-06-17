@@ -11,6 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
+from app.constants.settings_defaults import (
+    DEFAULT_ORG_JURISDICTION,
+    DEFAULT_PURCHASE_ORDER_TERMS,
+)
 from app.lib.config import settings
 from app.lib.storage import StorageService, storage_service
 from app.modules.owner.models import (
@@ -18,12 +22,19 @@ from app.modules.owner.models import (
     OwnerProfile,
     OwnerProfileSnapshot,
 )
-from app.modules.owner.schemas import OwnerInfo, OwnerProfileUpdate
+from app.modules.owner.schemas import (
+    OwnerInfo,
+    OwnerProfileUpdate,
+    PurchaseOrderSettingsDefaults,
+)
 
 logger = logging.getLogger(__name__)
 
 # Fields that constitute the rendered header; the snapshot hash is computed
 # over exactly these so two profiles render-identically iff they hash-equal.
+# jurisdiction is included because it drives the jurisdiction-aware compliance
+# label printed on the document; the two PO-create defaults are NOT
+# part of the rendered header and so are deliberately absent here.
 _SNAPSHOT_FIELDS = (
     "full_name",
     "location_watermark",
@@ -33,6 +44,7 @@ _SNAPSHOT_FIELDS = (
     "tax_pin",
     "website",
     "logo_storage_key",
+    "jurisdiction",
 )
 
 _LOGO_DIRECTORY = "owner/logo"
@@ -157,6 +169,25 @@ class OwnerService:
             )
         return snapshot
 
+    # Org-scoped Purchase Order settings defaults (PO-11)
+
+    def purchase_order_defaults(self) -> PurchaseOrderSettingsDefaults:
+        """Resolve the org-scoped defaults applied when creating a PO.
+
+        Each field falls back to its built-in constant when the org has never
+        set it (the column is NULL), so a never-configured organisation still
+        gets the documented out-of-the-box values without a backfill. The PO
+        service applies these at create time only.
+        """
+        profile = self.get_or_create()
+        return PurchaseOrderSettingsDefaults(
+            terms_and_conditions=(
+                profile.default_terms_and_conditions or DEFAULT_PURCHASE_ORDER_TERMS
+            ),
+            send_message=profile.default_send_message,
+            jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
+        )
+
     # Render DTO
 
     def load_logo_bytes(
@@ -193,6 +224,7 @@ class OwnerService:
             tax_pin=source.tax_pin,
             website=source.website,
             logo_storage_key=source.logo_storage_key,
+            jurisdiction=getattr(source, "jurisdiction", None),
         )
 
     # Logo
