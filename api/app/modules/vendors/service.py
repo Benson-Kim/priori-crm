@@ -437,7 +437,7 @@ class VendorService(StateMachineMixin, ServiceBase):
         index. (Bills join here once that module lands, same shape.)
 
         A purchase order is a non-payable commitment — only the Bill it is
-        converted to drives financials (PRD D9) — so its balance is reported
+        converted to drives financials — so its balance is reported
         as 0.00, mirroring how non-payable docs present a balance. POs are
         deliberately absent from generate_statement / the cashflow
         aggregates, which query expenses only.

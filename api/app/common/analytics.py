@@ -1,143 +1,187 @@
-"""Central product-analytics emitter.
+"""Centralized, fire-and-forget analytics instrumentation.
 
-Single dispatch point for product analytics events so call sites never
-hand-roll emission (DRY). The v1 sink is a dedicated structured logger
-(``analytics``); replacing it with a real analytics provider later touches
-only this module.
+This module is the single source of truth for product-analytics events. It
+exists so that:
 
-Three hard guarantees, all enforced here so every call site inherits them:
+- Event names live in one place (the ``PurchaseOrderEvent`` enum and friends)
+  instead of being copy-pasted as string literals across services and
+  routers (DRY / maintainability gate G).
+- Emission can NEVER break the business action it instruments. ``emit_event``
+  swallows every error (a misbehaving sink, an unserialisable property) and
+  logs it; it never raises (reliability gate B / PO-14 AC).
+- No PII leaves the process. Event properties are restricted to IDs, enums,
+  counts and booleans (e.g. ``recipient_email_present``). A defensive guard
+  drops any value that looks like a raw email address, and
+  ``sanitize_error_reason`` reduces an exception to a stable category string
+  rather than a raw message / stack trace.
 
-1. **Fire-and-forget.** :func:`emit` never raises. Any failure building or
-   dispatching an event is swallowed and logged at WARNING, so a broken
-   emitter can never fail the business action it instruments (PO-14 / gate
-   B).
-2. **No PII.** Only IDs, booleans and scalar counts are intended in event
-   properties. :func:`_scrub_properties` drops any value that looks like a
-   raw email address as a defence-in-depth net; recipient presence is
-   represented as the boolean ``recipient_email_present``, never the
-   address itself.
-3. **Sanitised failure reasons.** :func:`sanitize_error_reason` reduces an
-   exception or message to a short, stable category token rather than a raw
-   stack trace, for ``po_send_failed.error_reason``.
+The actual delivery sink is intentionally minimal for v1: events are written
+to a dedicated structured logger (``app.analytics``) which the platform's log
+pipeline forwards to the analytics warehouse. Swapping in a real client later
+is a single change in ``_dispatch`` — call sites do not change.
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from enum import StrEnum
 from typing import Any
 
+# Dedicated logger so analytics events can be routed/sampled independently of
+# application logs by the log pipeline.
+analytics_logger = logging.getLogger("app.analytics")
+
+# Internal logger for instrumentation failures (kept off the analytics stream
+# so a sink problem is visible in ordinary application logs).
 logger = logging.getLogger(__name__)
 
-# Dedicated sink so analytics can be routed/scraped independently of app logs.
-_analytics_logger = logging.getLogger("analytics")
 
-# Rough email shape — used only to scrub values that should never be sent.
+class PurchaseOrderEvent(StrEnum):
+    """The 14 Purchase Order analytics events (PRD §17).
+
+    Documented properties per event (carried in the ``properties`` dict):
+
+    - PO_CREATED            -> po_id, vendor_id, currency, item_count, recurring
+    - PO_SAVED              -> po_id, status
+    - PO_VIEWED             -> po_id
+    - PO_SENT               -> po_id, vendor_id, recipient_email_present
+    - PO_SEND_FAILED        -> po_id, error_reason  (sanitised category)
+    - PO_CONVERTED_TO_BILL  -> po_id, bill_id
+    - PO_PDF_DOWNLOADED     -> po_id
+    - PO_DUPLICATED         -> source_po_id, new_po_id
+    - PO_CANCELLED          -> po_id
+    - PO_DELETED            -> po_id
+    - PO_DOCUMENT_ATTACHED  -> po_id, file_size_kb
+    - PO_DOCUMENT_DOWNLOADED-> po_id, document_id
+    - PO_DOCUMENT_DELETED   -> po_id, document_id
+    - PO_LIST_EXPORTED      -> active_filter_tab, row_count
+    """
+
+    PO_CREATED = "po_created"
+    PO_SAVED = "po_saved"
+    PO_VIEWED = "po_viewed"
+    PO_SENT = "po_sent"
+    PO_SEND_FAILED = "po_send_failed"
+    PO_CONVERTED_TO_BILL = "po_converted_to_bill"
+    PO_PDF_DOWNLOADED = "po_pdf_downloaded"
+    PO_DUPLICATED = "po_duplicated"
+    PO_CANCELLED = "po_cancelled"
+    PO_DELETED = "po_deleted"
+    PO_DOCUMENT_ATTACHED = "po_document_attached"
+    PO_DOCUMENT_DOWNLOADED = "po_document_downloaded"
+    PO_DOCUMENT_DELETED = "po_document_deleted"
+    PO_LIST_EXPORTED = "po_list_exported"
+
+
+# Heuristic e-mail detector used to keep raw addresses out of analytics. We
+# never *want* an email in a property (call sites pass booleans), this is a
+# defence-in-depth net so an accidental address is dropped, not shipped.
 _EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
-
-class POEvent:
-    """Purchase-order analytics event names (PRD §17). Declared once."""
-
-    CREATED = "po_created"
-    SAVED = "po_saved"
-    VIEWED = "po_viewed"
-    SENT = "po_sent"
-    SEND_FAILED = "po_send_failed"
-    CONVERTED_TO_BILL = "po_converted_to_bill"
-    PDF_DOWNLOADED = "po_pdf_downloaded"
-    DUPLICATED = "po_duplicated"
-    CANCELLED = "po_cancelled"
-    DELETED = "po_deleted"
-    DOCUMENT_ATTACHED = "po_document_attached"
-    DOCUMENT_DOWNLOADED = "po_document_downloaded"
-    DOCUMENT_DELETED = "po_document_deleted"
-    LIST_EXPORTED = "po_list_exported"
+#: Stable, PII-free categories for ``po_send_failed.error_reason``. The raw
+#: exception is mapped to one of these so the warehouse sees a low-cardinality
+#: category rather than a stack trace or a message that might embed an address.
+SEND_ERROR_TIMEOUT = "timeout"
+SEND_ERROR_RECIPIENT_REJECTED = "recipient_rejected"
+SEND_ERROR_THROTTLED = "throttled"
+SEND_ERROR_AUTH = "auth_error"
+SEND_ERROR_PROVIDER_UNAVAILABLE = "provider_unavailable"
+SEND_ERROR_UNKNOWN = "unknown"
 
 
-# Documented property contract per event (PRD §17). Used by tests to assert
-# every event is emitted with exactly its declared property set, and to keep
-# the names/props defined in one place.
-PO_EVENT_PROPERTIES: dict[str, tuple[str, ...]] = {
-    POEvent.CREATED: ("po_id", "vendor_id", "currency", "item_count", "recurring"),
-    POEvent.SAVED: ("po_id", "status"),
-    POEvent.VIEWED: ("po_id",),
-    POEvent.SENT: ("po_id", "vendor_id", "recipient_email_present"),
-    POEvent.SEND_FAILED: ("po_id", "error_reason"),
-    POEvent.CONVERTED_TO_BILL: ("po_id", "bill_id"),
-    POEvent.PDF_DOWNLOADED: ("po_id",),
-    POEvent.DUPLICATED: ("source_po_id", "new_po_id"),
-    POEvent.CANCELLED: ("po_id",),
-    POEvent.DELETED: ("po_id",),
-    POEvent.DOCUMENT_ATTACHED: ("po_id", "file_size_kb"),
-    POEvent.DOCUMENT_DOWNLOADED: ("po_id", "document_id"),
-    POEvent.DOCUMENT_DELETED: ("po_id", "document_id"),
-    POEvent.LIST_EXPORTED: ("active_filter_tab", "row_count"),
-}
+def sanitize_error_reason(error: BaseException | str | None) -> str:
+    """Map an arbitrary send error to a stable, PII-free category.
 
-# Stable, sanitised categories for po_send_failed.error_reason. Mapped from
-# coarse signals in the underlying error so we never leak a stack trace.
-_SEND_ERROR_CATEGORIES: tuple[tuple[str, str], ...] = (
-    ("throttl", "ses_throttled"),
-    ("rate exceeded", "ses_throttled"),
-    ("timeout", "timeout"),
-    ("timed out", "timeout"),
-    ("connection", "connection_error"),
-    ("credential", "auth_error"),
-    ("access denied", "auth_error"),
-    ("not authorized", "auth_error"),
-    ("address", "invalid_recipient"),
-    ("recipient", "invalid_recipient"),
-    ("verify", "unverified_sender"),
-)
-
-
-def sanitize_error_reason(error: Exception | str | None) -> str:
-    """Reduce an error to a short, stable, PII-free category token.
-
-    Never returns a stack trace or a raw provider message: the result is one
-    of a small set of categories (plus ``unknown_error``), safe to store and
-    chart. Matching is done on a lower-cased view of the message only.
+    The result is one of the ``SEND_ERROR_*`` constants. The raw error text is
+    classified by keyword and then discarded, so neither a stack trace nor a
+    message that might contain a recipient address is ever emitted
+    (PO-14 AC: ``error_reason`` is a sanitised category, not a raw trace).
     """
     if error is None:
-        return "unknown_error"
-    message = str(error).lower()
-    for needle, category in _SEND_ERROR_CATEGORIES:
-        if needle in message:
-            return category
-    return "unknown_error"
+        return SEND_ERROR_UNKNOWN
+
+    text = (error if isinstance(error, str) else str(error)).lower()
+
+    if "timeout" in text or "timed out" in text:
+        return SEND_ERROR_TIMEOUT
+    if "throttl" in text or "rate" in text or "too many" in text:
+        return SEND_ERROR_THROTTLED
+    if (
+        "rejected" in text
+        or "recipient" in text
+        or "mailbox" in text
+        or "address" in text
+    ):
+        return SEND_ERROR_RECIPIENT_REJECTED
+    if (
+        "credential" in text
+        or "auth" in text
+        or "access denied" in text
+        or "forbidden" in text
+        or "signature" in text
+    ):
+        return SEND_ERROR_AUTH
+    if (
+        "unavailable" in text
+        or "connection" in text
+        or "service" in text
+        or "5" in text[:1]  # leading 5xx provider status
+    ):
+        return SEND_ERROR_PROVIDER_UNAVAILABLE
+    return SEND_ERROR_UNKNOWN
 
 
-def _scrub_properties(properties: dict[str, Any]) -> dict[str, Any]:
-    """Defence-in-depth: drop any property value that looks like a raw email.
+def _scrub(properties: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a copy of ``properties`` with obvious PII stripped.
 
-    Call sites are expected to pass only IDs/booleans/scalars, but this guard
-    guarantees a stray email can never reach the analytics sink even if a
-    caller regresses.
+    Any string value that matches an email pattern is replaced with the
+    sentinel ``"<redacted>"``. This never raises: an unexpected value type is
+    passed through untouched.
     """
-    scrubbed: dict[str, Any] = {}
+    if not properties:
+        return {}
+    cleaned: dict[str, Any] = {}
     for key, value in properties.items():
         if isinstance(value, str) and _EMAIL_RE.search(value):
-            # Preserve the signal (presence) without the PII.
-            scrubbed[key] = "[redacted]"
-            continue
-        scrubbed[key] = value
-    return scrubbed
+            cleaned[key] = "<redacted>"
+        else:
+            cleaned[key] = value
+    return cleaned
 
 
-def emit(event: str, /, **properties: Any) -> None:
-    """Emit a single analytics event. Never raises.
+def _dispatch(event_name: str, properties: dict[str, Any]) -> None:
+    """Deliver a single event to the sink.
 
-    Fire-and-forget by contract: any exception while scrubbing or dispatching
-    is caught and logged at WARNING so the calling business action is never
-    affected. ``properties`` should contain only IDs, booleans and scalar
-    counts — no PII.
+    v1 sink: a structured log line on the dedicated ``app.analytics`` logger.
+    Isolated in its own function so a future swap to a real analytics client
+    is a one-line change with no impact on call sites.
+    """
+    analytics_logger.info(
+        "analytics_event",
+        extra={"event": event_name, "properties": properties},
+    )
+
+
+def emit_event(
+    event: PurchaseOrderEvent | str,
+    properties: dict[str, Any] | None = None,
+) -> None:
+    """Emit an analytics event — fire-and-forget, never raises.
+
+    Centralised dispatch for every call site (DRY): callers pass an event from
+    ``PurchaseOrderEvent`` and a small property dict of IDs / enums / counts /
+    booleans. Any failure — a bad payload, a sink/logging error — is caught
+    and logged here, so instrumentation can never break or fail the business
+    action that triggered it (reliability gate B).
     """
     try:
-        payload = _scrub_properties(properties)
-        _analytics_logger.info(
-            "analytics_event",
-            extra={"event": event, "properties": payload},
+        event_name = event.value if isinstance(event, PurchaseOrderEvent) else event
+        _dispatch(event_name, _scrub(properties))
+    except Exception:  # noqa: BLE001 - fire-and-forget by contract
+        # Swallow-and-log: a failed emit must not propagate to the caller.
+        logger.warning(
+            "Failed to emit analytics event; business action unaffected",
+            exc_info=True,
+            extra={"event": str(event)},
         )
-    except Exception:  # noqa: BLE001 — analytics must never break the caller
-        logger.warning("Analytics emission failed for %s", event, exc_info=True)

@@ -32,6 +32,31 @@ from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
 MAX_TERMS_AND_CONDITIONS_LENGTH = 2000
 
 
+# DOCUMENT SCHEMAS
+
+
+class PurchaseOrderDocumentResponse(BaseModel):
+    """Document attachment in API responses.
+
+    ``storage_key`` is intentionally excluded — it is an internal object
+    path that must never be sent to clients (security gate F). ``file_size_kb``
+    is a model @property surfaced via ``from_attributes`` so the list view can
+    show the size in KB without the frontend re-deriving it.
+    """
+
+    id: UUID
+    po_id: UUID
+    filename: str
+    file_size_bytes: int
+    file_size_kb: float  # @property on the model — readable via from_attributes
+    mime_type: str
+    source: str
+    uploaded_at: datetime
+    uploaded_by: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # VENDOR SUMMARY
 
 
@@ -318,6 +343,7 @@ class PurchaseOrderResponse(BaseModel):
     # Relationships
     vendor: VendorSummary
     line_items: list[PurchaseOrderLineItemResponse] = Field(default_factory=list)
+    documents: list[PurchaseOrderDocumentResponse] = Field(default_factory=list)
 
     @computed_field
     @property

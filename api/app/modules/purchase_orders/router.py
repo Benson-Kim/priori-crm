@@ -2,24 +2,38 @@
 Purchase Order API endpoints — Purchases module.
 
 CRUD (create / get / get-by-number / update / delete), the totals-preview
-endpoint, and the list view (list / counts / Excel export).
-Send, convert, cancel and documents land in later issues.
+endpoint, and the list view (list / counts / Excel export), send, cancel, PDF,
+and per-PO document attachments (upload / list / download / delete).
 
 """
 
 import logging
+import secrets
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
+from app.common.analytics import PurchaseOrderEvent, emit_event
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.uploads import validate_upload
+from app.lib.storage import storage_service
 from app.modules.purchase_orders.schemas import (
     PurchaseOrderCalculationResponse,
     PurchaseOrderCreate,
+    PurchaseOrderDocumentResponse,
     PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
@@ -62,6 +76,12 @@ def create_purchase_order(
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderResponse:
     purchase_order = service.create(body, user_id=service.actor_id)
+    # po_saved reflects the form-save outcome (the status the row landed in);
+    # po_created is emitted by the service with the richer creation payload.
+    emit_event(
+        PurchaseOrderEvent.PO_SAVED,
+        {"po_id": str(purchase_order.id), "status": str(purchase_order.status)},
+    )
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -200,6 +220,16 @@ async def export_purchase_orders_to_excel(
     )
     truncated = len(rows) > settings.BATCH_SIZE
     purchase_orders = rows[: settings.BATCH_SIZE]
+
+    # Fire-and-forget analytics: the active tab (status filter, "all" when
+    # unset) and the number of rows actually exported (post-truncation).
+    emit_event(
+        PurchaseOrderEvent.PO_LIST_EXPORTED,
+        {
+            "active_filter_tab": filter_status or "all",
+            "row_count": len(purchase_orders),
+        },
+    )
 
     # Cap concurrency and build the workbook off the event loop.
     exporter = ExcelExporter()
@@ -345,6 +375,7 @@ def get_purchase_order(
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderResponse:
     purchase_order = service.get_by_id(po_id)
+    emit_event(PurchaseOrderEvent.PO_VIEWED, {"po_id": str(po_id)})
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -381,6 +412,10 @@ def update_purchase_order(
     ] = None,
 ) -> PurchaseOrderResponse:
     purchase_order = service.update(po_id, body, expected_version)
+    emit_event(
+        PurchaseOrderEvent.PO_SAVED,
+        {"po_id": str(po_id), "status": str(purchase_order.status)},
+    )
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -484,6 +519,8 @@ async def download_purchase_order_pdf(
         service.generate_pdf_for_download, po_id
     )
 
+    emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
+
     vendor_name = getattr(purchase_order.vendor, "vendor_name", "vendor")
     filename = (
         f"PurchaseOrder_{purchase_order.po_reference}_"
@@ -496,3 +533,181 @@ async def download_purchase_order_pdf(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+# DOCUMENT MANAGEMENT  (per-PO attachments)
+
+
+@router.get(
+    "/{po_id}/documents",
+    response_model=list[PurchaseOrderDocumentResponse],
+    summary="List purchase-order documents",
+    description="Retrieve all documents attached to a purchase order.",
+    responses={
+        200: {"description": "Document list"},
+        404: {"description": "Purchase order not found"},
+    },
+)
+def list_purchase_order_documents(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> list[PurchaseOrderDocumentResponse]:
+    purchase_order = service.get_by_id(po_id)
+    return [
+        PurchaseOrderDocumentResponse.model_validate(doc)
+        for doc in purchase_order.documents
+    ]
+
+
+@router.post(
+    "/{po_id}/documents",
+    response_model=PurchaseOrderDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a document to a purchase order",
+    description=(
+        "Attach a supporting document to a purchase order. The file is "
+        "validated (type allow-list, max size, magic-byte content sniff) and "
+        "written to object storage, then its metadata is persisted. "
+        "Attachments can be added from the View screen at any status "
+        "(including SENT / BILLED / CANCELED) and do not re-open edit mode. "
+        "source must be 'form' or 'view'. storage_key is never returned."
+    ),
+    responses={
+        201: {"description": "Document uploaded"},
+        400: {"description": "Unsupported type, oversize, or invalid source"},
+        404: {"description": "Purchase order not found"},
+    },
+)
+def upload_purchase_order_document(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+    file: UploadFile = File(...),
+    source: str = Form("form"),
+) -> PurchaseOrderDocumentResponse:
+    from app.common.exceptions import BadRequestException
+    from app.constants.enums import DocumentSource
+
+    user_id = service.actor_id
+
+    # PO documents only support form | view (no payment_modal): reject any
+    # other value with a clear 400 rather than letting the DB CHECK surface
+    # an opaque error.
+    try:
+        doc_source = DocumentSource(source)
+    except ValueError as exc:
+        raise BadRequestException(
+            detail="source must be 'form' or 'view'.",
+            field="source",
+        ) from exc
+    if doc_source not in (DocumentSource.FORM, DocumentSource.VIEW):
+        raise BadRequestException(
+            detail="source must be 'form' or 'view'.",
+            field="source",
+        )
+
+    # Confirm the PO exists before touching storage — raises NotFoundException
+    # otherwise, so we never write an object for a non-existent PO.
+    service.get_by_id(po_id)
+
+    mime_type = file.content_type or "application/octet-stream"
+
+    # Single source of truth for the upload attack surface:
+    # sanitize name -> extension -> MIME -> size -> magic-byte content sniff.
+    # Leaves the stream rewound to 0, ready to persist.
+    safe_basename, _ext, file_size_bytes = validate_upload(
+        file.file, file.filename or "unnamed_file", mime_type
+    )
+
+    unique_prefix = secrets.token_hex(8)
+    filename = f"{unique_prefix}_{safe_basename}"
+    directory = f"purchase_orders/{po_id}"
+
+    storage_key = storage_service.upload_file(file.file, directory, filename)
+
+    document = service.attach_document(
+        po_id=po_id,
+        filename=safe_basename,  # preserve the original display name
+        file_size_bytes=file_size_bytes,
+        mime_type=mime_type,
+        storage_key=storage_key,
+        source=doc_source,
+        user_id=user_id,
+    )
+    return PurchaseOrderDocumentResponse.model_validate(document)
+
+
+@router.get(
+    "/{po_id}/documents/{document_id}/download",
+    summary="Download a purchase-order document",
+    description=(
+        "Stream a document attached to a purchase order. Requires "
+        "authentication; the document must belong to the given purchase "
+        "order. The file is served through a path-confined storage handle — "
+        "never a raw client-supplied path — so storage keys cannot be used "
+        "for arbitrary file reads."
+    ),
+    responses={
+        200: {"description": "Document file stream"},
+        401: {"description": "Authentication required"},
+        404: {"description": "Document not found on this purchase order"},
+    },
+)
+def download_purchase_order_document(
+    po_id: UUID,
+    document_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> StreamingResponse:
+    # Ownership: get_document is scoped to (po_id, document_id) and the
+    # service depends on CurrentUser, so an unauthenticated caller is rejected
+    # before this point and UUID enumeration cannot leak another PO's file.
+    document = service.get_document(po_id, document_id)
+
+    emit_event(
+        PurchaseOrderEvent.PO_DOCUMENT_DOWNLOADED,
+        {"po_id": str(po_id), "document_id": str(document_id)},
+    )
+
+    # download_stream serves through a path-confined handle (local) or
+    # straight from get_object (S3); never a raw client-supplied path.
+    file_stream = storage_service.download_stream(document.storage_key)
+
+    return StreamingResponse(
+        file_stream,
+        media_type=document.mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{document.filename}"'},
+    )
+
+
+@router.delete(
+    "/{po_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a purchase-order document",
+    description=(
+        "Remove a document from a purchase order. The storage object is also "
+        "deleted after the DB record is removed."
+    ),
+    responses={
+        204: {"description": "Document deleted"},
+        403: {"description": "Insufficient role to delete documents"},
+        404: {"description": "Document not found on this purchase order"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def delete_purchase_order_document(
+    po_id: UUID,
+    document_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> None:
+    storage_key = service.delete_document(po_id, document_id)
+    success = storage_service.delete_file(storage_key)
+
+    if success:
+        logger.info(
+            "Document file deleted from storage",
+            extra={"storage_key": storage_key},
+        )
+    else:
+        logger.warning(
+            "Failed to delete document file from storage — orphaned file may remain",
+            extra={"storage_key": storage_key},
+        )
