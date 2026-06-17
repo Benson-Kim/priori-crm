@@ -31,8 +31,12 @@ from app.common.exceptions import (
 )
 from app.common.financial import build_line_items, sum_line_totals
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import PurchaseOrderStatus
-from app.modules.purchase_orders.models import PurchaseOrder, PurchaseOrderLineItem
+from app.constants.enums import DocumentSource, PurchaseOrderStatus
+from app.modules.purchase_orders.models import (
+    PurchaseOrder,
+    PurchaseOrderDocument,
+    PurchaseOrderLineItem,
+)
 from app.modules.purchase_orders.queries import (
     PurchaseOrderExportQuery,
     PurchaseOrderStatisticsRepository,
@@ -55,6 +59,7 @@ logger = logging.getLogger(__name__)
 PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.vendor),
     joinedload(PurchaseOrder.line_items),
+    joinedload(PurchaseOrder.documents),
 )
 
 # Statuses from which a PO may be deleted. SENT / BILLED are
@@ -673,6 +678,150 @@ Best regards,
         )
         return purchase_order
 
+    # DOCUMENT MANAGEMENT
+
+    def attach_document(
+        self,
+        po_id: uuid.UUID,
+        filename: str,
+        file_size_bytes: int,
+        mime_type: str,
+        storage_key: str,
+        source: DocumentSource = DocumentSource.FORM,
+        user_id: uuid.UUID | None = None,
+        storage: Any | None = None,
+    ) -> PurchaseOrderDocument:
+        """Persist document metadata after the file has been written to storage.
+
+        Mirrors ExpenseService.attach_document. The router is responsible for
+        the storage write and must call this only after it succeeds, so a DB
+        row never references an object that never landed.
+
+        Attachments are addable from the View screen at ANY status (DRAFT /
+        SENT / BILLED / CANCELED): a PO attachment is supporting evidence, not
+        an edit, so there is no editable-status gate here — the PO existing is
+        the only precondition (the router confirms it before the storage
+        write). Persisting metadata does not touch the PO row or its version,
+        so it never re-opens edit mode.
+
+        The freshly written object is registered for delete-on-rollback (shared
+        ``storage_tx`` helper): if this insert — or the outer request commit —
+        fails, the object is removed from storage instead of being orphaned.
+        ``storage`` is injectable for tests and defaults to the process
+        storage facade.
+        """
+        from app.common.storage_tx import schedule_delete_on_rollback
+        from app.lib.storage import storage_service
+
+        schedule_delete_on_rollback(self._db, storage or storage_service, storage_key)
+
+        # Confirm the PO exists — raises NotFoundException if not.
+        self.get_by_id(po_id)
+
+        document = PurchaseOrderDocument(
+            po_id=po_id,
+            filename=filename,
+            file_size_bytes=file_size_bytes,
+            mime_type=mime_type,
+            storage_key=storage_key,
+            source=source.value,
+            uploaded_by=user_id,
+        )
+        self._db.add(document)
+        self._db.flush()
+
+        logger.info(
+            "Attached document to purchase order %s: %s",
+            po_id,
+            filename,
+            extra={
+                "po_id": str(po_id),
+                "document_id": str(document.id),
+                "source": source.value,
+                "size_bytes": file_size_bytes,
+            },
+        )
+        return document
+
+    def get_document(
+        self,
+        po_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> PurchaseOrderDocument:
+        """Fetch a single document record, scoped to its owning PO.
+
+        Scoping the lookup to ``(po_id, document_id)`` means a download/delete
+        authorised for one PO can never reach another PO's attachment by
+        UUID guessing (security gate F).
+        """
+        document = (
+            self._db.query(PurchaseOrderDocument)
+            .filter(
+                PurchaseOrderDocument.id == document_id,
+                PurchaseOrderDocument.po_id == po_id,
+            )
+            .first()
+        )
+        if not document:
+            raise NotFoundException(
+                detail=(
+                    f"Document '{document_id}' not found on purchase order '{po_id}'"
+                ),
+                resource="purchase_order_document",
+            )
+        return document
+
+    def delete_document(
+        self,
+        po_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> str:
+        """Remove document metadata and return its storage_key.
+
+        Two-step by design (mirrors ExpenseService.delete_document): the
+        router deletes the object from storage using the returned key only
+        after the DB row is gone, so the key is never lost before deletion.
+        """
+        document = self.get_document(po_id, document_id)
+
+        storage_key = document.storage_key
+
+        self._db.delete(document)
+        self._db.flush()
+
+        logger.info(
+            "Deleted document %s from purchase order %s",
+            document_id,
+            po_id,
+            extra={
+                "po_id": str(po_id),
+                "document_id": str(document_id),
+            },
+        )
+        return storage_key  # caller deletes from object storage
+
+    @staticmethod
+    def _purge_storage_objects(storage_keys: list[str]) -> None:
+        """Best-effort delete of stored objects after a hard delete.
+
+        Mirrors ExpenseService._purge_storage_objects. Storage failures are
+        logged, not raised: the DB record is already gone, so a missed file is
+        a reconciliation concern, not a request failure.
+        """
+        from app.lib.storage import storage_service
+
+        for key in storage_keys:
+            if storage_service.delete_file(key):
+                logger.info(
+                    "Purged orphaned storage object",
+                    extra={"storage_key": key},
+                )
+            else:
+                logger.warning(
+                    "Failed to purge storage object — orphan may remain",
+                    extra={"storage_key": key},
+                )
+
     # CANCEL
 
     def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
@@ -748,6 +897,10 @@ Best regards,
             )
 
         try:
+            # Capture storage keys before the cascading DB delete so the
+            # underlying objects can be purged afterward (no orphaned blobs).
+            storage_keys = [doc.storage_key for doc in purchase_order.documents]
+
             # Before-image audit row — flushed in the same transaction as the
             # delete so the trail can never disagree with the ledger.
             record_audit_event(
@@ -767,10 +920,16 @@ Best regards,
             self._db.delete(purchase_order)
             self._db.flush()
 
+            # Best-effort purge after the row is gone.
+            self._purge_storage_objects(storage_keys)
+
             logger.info(
                 "Hard-deleted purchase order: %s",
                 purchase_order.po_reference,
-                extra={"po_id": str(po_id)},
+                extra={
+                    "po_id": str(po_id),
+                    "purged_objects": len(storage_keys),
+                },
             )
             return False
 
