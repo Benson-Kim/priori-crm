@@ -25,6 +25,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
+from app.common.analytics import PurchaseOrderEvent, emit_event
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.uploads import validate_upload
@@ -75,6 +76,12 @@ def create_purchase_order(
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderResponse:
     purchase_order = service.create(body, user_id=service.actor_id)
+    # po_saved reflects the form-save outcome (the status the row landed in);
+    # po_created is emitted by the service with the richer creation payload.
+    emit_event(
+        PurchaseOrderEvent.PO_SAVED,
+        {"po_id": str(purchase_order.id), "status": str(purchase_order.status)},
+    )
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -213,6 +220,16 @@ async def export_purchase_orders_to_excel(
     )
     truncated = len(rows) > settings.BATCH_SIZE
     purchase_orders = rows[: settings.BATCH_SIZE]
+
+    # Fire-and-forget analytics: the active tab (status filter, "all" when
+    # unset) and the number of rows actually exported (post-truncation).
+    emit_event(
+        PurchaseOrderEvent.PO_LIST_EXPORTED,
+        {
+            "active_filter_tab": filter_status or "all",
+            "row_count": len(purchase_orders),
+        },
+    )
 
     # Cap concurrency and build the workbook off the event loop.
     exporter = ExcelExporter()
@@ -358,6 +375,7 @@ def get_purchase_order(
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderResponse:
     purchase_order = service.get_by_id(po_id)
+    emit_event(PurchaseOrderEvent.PO_VIEWED, {"po_id": str(po_id)})
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -394,6 +412,10 @@ def update_purchase_order(
     ] = None,
 ) -> PurchaseOrderResponse:
     purchase_order = service.update(po_id, body, expected_version)
+    emit_event(
+        PurchaseOrderEvent.PO_SAVED,
+        {"po_id": str(po_id), "status": str(purchase_order.status)},
+    )
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
@@ -496,6 +518,8 @@ async def download_purchase_order_pdf(
     pdf_data, purchase_order = await run_export(
         service.generate_pdf_for_download, po_id
     )
+
+    emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
 
     vendor_name = getattr(purchase_order.vendor, "vendor_name", "vendor")
     filename = (
@@ -637,6 +661,11 @@ def download_purchase_order_document(
     # service depends on CurrentUser, so an unauthenticated caller is rejected
     # before this point and UUID enumeration cannot leak another PO's file.
     document = service.get_document(po_id, document_id)
+
+    emit_event(
+        PurchaseOrderEvent.PO_DOCUMENT_DOWNLOADED,
+        {"po_id": str(po_id), "document_id": str(document_id)},
+    )
 
     # download_stream serves through a path-confined handle (local) or
     # straight from get_object (S3); never a raw client-supplied path.
