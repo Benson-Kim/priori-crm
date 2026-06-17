@@ -41,6 +41,21 @@ Required **masked** CI/CD variables (Settings > CI/CD > Variables):
 - `API_BASE_URL` — e.g. `https://priori-crm-api.onrender.com` (no trailing path).
 - `INTERNAL_API_SECRET` — must equal the API's `INTERNAL_API_SECRET` env var.
 
+### GitHub Actions Schedules (mirror)
+
+`.github/workflows/scheduled-jobs.yml` mirrors the GitLab caller so the jobs
+still run if GitHub is the default VCS. It uses two `schedule` crons plus
+`workflow_dispatch`:
+
+| Trigger | Cron | Task |
+| --- | --- | --- |
+| Outbox drain | `*/5 * * * *` | `drain` |
+| Nightly maintenance | `0 2 * * *` | `nightly-transitions` |
+
+Required **repository secrets** (Settings > Secrets and variables > Actions):
+`API_BASE_URL` and `INTERNAL_API_SECRET` (same meaning as the GitLab variables).
+Use `workflow_dispatch` to run either task on demand.
+
 ### Alternatives
 
 - **k8s CronJob** / **cron + curl**: same four `POST`s with the
@@ -113,4 +128,9 @@ backend: `api:lint` (ruff), `api:openapi-schema` (offline OpenAPI export +
 frontend type generation), `api:test` (Postgres-guarded suite), and the
 GitLab-managed SAST / Dependency-Scanning / Secret-Detection analyzers. The
 `.github/workflows/` definitions remain authoritative for the GitHub-side
-checks (incl. CodeQL and gitleaks).
+checks (incl. CodeQL and gitleaks), and `.github/workflows/scheduled-jobs.yml`
+mirrors the internal-job scheduler.
+
+Both schedulers (GitLab CI/CD Schedules and GitHub Actions Schedules) target
+the same internal endpoints; enable **only one** in any given deployment to
+avoid double-draining (harmless but redundant).
