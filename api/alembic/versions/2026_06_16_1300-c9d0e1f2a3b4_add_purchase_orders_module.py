@@ -1,7 +1,7 @@
 """add purchase orders module
 
-Revision ID: c9d0e1f2a3b4
-Revises: b8c9d0e1f2a3
+Revision ID: a1b2c3d4e5f7
+Revises: f2a3b4c5d6e7
 Create Date: 2026-06-16 13:00:00.000000
 
 Creates the Purchase Orders module tables (PO-01):
@@ -12,8 +12,14 @@ Creates the Purchase Orders module tables (PO-01):
 Mirrors the expenses module schema (vendor-facing). No discount columns,
 no payments table in v1.
 
-Chained after the reference_sequences migration (b8c9d0e1f2a3), the current
-develop head, to keep a single linear history.
+NOTE: this migration was originally created with revision 'c9d0e1f2a3b4',
+which collided with the add_customer_version migration of the same id, and
+chained off the interior node 'b8c9d0e1f2a3' instead of the head - branching
+the graph and making it unloadable ("revision present more than once"), which
+broke `alembic upgrade head`. It has been re-keyed to 'a1b2c3d4e5f7' and
+re-chained after the true head 'f2a3b4c5d6e7' (add_audit_events) to restore a
+single linear history. No environment can have applied it under the old id,
+because alembic refused to load the duplicated graph outright.
 
 converted_bill_id is a plain nullable UUID column with NO foreign-key
 constraint because the Bills module/table does not exist yet (forward-
@@ -28,8 +34,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "c9d0e1f2a3b4"
-down_revision: Union[str, None] = "b8c9d0e1f2a3"
+revision: str = "a1b2c3d4e5f7"
+down_revision: Union[str, None] = "f2a3b4c5d6e7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
