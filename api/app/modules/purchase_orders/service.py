@@ -20,6 +20,11 @@ from typing import Any, ClassVar
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
+from app.common.analytics import (
+    PurchaseOrderEvent,
+    emit_event,
+    sanitize_error_reason,
+)
 from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import BaseDocumentService
@@ -258,6 +263,19 @@ class PurchaseOrderService(BaseDocumentService):
                 "vendor_id": str(data.vendor_id),
                 "total": float(total),
                 "created_by": str(user_id) if user_id else None,
+            },
+        )
+
+        # Fire-and-forget analytics. Emitted last so a failing
+        # emitter can never affect the created PO.
+        emit_event(
+            PurchaseOrderEvent.PO_CREATED,
+            {
+                "po_id": str(purchase_order.id),
+                "vendor_id": str(data.vendor_id),
+                "currency": str(po_currency),
+                "item_count": len(line_items_data),
+                "recurring": bool(purchase_order.is_recurring),
             },
         )
         return purchase_order
@@ -544,7 +562,7 @@ Best regards,
             po_id, to_email, subject, body, attach_pdf=attach_pdf
         )
 
-        from app.common.email_outbox import EmailOutboxService
+        from app.common.email_outbox import EmailOutbox, EmailOutboxService
 
         delivered = EmailOutboxService(self._db).deliver_now(outbox_id)
 
@@ -558,6 +576,41 @@ Best regards,
                 "delivered": delivered,
             },
         )
+
+        # Fire-and-forget analytics. The PO is already SENT and the
+        # email durably queued regardless of the first-attempt outcome, so
+        # these emits never affect delivery. recipient_email_present is a
+        # boolean — the raw address is never sent.
+        if delivered:
+            # Single scalar read for the vendor id (no joins / full load).
+            vendor_id = (
+                self._db.query(PurchaseOrder.vendor_id)
+                .filter(PurchaseOrder.id == po_id)
+                .scalar()
+            )
+            emit_event(
+                PurchaseOrderEvent.PO_SENT,
+                {
+                    "po_id": str(po_id),
+                    "vendor_id": str(vendor_id) if vendor_id else None,
+                    "recipient_email_present": bool(recipient),
+                },
+            )
+        else:
+            # First attempt failed (row stays queued for retry). Classify the
+            # durable last_error into a stable, PII-free category.
+            failed_row = (
+                self._db.query(EmailOutbox).filter(EmailOutbox.id == outbox_id).first()
+            )
+            last_error = getattr(failed_row, "last_error", None)
+            emit_event(
+                PurchaseOrderEvent.PO_SEND_FAILED,
+                {
+                    "po_id": str(po_id),
+                    "error_reason": sanitize_error_reason(last_error),
+                },
+            )
+
         return {
             "purchase_order_id": po_id,
             "sent_to": recipient,
@@ -741,6 +794,15 @@ Best regards,
                 "size_bytes": file_size_bytes,
             },
         )
+
+        # file_size_kb (rounded) only — no filename / storage_key in analytics.
+        emit_event(
+            PurchaseOrderEvent.PO_DOCUMENT_ATTACHED,
+            {
+                "po_id": str(po_id),
+                "file_size_kb": round(file_size_bytes / 1024),
+            },
+        )
         return document
 
     def get_document(
@@ -794,6 +856,14 @@ Best regards,
             document_id,
             po_id,
             extra={
+                "po_id": str(po_id),
+                "document_id": str(document_id),
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_DOCUMENT_DELETED,
+            {
                 "po_id": str(po_id),
                 "document_id": str(document_id),
             },
@@ -864,6 +934,11 @@ Best regards,
             purchase_order.po_reference,
             extra={"po_id": str(purchase_order.id)},
         )
+
+        emit_event(
+            PurchaseOrderEvent.PO_CANCELLED,
+            {"po_id": str(purchase_order.id)},
+        )
         return purchase_order
 
     # DELETE
@@ -930,6 +1005,11 @@ Best regards,
                     "po_id": str(po_id),
                     "purged_objects": len(storage_keys),
                 },
+            )
+
+            emit_event(
+                PurchaseOrderEvent.PO_DELETED,
+                {"po_id": str(po_id)},
             )
             return False
 
@@ -1010,6 +1090,14 @@ Best regards,
                     extra={
                         "original_id": str(original.id),
                         "duplicate_id": str(duplicate.id),
+                    },
+                )
+
+                emit_event(
+                    PurchaseOrderEvent.PO_DUPLICATED,
+                    {
+                        "source_po_id": str(original.id),
+                        "new_po_id": str(duplicate.id),
                     },
                 )
                 return duplicate
