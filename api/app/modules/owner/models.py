@@ -65,6 +65,34 @@ class OwnerProfile(Base):
     # NULL when no logo is set. Served/streamed via StorageService.
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    # --- Org-scoped document-settings defaults (PO-11) -------------------
+    # Stored once on the singleton (org scope), NOT per document. Applied to a
+    # Purchase Order at create time only, so editing a default never alters an
+    # existing PO. NULL means "use the built-in default" (see
+    # app.constants.settings_defaults), so a never-touched profile still yields
+    # the out-of-the-box values without a data migration backfill.
+    default_terms_and_conditions: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment=(
+            "Org default Terms & Conditions pre-filled on new POs "
+            "(<= 2000 chars, enforced in the schema layer)"
+        ),
+    )
+    default_send_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Org default Send-email body pre-filled in the PO Send modal",
+    )
+    # ISO 3166-1 alpha-2 jurisdiction driving the jurisdiction-aware
+    # compliance-reference label (PO-10). NULL falls back to the built-in
+    # DEFAULT_ORG_JURISDICTION.
+    jurisdiction: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+        comment="Org jurisdiction (ISO 3166-1 alpha-2), e.g. 'KE'",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -118,6 +146,13 @@ class OwnerProfileSnapshot(Base):
     tax_pin: Mapped[str | None] = mapped_column(String(50), nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Snapshotted so the issued document's jurisdiction-aware compliance label
+    # (PO-10) is frozen at issue time and a later Settings change cannot
+    # re-label an already-sent document. The two PO-create defaults
+    # (default_terms_and_conditions / default_send_message) are NOT snapshotted:
+    # they are create-time inputs copied onto the PO row itself, not part of the
+    # rendered header.
+    jurisdiction: Mapped[str | None] = mapped_column(String(2), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
