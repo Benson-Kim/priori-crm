@@ -9,14 +9,16 @@
 # The security stage runs GitLab's managed SAST, Dependency Scanning, and
 # Secret Detection analyzers. Their results satisfy the scan_finding
 # approval rules defined in .gitlab/security-policies/policy.yml.
+# 
+# schedule-only callers for the internal machine-to-machine jobs
+# (outbox drain, nightly transitions, OTP purge). Gated to scheduled
+# pipelines so they never run on MR/branch pipelines.
+
 
 include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Dependency-Scanning.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
-  # PO-15: schedule-only callers for the internal machine-to-machine jobs
-  # (outbox drain, nightly transitions, OTP purge). Gated to scheduled
-  # pipelines so they never run on MR/branch pipelines.
   - local: .gitlab/ci/scheduled-jobs.yml
 
 stages:
@@ -35,13 +37,14 @@ variables:
 # Run pipelines for merge requests and for pushes to the long-lived
 # branches. The `workflow` block prevents duplicate detached/branch
 # pipelines for the same MR commit.
+# 
+# Allow GitLab CI/CD scheduled pipelines, which run the
+# internal-job callers in .gitlab/ci/scheduled-jobs.yml.
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    # PO-15: allow GitLab CI/CD scheduled pipelines, which run the
-    # internal-job callers in .gitlab/ci/scheduled-jobs.yml.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-# Purchase Orders — DevOps runbook (PO-15)
+# Purchase Orders — DevOps runbook
 
 Operational wiring for the Purchase Orders module's background and
 infrastructure dependencies. The PO module introduces the first **email
@@ -72,7 +72,7 @@ Use `workflow_dispatch` to run either task on demand.
   failing drain pipeline as an actionable alert and inspect the `email_outbox`
   rows in `dead` status.
 
-## 3. AWS SES (coordinate with PO-06 Send)
+## 3. AWS SES (coordinate with Send)
 
 - Verify the sender identity / domain used by `SES_SENDER_EMAIL`.
 - Request **production access** (move the account out of the SES sandbox) so
@@ -83,7 +83,7 @@ Use `workflow_dispatch` to run either task on demand.
   config validation (`Settings.validate_production_hardening`) fails fast if
   the SES credentials or sender are missing in production.
 
-## 4. Object storage (coordinate with PO-12 Documents)
+## 4. Object storage (coordinate with Documents)
 
 - Provision a bucket for PO document upload/download when
   `STORAGE_BACKEND=s3`; set `S3_BUCKET` and `S3_REGION` (and `S3_ENDPOINT_URL`

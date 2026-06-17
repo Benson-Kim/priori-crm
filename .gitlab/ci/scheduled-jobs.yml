@@ -1,4 +1,4 @@
-# Scheduled internal-job caller (PO-15 DevOps)
+# Scheduled internal-job caller
 #
 # These jobs run ONLY on GitLab *scheduled* pipelines
 # (CI_PIPELINE_SOURCE == "schedule"). They never run on merge-request or
