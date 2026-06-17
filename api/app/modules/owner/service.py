@@ -11,12 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
-from app.lib.config import settings
-from app.lib.storage import StorageService, storage_service
 from app.constants.settings_defaults import (
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
+from app.lib.config import settings
+from app.lib.storage import StorageService, storage_service
 from app.modules.owner.models import (
     SINGLETON_PROFILE_ID,
     OwnerProfile,
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Fields that constitute the rendered header; the snapshot hash is computed
 # over exactly these so two profiles render-identically iff they hash-equal.
 # jurisdiction is included because it drives the jurisdiction-aware compliance
-# label printed on the document (PO-10); the two PO-create defaults are NOT
+# label printed on the document; the two PO-create defaults are NOT
 # part of the rendered header and so are deliberately absent here.
 _SNAPSHOT_FIELDS = (
     "full_name",

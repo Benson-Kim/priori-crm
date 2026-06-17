@@ -24,7 +24,7 @@ _WRITE_ROLES = (UserRole.MANAGER, UserRole.ADMIN)
 def _to_response(profile) -> OwnerProfileResponse:
     # Surface the org-scoped PO defaults as RESOLVED values (persisted value,
     # or the built-in fallback when never set) so the Settings screen and the
-    # PO create form read a single authoritative source (PO-11).
+    # PO create form read a single authoritative source
     return OwnerProfileResponse(
         full_name=profile.full_name,
         location_watermark=profile.location_watermark,

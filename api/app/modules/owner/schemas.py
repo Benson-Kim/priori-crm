@@ -45,7 +45,7 @@ class OwnerProfileUpdate(BaseModel):
     phone: str | None = Field(None, max_length=30)
     tax_pin: str | None = Field(None, max_length=50, alias="taxPin")
     website: str | None = Field(None, max_length=255)
-    # --- Org-scoped document-settings defaults (PO-11) ------------------
+    # Org-scoped document-settings defaults
     default_terms_and_conditions: str | None = Field(
         None,
         max_length=MAX_DEFAULT_TERMS_LENGTH,
@@ -111,7 +111,7 @@ class OwnerProfileResponse(BaseModel):
     phone: str | None = None
     tax_pin: str | None = Field(None, alias="taxPin")
     website: str | None = None
-    # --- Org-scoped document-settings defaults (PO-11) ------------------
+    # Org-scoped document-settings defaults
     # Returned as the resolved values (persisted value, or the built-in
     # fallback when never set) so the frontend Settings screen and the PO
     # create form read a single authoritative source.

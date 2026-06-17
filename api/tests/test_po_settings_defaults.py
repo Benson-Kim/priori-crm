@@ -1,4 +1,4 @@
-"""PO-11 - org-scoped Settings defaults (T&C, send message, jurisdiction).
+"""org-scoped Settings defaults (T&C, send message, jurisdiction).
 
 Acceptance criteria exercised here:
 - Settings keys are stored once (org scope) on the OwnerProfile singleton, not
@@ -108,8 +108,7 @@ class TestOwnerSettingsDefaults:
         db.flush()
 
         assert (
-            service.purchase_order_defaults().jurisdiction
-            == DEFAULT_ORG_JURISDICTION
+            service.purchase_order_defaults().jurisdiction == DEFAULT_ORG_JURISDICTION
         )
 
     def test_invalid_jurisdiction_rejected(self):
