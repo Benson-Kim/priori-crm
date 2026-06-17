@@ -13,6 +13,8 @@ export type BadgeVariant =
   | "overdue"
   | "canceled"
   | "pending"
+  // Purchase order status variant
+  | "billed"
   // Quote status variants
   | "approved"
   | "invoiced"
@@ -40,6 +42,8 @@ const variantStyles: Record<BadgeVariant, string> = {
   overdue: "text-error-600 font-medium px-2.5 py-1 rounded-full",
   canceled: "text-gray-400 font-medium px-2.5 py-1 rounded-full",
   pending: "text-warning font-medium px-2.5 py-1 rounded-full",
+  // Purchase order status
+  billed: "text-status-paid font-medium px-2.5 py-1 rounded-full",
   // Quote statuses
   approved: "text-teal-700 font-medium px-2.5 py-1 rounded-full",
   invoiced: "text-status-paid font-medium px-2.5 py-1 rounded-full",
