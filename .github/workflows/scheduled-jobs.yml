@@ -1,6 +1,6 @@
 name: Scheduled internal jobs
 
-# GitHub-side mirror of .gitlab/ci/scheduled-jobs.yml (PO-15 DevOps).
+# GitHub-side mirror of .gitlab/ci/scheduled-jobs.yml.
 # .gitlab-ci.yml remains the authoritative pipeline; this workflow is kept
 # in sync so the internal machine-to-machine jobs still run if GitHub
 # becomes the default VCS.
