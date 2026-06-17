@@ -5,6 +5,7 @@ import AddExpensePage from "@/pages/purchases/expenses/add";
 import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
 import EditExpensePage from "@/pages/purchases/expenses/edit";
 import PurchaseOrdersPage from "@/pages/purchases/purchase-orders";
+import PurchaseOrderDetailPage from "@/pages/purchases/purchase-orders/detail";
 import VendorsPage from "@/pages/purchases/vendors";
 import VendorDetailPage from "@/pages/purchases/vendors/detail";
 import CustomersPage from "@/pages/sales/customers";
@@ -280,6 +281,16 @@ const routes = [
                                     header: {
                                         title: "Purchase Orders",
                                         description: "Raise and manage purchase orders to your vendors.",
+                                    },
+                                },
+                            },
+                            {
+                                path: ":id",
+                                element: <PurchaseOrderDetailPage />,
+                                handle: {
+                                    header: {
+                                        title: "Purchase Order Detail",
+                                        description: "View complete purchase order information.",
                                     },
                                 },
                             },
