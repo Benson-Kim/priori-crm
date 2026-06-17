@@ -10,6 +10,10 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
 from app.constants.enums import UserRole
+from app.constants.settings_defaults import (
+    DEFAULT_ORG_JURISDICTION,
+    DEFAULT_PURCHASE_ORDER_TERMS,
+)
 from app.modules.owner.schemas import OwnerProfileResponse, OwnerProfileUpdate
 
 router = APIRouter()
@@ -18,6 +22,9 @@ _WRITE_ROLES = (UserRole.MANAGER, UserRole.ADMIN)
 
 
 def _to_response(profile) -> OwnerProfileResponse:
+    # Surface the org-scoped PO defaults as RESOLVED values (persisted value,
+    # or the built-in fallback when never set) so the Settings screen and the
+    # PO create form read a single authoritative source (PO-11).
     return OwnerProfileResponse(
         full_name=profile.full_name,
         location_watermark=profile.location_watermark,
@@ -26,6 +33,11 @@ def _to_response(profile) -> OwnerProfileResponse:
         phone=profile.phone,
         tax_pin=profile.tax_pin,
         website=profile.website,
+        default_terms_and_conditions=(
+            profile.default_terms_and_conditions or DEFAULT_PURCHASE_ORDER_TERMS
+        ),
+        default_send_message=profile.default_send_message,
+        jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
     )
