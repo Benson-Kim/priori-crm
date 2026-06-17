@@ -22,6 +22,11 @@ export interface OwnerProfileUpdate {
   phone?: string | null;
   taxPin?: string | null;
   website?: string | null;
+  // Org-scoped document-settings defaults (PO-11). Persisted once at org
+  // scope; the PO create form reads them at create time only.
+  defaultTermsAndConditions?: string | null;
+  defaultSendMessage?: string | null;
+  jurisdiction?: string | null;
 }
 
 export function getOwnerProfile(): Promise<OwnerProfile> {
