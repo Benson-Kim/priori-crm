@@ -765,8 +765,7 @@ Best regards,
         if not document:
             raise NotFoundException(
                 detail=(
-                    f"Document '{document_id}' not found on purchase order "
-                    f"'{po_id}'"
+                    f"Document '{document_id}' not found on purchase order '{po_id}'"
                 ),
                 resource="purchase_order_document",
             )
@@ -921,7 +920,7 @@ Best regards,
             self._db.delete(purchase_order)
             self._db.flush()
 
-            # Best-effort purge after the row is gone — coordinates with PO-08.
+            # Best-effort purge after the row is gone.
             self._purge_storage_objects(storage_keys)
 
             logger.info(
