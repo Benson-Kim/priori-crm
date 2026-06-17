@@ -220,6 +220,13 @@ export default function VendorDetailPage() {
     { key: "overdue", label: "Overdue" },
   ];
 
+  // Source filter (PO-13): isolate Expenses or Purchase Orders.
+  const TYPE_TABS = [
+    { key: "all", label: "All Types" },
+    { key: "expense", label: "Expenses" },
+    { key: "purchase_order", label: "Purchase Orders" },
+  ];
+
   const columns = [
     {
       key: "number",
@@ -472,6 +479,11 @@ export default function VendorDetailPage() {
                   tabs={TABS}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
+                />
+                <FilterTabs
+                  tabs={TYPE_TABS}
+                  activeTab={typeTab}
+                  onTabChange={setTypeTab}
                 />
               </div>
 
