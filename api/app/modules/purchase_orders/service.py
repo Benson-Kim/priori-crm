@@ -266,7 +266,7 @@ class PurchaseOrderService(BaseDocumentService):
             },
         )
 
-        # Fire-and-forget analytics (PRD §17). Emitted last so a failing
+        # Fire-and-forget analytics. Emitted last so a failing
         # emitter can never affect the created PO.
         emit_event(
             PurchaseOrderEvent.PO_CREATED,
@@ -577,7 +577,7 @@ Best regards,
             },
         )
 
-        # Fire-and-forget analytics (PRD §17). The PO is already SENT and the
+        # Fire-and-forget analytics. The PO is already SENT and the
         # email durably queued regardless of the first-attempt outcome, so
         # these emits never affect delivery. recipient_email_present is a
         # boolean — the raw address is never sent.
@@ -600,9 +600,7 @@ Best regards,
             # First attempt failed (row stays queued for retry). Classify the
             # durable last_error into a stable, PII-free category.
             failed_row = (
-                self._db.query(EmailOutbox)
-                .filter(EmailOutbox.id == outbox_id)
-                .first()
+                self._db.query(EmailOutbox).filter(EmailOutbox.id == outbox_id).first()
             )
             last_error = getattr(failed_row, "last_error", None)
             emit_event(
@@ -612,6 +610,7 @@ Best regards,
                     "error_reason": sanitize_error_reason(last_error),
                 },
             )
+
         return {
             "purchase_order_id": po_id,
             "sent_to": recipient,

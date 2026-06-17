@@ -5,10 +5,10 @@ exists so that:
 
 - Event names live in one place (the ``PurchaseOrderEvent`` enum and friends)
   instead of being copy-pasted as string literals across services and
-  routers (DRY / maintainability gate G).
+  routers.
 - Emission can NEVER break the business action it instruments. ``emit_event``
   swallows every error (a misbehaving sink, an unserialisable property) and
-  logs it; it never raises (reliability gate B / PO-14 AC).
+  logs it; it never raises.
 - No PII leaves the process. Event properties are restricted to IDs, enums,
   counts and booleans (e.g. ``recipient_email_present``). A defensive guard
   drops any value that looks like a raw email address, and
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 class PurchaseOrderEvent(StrEnum):
-    """The 14 Purchase Order analytics events (PRD §17).
+    """The 14 Purchase Order analytics events.
 
     Documented properties per event (carried in the ``properties`` dict):
 
@@ -96,7 +96,7 @@ def sanitize_error_reason(error: BaseException | str | None) -> str:
     The result is one of the ``SEND_ERROR_*`` constants. The raw error text is
     classified by keyword and then discarded, so neither a stack trace nor a
     message that might contain a recipient address is ever emitted
-    (PO-14 AC: ``error_reason`` is a sanitised category, not a raw trace).
+    (``error_reason`` is a sanitised category, not a raw trace).
     """
     if error is None:
         return SEND_ERROR_UNKNOWN
@@ -169,16 +169,16 @@ def emit_event(
 ) -> None:
     """Emit an analytics event — fire-and-forget, never raises.
 
-    Centralised dispatch for every call site (DRY): callers pass an event from
+    Centralised dispatch for every call site: callers pass an event from
     ``PurchaseOrderEvent`` and a small property dict of IDs / enums / counts /
     booleans. Any failure — a bad payload, a sink/logging error — is caught
     and logged here, so instrumentation can never break or fail the business
-    action that triggered it (reliability gate B).
+    action that triggered it.
     """
     try:
         event_name = event.value if isinstance(event, PurchaseOrderEvent) else event
         _dispatch(event_name, _scrub(properties))
-    except Exception:  # noqa: BLE001 - fire-and-forget by contract
+    except Exception:
         # Swallow-and-log: a failed emit must not propagate to the caller.
         logger.warning(
             "Failed to emit analytics event; business action unaffected",

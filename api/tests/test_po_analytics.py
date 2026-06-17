@@ -1,9 +1,9 @@
-"""PO-14 analytics instrumentation (PRD §17).
+"""Analytics instrumentation.
 
 These tests prove the acceptance criteria with automated checks:
 
 - emission is centralised through ``emit_event`` and is fire-and-forget — a
-  failing sink can never break or fail the business action (Gate B);
+  failing sink can never break or fail the business action ;
 - ``po_send_failed.error_reason`` is a sanitised category, not a raw trace;
 - no PII (raw email) is ever carried in event properties;
 - the documented events fire with the documented, PII-free properties.
@@ -39,7 +39,6 @@ from app.modules.purchase_orders.schemas import (
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
 from app.modules.vendors.models import Vendor
-
 
 # CAPTURE HELPER
 
@@ -103,8 +102,10 @@ class TestSanitizeErrorReason:
         [
             ("Connection timed out after 30s", SEND_ERROR_TIMEOUT),
             ("Throttling: rate exceeded", SEND_ERROR_THROTTLED),
-            ("Recipient address rejected: mailbox unavailable",
-             SEND_ERROR_RECIPIENT_REJECTED),
+            (
+                "Recipient address rejected: mailbox unavailable",
+                SEND_ERROR_RECIPIENT_REJECTED,
+            ),
             ("Service Unavailable", SEND_ERROR_PROVIDER_UNAVAILABLE),
             ("some entirely novel boom", SEND_ERROR_UNKNOWN),
             (None, SEND_ERROR_UNKNOWN),
@@ -191,7 +192,7 @@ class TestCreateEmitsPoCreated:
         }
 
     def test_create_succeeds_even_when_emit_raises(self, db, monkeypatch):
-        """Gate B self-test: a failing emitter cannot fail the create."""
+        """self-test: a failing emitter cannot fail the create."""
 
         def _boom(*_a, **_k):
             raise RuntimeError("sink down")

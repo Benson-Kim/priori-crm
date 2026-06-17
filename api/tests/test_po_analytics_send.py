@@ -1,4 +1,4 @@
-"""PO-14 send-path analytics (po_sent / po_send_failed).
+"""send-path analytics (po_sent / po_send_failed).
 
 Postgres-guarded: the send path re-reads the row FOR UPDATE, captures an
 owner snapshot and drains the outbox with SKIP LOCKED — Postgres-only paths
