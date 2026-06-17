@@ -34,6 +34,25 @@
         "title": "Body_upload_owner_logo_api_v1_owner_logo_put",
         "type": "object"
       },
+      "Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "source": {
+            "default": "form",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
+        "type": "object"
+      },
       "CashflowBucket": {
         "description": "One zero-filled chart bucket (closed date sub-window).",
         "properties": {
@@ -3695,6 +3714,28 @@
             ],
             "title": "Address"
           },
+          "defaultSendMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultsendmessage"
+          },
+          "defaultTermsAndConditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaulttermsandconditions"
+          },
           "email": {
             "anyOf": [
               {
@@ -3714,6 +3755,17 @@
             "default": false,
             "title": "Haslogo",
             "type": "boolean"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
           },
           "locationWatermark": {
             "anyOf": [
@@ -3793,6 +3845,30 @@
             ],
             "title": "Address"
           },
+          "defaultSendMessage": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultsendmessage"
+          },
+          "defaultTermsAndConditions": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaulttermsandconditions"
+          },
           "email": {
             "anyOf": [
               {
@@ -3811,6 +3887,18 @@
             "minLength": 1,
             "title": "Fullname",
             "type": "string"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
           },
           "locationWatermark": {
             "anyOf": [
@@ -3964,6 +4052,26 @@
           "metadata"
         ],
         "title": "PaginatedResponse[InvoiceSummary]",
+        "type": "object"
+      },
+      "PaginatedResponse_PurchaseOrderSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[PurchaseOrderSummary]",
         "type": "object"
       },
       "PaginatedResponse_QuoteSummary_": {
@@ -4270,6 +4378,900 @@
           }
         },
         "title": "ProfitMarginMetric",
+        "type": "object"
+      },
+      "PurchaseOrderCalculationResponse": {
+        "description": "Totals preview \u2014 POST /purchase-orders/calculate.\n\nNo discount in v1: total = subtotal + tax_total. The field is named\n``total`` (not ``total_due``) because a purchase order is a commitment\nto pay a vendor, not a receivable with a running balance",
+        "properties": {
+          "line_items": {
+            "description": "Line items with calculated totals",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Line Items",
+            "type": "array"
+          },
+          "subtotal": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subtotal",
+          "tax_total",
+          "total"
+        ],
+        "title": "PurchaseOrderCalculationResponse",
+        "type": "object"
+      },
+      "PurchaseOrderCreate": {
+        "description": "Payload for creating a new purchase order (always starts as DRAFT).\n\nMirrors ExpenseCreate adapted to the PO domain: ``order_date`` replaces\n``expense_date`` and ``delivery_date`` is optional (and, when set, must be\non or after ``order_date`` \u2014 also DB-enforced via a CHECK constraint).",
+        "example": {
+          "complianceRef": "LPO-2026-0042",
+          "currency": "KES",
+          "deliveryDate": "2026-06-30",
+          "isRecurring": false,
+          "lineItems": [
+            {
+              "description": "Box of 500 grade-8.8 bolts",
+              "itemName": "Steel bolts M8",
+              "quantity": 10,
+              "taxType": "vat_16",
+              "unitPrice": 1200.0
+            }
+          ],
+          "notes": "Deliver to the Upper Hill warehouse.",
+          "orderDate": "2026-06-16",
+          "termsAndConditions": "Net 30. Goods remain returnable for 14 days.",
+          "vendorId": "123e4567-e89b-12d3-a456-426614174000"
+        },
+        "properties": {
+          "complianceRef": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Jurisdiction-aware compliance reference (free text)",
+            "title": "Complianceref"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "default": "KES",
+            "description": "ISO 4217 currency code \u2014 locked after first save"
+          },
+          "deliveryDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Expected delivery date \u2014 if set must be on or after order_date",
+            "title": "Deliverydate"
+          },
+          "isRecurring": {
+            "default": false,
+            "description": "Recurring-PO flag \u2014 informational only in v1",
+            "title": "Isrecurring",
+            "type": "boolean"
+          },
+          "lineItems": {
+            "description": "At least one line item required",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderLineItemCreate"
+            },
+            "minItems": 1,
+            "title": "Lineitems",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Vendor-facing or internal notes",
+            "title": "Notes"
+          },
+          "orderDate": {
+            "description": "Date the purchase order was raised",
+            "format": "date",
+            "title": "Orderdate",
+            "type": "string"
+          },
+          "termsAndConditions": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Terms & conditions \u2014 max 2000 characters",
+            "title": "Termsandconditions"
+          },
+          "vendorId": {
+            "description": "Vendor this purchase order is raised against \u2014 required",
+            "format": "uuid",
+            "title": "Vendorid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendorId",
+          "lineItems"
+        ],
+        "title": "PurchaseOrderCreate",
+        "type": "object"
+      },
+      "PurchaseOrderDocumentResponse": {
+        "description": "Document attachment in API responses.\n\n``storage_key`` is intentionally excluded \u2014 it is an internal object\npath that must never be sent to clients (security gate F). ``file_size_kb``\nis a model @property surfaced via ``from_attributes`` so the list view can\nshow the size in KB without the frontend re-deriving it.",
+        "properties": {
+          "file_size_bytes": {
+            "title": "File Size Bytes",
+            "type": "integer"
+          },
+          "file_size_kb": {
+            "title": "File Size Kb",
+            "type": "number"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mime_type": {
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "po_id": {
+            "format": "uuid",
+            "title": "Po Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded By"
+          }
+        },
+        "required": [
+          "id",
+          "po_id",
+          "filename",
+          "file_size_bytes",
+          "file_size_kb",
+          "mime_type",
+          "source",
+          "uploaded_at"
+        ],
+        "title": "PurchaseOrderDocumentResponse",
+        "type": "object"
+      },
+      "PurchaseOrderDuplicateResponse": {
+        "description": "Response returned after duplicating a purchase order (PRD \u00a76.10).\n\nMirrors the Quote duplicate response: returns the original and the new\nDRAFT identifiers plus the new system reference so the frontend can\nredirect straight to the editable copy.",
+        "properties": {
+          "message": {
+            "default": "Purchase order duplicated successfully",
+            "title": "Message",
+            "type": "string"
+          },
+          "new_po_id": {
+            "format": "uuid",
+            "title": "New Po Id",
+            "type": "string"
+          },
+          "new_po_reference": {
+            "title": "New Po Reference",
+            "type": "string"
+          },
+          "original_po_id": {
+            "format": "uuid",
+            "title": "Original Po Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "original_po_id",
+          "new_po_id",
+          "new_po_reference"
+        ],
+        "title": "PurchaseOrderDuplicateResponse",
+        "type": "object"
+      },
+      "PurchaseOrderLineItemCreate": {
+        "description": "Payload for a single PO line item \u2014 used on create and full line-item\nreplace, and as the input to the calculation-preview endpoint.\n\nMirrors ExpenseLineItemCreate field-for-field so totals are guaranteed\nidentical across the two vendor-facing document types.",
+        "example": {
+          "description": "Box of 500 grade-8.8 bolts",
+          "itemName": "Steel bolts M8",
+          "quantity": 10,
+          "taxType": "vat_16",
+          "unitPrice": 1200.0
+        },
+        "properties": {
+          "description": {
+            "description": "Detailed description of the line item",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "itemName": {
+            "description": "Product or service name",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Itemname",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Quantity \u2014 must be greater than zero",
+            "title": "Quantity"
+          },
+          "taxType": {
+            "$ref": "#/components/schemas/TaxType",
+            "default": "vat_16",
+            "description": "Tax type applied to this line item"
+          },
+          "unitPrice": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Price per unit \u2014 zero allowed for zero-rated items",
+            "title": "Unitprice"
+          }
+        },
+        "required": [
+          "itemName",
+          "description",
+          "quantity",
+          "unitPrice"
+        ],
+        "title": "PurchaseOrderLineItemCreate",
+        "type": "object"
+      },
+      "PurchaseOrderLineItemResponse": {
+        "description": "Line item in API responses \u2014 mirrors ExpenseLineItemResponse.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "line_number": {
+            "title": "Line Number",
+            "type": "integer"
+          },
+          "line_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Line Total",
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "tax_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Amount",
+            "type": "string"
+          },
+          "tax_type": {
+            "title": "Tax Type",
+            "type": "string"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "line_number",
+          "item_name",
+          "description",
+          "quantity",
+          "unit_price",
+          "line_total",
+          "tax_type",
+          "tax_amount",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PurchaseOrderLineItemResponse",
+        "type": "object"
+      },
+      "PurchaseOrderResponse": {
+        "description": "Full purchase-order detail \u2014 returned by create, update, and get.\n\nMirrors ExpenseResponse adapted to the PO domain. ``storage_key`` is\nnever present on any nested schema, per the security gate.",
+        "properties": {
+          "compliance_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Ref"
+          },
+          "converted_bill_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Bill Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Date"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderDocumentResponse"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_editable": {
+            "description": "Only DRAFT purchase orders are freely editable.",
+            "readOnly": true,
+            "title": "Is Editable",
+            "type": "boolean"
+          },
+          "is_recurring": {
+            "title": "Is Recurring",
+            "type": "boolean"
+          },
+          "line_items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderLineItemResponse"
+            },
+            "title": "Line Items",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "order_date": {
+            "format": "date",
+            "title": "Order Date",
+            "type": "string"
+          },
+          "po_number": {
+            "title": "Po Number",
+            "type": "string"
+          },
+          "po_reference": {
+            "title": "Po Reference",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "terms_and_conditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terms And Conditions"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vendor": {
+            "$ref": "#/components/schemas/app__modules__purchase_orders__schemas__VendorSummary"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "po_number",
+          "po_reference",
+          "vendor_id",
+          "order_date",
+          "status",
+          "currency",
+          "is_recurring",
+          "subtotal",
+          "tax_total",
+          "total",
+          "created_at",
+          "updated_at",
+          "version",
+          "vendor",
+          "is_editable"
+        ],
+        "title": "PurchaseOrderResponse",
+        "type": "object"
+      },
+      "PurchaseOrderSendRequest": {
+        "description": "Payload for sending a purchase order to its vendor by email (PRD \u00a76.6).\n\nAll fields are optional: ``toEmail`` defaults to the vendor's email\n(resolved server-side), and ``subject`` / ``body`` fall back to the\nservice-generated vendor-facing template when omitted.",
+        "example": {
+          "attachPdf": true,
+          "body": "Please find attached our purchase order.",
+          "subject": "Purchase Order PO-000042 from Priori Technologies",
+          "toEmail": "vendor@example.com"
+        },
+        "properties": {
+          "attachPdf": {
+            "default": true,
+            "description": "Whether to attach the purchase-order PDF",
+            "title": "Attachpdf",
+            "type": "boolean"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Email body (uses the template if not provided)",
+            "title": "Body"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Email subject (auto-generated if not provided)",
+            "title": "Subject"
+          },
+          "toEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override recipient email (defaults to the vendor email)",
+            "title": "Toemail"
+          }
+        },
+        "title": "PurchaseOrderSendRequest",
+        "type": "object"
+      },
+      "PurchaseOrderSendResponse": {
+        "description": "Response returned after sending a purchase order.",
+        "properties": {
+          "message": {
+            "default": "Purchase order sent successfully",
+            "title": "Message",
+            "type": "string"
+          },
+          "purchase_order_id": {
+            "format": "uuid",
+            "title": "Purchase Order Id",
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "sent_to": {
+            "title": "Sent To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purchase_order_id",
+          "sent_to",
+          "sent_at"
+        ],
+        "title": "PurchaseOrderSendResponse",
+        "type": "object"
+      },
+      "PurchaseOrderStatusCounts": {
+        "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nMirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced\nvia its own count and excluded from ``all`` (it is a voided PO).",
+        "properties": {
+          "all": {
+            "default": 0,
+            "title": "All",
+            "type": "integer"
+          },
+          "billed": {
+            "default": 0,
+            "title": "Billed",
+            "type": "integer"
+          },
+          "canceled": {
+            "default": 0,
+            "title": "Canceled",
+            "type": "integer"
+          },
+          "draft": {
+            "default": 0,
+            "title": "Draft",
+            "type": "integer"
+          },
+          "sent": {
+            "default": 0,
+            "title": "Sent",
+            "type": "integer"
+          }
+        },
+        "title": "PurchaseOrderStatusCounts",
+        "type": "object"
+      },
+      "PurchaseOrderSummary": {
+        "description": "Lightweight row for the paginated list view (PRD \u00a76.1).\n\nBuilt from a summary-column projection query joined to the vendor name\n\u2014 never a full ORM instance, so the list never loads line items (no\nN+1). Mirrors ExpenseSummary adapted to the PO domain.",
+        "properties": {
+          "converted_bill_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Bill Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_recurring": {
+            "title": "Is Recurring",
+            "type": "boolean"
+          },
+          "order_date": {
+            "format": "date",
+            "title": "Order Date",
+            "type": "string"
+          },
+          "po_number": {
+            "title": "Po Number",
+            "type": "string"
+          },
+          "po_reference": {
+            "title": "Po Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "po_number",
+          "po_reference",
+          "vendor_id",
+          "vendor_name",
+          "order_date",
+          "status",
+          "currency",
+          "total",
+          "is_recurring",
+          "created_at"
+        ],
+        "title": "PurchaseOrderSummary",
+        "type": "object"
+      },
+      "PurchaseOrderUpdate": {
+        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT                       -> editable\n    SENT / BILLED / CANCELED    -> BadRequestException (\u00a713 inline banner)",
+        "properties": {
+          "complianceRef": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complianceref"
+          },
+          "deliveryDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliverydate"
+          },
+          "isRecurring": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrecurring"
+          },
+          "lineItems": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PurchaseOrderLineItemCreate"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lineitems"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "orderDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orderdate"
+          },
+          "termsAndConditions": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Termsandconditions"
+          },
+          "vendorId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendorid"
+          }
+        },
+        "title": "PurchaseOrderUpdate",
         "type": "object"
       },
       "QuoteApproveRequest": {
@@ -6441,7 +7443,11 @@
             "enum": [
               "paid",
               "pending",
-              "overdue"
+              "overdue",
+              "draft",
+              "sent",
+              "billed",
+              "canceled"
             ],
             "title": "Status",
             "type": "string"
@@ -6456,7 +7462,8 @@
             "description": "Source record type",
             "enum": [
               "expense",
-              "bill"
+              "bill",
+              "purchase_order"
             ],
             "title": "Transaction Type",
             "type": "string"
@@ -6664,6 +7671,59 @@
       },
       "app__modules__expenses__schemas__VendorSummary": {
         "description": "Vendor fields surfaced on expense responses",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "phone_primary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Primary"
+          },
+          "phone_secondary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Secondary"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "vendor_name"
+        ],
+        "title": "VendorSummary",
+        "type": "object"
+      },
+      "app__modules__purchase_orders__schemas__VendorSummary": {
+        "description": "Vendor fields surfaced on purchase-order responses.\n\nMirrors the Expenses VendorSummary. ``email`` is included because the\nPO Send flow resolves the recipient from the vendor.",
         "properties": {
           "email": {
             "anyOf": [
@@ -10943,6 +12003,1224 @@
         ]
       }
     },
+    "/api/v1/purchase-orders": {
+      "get": {
+        "description": "Paginated, filterable list of purchase orders.",
+        "operationId": "list_purchase_orders_api_v1_purchase_orders_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "draft | sent | billed | canceled",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "draft | sent | billed | canceled",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Filter by vendor ID",
+            "in": "query",
+            "name": "vendorId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by vendor ID",
+              "title": "Vendorid"
+            }
+          },
+          {
+            "description": "order_date >= this value",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "order_date >= this value",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "order_date <= this value",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "order_date <= this value",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "delivery_date >= this value",
+            "in": "query",
+            "name": "deliveryDateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "delivery_date >= this value",
+              "title": "Deliverydatefrom"
+            }
+          },
+          {
+            "description": "delivery_date <= this value",
+            "in": "query",
+            "name": "deliveryDateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "delivery_date <= this value",
+              "title": "Deliverydateto"
+            }
+          },
+          {
+            "description": "Search PO number, reference, or vendor name",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search PO number, reference, or vendor name",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_PurchaseOrderSummary_"
+                }
+              }
+            },
+            "description": "Paginated purchase-order list"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List purchase orders",
+        "tags": [
+          "Purchase Orders"
+        ]
+      },
+      "post": {
+        "description": "Create a new purchase order raised against a vendor. Calculates subtotal, tax_total and total from the line items. Initial status is always DRAFT. No discount in v1.",
+        "operationId": "create_purchase_order_api_v1_purchase_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            },
+            "description": "Purchase order created successfully"
+          },
+          "400": {
+            "description": "Validation error, inactive vendor, or no line items"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "409": {
+            "description": "Reference collision (auto-retried)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a new purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/calculate": {
+      "post": {
+        "description": "Calculate subtotal, tax_total and total from line items without persisting. Used for real-time frontend recalculation. No discount in v1.",
+        "operationId": "calculate_purchase_order_totals_api_v1_purchase_orders_calculate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/PurchaseOrderLineItemCreate"
+                },
+                "title": "Line Items",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderCalculationResponse"
+                }
+              }
+            },
+            "description": "Calculated totals"
+          },
+          "400": {
+            "description": "Invalid line items"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview purchase-order totals",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/counts": {
+      "get": {
+        "description": "Per-status counts for the filter-tab bar badges.",
+        "operationId": "get_purchase_order_counts_api_v1_purchase_orders_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderStatusCounts"
+                }
+              }
+            },
+            "description": "Counts by status"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get purchase-order status counts",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/export/excel": {
+      "get": {
+        "description": "Export the currently-filtered purchase orders as an .xlsx workbook.",
+        "operationId": "export_purchase_orders_to_excel_api_v1_purchase_orders_export_excel_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vendorId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vendorid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Datefrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dateto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deliveryDateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deliverydatefrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deliveryDateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deliverydateto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include line items in a separate sheet",
+            "in": "query",
+            "name": "includeLineItems",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include line items in a separate sheet",
+              "title": "Includelineitems",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel file"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export purchase orders to Excel",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/number/{po_number}": {
+      "get": {
+        "description": "Retrieve a purchase order by system number (e.g. PO-20260616-001).",
+        "operationId": "get_purchase_order_by_number_api_v1_purchase_orders_number__po_number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_number",
+            "required": true,
+            "schema": {
+              "title": "Po Number",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            },
+            "description": "Purchase order details"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get purchase order by number",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}": {
+      "delete": {
+        "description": "Delete a purchase order. Permitted only for DRAFT or CANCELED purchase orders; a SENT or BILLED purchase order must be canceled first. Line items are removed with it. A before-image audit row is written atomically with the delete. The X-Delete-Type response header reports 'hard'.",
+        "operationId": "delete_purchase_order_api_v1_purchase_orders__po_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Purchase order deleted"
+          },
+          "400": {
+            "description": "Not deletable in the current status"
+          },
+          "403": {
+            "description": "Insufficient role to delete purchase orders"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a complete purchase order including its vendor and line items.",
+        "operationId": "get_purchase_order_api_v1_purchase_orders__po_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            },
+            "description": "Purchase order details"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get purchase order details",
+        "tags": [
+          "Purchase Orders"
+        ]
+      },
+      "put": {
+        "description": "Update a purchase order. Only DRAFT purchase orders are editable; SENT / BILLED / CANCELED are read-only. currency is locked after the first save. Supplying lineItems replaces the full set. Pass expectedVersion (from your last GET) for optimistic-lock protection.",
+        "operationId": "update_purchase_order_api_v1_purchase_orders__po_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
+            "in": "query",
+            "name": "expectedVersion",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
+              "title": "Expectedversion"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrderUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            },
+            "description": "Purchase order updated"
+          },
+          "400": {
+            "description": "Not editable (non-DRAFT) or validation failed"
+          },
+          "404": {
+            "description": "Purchase order or vendor not found"
+          },
+          "409": {
+            "description": "Version conflict \u2014 concurrent edit detected"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/cancel": {
+      "post": {
+        "description": "Cancel a purchase order (DRAFT or SENT only) -> CANCELED. The record is preserved but becomes terminal: it can no longer be edited, sent or converted. A BILLED or already-CANCELED purchase order cannot be cancelled. A before/after-image audit row is written atomically with the transition.",
+        "operationId": "cancel_purchase_order_api_v1_purchase_orders__po_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            },
+            "description": "Purchase order canceled"
+          },
+          "400": {
+            "description": "Invalid transition (BILLED or already CANCELED)"
+          },
+          "403": {
+            "description": "Insufficient role to cancel purchase orders"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/documents": {
+      "get": {
+        "description": "Retrieve all documents attached to a purchase order.",
+        "operationId": "list_purchase_order_documents_api_v1_purchase_orders__po_id__documents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PurchaseOrderDocumentResponse"
+                  },
+                  "title": "Response List Purchase Order Documents Api V1 Purchase Orders  Po Id  Documents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Document list"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List purchase-order documents",
+        "tags": [
+          "Purchase Orders"
+        ]
+      },
+      "post": {
+        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form' or 'view'. storage_key is never returned.",
+        "operationId": "upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderDocumentResponse"
+                }
+              }
+            },
+            "description": "Document uploaded"
+          },
+          "400": {
+            "description": "Unsupported type, oversize, or invalid source"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload a document to a purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/documents/{document_id}": {
+      "delete": {
+        "description": "Remove a document from a purchase order. The storage object is also deleted after the DB record is removed.",
+        "operationId": "delete_purchase_order_document_api_v1_purchase_orders__po_id__documents__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Document deleted"
+          },
+          "403": {
+            "description": "Insufficient role to delete documents"
+          },
+          "404": {
+            "description": "Document not found on this purchase order"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete a purchase-order document",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/documents/{document_id}/download": {
+      "get": {
+        "description": "Stream a document attached to a purchase order. Requires authentication; the document must belong to the given purchase order. The file is served through a path-confined storage handle \u2014 never a raw client-supplied path \u2014 so storage keys cannot be used for arbitrary file reads.",
+        "operationId": "download_purchase_order_document_api_v1_purchase_orders__po_id__documents__document_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Document file stream"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Document not found on this purchase order"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download a purchase-order document",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/duplicate": {
+      "post": {
+        "description": "Create a copy of a purchase order as a new DRAFT. Copies line items, currency, notes, Terms & Conditions and the delivery date; order_date is reset to today. The Compliance Ref is cleared and attached documents are not copied. Available at any status.",
+        "operationId": "duplicate_purchase_order_api_v1_purchase_orders__po_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderDuplicateResponse"
+                }
+              }
+            },
+            "description": "Purchase order duplicated successfully"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Duplicate purchase order",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/pdf": {
+      "get": {
+        "description": "Generate and stream the purchase-order PDF. The document is read-only: no edit controls, action buttons or attachments list. Available at any status. Owner branding comes from the PO's immutable snapshot once sent, else the live profile for a Draft preview.",
+        "operationId": "download_purchase_order_pdf_api_v1_purchase_orders__po_id__pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/pdf": {}
+            },
+            "description": "PDF file"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "description": "PDF could not be generated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download purchase order as PDF",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/send": {
+      "post": {
+        "description": "Send a DRAFT purchase order to its vendor by email and transition it to SENT. The status change and the queued email are committed atomically (transactional outbox); SES dispatch then runs outside the row lock, and a failed first attempt is retried automatically by the outbox drainer. The recipient defaults to the vendor email and can be overridden in the request.",
+        "operationId": "send_purchase_order_api_v1_purchase_orders__po_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PurchaseOrderSendRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderSendResponse"
+                }
+              }
+            },
+            "description": "Purchase order sent (or durably queued)"
+          },
+          "400": {
+            "description": "Not DRAFT, or the vendor has no email address on record"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send purchase order to the vendor by email",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
     "/api/v1/quotes": {
       "get": {
         "description": "Get paginated list of quotes with filtering and search.",
@@ -13487,7 +15765,7 @@
     },
     "/api/v1/vendors/{vendor_id}/transactions": {
       "get": {
-        "description": "Paginated list of all expenses and bills linked to this vendor. Includes computed days_overdue and status_display fields.",
+        "description": "Paginated list of the vendor's transactions \u2014 expenses and purchase orders (and bills once that module lands) \u2014 in one source-tagged list. Each row carries transaction_type ('expense' | 'purchase_order') plus computed days_overdue and status_display fields. Purchase orders are non-payable commitments and report a 0.00 balance.",
         "operationId": "get_vendor_transactions_api_v1_vendors__vendor_id__transactions_get",
         "parameters": [
           {
@@ -13524,7 +15802,7 @@
             }
           },
           {
-            "description": "Filter by transaction status: 'paid' | 'pending' | 'overdue'. ",
+            "description": "Filter by transaction status. Payable: 'paid' | 'pending' | 'overdue'. Purchase order: 'draft' | 'sent' | 'billed' | 'canceled'. Omit for all.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -13537,8 +15815,26 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by transaction status: 'paid' | 'pending' | 'overdue'. ",
+              "description": "Filter by transaction status. Payable: 'paid' | 'pending' | 'overdue'. Purchase order: 'draft' | 'sent' | 'billed' | 'canceled'. Omit for all.",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Filter by source type: 'expense' | 'purchase_order'. Omit for all.",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source type: 'expense' | 'purchase_order'. Omit for all.",
+              "title": "Type"
             }
           }
         ],
