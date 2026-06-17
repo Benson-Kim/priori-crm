@@ -581,15 +581,18 @@ Best regards,
         # email durably queued regardless of the first-attempt outcome, so
         # these emits never affect delivery. recipient_email_present is a
         # boolean — the raw address is never sent.
-        vendor_id = getattr(
-            getattr(self.get_by_id(po_id), "vendor_id", None), "__str__", lambda: None
-        )()
         if delivered:
+            # Single scalar read for the vendor id (no joins / full load).
+            vendor_id = (
+                self._db.query(PurchaseOrder.vendor_id)
+                .filter(PurchaseOrder.id == po_id)
+                .scalar()
+            )
             emit_event(
                 PurchaseOrderEvent.PO_SENT,
                 {
                     "po_id": str(po_id),
-                    "vendor_id": vendor_id,
+                    "vendor_id": str(vendor_id) if vendor_id else None,
                     "recipient_email_present": bool(recipient),
                 },
             )
