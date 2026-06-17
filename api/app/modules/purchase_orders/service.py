@@ -795,6 +795,15 @@ Best regards,
                 "size_bytes": file_size_bytes,
             },
         )
+
+        # file_size_kb (rounded) only — no filename / storage_key in analytics.
+        emit_event(
+            PurchaseOrderEvent.PO_DOCUMENT_ATTACHED,
+            {
+                "po_id": str(po_id),
+                "file_size_kb": round(file_size_bytes / 1024),
+            },
+        )
         return document
 
     def get_document(
@@ -848,6 +857,14 @@ Best regards,
             document_id,
             po_id,
             extra={
+                "po_id": str(po_id),
+                "document_id": str(document_id),
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_DOCUMENT_DELETED,
+            {
                 "po_id": str(po_id),
                 "document_id": str(document_id),
             },
@@ -918,6 +935,11 @@ Best regards,
             purchase_order.po_reference,
             extra={"po_id": str(purchase_order.id)},
         )
+
+        emit_event(
+            PurchaseOrderEvent.PO_CANCELLED,
+            {"po_id": str(purchase_order.id)},
+        )
         return purchase_order
 
     # DELETE
@@ -984,6 +1006,11 @@ Best regards,
                     "po_id": str(po_id),
                     "purged_objects": len(storage_keys),
                 },
+            )
+
+            emit_event(
+                PurchaseOrderEvent.PO_DELETED,
+                {"po_id": str(po_id)},
             )
             return False
 
@@ -1064,6 +1091,14 @@ Best regards,
                     extra={
                         "original_id": str(original.id),
                         "duplicate_id": str(duplicate.id),
+                    },
+                )
+
+                emit_event(
+                    PurchaseOrderEvent.PO_DUPLICATED,
+                    {
+                        "source_po_id": str(original.id),
+                        "new_po_id": str(duplicate.id),
                     },
                 )
                 return duplicate
