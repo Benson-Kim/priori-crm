@@ -160,6 +160,19 @@ class PurchaseOrderService(BaseDocumentService):
             strip_prefix_len=3,
         )
 
+    def _owner_defaults(self):
+        """Resolve the org-scoped PO Settings defaults (PO-11).
+
+        Thin wrapper over OwnerService so create() reads the org default T&C /
+        send message / jurisdiction from the single authoritative source.
+        Imported lazily to avoid a module-level import cycle
+        (owner.service already imports purchase_orders indirectly via the PDF
+        renderer path).
+        """
+        from app.modules.owner.service import OwnerService
+
+        return OwnerService(self._db).purchase_order_defaults()
+
     @staticmethod
     def _build_line_items(
         raw_items: list[PurchaseOrderLineItemCreate],
@@ -227,6 +240,10 @@ class PurchaseOrderService(BaseDocumentService):
         subtotal, tax_total = self._sum_line_totals(line_items_data)
         total = subtotal + tax_total
 
+        terms_and_conditions = data.terms_and_conditions
+        if "terms_and_conditions" not in data.model_fields_set:
+            terms_and_conditions = self._owner_defaults().terms_and_conditions
+
         def _build() -> PurchaseOrder:
             purchase_order = PurchaseOrder(
                 po_number=self._generate_po_number(),
@@ -242,7 +259,7 @@ class PurchaseOrderService(BaseDocumentService):
                 total=total,
                 compliance_ref=data.compliance_ref,
                 notes=data.notes,
-                terms_and_conditions=data.terms_and_conditions,
+                terms_and_conditions=terms_and_conditions,
                 created_by=user_id,
             )
             self._db.add(purchase_order)

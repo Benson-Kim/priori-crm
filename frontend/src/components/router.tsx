@@ -4,6 +4,10 @@ import ExpensesPage from "@/pages/purchases/expenses";
 import AddExpensePage from "@/pages/purchases/expenses/add";
 import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
 import EditExpensePage from "@/pages/purchases/expenses/edit";
+import PurchaseOrdersPage from "@/pages/purchases/purchase-orders";
+import AddPurchaseOrderPage from "@/pages/purchases/purchase-orders/add";
+import PurchaseOrderDetailPage from "@/pages/purchases/purchase-orders/detail";
+import EditPurchaseOrderPage from "@/pages/purchases/purchase-orders/edit";
 import VendorsPage from "@/pages/purchases/vendors";
 import VendorDetailPage from "@/pages/purchases/vendors/detail";
 import CustomersPage from "@/pages/sales/customers";
@@ -264,6 +268,51 @@ const routes = [
                                     header: {
                                         title: "Edit Expense",
                                         description: "Update expense details.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "purchase-orders",
+                        children: [
+                            {
+                                index: true,
+                                element: <PurchaseOrdersPage />,
+                                handle: {
+                                    header: {
+                                        title: "Purchase Orders",
+                                        description: "Raise and manage purchase orders to your vendors.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "new",
+                                element: <AddPurchaseOrderPage />,
+                                handle: {
+                                    header: {
+                                        title: "Create New Purchase Order",
+                                        description: "Raise a new purchase order to a vendor.",
+                                    },
+                                },
+                            },
+                            {
+                                path: ":id",
+                                element: <PurchaseOrderDetailPage />,
+                                handle: {
+                                    header: {
+                                        title: "Purchase Order Detail",
+                                        description: "View complete purchase order information.",
+                                    },
+                                },
+                            },
+                            {
+                                path: ":id/edit",
+                                element: <EditPurchaseOrderPage />,
+                                handle: {
+                                    header: {
+                                        title: "Edit Purchase Order",
+                                        description: "Update purchase order details.",
                                     },
                                 },
                             },

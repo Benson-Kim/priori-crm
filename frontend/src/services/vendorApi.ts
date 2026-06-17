@@ -87,6 +87,8 @@ export async function getVendorTransactions(
     page?: number;
     per_page?: number;
     status?: string;
+    // Source filter: 'expense' | 'purchase_order'. Omitted = all sources.
+    type?: string;
   }
 ): Promise<PaginatedVendorTransactions> {
   const raw = await apiGet<PaginatedApiResponse<VendorTransactionSummary>>(`vendors/${id}/transactions`, params);
