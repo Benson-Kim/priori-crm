@@ -234,6 +234,23 @@ class DocumentSendMixin:
     def _validate_sendable(self, entity: Any) -> None:
         """Per-service guard for unsendable statuses (override)."""
 
+    def _resolve_recipient(self, entity: Any, to_email: str | None) -> str:
+        """Resolve the send recipient (override per document type).
+
+        Default: an explicit ``to_email`` wins, else the customer's email.
+        Vendor-facing documents (purchase orders) override this to resolve
+        the vendor's email instead. Raises ``BadRequestException`` when no
+        address is available so Send is blocked server-side (defence in
+        depth alongside the disabled UI button).
+        """
+        recipient = to_email or entity.customer.email
+        if not recipient:
+            raise BadRequestException(
+                detail="No email address available for this customer",
+                field="to_email",
+            )
+        return recipient
+
     def _get_locked(self, entity_id: Any) -> Any:
         """Re-read the bare row ``FOR UPDATE`` or raise 404.
 
@@ -277,12 +294,7 @@ class DocumentSendMixin:
 
         self._validate_sendable(entity)
 
-        recipient = to_email or entity.customer.email
-        if not recipient:
-            raise BadRequestException(
-                detail="No email address available for this customer",
-                field="to_email",
-            )
+        recipient = self._resolve_recipient(entity, to_email)
 
         email_subject = subject or self._generate_email_subject(entity)
         email_body = body or self._generate_email_body(entity, attached=attach_pdf)

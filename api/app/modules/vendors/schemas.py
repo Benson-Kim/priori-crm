@@ -275,8 +275,23 @@ class VendorStatusCounts(BaseModel):
     inactive: int = 0
 
 
-TransactionStatus = Literal["paid", "pending", "overdue"]
-TransactionType = Literal["expense", "bill"]
+# Payable statuses (expenses/bills) plus the purchase-order lifecycle
+# statuses. POs are non-payable commitments, so their statuses live in the
+# same union only so the shared transaction-list row can represent them —
+# the days_overdue/status_display computed fields stay payable-only.
+TransactionStatus = Literal[
+    "paid",
+    "pending",
+    "overdue",
+    "draft",
+    "sent",
+    "billed",
+    "canceled",
+]
+TransactionType = Literal["expense", "bill", "purchase_order"]
+
+# Payable statuses that drive the overdue countdown; PO statuses are excluded.
+_PAYABLE_OVERDUE_STATUS = "overdue"
 
 
 class VendorTransactionSummary(BaseModel):
