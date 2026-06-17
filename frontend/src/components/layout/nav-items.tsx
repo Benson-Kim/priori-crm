@@ -29,6 +29,7 @@ export const navItems = [
         children: [
             { label: "Vendors", path: "/vendors" },
             { label: "Expenses", path: "/expenses" },
+            { label: "Purchase Orders", path: "/purchase-orders" },
             { label: "Bills", path: "/bills" },
         ],
     },
