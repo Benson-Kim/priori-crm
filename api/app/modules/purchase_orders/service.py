@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Any, ClassVar
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.common.analytics import (
     PurchaseOrderEvent,
@@ -62,12 +62,19 @@ from app.modules.purchase_orders.schemas import (
 logger = logging.getLogger(__name__)
 
 # Eager-load options shared by the single-resource reads so a PO detail
-# never triggers N+1 lazy loads for its vendor / line items.
+# never triggers N+1 lazy loads for its vendor / line items / payments /
+# documents. The vendor is many-to-one (safe to JOIN), but the three
+# one-to-many collections are loaded with selectinload: joined-eager-loading
+# more than one collection on a single query Cartesian-multiplies the rows
+# (and a .first()/.all() then requires .unique()). selectinload issues one
+# constant extra SELECT per collection, so the read stays N+1-free with no
+# row explosion (gate C) and needs no .unique(). Mirrors PurchaseOrderPayment
+# lazy="selectin" on the model.
 PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.vendor),
-    joinedload(PurchaseOrder.line_items),
-    joinedload(PurchaseOrder.payments),
-    joinedload(PurchaseOrder.documents),
+    selectinload(PurchaseOrder.line_items),
+    selectinload(PurchaseOrder.payments),
+    selectinload(PurchaseOrder.documents),
 )
 
 # Statuses from which a PO may be deleted. Only DRAFT is deletable in v1:
