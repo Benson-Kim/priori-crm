@@ -56,6 +56,7 @@ class PurchaseOrderEvent(StrEnum):
     - PO_DOCUMENT_DOWNLOADED-> po_id, document_id
     - PO_DOCUMENT_DELETED   -> po_id, document_id
     - PO_LIST_EXPORTED      -> active_filter_tab, row_count
+    - PO_PAYMENT_RECORDED   -> po_id, settled  (PO-19; settled = balance cleared)
     """
 
     PO_CREATED = "po_created"
@@ -72,6 +73,7 @@ class PurchaseOrderEvent(StrEnum):
     PO_DOCUMENT_DOWNLOADED = "po_document_downloaded"
     PO_DOCUMENT_DELETED = "po_document_deleted"
     PO_LIST_EXPORTED = "po_list_exported"
+    PO_PAYMENT_RECORDED = "po_payment_recorded"
 
 
 # Heuristic e-mail detector used to keep raw addresses out of analytics. We
