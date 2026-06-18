@@ -32,6 +32,77 @@ from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
 MAX_TERMS_AND_CONDITIONS_LENGTH = 2000
 
 
+# PAYMENT SCHEMAS
+
+
+class PurchaseOrderPaymentCreate(BaseModel):
+    """Payload for recording a payment against a purchase order.
+
+    Mirrors ExpensePaymentCreate: no payment_method field. amount must be
+    > 0 and is additionally validated server-side against the current
+    balance_due (overpayment is rejected with a 400).
+    """
+
+    amount: Decimal = Field(
+        ...,
+        gt=0,
+        decimal_places=2,
+        description="Payment amount — must be > 0 and <= current balance_due",
+    )
+    payment_date: date = Field(
+        ...,
+        alias="paymentDate",
+        description="Date the payment was made — required",
+    )
+    reference: str | None = Field(
+        None,
+        max_length=200,
+        description="Transaction ID, cheque number, or remittance reference",
+    )
+    notes: str | None = Field(
+        None,
+        max_length=2000,
+        description="Internal notes for this payment entry",
+    )
+
+    @field_validator("reference", "notes", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: str | None) -> str | None:
+        return normalize_empty_str(v)
+
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "amount": 5000.00,
+                "paymentDate": "2026-06-18",
+                "reference": "TXN-9981234",
+                "notes": "Paid via bank transfer",
+            }
+        },
+    }
+
+
+class PurchaseOrderPaymentResponse(BaseModel):
+    """Payment record in API responses.
+
+    ``document_id`` references the optional proof-of-payment attachment;
+    the attachment's ``storage_key`` is never surfaced (security gate F).
+    """
+
+    id: UUID
+    po_id: UUID
+    amount: Decimal
+    payment_date: date
+    reference: str | None = None
+    notes: str | None = None
+    document_id: UUID | None = None
+    created_at: datetime
+    recorded_by: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # DOCUMENT SCHEMAS
 
 
@@ -327,6 +398,8 @@ class PurchaseOrderResponse(BaseModel):
     subtotal: Decimal
     tax_total: Decimal
     total: Decimal
+    amount_paid: Decimal
+    balance_due: Decimal
 
     compliance_ref: str | None = None
     notes: str | None = None
@@ -337,12 +410,14 @@ class PurchaseOrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     sent_at: datetime | None = None
+    paid_at: datetime | None = None
     created_by: UUID | None = None
     version: int
 
     # Relationships
     vendor: VendorSummary
     line_items: list[PurchaseOrderLineItemResponse] = Field(default_factory=list)
+    payments: list[PurchaseOrderPaymentResponse] = Field(default_factory=list)
     documents: list[PurchaseOrderDocumentResponse] = Field(default_factory=list)
 
     @computed_field
@@ -350,6 +425,12 @@ class PurchaseOrderResponse(BaseModel):
     def is_editable(self) -> bool:
         """Only DRAFT purchase orders are freely editable."""
         return self.status == PurchaseOrderStatus.DRAFT
+
+    @computed_field
+    @property
+    def is_paid(self) -> bool:
+        """Fully settled by status or a cleared balance."""
+        return self.status == PurchaseOrderStatus.PAID or self.balance_due <= 0
 
     model_config = {"from_attributes": True}
 
@@ -376,6 +457,7 @@ class PurchaseOrderSummary(BaseModel):
     status: str
     currency: str
     total: Decimal
+    balance_due: Decimal
     is_recurring: bool
     converted_bill_id: UUID | None = None
     created_at: datetime
