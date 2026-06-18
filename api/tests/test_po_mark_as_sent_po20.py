@@ -46,6 +46,7 @@ def _service_with(po: _FakePO, monkeypatch) -> PurchaseOrderService:
     service._current_user = None
     service._actor_id = None
     service._get_locked = lambda _po_id: po  # type: ignore[assignment]
+
     # Snapshot capture stubbed: simulate stamping an id so idempotency holds.
     def _capture(p) -> None:
         if p.owner_snapshot_id is None:
