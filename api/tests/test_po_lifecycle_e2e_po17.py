@@ -84,36 +84,24 @@ class TestCalculationParity:
             _line_item(),
             _line_item(item_name="Nuts M8", quantity=Decimal("3")),
         ]
-        built = build_line_items(
-            [
-                {
-                    "item_name": i.item_name,
-                    "description": i.description,
-                    "quantity": i.quantity,
-                    "unit_price": i.unit_price,
-                    "tax_type": i.tax_type,
-                }
-                for i in items
-            ]
-        )
-        subtotal, tax_total = sum_line_totals(built)
+        # The shared engine is the reference. _build_line_items /
+        # _sum_line_totals are @staticmethod and accept the schema objects
+        # directly, delegating to the same helpers (PO-02: no local calc), so
+        # the service totals must match the engine output exactly — the same
+        # numbers Quotes/Expenses produce for identical input.
+        ref_subtotal, ref_tax = sum_line_totals(build_line_items(items))
 
-        # The service builds + sums via the same helpers, so its totals must
-        # match byte-for-byte (PO-02: identical to Quotes/Expenses).
-        svc_built = PurchaseOrderService._build_line_items(
-            PurchaseOrderService.__new__(PurchaseOrderService), items
-        )
-        svc_subtotal, svc_tax = PurchaseOrderService._sum_line_totals(
-            PurchaseOrderService.__new__(PurchaseOrderService), svc_built
-        )
-        assert (svc_subtotal, svc_tax) == (subtotal, tax_total)
-        assert svc_subtotal + svc_tax == subtotal + tax_total
+        svc_built = PurchaseOrderService._build_line_items(items)
+        svc_subtotal, svc_tax = PurchaseOrderService._sum_line_totals(svc_built)
+
+        assert (svc_subtotal, svc_tax) == (ref_subtotal, ref_tax)
+        assert svc_subtotal + svc_tax == ref_subtotal + ref_tax
 
     def test_zero_rated_has_no_tax(self) -> None:
-        items = [_line_item(tax_type=TaxType.ZERO_RATED)]
-        svc = PurchaseOrderService.__new__(PurchaseOrderService)
-        built = svc._build_line_items(items)
-        subtotal, tax_total = svc._sum_line_totals(built)
+        # VAT_0 is the zero-rated tax type: subtotal accrues, tax is 0.
+        items = [_line_item(tax_type=TaxType.VAT_0)]
+        built = PurchaseOrderService._build_line_items(items)
+        subtotal, tax_total = PurchaseOrderService._sum_line_totals(built)
         assert tax_total == Decimal("0.00")
         assert subtotal == Decimal("200.00")
 
