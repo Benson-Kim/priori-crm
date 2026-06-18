@@ -24,7 +24,6 @@ import {
     duplicatePurchaseOrder,
     getPurchaseOrder,
     markAsSentPurchaseOrder,
-    recordPurchaseOrderPayment,
     sendPurchaseOrder,
     uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
