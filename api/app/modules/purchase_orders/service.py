@@ -1386,11 +1386,16 @@ Best regards,
 
     # PDF GENERATION
 
-    def _render_pdf(self, purchase_order: PurchaseOrder) -> bytes:
+    def _render_pdf(
+        self, purchase_order: PurchaseOrder, include_balance: bool = False
+    ) -> bytes:
         """Render a PDF for an already-loaded purchase order.
 
         Orchestration (owner branding + ReportLab generator) is shared with
         invoices/quotes via DocumentPdfRenderer — no PO-specific copy.
+
+        ``include_balance`` selects the original-amount document (False) or
+        the balance-aware current/statement document (True).
 
         A rendering failure is not swallowed: it surfaces as an explicit 500
         carrying the message so the UI can show "PDF could not be
@@ -1399,7 +1404,9 @@ Best regards,
         from app.common.pdf_renderer import DocumentPdfRenderer
 
         try:
-            return DocumentPdfRenderer(self._db).render_purchase_order(purchase_order)
+            return DocumentPdfRenderer(self._db).render_purchase_order(
+                purchase_order, include_balance=include_balance
+            )
         except Exception as exc:
             logger.exception(
                 "Failed to render purchase-order PDF %s",
@@ -1412,18 +1419,30 @@ Best regards,
                 error_code="PDF_GENERATION_FAILED",
             ) from exc
 
-    def generate_pdf(self, po_id: uuid.UUID) -> bytes:
-        """Generate the PDF for a purchase order by id."""
-        return self._render_pdf(self.get_by_id(po_id))
+    def generate_pdf(
+        self, po_id: uuid.UUID, include_balance: bool = False
+    ) -> bytes:
+        """Generate the PDF for a purchase order by id.
+
+        ``include_balance`` selects the original-amount document (False) or
+        the balance-aware current/statement document (True).
+        """
+        return self._render_pdf(
+            self.get_by_id(po_id), include_balance=include_balance
+        )
 
     def generate_pdf_for_download(
-        self, po_id: uuid.UUID
+        self, po_id: uuid.UUID, include_balance: bool = False
     ) -> tuple[bytes, PurchaseOrder]:
         """Generate the PO PDF and return it with the loaded purchase order.
 
         Loads the PO once and renders from it, so the download endpoint does
         not re-query just for the attachment filename (mirrors
-        QuoteService.generate_pdf_for_download).
+        QuoteService.generate_pdf_for_download). ``include_balance`` selects
+        the original-amount vs balance-aware variant.
         """
         purchase_order = self.get_by_id(po_id)
-        return self._render_pdf(purchase_order), purchase_order
+        return (
+            self._render_pdf(purchase_order, include_balance=include_balance),
+            purchase_order,
+        )

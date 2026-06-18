@@ -552,8 +552,9 @@ async def download_purchase_order_pdf(
 
     # Cap concurrent PDF builds and run the blocking render in a worker
     # thread. Loads the PO once (no second query just for the filename).
+    # This is the ORIGINAL document: full amount, no payments shown.
     pdf_data, purchase_order = await run_export(
-        service.generate_pdf_for_download, po_id
+        service.generate_pdf_for_download, po_id, False
     )
 
     emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
@@ -562,6 +563,51 @@ async def download_purchase_order_pdf(
     filename = (
         f"PurchaseOrder_{purchase_order.po_reference}_"
         f"{_safe_filename_token(vendor_name)}.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get(
+    "/{po_id}/pdf/statement",
+    summary="Download the current (balance-aware) purchase-order PDF",
+    description=(
+        "Generate and stream the CURRENT purchase-order PDF: the same "
+        "document as /pdf but with Amount Paid and Balance Due rows appended "
+        "to the summary, reflecting payments recorded so far. Read-only and "
+        "available at any status; owner branding comes from the PO's "
+        "immutable snapshot once sent, else the live profile."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Purchase order not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_purchase_order_statement_pdf(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.export_limiter import run_export
+
+    # CURRENT document: payments applied + running balance.
+    pdf_data, purchase_order = await run_export(
+        service.generate_pdf_for_download, po_id, True
+    )
+
+    emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
+
+    vendor_name = getattr(purchase_order.vendor, "vendor_name", "vendor")
+    filename = (
+        f"PurchaseOrder_{purchase_order.po_reference}_"
+        f"{_safe_filename_token(vendor_name)}_current.pdf"
     )
     return StreamingResponse(
         io.BytesIO(pdf_data),
