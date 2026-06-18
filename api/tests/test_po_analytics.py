@@ -67,6 +67,8 @@ def _only(events, name):
 
 
 class TestEventCatalogue:
+    # The 14 PRD §17 events, plus the two v1-lifecycle additions
+    # (PO_PAYMENT_RECORDED from PO-19, PO_MARKED_SENT from PO-20).
     _PRD_EVENTS: ClassVar[set[str]] = {
         "po_created",
         "po_saved",
