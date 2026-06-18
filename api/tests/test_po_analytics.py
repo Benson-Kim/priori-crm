@@ -66,9 +66,35 @@ def _only(events, name):
 
 
 class TestEventCatalogue:
-    def test_all_fourteen_events_defined(self):
-        """The PRD §17 catalogue is complete — exactly 14 events."""
-        assert len(list(PurchaseOrderEvent)) == 14
+    # The 14 PRD §17 events, plus the two v1-lifecycle additions
+    # (PO_PAYMENT_RECORDED from PO-19, PO_MARKED_SENT from PO-20).
+    _PRD_EVENTS = {
+        "po_created",
+        "po_saved",
+        "po_viewed",
+        "po_sent",
+        "po_send_failed",
+        "po_converted_to_bill",
+        "po_pdf_downloaded",
+        "po_duplicated",
+        "po_cancelled",
+        "po_deleted",
+        "po_document_attached",
+        "po_document_downloaded",
+        "po_document_deleted",
+        "po_list_exported",
+    }
+    _LIFECYCLE_ADDITIONS = {"po_payment_recorded", "po_marked_sent"}
+
+    def test_prd_catalogue_is_complete(self):
+        """All 14 PRD §17 events are defined (the documented catalogue)."""
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert self._PRD_EVENTS <= defined
+
+    def test_event_enum_is_exactly_prd_plus_lifecycle(self):
+        """No stray events: the enum is the PRD set + the 2 lifecycle adds."""
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert defined == self._PRD_EVENTS | self._LIFECYCLE_ADDITIONS
 
     def test_event_names_are_snake_case_constants(self):
         for ev in PurchaseOrderEvent:
