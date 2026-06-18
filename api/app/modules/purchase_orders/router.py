@@ -419,33 +419,11 @@ def update_purchase_order(
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
-@router.post(
-    "/{po_id}/cancel",
-    response_model=PurchaseOrderResponse,
-    summary="Cancel purchase order",
-    description=(
-        "Cancel a purchase order (DRAFT or SENT only) -> CANCELED. The "
-        "record is preserved but becomes terminal: it can no longer be "
-        "edited, sent or converted. A BILLED or already-CANCELED purchase "
-        "order cannot be cancelled. A before/after-image audit row is "
-        "written atomically with the transition."
-    ),
-    responses={
-        200: {"description": "Purchase order canceled"},
-        400: {"description": "Invalid transition (BILLED or already CANCELED)"},
-        403: {"description": "Insufficient role to cancel purchase orders"},
-        404: {"description": "Purchase order not found"},
-    },
-    dependencies=[Depends(require_privileged())],
-)
-def cancel_purchase_order(
-    po_id: UUID,
-    service: PurchaseOrderServiceDep,
-) -> PurchaseOrderResponse:
-    service.cancel(po_id)
-    # Re-read with vendor + line items eager-loaded for the response.
-    purchase_order = service.get_by_id(po_id)
-    return PurchaseOrderResponse.model_validate(purchase_order)
+# NOTE: Cancel is DISABLED in v1. The CANCELED status and
+# PurchaseOrderService.cancel() are retained (dormant) but no route is
+# exposed, so a PO can never be canceled through the API. Re-enabling is a
+# code-only change: restore this endpoint and the SENT->CANCELED edge in
+# PurchaseOrderService.ALLOWED_TRANSITIONS.
 
 
 @router.delete(
@@ -453,10 +431,10 @@ def cancel_purchase_order(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete purchase order",
     description=(
-        "Delete a purchase order. Permitted only for DRAFT or CANCELED "
-        "purchase orders; a SENT or BILLED purchase order must be canceled "
-        "first. Line items are removed with it. A before-image audit row is "
-        "written atomically with the delete. The X-Delete-Type response "
+        "Delete a purchase order. Permitted only for DRAFT purchase orders; "
+        "a SENT or PAID purchase order is a permanent record and cannot be "
+        "deleted. Line items are removed with it. A before-image audit row "
+        "is written atomically with the delete. The X-Delete-Type response "
         "header reports 'hard'."
     ),
     responses={
