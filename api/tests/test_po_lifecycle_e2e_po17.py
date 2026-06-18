@@ -153,9 +153,7 @@ class TestLifecycleE2E:
         # FINAL payment clears the balance -> auto-settle to PAID.
         service.record_payment(
             po.id,
-            PurchaseOrderPaymentCreate(
-                amount=total - half, paymentDate=date.today()
-            ),
+            PurchaseOrderPaymentCreate(amount=total - half, paymentDate=date.today()),
         )
         db.flush()
         assert po.status == PurchaseOrderStatus.PAID
