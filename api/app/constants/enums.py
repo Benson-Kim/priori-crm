@@ -140,9 +140,18 @@ class DocumentSource(StrEnum):
 
 
 class PurchaseOrderStatus(StrEnum):
-    """Purchase Order lifecycle states"""
+    """Purchase Order lifecycle states.
+
+    Active v1 lifecycle: DRAFT -> SENT -> PAID.
+    BILLED and CANCELED are retained for forward/backward compatibility
+    (and remain valid values in the DB CHECK constraint) but are
+    DISABLED: the PurchaseOrderService state machine exposes no
+    transition into them, so they are currently unreachable. Re-enabling
+    them later is a code-only change (no data migration).
+    """
 
     DRAFT = "draft"  # Created but not yet sent
-    SENT = "sent"  # Sent to the vendor by email
-    BILLED = "billed"  # PO has been converted to a Bill
-    CANCELED = "canceled"  # PO has been voided
+    SENT = "sent"  # Sent to the vendor (emailed or marked sent)
+    PAID = "paid"  # Fully settled via recorded payments
+    BILLED = "billed"  # DISABLED in v1 (converted to a Bill)
+    CANCELED = "canceled"  # DISABLED in v1 (voided)
