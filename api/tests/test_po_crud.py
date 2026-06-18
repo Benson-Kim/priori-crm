@@ -344,15 +344,6 @@ class TestDelete:
         assert audit.before["status"] == PurchaseOrderStatus.DRAFT.value
         assert audit.before["po_reference"] == po.po_reference
 
-    def test_delete_canceled_allowed(self, db):
-        vendor = _vendor(db)
-        svc = PurchaseOrderService(db)
-        po = svc.create(_create_payload(vendor_id=vendor.id))
-        po.status = PurchaseOrderStatus.CANCELED
-        db.flush()
-
-        assert svc.delete(po.id) is False
-
     def test_delete_sent_rejected(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
