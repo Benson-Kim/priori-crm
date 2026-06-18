@@ -5,6 +5,7 @@ import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
+import { recordPurchaseOrderPayment, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
 import { CreditCard } from "lucide-react";
 import { startTransition, useEffect, useState } from "react";
 
@@ -12,7 +13,7 @@ interface RecordPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     entityId: string;
-    entityType: "invoice" | "expense";
+    entityType: "invoice" | "expense" | "purchaseOrder";
     balanceDue: number;
     currency: string;
     prefillAmount?: number;
@@ -82,6 +83,14 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     notes: notes || undefined,
                 };
                 await recordExpensePayment(entityId, payload);
+            } else if (entityType === "purchaseOrder") {
+                const payload: PurchaseOrderPaymentPayload = {
+                    amount: parsedAmount,
+                    paymentDate,
+                    reference: reference || undefined,
+                    notes: notes || undefined,
+                };
+                await recordPurchaseOrderPayment(entityId, payload);
             }
             console.log(`[RecordPayment] Success for ${entityType}`);
             onSuccess();
@@ -136,8 +145,9 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     />
                 </div>
 
-                {/* The expense payment API has no payment_method field, so the
-                    selection would be silently dropped — only show it for invoices. */}
+                {/* Only the invoice payment API carries a payment_method field; the
+                    expense and purchase-order payment APIs do not, so the selection
+                    would be silently dropped — only show it for invoices. */}
                 {entityType === "invoice" && (
                     <div>
                         <Label htmlFor="payment-method">Payment Method</Label>
