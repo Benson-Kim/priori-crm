@@ -101,9 +101,7 @@ def upgrade() -> None:
         ),
         sa.Column("recorded_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.CheckConstraint("amount > 0", name="ck_po_payments_amount_positive"),
-        sa.ForeignKeyConstraint(
-            ["po_id"], ["purchase_orders.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["po_id"], ["purchase_orders.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["purchase_order_documents.id"],

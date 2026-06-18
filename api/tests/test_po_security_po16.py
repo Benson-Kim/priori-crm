@@ -101,8 +101,7 @@ class TestPrivilegedActionsGated:
                 if key in _PRIVILEGED_ROUTES:
                     seen.add(key)
                     assert _has_privileged_gate(route), (
-                        f"{method} {route.path} must be gated by "
-                        "require_privileged"
+                        f"{method} {route.path} must be gated by require_privileged"
                     )
 
         missing = _PRIVILEGED_ROUTES - seen

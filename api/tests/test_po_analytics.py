@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import ClassVar
 
 import pytest
 
@@ -68,7 +69,7 @@ def _only(events, name):
 class TestEventCatalogue:
     # The 14 PRD §17 events, plus the two v1-lifecycle additions
     # (PO_PAYMENT_RECORDED from PO-19, PO_MARKED_SENT from PO-20).
-    _PRD_EVENTS = {
+    _PRD_EVENTS: ClassVar[set[str]] = {
         "po_created",
         "po_saved",
         "po_viewed",
@@ -84,12 +85,12 @@ class TestEventCatalogue:
         "po_document_deleted",
         "po_list_exported",
     }
-    _LIFECYCLE_ADDITIONS = {"po_payment_recorded", "po_marked_sent"}
+    _LIFECYCLE_ADDITIONS: ClassVar[set[str]] = {"po_payment_recorded", "po_marked_sent"}
 
     def test_prd_catalogue_is_complete(self):
         """All 14 PRD §17 events are defined (the documented catalogue)."""
         defined = {ev.value for ev in PurchaseOrderEvent}
-        assert self._PRD_EVENTS <= defined
+        assert defined >= self._PRD_EVENTS
 
     def test_event_enum_is_exactly_prd_plus_lifecycle(self):
         """No stray events: the enum is the PRD set + the 2 lifecycle adds."""
