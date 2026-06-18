@@ -1,4 +1,4 @@
-"""PO-21a dual-PDF tests (work item #22, backend half).
+"""dual-PDF tests .
 
 Asserts the single shared PO PDF builder produces the ORIGINAL document
 (TOTAL only) when include_balance is False and the CURRENT / statement
