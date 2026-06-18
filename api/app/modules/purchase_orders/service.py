@@ -67,11 +67,10 @@ PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.documents),
 )
 
-# Statuses from which a PO may be deleted. SENT / BILLED are
-# protected: a sent or billed PO must be Canceled or is immutable.
-_DELETABLE_STATUSES = frozenset(
-    {PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED}
-)
+# Statuses from which a PO may be deleted. Only DRAFT is deletable in v1:
+# once a PO is SENT (and thereafter PAID) it is a durable record and cannot
+# be deleted. Cancel is disabled, so there is no soft-void path either.
+_DELETABLE_STATUSES = frozenset({PurchaseOrderStatus.DRAFT})
 
 
 class PurchaseOrderService(BaseDocumentService):
@@ -81,9 +80,12 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle:
-        DRAFT → SENT → BILLED
-        DRAFT | SENT → CANCELED   (terminal)
+    Lifecycle (v1):
+        DRAFT → SENT → PAID
+    PAID is reached by full settlement (see record_payment), not a manual
+    edge. BILLED and CANCELED are DISABLED in v1: they remain valid enum /
+    DB-CHECK values but the state machine exposes no transition into them,
+    so they are currently unreachable (re-enabling is a code-only change).
     """
 
     MAX_RETRIES = 3
@@ -112,16 +114,14 @@ class PurchaseOrderService(BaseDocumentService):
     ALLOWED_TRANSITIONS: ClassVar[
         dict[PurchaseOrderStatus, list[PurchaseOrderStatus]]
     ] = {
-        PurchaseOrderStatus.DRAFT: [
-            PurchaseOrderStatus.SENT,
-            PurchaseOrderStatus.CANCELED,
-        ],
-        PurchaseOrderStatus.SENT: [
-            PurchaseOrderStatus.BILLED,
-            PurchaseOrderStatus.CANCELED,
-        ],
-        PurchaseOrderStatus.BILLED: [],  # terminal
-        PurchaseOrderStatus.CANCELED: [],  # terminal
+        PurchaseOrderStatus.DRAFT: [PurchaseOrderStatus.SENT],
+        # PAID is reached only by full settlement (record_payment, PO-19).
+        PurchaseOrderStatus.SENT: [PurchaseOrderStatus.PAID],
+        PurchaseOrderStatus.PAID: [],  # terminal
+        # BILLED / CANCELED are disabled in v1: retained as values but with
+        # no edge into them, so the state machine can never reach them.
+        PurchaseOrderStatus.BILLED: [],  # disabled (terminal)
+        PurchaseOrderStatus.CANCELED: [],  # disabled (terminal)
     }
 
     # REFERENCE GENERATION
@@ -961,12 +961,14 @@ Best regards,
     # DELETE
 
     def delete(self, po_id: uuid.UUID) -> bool:
-        """Delete a purchase order — permitted only in DRAFT or CANCELED.
+        """Delete a purchase order — permitted only in DRAFT.
 
-        SENT / BILLED purchase orders are protected and raise
-        BadRequestException. A before-image audit row is written atomically
-        with the delete (committed by get_db()). v1 POs carry no payments, so
-        this is always a hard delete; line items cascade.
+        SENT and PAID purchase orders are protected and raise
+        BadRequestException: once sent, a PO is a durable record and cannot
+        be deleted (cancel is disabled in v1, so there is no void path). A
+        before-image audit row is written atomically with the delete
+        (committed by get_db()); this is always a hard delete and line items
+        cascade.
 
         Locked load: serializes with concurrent transitions (race-condition
         contract — all status-sensitive ops load FOR UPDATE) so the status
@@ -981,9 +983,9 @@ Best regards,
             raise BadRequestException(
                 detail=(
                     f"Cannot delete a purchase order in "
-                    f"'{purchase_order.status}' status. Only DRAFT or CANCELED "
-                    "purchase orders can be deleted; cancel a sent purchase "
-                    "order instead."
+                    f"'{purchase_order.status}' status. Only DRAFT purchase "
+                    "orders can be deleted; a sent purchase order is a "
+                    "permanent record."
                 ),
                 field="status",
             )
