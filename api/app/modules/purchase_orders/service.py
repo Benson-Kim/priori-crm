@@ -1426,17 +1426,13 @@ Best regards,
                 error_code="PDF_GENERATION_FAILED",
             ) from exc
 
-    def generate_pdf(
-        self, po_id: uuid.UUID, include_balance: bool = False
-    ) -> bytes:
+    def generate_pdf(self, po_id: uuid.UUID, include_balance: bool = False) -> bytes:
         """Generate the PDF for a purchase order by id.
 
         ``include_balance`` selects the original-amount document (False) or
         the balance-aware current/statement document (True).
         """
-        return self._render_pdf(
-            self.get_by_id(po_id), include_balance=include_balance
-        )
+        return self._render_pdf(self.get_by_id(po_id), include_balance=include_balance)
 
     def generate_pdf_for_download(
         self, po_id: uuid.UUID, include_balance: bool = False

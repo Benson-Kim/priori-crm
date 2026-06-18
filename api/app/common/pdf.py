@@ -293,12 +293,8 @@ class DocumentPDFGenerator:
         if include_balance:
             amount_paid = getattr(po, "amount_paid", Decimal("0.00"))
             balance_due = getattr(po, "balance_due", po.total)
-            totals_rows.append(
-                ["Amount Paid", f"{po.currency} {amount_paid:,.2f}"]
-            )
-            totals_rows.append(
-                ["Balance Due", f"{po.currency} {balance_due:,.2f}"]
-            )
+            totals_rows.append(["Amount Paid", f"{po.currency} {amount_paid:,.2f}"])
+            totals_rows.append(["Balance Due", f"{po.currency} {balance_due:,.2f}"])
         totals_table = Table(totals_rows, colWidths=[40 * mm, 45 * mm], hAlign="RIGHT")
         totals_table.setStyle(
             TableStyle(
