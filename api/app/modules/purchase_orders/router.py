@@ -37,6 +37,8 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
+    PurchaseOrderPaymentResponse,
     PurchaseOrderResponse,
     PurchaseOrderSendRequest,
     PurchaseOrderSendResponse,
@@ -306,6 +308,35 @@ def send_purchase_order(
         attach_pdf=request_data.attach_pdf,
     )
     return PurchaseOrderSendResponse(**result)
+
+
+@router.post(
+    "/{po_id}/payments",
+    response_model=PurchaseOrderPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a payment against a purchase order",
+    description=(
+        "Record an auditable payment against a SENT purchase order, reducing "
+        "its balance_due. When the balance reaches zero the purchase order is "
+        "settled to PAID. Overpayment is rejected. A DRAFT purchase order must "
+        "be sent first, and an already-PAID purchase order cannot take further "
+        "payment."
+    ),
+    responses={
+        201: {"description": "Payment recorded"},
+        400: {"description": "Not SENT, already paid, or overpayment"},
+        403: {"description": "Insufficient role to record payments"},
+        404: {"description": "Purchase order not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def record_purchase_order_payment(
+    po_id: UUID,
+    body: PurchaseOrderPaymentCreate,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderPaymentResponse:
+    payment = service.record_payment(po_id, body, user_id=service.actor_id)
+    return PurchaseOrderPaymentResponse.model_validate(payment)
 
 
 @router.post(
