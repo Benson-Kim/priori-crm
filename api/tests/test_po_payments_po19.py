@@ -44,7 +44,7 @@ class _CapturingSession:
     def add(self, obj) -> None:
         self.added.append(obj)
 
-    def flush(self) -> None:  # noqa: D401 - no-op for the unit test
+    def flush(self) -> None:
         pass
 
 

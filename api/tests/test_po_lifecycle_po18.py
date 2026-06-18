@@ -79,7 +79,7 @@ def test_legal_edges_present_in_table(
 
 
 def test_only_draft_is_deletable() -> None:
-    assert _DELETABLE_STATUSES == frozenset({PurchaseOrderStatus.DRAFT})
+    assert frozenset({PurchaseOrderStatus.DRAFT}) == _DELETABLE_STATUSES
     assert PurchaseOrderStatus.SENT not in _DELETABLE_STATUSES
     assert PurchaseOrderStatus.PAID not in _DELETABLE_STATUSES
     assert PurchaseOrderStatus.CANCELED not in _DELETABLE_STATUSES
