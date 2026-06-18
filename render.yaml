@@ -86,6 +86,18 @@ services:
       - key: UPLOAD_DIR
         value: /var/data/uploads
 
+      # Internal job authentication: gates the scheduler-only endpoints
+      # (email-outbox drain, nightly transitions, OTP purge). The endpoints
+      # fail CLOSED when this is unset, so it must be provisioned. Generate
+      # with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+      # and set the SAME value on the priori-crm-scheduler cron service.
+      - key: INTERNAL_API_SECRET
+        sync: false  # Must be set manually (shared with the scheduler)
+
+      # Export batch cap (truncation detection uses BATCH_SIZE + 1).
+      - key: BATCH_SIZE
+        value: 1000
+
       # Monitoring (optional)
       - key: SENTRY_DSN
         sync: false
@@ -98,9 +110,68 @@ services:
       mountPath: /var/data/uploads
       sizeGB: 10
 
+  # Scheduler: periodically drives the internal job endpoints (the API has
+  # no in-process scheduler, by design — see app/common/email_outbox.py).
+  # Each call carries the shared X-Internal-Secret. The drain cadence bounds
+  # how long a first-attempt SES failure stays queued before redelivery;
+  # rows dead-letter after MAX_DELIVERY_ATTEMPTS (5).
+  - type: cron
+    name: priori-crm-scheduler-outbox-drain
+    env: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    schedule: "*/5 * * * *"  # every 5 minutes
+    dockerCommand: >-
+      sh -c 'curl -fsS -X POST
+      -H "X-Internal-Secret: $INTERNAL_API_SECRET"
+      "$API_BASE_URL/api/v1/internal/email-outbox/drain"'
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: priori-crm-api
+          property: host
+      - key: INTERNAL_API_SECRET
+        sync: false  # Must match priori-crm-api's INTERNAL_API_SECRET
+
+  - type: cron
+    name: priori-crm-scheduler-nightly
+    env: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    schedule: "15 0 * * *"  # 00:15 UTC daily
+    dockerCommand: >-
+      sh -c 'set -e;
+      H="-H \"X-Internal-Secret: $INTERNAL_API_SECRET\"";
+      curl -fsS -X POST $H "$API_BASE_URL/api/v1/invoices/internal/transition-overdue";
+      curl -fsS -X POST $H "$API_BASE_URL/api/v1/quotes/internal/transition-expired";
+      curl -fsS -X POST $H "$API_BASE_URL/api/v1/auth/internal/purge-otps"'
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: priori-crm-api
+          property: host
+      - key: INTERNAL_API_SECRET
+        sync: false  # Must match priori-crm-api's INTERNAL_API_SECRET
+
 # IMPORTANT: After deploying, you MUST set these environment variables in the Render dashboard:
 # 1. JWT_SECRET_KEY - Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 # 2. AWS_ACCESS_KEY_ID - Your AWS IAM access key with SES permissions
 # 3. AWS_SECRET_ACCESS_KEY - Your AWS IAM secret key
 # 4. SES_SENDER_EMAIL - Verified email address in AWS SES (e.g., noreply@yourdomain.com)
-# 5. Update CORS_ORIGINS with your actual frontend domain
+# 5. INTERNAL_API_SECRET - the SAME value on priori-crm-api AND both scheduler
+#    cron services (gates the internal job endpoints; they fail closed if unset)
+# 6. Update CORS_ORIGINS with your actual frontend domain
+#
+# OPERATIONAL (outside this repo — see PO-15 #16):
+# - SES: verify sender identity/domain, request production (out-of-sandbox)
+#   access, confirm AWS_REGION.
+# - Object storage: provision the S3 bucket + least-privilege IAM and a
+#   retention/lifecycle policy when STORAGE_BACKEND=s3.
+# - Alerting: alert if a cron job has not succeeded within its window, and
+#   on email_outbox rows reaching the `dead` status (delivery exhausted).
