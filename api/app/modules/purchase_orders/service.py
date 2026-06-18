@@ -41,6 +41,7 @@ from app.modules.purchase_orders.models import (
     PurchaseOrder,
     PurchaseOrderDocument,
     PurchaseOrderLineItem,
+    PurchaseOrderPayment,
 )
 from app.modules.purchase_orders.queries import (
     PurchaseOrderExportQuery,
@@ -52,6 +53,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderCreate,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
     PurchaseOrderStatusCounts,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
@@ -64,6 +66,7 @@ logger = logging.getLogger(__name__)
 PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.vendor),
     joinedload(PurchaseOrder.line_items),
+    joinedload(PurchaseOrder.payments),
     joinedload(PurchaseOrder.documents),
 )
 
@@ -257,6 +260,8 @@ class PurchaseOrderService(BaseDocumentService):
                 subtotal=subtotal,
                 tax_total=tax_total,
                 total=total,
+                amount_paid=Decimal("0.00"),
+                balance_due=total,
                 compliance_ref=data.compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
@@ -377,6 +382,7 @@ class PurchaseOrderService(BaseDocumentService):
                 PurchaseOrder.status,
                 PurchaseOrder.currency,
                 PurchaseOrder.total,
+                PurchaseOrder.balance_due,
                 PurchaseOrder.is_recurring,
                 PurchaseOrder.converted_bill_id,
                 PurchaseOrder.created_at,
@@ -406,6 +412,7 @@ class PurchaseOrderService(BaseDocumentService):
                     status=row.status,
                     currency=row.currency,
                     total=row.total,
+                    balance_due=row.balance_due,
                     is_recurring=row.is_recurring,
                     converted_bill_id=row.converted_bill_id,
                     created_at=row.created_at,
@@ -722,13 +729,29 @@ Best regards,
             line_items_data = self._build_line_items(typed_items)
 
             subtotal, tax_total = self._sum_line_totals(line_items_data)
+            total = subtotal + tax_total
+            balance_due = total - purchase_order.amount_paid
+
+            # Mirror Expenses: the new total can never drop below what has
+            # already been paid against the PO.
+            if balance_due < Decimal("0.00"):
+                raise BadRequestException(
+                    detail=(
+                        f"Cannot reduce the total below the amount already "
+                        f"paid ({purchase_order.currency} "
+                        f"{purchase_order.amount_paid}). Remove or reduce "
+                        "payments first."
+                    ),
+                    field="line_items",
+                )
 
             for item in line_items_data:
                 self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
-            update_data["total"] = subtotal + tax_total
+            update_data["total"] = total
+            update_data["balance_due"] = balance_due
 
         # Apply scalar updates (currency is never present — locked).
         for field, value in update_data.items():
@@ -908,6 +931,148 @@ Best regards,
                     "Failed to purge storage object — orphan may remain",
                     extra={"storage_key": key},
                 )
+
+    # PAYMENT RECORDING
+
+    def _apply_payment(
+        self,
+        purchase_order: PurchaseOrder,
+        amount: Decimal,
+        payment_date,
+        *,
+        reference: str | None = None,
+        notes: str | None = None,
+        document_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderPayment:
+        """Apply a payment to an already-locked PO and settle if covered.
+
+        Single source of truth for record_payment (mirrors
+        ExpenseService._apply_payment): creates the audit-trail
+        PurchaseOrderPayment, advances amount_paid / balance_due, transitions
+        SENT->PAID via the shared state machine when the balance clears, and
+        bumps ``version`` exactly once. The caller must have already loaded
+        ``purchase_order`` FOR UPDATE and validated status/amount.
+        """
+        from datetime import UTC, datetime
+
+        payment = PurchaseOrderPayment(
+            po_id=purchase_order.id,
+            amount=amount,
+            payment_date=payment_date,
+            reference=reference,
+            notes=notes,
+            document_id=document_id,
+            recorded_by=user_id,
+        )
+        self._db.add(payment)
+
+        purchase_order.amount_paid += amount
+        purchase_order.balance_due = purchase_order.total - purchase_order.amount_paid
+
+        if purchase_order.balance_due <= Decimal("0.00"):
+            # Full settlement: route SENT->PAID through the state machine
+            # (it owns the single version bump for this op) and clamp the
+            # balance so a rounding residue never leaves a negative.
+            self._transition(purchase_order, PurchaseOrderStatus.PAID)
+            purchase_order.balance_due = Decimal("0.00")
+            purchase_order.paid_at = datetime.now(UTC)
+        else:
+            # Partial payment: no status edge, so bump the version here so
+            # the optimistic-lock counter still advances exactly once.
+            purchase_order.version += 1
+
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="payment_recorded",
+            after={
+                "payment_id": str(payment.id),
+                "amount": str(amount),
+                "new_balance": str(purchase_order.balance_due),
+                "new_status": status_value(purchase_order.status),
+            },
+        )
+        return payment
+
+    def record_payment(
+        self,
+        po_id: uuid.UUID,
+        data: PurchaseOrderPaymentCreate,
+        user_id: uuid.UUID | None = None,
+        document_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderPayment:
+        """Record an auditable payment against a purchase order.
+
+        A payment is only meaningful once the PO has been sent: a DRAFT PO
+        must be sent first, and an already-PAID PO rejects further payment.
+        Overpayment (amount > balance_due) is rejected with a typed 400.
+        On full settlement the PO transitions SENT->PAID (see _apply_payment).
+
+        Locked load: the bare row is read FOR UPDATE via the inherited
+        _get_locked (lazyload('*') keeps the lock off the vendor outer join),
+        so concurrent payments serialize on the row lock instead of racing
+        (race-condition contract). No blocking I/O runs under the lock.
+        """
+        purchase_order = self._get_locked(po_id)
+
+        if purchase_order.status == PurchaseOrderStatus.PAID:
+            raise BadRequestException(
+                detail="Cannot record payment for an already-paid purchase order.",
+                field="status",
+            )
+        if purchase_order.status != PurchaseOrderStatus.SENT:
+            raise BadRequestException(
+                detail=(
+                    "Payments can only be recorded against a SENT purchase "
+                    "order. Send the purchase order first."
+                ),
+                field="status",
+            )
+        if data.amount > purchase_order.balance_due:
+            raise BadRequestException(
+                detail=(
+                    f"Payment amount ({data.amount}) exceeds the balance due "
+                    f"({purchase_order.balance_due}). Cannot overpay a "
+                    "purchase order."
+                ),
+                field="amount",
+            )
+
+        payment = self._apply_payment(
+            purchase_order,
+            amount=data.amount,
+            payment_date=data.payment_date,
+            reference=data.reference,
+            notes=data.notes,
+            document_id=document_id,
+            user_id=user_id,
+        )
+
+        logger.info(
+            "Recorded payment for purchase order %s",
+            purchase_order.po_reference,
+            extra={
+                "po_id": str(purchase_order.id),
+                "payment_id": str(payment.id),
+                "amount": float(data.amount),
+                "new_balance": float(purchase_order.balance_due),
+                "new_status": purchase_order.status,
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_PAYMENT_RECORDED,
+            {
+                "po_id": str(purchase_order.id),
+                "settled": purchase_order.status == PurchaseOrderStatus.PAID,
+            },
+        )
+        return payment
 
     # CANCEL
 
