@@ -456,7 +456,7 @@ export function PurchaseOrderEditor({
           <div>
             <label
               htmlFor="notes-input"
-              className="block text-[16px] font-bold text-gray-800 mb-3"
+              className="block text-[16px] font-bold text-gray-800 mb-2"
             >
               Notes
             </label>
@@ -465,9 +465,9 @@ export function PurchaseOrderEditor({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes here"
-              rows={2}
+              rows={1}
               disabled={restrictedMode}
-              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-20"
+              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
             />
           </div>
 
@@ -486,7 +486,7 @@ export function PurchaseOrderEditor({
               rows={2}
               maxLength={2000}
               disabled={restrictedMode}
-              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-20"
+              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
             />
           </div>
         </div>

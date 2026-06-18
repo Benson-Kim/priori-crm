@@ -159,11 +159,11 @@ export function CustomerSelector({
     };
 
     return (
-        <div className="flex flex-col gap-1">
-            <p className="text-sm text-gray-500 mb-1">{label}</p>
+        <div className="flex flex-col gap-2">
+            <p className="text-sm text-gray-500 mb-2">{label}</p>
 
             {restrictedMode ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                     <p className="text-[16px] font-bold text-priori-purple">{customerName || customerId}</p>
                     {customerDetails && (
                         <>
@@ -176,7 +176,7 @@ export function CustomerSelector({
                     )}
                 </div>
             ) : customerId && customerDetails ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                     <div className="relative">
                         <button
                             type="button"

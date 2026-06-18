@@ -26,7 +26,7 @@ function VendorDropdown({
     const [isFocused, setIsFocused] = useState(false);
 
     return (
-        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
+        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto right-0">
             <Button
                 variant="outline"
                 onClick={() => {
@@ -180,11 +180,11 @@ export function VendorSelector({
     }, [showDropdown]);
 
     return (
-        <div className="flex flex-col gap-1" ref={dropdownRef}>
-            <p className="text-sm text-gray-500 mb-1">{label}</p>
+        <div className="flex flex-col gap-2" ref={dropdownRef}>
+            <p className="text-sm text-gray-500 mb-2">{label}</p>
 
             {restrictedMode ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                     <p className="text-[16px] font-bold text-priori-purple">{vendorName || vendorId}</p>
                     {vendorDetails && (
                         <>
@@ -197,17 +197,17 @@ export function VendorSelector({
                     )}
                 </div>
             ) : vendorId && vendorDetails ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                     <div className="relative">
-                        {/* <button
+                        <button
                             type="button"
-                            className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
+                            className="text-priori-purple font-bold text-[16px] flex items-center gap-2 hover:underline text-left w-fit"
                             onClick={() => setShowDropdown(!showDropdown)}
                         >
                             {vendorName} <SquarePen size={18} />
-                        </button> */}
+                        </button>
 
-                        <div
+                        {/* <div
                             onClick={() => setShowDropdown(!showDropdown)}
                             className="flex items-center justify-between w-full max-w-[320px] py-3 px-3 gap-3 rounded-lg border border-gray-300 cursor-pointer hover:border-priori-purple transition-all"
                         >
@@ -216,7 +216,7 @@ export function VendorSelector({
                             </span>
 
                             <ChevronDown size={16} className="text-gray-500" />
-                        </div>
+                        </div> */}
 
                         {showDropdown && (
                             <VendorDropdown
@@ -242,7 +242,7 @@ export function VendorSelector({
                         className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left"
                         onClick={() => setShowDropdown(!showDropdown)}
                     >
-                        Select Vendor <SquarePen size={18} />
+                        Add / Select Vendor <SquarePen size={18} />
                     </button>
 
                     {showDropdown && (
