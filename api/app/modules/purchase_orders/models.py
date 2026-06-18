@@ -67,7 +67,7 @@ class PurchaseOrder(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'sent', 'billed', 'canceled')",
+            "status IN ('draft', 'sent', 'paid', 'billed', 'canceled')",
             name="ck_purchase_orders_valid_status",
         ),
         CheckConstraint(

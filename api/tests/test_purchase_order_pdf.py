@@ -136,7 +136,7 @@ def test_branding_uses_owner_snapshot_when_present(db, monkeypatch):
 
     captured = {}
 
-    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None):
+    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None, include_balance=False):
         captured["owner_name"] = owner.full_name
         return b"%PDF-fake"
 
@@ -157,7 +157,7 @@ def test_branding_falls_back_to_live_profile_for_draft(db, monkeypatch):
 
     captured = {}
 
-    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None):
+    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None, include_balance=False):
         captured["owner_name"] = owner.full_name
         return b"%PDF-fake"
 
@@ -182,7 +182,7 @@ def test_compliance_ref_passed_through_when_set(db, monkeypatch):
 
     captured = {}
 
-    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None):
+    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None, include_balance=False):
         captured["compliance_ref"] = purchase_order.compliance_ref
         return b"%PDF-fake"
 
@@ -201,7 +201,7 @@ def test_compliance_ref_absent_when_blank(db, monkeypatch):
 
     captured = {}
 
-    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None):
+    def _fake_generate(self, purchase_order, owner=None, logo_bytes=None, include_balance=False):
         captured["compliance_ref"] = purchase_order.compliance_ref
         return b"%PDF-fake"
 
