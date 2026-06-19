@@ -1,13 +1,15 @@
+import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
+import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
-import { recordPurchaseOrderPayment, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
-import { CreditCard } from "lucide-react";
-import { startTransition, useEffect, useState } from "react";
+import { recordPurchaseOrderPayment, uploadPurchaseOrderDocument, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
+import { CreditCard, Paperclip, X } from "lucide-react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 interface RecordPaymentModalProps {
     isOpen: boolean;
@@ -44,6 +46,15 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Proof-of-payment attachments (purchase orders only). The selected files
+    // are uploaded with source `payment_modal` on submit; the first uploaded
+    // document is linked to the payment via documentId.
+    const [files, setFiles] = useState<File[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Only the purchase-order payment API supports linking a proof-of-payment
+    // document, so the attach control is shown for that entity type only.
+    const supportsAttachments = entityType === "purchaseOrder";
 
     useEffect(() => {
         if (isOpen) {
@@ -53,10 +64,22 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                 setPaymentMethod("bank_transfer");
                 setReference("");
                 setNotes("");
+                setFiles([]);
                 setError(null);
             })
         }
     }, [isOpen, prefillAmount, balanceDue]);
+
+    const handleFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const picked = Array.from(e.target.files ?? []);
+        if (picked.length) {
+            setFiles((prev) => [...prev, ...picked]);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    const removeFile = (index: number) =>
+        setFiles((prev) => prev.filter((_, i) => i !== index));
 
     const handleRecord = async () => {
         setError(null);
@@ -90,11 +113,23 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                 };
                 await recordExpensePayment(entityId, payload);
             } else if (entityType === "purchaseOrder") {
+                // Upload any selected proof-of-payment documents first (source
+                // payment_modal) so the first one can be linked to the payment.
+                let documentId: string | undefined;
+                for (let i = 0; i < files.length; i++) {
+                    const uploaded = await uploadPurchaseOrderDocument(
+                        entityId,
+                        files[i],
+                        "payment_modal"
+                    );
+                    if (i === 0) documentId = uploaded.id;
+                }
                 const payload: PurchaseOrderPaymentPayload = {
                     amount: parsedAmount,
                     paymentDate,
                     reference: reference || undefined,
                     notes: notes || undefined,
+                    documentId,
                 };
                 await recordPurchaseOrderPayment(entityId, payload);
             }
@@ -187,6 +222,53 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                         placeholder="Additional notes..."
                     />
                 </div>
+
+                {/* Proof-of-payment attachments (purchase orders only). */}
+                {supportsAttachments && (
+                    <div>
+                        <Label htmlFor="payment-documents">Attach document(s) (optional)</Label>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center gap-2"
+                        >
+                            <Paperclip size={16} /> Attach document
+                        </Button>
+                        <input
+                            id="payment-documents"
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            accept={ACCEPTED_UPLOAD_TYPES}
+                            onChange={handleFilesPicked}
+                        />
+                        {files.length > 0 && (
+                            <ul className="mt-2 flex flex-col gap-2">
+                                {files.map((file, index) => (
+                                    <li
+                                        key={`${file.name}-${index}`}
+                                        className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg"
+                                    >
+                                        <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                            <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                            <span className="truncate" title={file.name}>{file.name}</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeFile(index)}
+                                            className="text-gray-400 hover:text-red-500 transition-colors"
+                                            aria-label={`Remove ${file.name}`}
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
             </div>
         </Dialog>
     );
