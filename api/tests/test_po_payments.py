@@ -25,12 +25,19 @@ import pytest
 
 from app.common.exceptions import BadRequestException, NotFoundException
 from app.constants.enums import PurchaseOrderStatus
+from app.modules.purchase_orders.models import PurchaseOrder
 from app.modules.purchase_orders.schemas import PurchaseOrderPaymentCreate
 from app.modules.purchase_orders.service import PurchaseOrderService
 
 
 class _FakePO:
-    """Stand-in for a locked PurchaseOrder row."""
+    """Stand-in for a locked PurchaseOrder row.
+
+    ``is_paid`` delegates to the real ``PurchaseOrder.is_paid`` property
+    descriptor so the tests exercise the production logic directly — a
+    regression in models.py is caught rather than masked by a hand-copied
+    expression.
+    """
 
     def __init__(self, total: str, status=PurchaseOrderStatus.SENT) -> None:
         self.id = "00000000-0000-0000-0000-000000000001"
@@ -41,6 +48,12 @@ class _FakePO:
         self.status = status
         self.version = 1
         self.paid_at = None
+
+    @property
+    def is_paid(self) -> bool:
+        # Invoke the real property descriptor against this stub so the
+        # production condition in models.py is what is actually asserted.
+        return PurchaseOrder.is_paid.fget(self)
 
 
 class _CapturingSession:
@@ -174,11 +187,7 @@ class TestIsPaidProperty:
     def test_draft_zero_total_is_not_paid(self) -> None:
         """A DRAFT PO with zero total must NOT be considered paid."""
         po = self._make_po(PurchaseOrderStatus.DRAFT, "0.00")
-        # Simulate the model property logic directly (mirrors models.py).
-        is_paid = po.status == PurchaseOrderStatus.PAID or (
-            po.status == PurchaseOrderStatus.SENT and po.balance_due <= 0
-        )
-        assert not is_paid, (
+        assert not po.is_paid, (
             "A zero-total DRAFT PO must not be considered paid — "
             "it has never been sent and no payment has been recorded."
         )
@@ -186,26 +195,17 @@ class TestIsPaidProperty:
     def test_sent_zero_balance_is_paid(self) -> None:
         """A SENT PO with balance_due=0 IS considered paid (settled)."""
         po = self._make_po(PurchaseOrderStatus.SENT, "100.00")
-        is_paid = po.status == PurchaseOrderStatus.PAID or (
-            po.status == PurchaseOrderStatus.SENT and po.balance_due <= 0
-        )
-        assert is_paid
+        assert po.is_paid
 
     def test_explicit_paid_status_is_paid(self) -> None:
         """A PO in PAID status is always considered paid."""
         po = self._make_po(PurchaseOrderStatus.PAID, "100.00")
-        is_paid = po.status == PurchaseOrderStatus.PAID or (
-            po.status == PurchaseOrderStatus.SENT and po.balance_due <= 0
-        )
-        assert is_paid
+        assert po.is_paid
 
     def test_draft_nonzero_balance_is_not_paid(self) -> None:
         """A DRAFT PO with a non-zero balance is not paid."""
         po = _FakePO("500.00", status=PurchaseOrderStatus.DRAFT)
-        is_paid = po.status == PurchaseOrderStatus.PAID or (
-            po.status == PurchaseOrderStatus.SENT and po.balance_due <= 0
-        )
-        assert not is_paid
+        assert not po.is_paid
 
 
 # DOCUMENT_ID WIRING (Finding 3)
@@ -227,7 +227,14 @@ def _service_with_document(
     service = _service_with(po)
 
     def _get_document(po_id, doc_id):
-        if document is None or str(document.id) != str(doc_id):
+        # Scoped lookup: the document must exist, its id must match, AND it
+        # must belong to the requested PO. A foreign document (matching id
+        # but different po_id) is rejected just like a missing one.
+        if (
+            document is None
+            or str(document.id) != str(doc_id)
+            or str(document.po_id) != str(po_id)
+        ):
             raise NotFoundException(
                 detail=f"Document '{doc_id}' not found on purchase order '{po_id}'",
                 resource="purchase_order_document",
@@ -277,14 +284,18 @@ class TestRecordPaymentDocumentId:
         assert payment.document_id is None
 
     def test_foreign_document_id_is_rejected(self, monkeypatch) -> None:
-        """A document_id that does not belong to this PO is rejected with 404."""
+        """A document_id that belongs to a DIFFERENT PO is rejected with 404.
+
+        The document exists and its id matches the requested doc_id, but its
+        po_id points at another purchase order, so the scoped lookup must
+        still reject it. This is distinct from the nonexistent-document case.
+        """
         _patch_side_effects(monkeypatch)
         po = _FakePO("1000.00")
-        # Provide a document that belongs to a DIFFERENT PO.
         foreign_doc_id = uuid.uuid4()
-        service = _service_with_document(
-            po, None
-        )  # get_document raises NotFoundException
+        # The document exists (same id) but belongs to a different PO.
+        foreign_doc = _FakeDocument(foreign_doc_id, po_id="a-different-po")
+        service = _service_with_document(po, foreign_doc)
 
         with pytest.raises(NotFoundException):
             service.record_payment(
