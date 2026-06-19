@@ -1,4 +1,4 @@
-"""PO-19 payment & balance tests (work item #20).
+"""payment & balance tests.
 
 Exercises the record_payment / _apply_payment logic against the real
 service using a lightweight locked-row stub, so the balance arithmetic,
@@ -282,7 +282,9 @@ class TestRecordPaymentDocumentId:
         po = _FakePO("1000.00")
         # Provide a document that belongs to a DIFFERENT PO.
         foreign_doc_id = uuid.uuid4()
-        service = _service_with_document(po, None)  # get_document raises NotFoundException
+        service = _service_with_document(
+            po, None
+        )  # get_document raises NotFoundException
 
         with pytest.raises(NotFoundException):
             service.record_payment(
