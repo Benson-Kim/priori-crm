@@ -4673,6 +4673,19 @@
             "title": "Amount",
             "type": "number"
           },
+          "documentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional proof-of-payment document previously uploaded to this purchase order (source: payment_modal). The document must belong to the same PO; a foreign or non-existent document_id is rejected.",
+            "title": "Documentid"
+          },
           "notes": {
             "anyOf": [
               {
@@ -5123,6 +5136,11 @@
           "draft": {
             "default": 0,
             "title": "Draft",
+            "type": "integer"
+          },
+          "paid": {
+            "default": 0,
+            "title": "Paid",
             "type": "integer"
           },
           "sent": {

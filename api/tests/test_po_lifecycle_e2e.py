@@ -188,3 +188,36 @@ class TestLifecycleE2E:
                     amount=Decimal("10.00"), paymentDate=date.today()
                 ),
             )
+
+    def test_zero_total_draft_is_not_paid(self, db) -> None:
+        """A zero-total DRAFT PO must NOT be considered paid (Finding 1).
+
+        The old ``is_paid`` condition ``balance_due <= 0`` would return True
+        for any PO whose total is zero — including a DRAFT that has never
+        been sent or had a payment recorded. The fix requires an explicit
+        PAID status or a SENT PO with a cleared balance.
+        """
+        vendor = _vendor(db)
+        service = PurchaseOrderService(db)
+        # Create a PO with a zero-price line item so total == 0.
+        po = service.create(
+            PurchaseOrderCreate(
+                vendor_id=vendor.id,
+                order_date=date.today(),
+                line_items=[
+                    _line_item(
+                        unit_price=Decimal("0.00"),
+                        tax_type=TaxType.VAT_0,
+                    )
+                ],
+            )
+        )
+        db.flush()
+        assert po.status == PurchaseOrderStatus.DRAFT
+        assert po.total == Decimal("0.00")
+        assert po.balance_due == Decimal("0.00")
+        # The key assertion: a zero-total DRAFT must NOT be considered paid.
+        assert not po.is_paid, (
+            "A zero-total DRAFT PO must not be considered paid — "
+            "it has never been sent and no payment has been recorded."
+        )

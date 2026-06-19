@@ -91,6 +91,8 @@ export interface PurchaseOrderPaymentPayload {
   paymentDate: string;
   reference?: string | null;
   notes?: string | null;
+  /** Optional proof-of-payment document UUID (must belong to the same PO). */
+  documentId?: string | null;
 }
 
 export interface PurchaseOrderListParams {

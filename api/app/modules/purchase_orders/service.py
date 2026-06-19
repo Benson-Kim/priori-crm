@@ -1063,7 +1063,6 @@ Best regards,
         po_id: uuid.UUID,
         data: PurchaseOrderPaymentCreate,
         user_id: uuid.UUID | None = None,
-        document_id: uuid.UUID | None = None,
     ) -> PurchaseOrderPayment:
         """Record an auditable payment against a purchase order.
 
@@ -1071,6 +1070,13 @@ Best regards,
         must be sent first, and an already-PAID PO rejects further payment.
         Overpayment (amount > balance_due) is rejected with a typed 400.
         On full settlement the PO transitions SENT->PAID (see _apply_payment).
+
+        If ``data.document_id`` is supplied, the referenced document must
+        exist and belong to this purchase order (scoped lookup). A document
+        that does not exist or belongs to a different PO is rejected with a
+        404. Ideally the document should have source ``payment_modal``
+        (proof-of-payment), but this is not enforced so that documents
+        uploaded via other sources can still be linked if needed.
 
         Locked load: the bare row is read FOR UPDATE via the inherited
         _get_locked (lazyload('*') keeps the lock off the vendor outer join),
@@ -1101,6 +1107,13 @@ Best regards,
                 ),
                 field="amount",
             )
+
+        # Validate the optional proof-of-payment document. The scoped lookup
+        # (po_id + document_id) ensures a document from a different PO cannot
+        # be linked here — raises NotFoundException if not found.
+        document_id: uuid.UUID | None = data.document_id
+        if document_id is not None:
+            self.get_document(po_id, document_id)
 
         payment = self._apply_payment(
             purchase_order,
