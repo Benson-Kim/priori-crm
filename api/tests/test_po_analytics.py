@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import ClassVar
 
 import pytest
 
@@ -66,9 +67,31 @@ def _only(events, name):
 
 
 class TestEventCatalogue:
-    def test_all_events_defined(self):
-        """The PRD §17 catalogue plus PO_PAYMENT_RECORDED and PO_MARKED_SENT — 16 events."""
-        assert len(list(PurchaseOrderEvent)) == 16
+    _PRD_EVENTS: ClassVar[set[str]] = {
+        "po_created",
+        "po_saved",
+        "po_viewed",
+        "po_sent",
+        "po_send_failed",
+        "po_converted_to_bill",
+        "po_pdf_downloaded",
+        "po_duplicated",
+        "po_cancelled",
+        "po_deleted",
+        "po_document_attached",
+        "po_document_downloaded",
+        "po_document_deleted",
+        "po_list_exported",
+    }
+    _LIFECYCLE_ADDITIONS: ClassVar[set[str]] = {"po_payment_recorded", "po_marked_sent"}
+
+    def test_prd_catalogue_is_complete(self):
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert defined >= self._PRD_EVENTS
+
+    def test_event_enum_is_exactly_prd_plus_lifecycle(self):
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert defined == self._PRD_EVENTS | self._LIFECYCLE_ADDITIONS
 
     def test_event_names_are_snake_case_constants(self):
         for ev in PurchaseOrderEvent:
