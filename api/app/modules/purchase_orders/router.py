@@ -46,8 +46,6 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
 )
-from app.modules.purchase_orders.service import PurchaseOrderService
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
