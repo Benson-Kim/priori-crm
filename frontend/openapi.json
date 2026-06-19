@@ -37,7 +37,7 @@
       "Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           },
@@ -3714,6 +3714,28 @@
             ],
             "title": "Address"
           },
+          "defaultSendMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultsendmessage"
+          },
+          "defaultTermsAndConditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaulttermsandconditions"
+          },
           "email": {
             "anyOf": [
               {
@@ -3733,6 +3755,17 @@
             "default": false,
             "title": "Haslogo",
             "type": "boolean"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
           },
           "locationWatermark": {
             "anyOf": [
@@ -3812,6 +3845,30 @@
             ],
             "title": "Address"
           },
+          "defaultSendMessage": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultsendmessage"
+          },
+          "defaultTermsAndConditions": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaulttermsandconditions"
+          },
           "email": {
             "anyOf": [
               {
@@ -3830,6 +3887,18 @@
             "minLength": 1,
             "title": "Fullname",
             "type": "string"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
           },
           "locationWatermark": {
             "anyOf": [
@@ -3986,7 +4055,6 @@
         "type": "object"
       },
       "PaginatedResponse_PurchaseOrderSummary_": {
-        "description": "Paginated response wrapper.",
         "properties": {
           "items": {
             "items": {
@@ -3995,41 +4063,13 @@
             "title": "Items",
             "type": "array"
           },
-          "page": {
-            "title": "Page",
-            "type": "integer"
-          },
-          "per_page": {
-            "title": "Per Page",
-            "type": "integer"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          },
-          "total_pages": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Pages"
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
         "required": [
           "items",
-          "page",
-          "per_page"
+          "metadata"
         ],
         "title": "PaginatedResponse[PurchaseOrderSummary]",
         "type": "object"
@@ -4341,10 +4381,14 @@
         "type": "object"
       },
       "PurchaseOrderCalculationResponse": {
-        "description": "Totals preview \u2014 POST /purchase-orders/calculate.",
+        "description": "Totals preview \u2014 POST /purchase-orders/calculate.\n\nNo discount in v1: total = subtotal + tax_total. The field is named\n``total`` (not ``total_due``) because a purchase order is a commitment\nto pay a vendor, not a receivable with a running balance",
         "properties": {
           "line_items": {
-            "items": {},
+            "description": "Line items with calculated totals",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
             "title": "Line Items",
             "type": "array"
           },
@@ -4373,7 +4417,26 @@
         "type": "object"
       },
       "PurchaseOrderCreate": {
-        "description": "Payload for creating a new purchase order.",
+        "description": "Payload for creating a new purchase order (always starts as DRAFT).\n\nMirrors ExpenseCreate adapted to the PO domain: ``order_date`` replaces\n``expense_date`` and ``delivery_date`` is optional (and, when set, must be\non or after ``order_date`` \u2014 also DB-enforced via a CHECK constraint).",
+        "example": {
+          "complianceRef": "LPO-2026-0042",
+          "currency": "KES",
+          "deliveryDate": "2026-06-30",
+          "isRecurring": false,
+          "lineItems": [
+            {
+              "description": "Box of 500 grade-8.8 bolts",
+              "itemName": "Steel bolts M8",
+              "quantity": 10,
+              "taxType": "vat_16",
+              "unitPrice": 1200.0
+            }
+          ],
+          "notes": "Deliver to the Upper Hill warehouse.",
+          "orderDate": "2026-06-16",
+          "termsAndConditions": "Net 30. Goods remain returnable for 14 days.",
+          "vendorId": "123e4567-e89b-12d3-a456-426614174000"
+        },
         "properties": {
           "complianceRef": {
             "anyOf": [
@@ -4385,12 +4448,13 @@
                 "type": "null"
               }
             ],
+            "description": "Jurisdiction-aware compliance reference (free text)",
             "title": "Complianceref"
           },
           "currency": {
+            "$ref": "#/components/schemas/Currency",
             "default": "KES",
-            "title": "Currency",
-            "type": "string"
+            "description": "ISO 4217 currency code \u2014 locked after first save"
           },
           "deliveryDate": {
             "anyOf": [
@@ -4402,14 +4466,17 @@
                 "type": "null"
               }
             ],
+            "description": "Expected delivery date \u2014 if set must be on or after order_date",
             "title": "Deliverydate"
           },
           "isRecurring": {
             "default": false,
+            "description": "Recurring-PO flag \u2014 informational only in v1",
             "title": "Isrecurring",
             "type": "boolean"
           },
           "lineItems": {
+            "description": "At least one line item required",
             "items": {
               "$ref": "#/components/schemas/PurchaseOrderLineItemCreate"
             },
@@ -4427,9 +4494,11 @@
                 "type": "null"
               }
             ],
+            "description": "Vendor-facing or internal notes",
             "title": "Notes"
           },
           "orderDate": {
+            "description": "Date the purchase order was raised",
             "format": "date",
             "title": "Orderdate",
             "type": "string"
@@ -4444,9 +4513,11 @@
                 "type": "null"
               }
             ],
+            "description": "Terms & conditions \u2014 max 2000 characters",
             "title": "Termsandconditions"
           },
           "vendorId": {
+            "description": "Vendor this purchase order is raised against \u2014 required",
             "format": "uuid",
             "title": "Vendorid",
             "type": "string"
@@ -4460,7 +4531,7 @@
         "type": "object"
       },
       "PurchaseOrderDocumentResponse": {
-        "description": "Document attachment in API responses.\n\n``storage_key`` is intentionally excluded.",
+        "description": "Document attachment in API responses.\n\n``storage_key`` is intentionally excluded \u2014 it is an internal object\npath that must never be sent to clients (security gate F). ``file_size_kb``\nis a model @property surfaced via ``from_attributes`` so the list view can\nshow the size in KB without the frontend re-deriving it.",
         "properties": {
           "file_size_bytes": {
             "title": "File Size Bytes",
@@ -4524,7 +4595,7 @@
         "type": "object"
       },
       "PurchaseOrderDuplicateResponse": {
-        "description": "Response returned after duplicating a purchase order.",
+        "description": "Response returned after duplicating a purchase order (PRD \u00a76.10).\n\nMirrors the Quote duplicate response: returns the original and the new\nDRAFT identifiers plus the new system reference so the frontend can\nredirect straight to the editable copy.",
         "properties": {
           "message": {
             "default": "Purchase order duplicated successfully",
@@ -4555,34 +4626,61 @@
         "type": "object"
       },
       "PurchaseOrderLineItemCreate": {
-        "description": "Payload for a single PO line item.",
+        "description": "Payload for a single PO line item \u2014 used on create and full line-item\nreplace, and as the input to the calculation-preview endpoint.\n\nMirrors ExpenseLineItemCreate field-for-field so totals are guaranteed\nidentical across the two vendor-facing document types.",
+        "example": {
+          "description": "Box of 500 grade-8.8 bolts",
+          "itemName": "Steel bolts M8",
+          "quantity": 10,
+          "taxType": "vat_16",
+          "unitPrice": 1200.0
+        },
         "properties": {
           "description": {
+            "description": "Detailed description of the line item",
             "maxLength": 2000,
             "minLength": 1,
             "title": "Description",
             "type": "string"
           },
           "itemName": {
+            "description": "Product or service name",
             "maxLength": 500,
             "minLength": 1,
             "title": "Itemname",
             "type": "string"
           },
           "quantity": {
-            "exclusiveMinimum": 0,
-            "title": "Quantity",
-            "type": "number"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Quantity \u2014 must be greater than zero",
+            "title": "Quantity"
           },
           "taxType": {
+            "$ref": "#/components/schemas/TaxType",
             "default": "vat_16",
-            "title": "Taxtype",
-            "type": "string"
+            "description": "Tax type applied to this line item"
           },
           "unitPrice": {
-            "minimum": 0,
-            "title": "Unitprice",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Price per unit \u2014 zero allowed for zero-rated items",
+            "title": "Unitprice"
           }
         },
         "required": [
@@ -4595,7 +4693,7 @@
         "type": "object"
       },
       "PurchaseOrderLineItemResponse": {
-        "description": "Line item in API responses.",
+        "description": "Line item in API responses \u2014 mirrors ExpenseLineItemResponse.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -4666,12 +4764,28 @@
         "type": "object"
       },
       "PurchaseOrderPaymentCreate": {
-        "description": "Payload for recording a payment against a purchase order.",
+        "description": "Payload for recording a payment against a purchase order.\n\nMirrors ExpensePaymentCreate: no payment_method field. amount must be\n> 0 and is additionally validated server-side against the current\nbalance_due (overpayment is rejected with a 400).\n\n``document_id`` optionally links a proof-of-payment document that was\npreviously uploaded to this purchase order (source: payment_modal).\nThe service validates that the document exists and belongs to the same\nPO; an invalid or foreign document_id is rejected with a 404/400.",
+        "example": {
+          "amount": 5000.0,
+          "documentId": "123e4567-e89b-12d3-a456-426614174000",
+          "notes": "Paid via bank transfer",
+          "paymentDate": "2026-06-18",
+          "reference": "TXN-9981234"
+        },
         "properties": {
           "amount": {
-            "exclusiveMinimum": 0,
-            "title": "Amount",
-            "type": "number"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Payment amount \u2014 must be > 0 and <= current balance_due",
+            "title": "Amount"
           },
           "documentId": {
             "anyOf": [
@@ -4696,9 +4810,11 @@
                 "type": "null"
               }
             ],
+            "description": "Internal notes for this payment entry",
             "title": "Notes"
           },
           "paymentDate": {
+            "description": "Date the payment was made \u2014 required",
             "format": "date",
             "title": "Paymentdate",
             "type": "string"
@@ -4713,6 +4829,7 @@
                 "type": "null"
               }
             ],
+            "description": "Transaction ID, cheque number, or remittance reference",
             "title": "Reference"
           }
         },
@@ -4809,7 +4926,7 @@
         "type": "object"
       },
       "PurchaseOrderResponse": {
-        "description": "Full purchase-order detail \u2014 returned by create, update, and get.",
+        "description": "Full purchase-order detail \u2014 returned by create, update, and get.\n\nMirrors ExpenseResponse adapted to the PO domain. ``storage_key`` is\nnever present on any nested schema, per the security gate.",
         "properties": {
           "amount_paid": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -4896,7 +5013,7 @@
             "type": "boolean"
           },
           "is_paid": {
-            "description": "Fully settled by status or a cleared balance.",
+            "description": "Fully settled by explicit PAID status or a cleared balance on a SENT PO.\n\nA DRAFT PO with a zero total must NOT be considered paid \u2014 it has\nnever been sent and no payment has been recorded against it. Only\na PO that has been explicitly transitioned to PAID, or a SENT PO\nwhose balance_due has been reduced to zero by recorded payments,\nis treated as settled.",
             "readOnly": true,
             "title": "Is Paid",
             "type": "boolean"
@@ -5032,16 +5149,25 @@
           "created_at",
           "updated_at",
           "version",
-          "vendor"
+          "vendor",
+          "is_editable",
+          "is_paid"
         ],
         "title": "PurchaseOrderResponse",
         "type": "object"
       },
       "PurchaseOrderSendRequest": {
-        "description": "Payload for sending a purchase order to its vendor by email.",
+        "description": "Payload for sending a purchase order to its vendor by email (PRD \u00a76.6).\n\nAll fields are optional: ``toEmail`` defaults to the vendor's email\n(resolved server-side), and ``subject`` / ``body`` fall back to the\nservice-generated vendor-facing template when omitted.",
+        "example": {
+          "attachPdf": true,
+          "body": "Please find attached our purchase order.",
+          "subject": "Purchase Order PO-000042 from Priori Technologies",
+          "toEmail": "vendor@example.com"
+        },
         "properties": {
           "attachPdf": {
             "default": true,
+            "description": "Whether to attach the purchase-order PDF",
             "title": "Attachpdf",
             "type": "boolean"
           },
@@ -5055,6 +5181,7 @@
                 "type": "null"
               }
             ],
+            "description": "Email body (uses the template if not provided)",
             "title": "Body"
           },
           "subject": {
@@ -5067,6 +5194,7 @@
                 "type": "null"
               }
             ],
+            "description": "Email subject (auto-generated if not provided)",
             "title": "Subject"
           },
           "toEmail": {
@@ -5078,6 +5206,7 @@
                 "type": "null"
               }
             ],
+            "description": "Override recipient email (defaults to the vendor email)",
             "title": "Toemail"
           }
         },
@@ -5116,7 +5245,7 @@
         "type": "object"
       },
       "PurchaseOrderStatusCounts": {
-        "description": "Status counts for the filter-tab bar.",
+        "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nMirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced\nvia its own count and excluded from ``all`` (it is a voided PO).\nPAID is a reachable lifecycle status (SENT -> PAID via record_payment)\nand is included in both ``all`` and its own ``paid`` bucket so the\nfilter-tab bar can surface a \"Paid\" tab without silently under-counting.",
         "properties": {
           "all": {
             "default": 0,
@@ -5153,7 +5282,7 @@
         "type": "object"
       },
       "PurchaseOrderSummary": {
-        "description": "Lightweight row for the paginated list view.",
+        "description": "Lightweight row for the paginated list view (PRD \u00a76.1).\n\nBuilt from a summary-column projection query joined to the vendor name\n\u2014 never a full ORM instance, so the list never loads line items (no\nN+1). Mirrors ExpenseSummary adapted to the PO domain.",
         "properties": {
           "balance_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5252,7 +5381,7 @@
         "type": "object"
       },
       "PurchaseOrderUpdate": {
-        "description": "Payload for updating an existing purchase order.",
+        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT                       -> editable\n    SENT / BILLED / CANCELED    -> BadRequestException (\u00a713 inline banner)",
         "properties": {
           "complianceRef": {
             "anyOf": [
@@ -7525,7 +7654,11 @@
             "enum": [
               "paid",
               "pending",
-              "overdue"
+              "overdue",
+              "draft",
+              "sent",
+              "billed",
+              "canceled"
             ],
             "title": "Status",
             "type": "string"
@@ -7540,7 +7673,8 @@
             "description": "Source record type",
             "enum": [
               "expense",
-              "bill"
+              "bill",
+              "purchase_order"
             ],
             "title": "Transaction Type",
             "type": "string"
@@ -7800,7 +7934,7 @@
         "type": "object"
       },
       "app__modules__purchase_orders__schemas__VendorSummary": {
-        "description": "Vendor fields surfaced on purchase-order responses.",
+        "description": "Vendor fields surfaced on purchase-order responses.\n\nMirrors the Expenses VendorSummary. ``email`` is included because the\nPO Send flow resolves the recipient from the vendor.",
         "properties": {
           "email": {
             "anyOf": [
@@ -12086,27 +12220,34 @@
         "operationId": "list_purchase_orders_api_v1_purchase_orders_get",
         "parameters": [
           {
+            "description": "Page number (1-indexed)",
             "in": "query",
             "name": "page",
             "required": false,
             "schema": {
               "default": 1,
+              "description": "Page number (1-indexed)",
               "minimum": 1,
+              "title": "Page",
               "type": "integer"
             }
           },
           {
+            "description": "Items per page",
             "in": "query",
             "name": "per_page",
             "required": false,
             "schema": {
               "default": 10,
+              "description": "Items per page",
               "maximum": 100,
               "minimum": 1,
+              "title": "Per Page",
               "type": "integer"
             }
           },
           {
+            "description": "draft | sent | billed | canceled",
             "in": "query",
             "name": "status",
             "required": false,
@@ -12118,10 +12259,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "draft | sent | billed | canceled",
+              "title": "Status"
             }
           },
           {
+            "description": "Filter by vendor ID",
             "in": "query",
             "name": "vendorId",
             "required": false,
@@ -12134,10 +12278,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Filter by vendor ID",
+              "title": "Vendorid"
             }
           },
           {
+            "description": "order_date >= this value",
             "in": "query",
             "name": "dateFrom",
             "required": false,
@@ -12150,10 +12297,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "order_date >= this value",
+              "title": "Datefrom"
             }
           },
           {
+            "description": "order_date <= this value",
             "in": "query",
             "name": "dateTo",
             "required": false,
@@ -12166,10 +12316,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "order_date <= this value",
+              "title": "Dateto"
             }
           },
           {
+            "description": "delivery_date >= this value",
             "in": "query",
             "name": "deliveryDateFrom",
             "required": false,
@@ -12182,10 +12335,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "delivery_date >= this value",
+              "title": "Deliverydatefrom"
             }
           },
           {
+            "description": "delivery_date <= this value",
             "in": "query",
             "name": "deliveryDateTo",
             "required": false,
@@ -12198,10 +12354,13 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "delivery_date <= this value",
+              "title": "Deliverydateto"
             }
           },
           {
+            "description": "Search PO number, reference, or vendor name",
             "in": "query",
             "name": "search",
             "required": false,
@@ -12213,15 +12372,20 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Search PO number, reference, or vendor name",
+              "title": "Search"
             }
           },
           {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
             "in": "query",
             "name": "withTotal",
             "required": false,
             "schema": {
               "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
               "type": "boolean"
             }
           }
@@ -12259,7 +12423,7 @@
         ]
       },
       "post": {
-        "description": "Create a new purchase order raised against a vendor.",
+        "description": "Create a new purchase order raised against a vendor. Calculates subtotal, tax_total and total from the line items. Initial status is always DRAFT. No discount in v1.",
         "operationId": "create_purchase_order_api_v1_purchase_orders_post",
         "requestBody": {
           "content": {
@@ -12315,7 +12479,7 @@
     },
     "/api/v1/purchase-orders/calculate": {
       "post": {
-        "description": "Calculate subtotal, tax_total and total from line items without persisting.",
+        "description": "Calculate subtotal, tax_total and total from line items without persisting. Used for real-time frontend recalculation. No discount in v1.",
         "operationId": "calculate_purchase_order_totals_api_v1_purchase_orders_calculate_post",
         "requestBody": {
           "content": {
@@ -12324,6 +12488,7 @@
                 "items": {
                   "$ref": "#/components/schemas/PurchaseOrderLineItemCreate"
                 },
+                "title": "Line Items",
                 "type": "array"
               }
             }
@@ -12410,7 +12575,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Status"
             }
           },
           {
@@ -12426,7 +12592,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Vendorid"
             }
           },
           {
@@ -12442,7 +12609,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Datefrom"
             }
           },
           {
@@ -12458,7 +12626,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Dateto"
             }
           },
           {
@@ -12474,7 +12643,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Deliverydatefrom"
             }
           },
           {
@@ -12490,7 +12660,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Deliverydateto"
             }
           },
           {
@@ -12505,15 +12676,19 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "title": "Search"
             }
           },
           {
+            "description": "Include line items in a separate sheet",
             "in": "query",
             "name": "includeLineItems",
             "required": false,
             "schema": {
               "default": false,
+              "description": "Include line items in a separate sheet",
+              "title": "Includelineitems",
               "type": "boolean"
             }
           }
@@ -12521,9 +12696,22 @@
         "responses": {
           "200": {
             "content": {
+              "application/json": {
+                "schema": {}
+              },
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             },
             "description": "Excel file"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -12539,7 +12727,7 @@
     },
     "/api/v1/purchase-orders/number/{po_number}": {
       "get": {
-        "description": "Retrieve a purchase order by system number.",
+        "description": "Retrieve a purchase order by system number (e.g. PO-20260616-001).",
         "operationId": "get_purchase_order_by_number_api_v1_purchase_orders_number__po_number__get",
         "parameters": [
           {
@@ -12547,6 +12735,7 @@
             "name": "po_number",
             "required": true,
             "schema": {
+              "title": "Po Number",
               "type": "string"
             }
           }
@@ -12589,7 +12778,7 @@
     },
     "/api/v1/purchase-orders/{po_id}": {
       "delete": {
-        "description": "Delete a purchase order. Permitted only for DRAFT purchase orders.",
+        "description": "Delete a purchase order. Permitted only for DRAFT purchase orders; a SENT or PAID purchase order is a permanent record and cannot be deleted. Line items are removed with it. A before-image audit row is written atomically with the delete. The X-Delete-Type response header reports 'hard'.",
         "operationId": "delete_purchase_order_api_v1_purchase_orders__po_id__delete",
         "parameters": [
           {
@@ -12598,6 +12787,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -12646,6 +12836,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -12686,7 +12877,7 @@
         ]
       },
       "put": {
-        "description": "Update a purchase order. Only DRAFT purchase orders are editable.",
+        "description": "Update a purchase order. Only DRAFT purchase orders are editable; SENT / BILLED / CANCELED are read-only. currency is locked after the first save. Supplying lineItems replaces the full set. Pass expectedVersion (from your last GET) for optimistic-lock protection.",
         "operationId": "update_purchase_order_api_v1_purchase_orders__po_id__put",
         "parameters": [
           {
@@ -12695,10 +12886,12 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           },
           {
+            "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
             "in": "query",
             "name": "expectedVersion",
             "required": false,
@@ -12710,7 +12903,9 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
+              "title": "Expectedversion"
             }
           }
         ],
@@ -12777,6 +12972,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -12789,6 +12985,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PurchaseOrderDocumentResponse"
                   },
+                  "title": "Response List Purchase Order Documents Api V1 Purchase Orders  Po Id  Documents Get",
                   "type": "array"
                 }
               }
@@ -12820,7 +13017,7 @@
         ]
       },
       "post": {
-        "description": "Attach a supporting document to a purchase order.",
+        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form' or 'view'. storage_key is never returned.",
         "operationId": "upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
         "parameters": [
           {
@@ -12829,6 +13026,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -12884,7 +13082,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/documents/{document_id}": {
       "delete": {
-        "description": "Remove a document from a purchase order.",
+        "description": "Remove a document from a purchase order. The storage object is also deleted after the DB record is removed.",
         "operationId": "delete_purchase_order_document_api_v1_purchase_orders__po_id__documents__document_id__delete",
         "parameters": [
           {
@@ -12893,6 +13091,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           },
@@ -12902,6 +13101,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Document Id",
               "type": "string"
             }
           }
@@ -12940,7 +13140,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/documents/{document_id}/download": {
       "get": {
-        "description": "Stream a document attached to a purchase order.",
+        "description": "Stream a document attached to a purchase order. Requires authentication; the document must belong to the given purchase order. The file is served through a path-confined storage handle \u2014 never a raw client-supplied path \u2014 so storage keys cannot be used for arbitrary file reads.",
         "operationId": "download_purchase_order_document_api_v1_purchase_orders__po_id__documents__document_id__download_get",
         "parameters": [
           {
@@ -12949,6 +13149,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           },
@@ -12958,12 +13159,18 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Document Id",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
             "description": "Document file stream"
           },
           "401": {
@@ -12996,7 +13203,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/duplicate": {
       "post": {
-        "description": "Create a copy of a purchase order as a new DRAFT.",
+        "description": "Create a copy of a purchase order as a new DRAFT. Copies line items, currency, notes, Terms & Conditions and the delivery date; order_date is reset to today. The Compliance Ref is cleared and attached documents are not copied. Available at any status.",
         "operationId": "duplicate_purchase_order_api_v1_purchase_orders__po_id__duplicate_post",
         "parameters": [
           {
@@ -13005,6 +13212,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13047,7 +13255,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/mark-as-sent": {
       "post": {
-        "description": "Transition a DRAFT purchase order to SENT WITHOUT dispatching an email.",
+        "description": "Transition a DRAFT purchase order to SENT WITHOUT dispatching an email \u2014 for when it has been sent to the vendor offline. Stamps sent_at and freezes the owner-header snapshot exactly like Send, but queues no email. Only DRAFT purchase orders can be marked sent.",
         "operationId": "mark_purchase_order_as_sent_api_v1_purchase_orders__po_id__mark_as_sent_post",
         "parameters": [
           {
@@ -13056,6 +13264,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13104,7 +13313,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/payments": {
       "post": {
-        "description": "Record an auditable payment against a SENT purchase order.",
+        "description": "Record an auditable payment against a SENT purchase order, reducing its balance_due. When the balance reaches zero the purchase order is settled to PAID. Overpayment is rejected. A DRAFT purchase order must be sent first, and an already-PAID purchase order cannot take further payment. Optionally supply documentId to link a proof-of-payment document previously uploaded to this purchase order; the document must belong to the same PO or a 404 is returned.",
         "operationId": "record_purchase_order_payment_api_v1_purchase_orders__po_id__payments_post",
         "parameters": [
           {
@@ -13113,6 +13322,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13145,7 +13355,7 @@
             "description": "Insufficient role to record payments"
           },
           "404": {
-            "description": "Purchase order not found"
+            "description": "Purchase order or proof-of-payment document not found"
           },
           "422": {
             "content": {
@@ -13171,7 +13381,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/pdf": {
       "get": {
-        "description": "Generate and stream the purchase-order PDF.",
+        "description": "Generate and stream the purchase-order PDF. The document is read-only: no edit controls, action buttons or attachments list. Available at any status. Owner branding comes from the PO's immutable snapshot once sent, else the live profile for a Draft preview.",
         "operationId": "download_purchase_order_pdf_api_v1_purchase_orders__po_id__pdf_get",
         "parameters": [
           {
@@ -13180,6 +13390,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13187,6 +13398,9 @@
         "responses": {
           "200": {
             "content": {
+              "application/json": {
+                "schema": {}
+              },
               "application/pdf": {}
             },
             "description": "PDF file"
@@ -13221,7 +13435,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/pdf/statement": {
       "get": {
-        "description": "Generate and stream the CURRENT purchase-order PDF with balance.",
+        "description": "Generate and stream the CURRENT purchase-order PDF: the same document as /pdf but with Amount Paid and Balance Due rows appended to the summary, reflecting payments recorded so far. Read-only and available at any status; owner branding comes from the PO's immutable snapshot once sent, else the live profile.",
         "operationId": "download_purchase_order_statement_pdf_api_v1_purchase_orders__po_id__pdf_statement_get",
         "parameters": [
           {
@@ -13230,6 +13444,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13237,6 +13452,9 @@
         "responses": {
           "200": {
             "content": {
+              "application/json": {
+                "schema": {}
+              },
               "application/pdf": {}
             },
             "description": "PDF file"
@@ -13271,7 +13489,7 @@
     },
     "/api/v1/purchase-orders/{po_id}/send": {
       "post": {
-        "description": "Send a DRAFT purchase order to its vendor by email.",
+        "description": "Send a DRAFT purchase order to its vendor by email and transition it to SENT. The status change and the queued email are committed atomically (transactional outbox); SES dispatch then runs outside the row lock, and a failed first attempt is retried automatically by the outbox drainer. The recipient defaults to the vendor email and can be overridden in the request.",
         "operationId": "send_purchase_order_api_v1_purchase_orders__po_id__send_post",
         "parameters": [
           {
@@ -13280,6 +13498,7 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "title": "Po Id",
               "type": "string"
             }
           }
@@ -13295,11 +13514,11 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "title": "Body"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
@@ -13314,6 +13533,9 @@
           },
           "400": {
             "description": "Not DRAFT, or the vendor has no email address on record"
+          },
+          "403": {
+            "description": "Insufficient role to send purchase orders"
           },
           "404": {
             "description": "Purchase order not found"
@@ -15884,7 +16106,7 @@
     },
     "/api/v1/vendors/{vendor_id}/transactions": {
       "get": {
-        "description": "Paginated list of all expenses and bills linked to this vendor. Includes computed days_overdue and status_display fields.",
+        "description": "Paginated list of the vendor's transactions \u2014 expenses and purchase orders (and bills once that module lands) \u2014 in one source-tagged list. Each row carries transaction_type ('expense' | 'purchase_order') plus computed days_overdue and status_display fields. Purchase orders are non-payable commitments and report a 0.00 balance.",
         "operationId": "get_vendor_transactions_api_v1_vendors__vendor_id__transactions_get",
         "parameters": [
           {
@@ -15921,7 +16143,7 @@
             }
           },
           {
-            "description": "Filter by transaction status: 'paid' | 'pending' | 'overdue'. ",
+            "description": "Filter by transaction status. Payable: 'paid' | 'pending' | 'overdue'. Purchase order: 'draft' | 'sent' | 'billed' | 'canceled'. Omit for all.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -15934,8 +16156,26 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by transaction status: 'paid' | 'pending' | 'overdue'. ",
+              "description": "Filter by transaction status. Payable: 'paid' | 'pending' | 'overdue'. Purchase order: 'draft' | 'sent' | 'billed' | 'canceled'. Omit for all.",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Filter by source type: 'expense' | 'purchase_order'. Omit for all.",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source type: 'expense' | 'purchase_order'. Omit for all.",
+              "title": "Type"
             }
           }
         ],
