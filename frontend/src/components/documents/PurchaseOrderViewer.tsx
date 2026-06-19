@@ -36,10 +36,12 @@ export interface PurchaseOrderViewerData {
 
 interface PurchaseOrderViewerProps {
   data: PurchaseOrderViewerData;
+  editableOwner?: boolean;
 }
 
 export function PurchaseOrderViewer({
   data,
+  editableOwner = false,
 }: Readonly<PurchaseOrderViewerProps>) {
   // Build VAT label from line items (shared helper used by the other viewers).
   const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
@@ -49,7 +51,7 @@ export function PurchaseOrderViewer({
       {/* Top Section */}
       <div className="p-6">
         {/* Owner identity (logo + company block) - single source of truth. */}
-        <DocumentOwnerHeader />
+        <DocumentOwnerHeader editable={editableOwner} />
       </div>
 
       <div className="p-6">
