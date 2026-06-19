@@ -116,7 +116,7 @@ class DocumentPDFGenerator:
         )
 
     def generate_purchase_order_pdf(
-        self, purchase_order, owner=None, logo_bytes=None
+        self, purchase_order, owner=None, logo_bytes=None, include_balance=False
     ) -> bytes:
         """Return PDF bytes for a purchase-order ORM object.
 
@@ -127,6 +127,11 @@ class DocumentPDFGenerator:
         "Rate" and "Amount" are display labels for unit_price / line_total.
         Excludes any edit controls, action buttons or attachments list.
 
+        ``include_balance`` selects the variant: False renders the ORIGINAL
+        document (TOTAL only, no payments); True renders the CURRENT /
+        statement document, appending Amount Paid + Balance Due rows. The
+        two share the same builder so the layouts can never drift.
+
         ``owner`` is an optional OwnerInfo DTO (the PO's immutable snapshot
         when sent, else the live profile for a Draft preview); ``logo_bytes``
         is the optional header logo binary.
@@ -135,6 +140,7 @@ class DocumentPDFGenerator:
             owner=owner,
             logo_bytes=logo_bytes,
             purchase_order=purchase_order,
+            include_balance=include_balance,
         )
 
     # private implementation
@@ -145,6 +151,7 @@ class DocumentPDFGenerator:
         owner,
         logo_bytes: bytes | None,
         purchase_order,
+        include_balance: bool = False,
     ) -> bytes:
         po = purchase_order
         buf = io.BytesIO()
@@ -274,12 +281,20 @@ class DocumentPDFGenerator:
         elements.append(items_table)
         elements.append(Spacer(1, 6 * mm))
 
-        # summary — Sub Total / VAT / TOTAL (no discount in v1).
+        # summary — Sub Total / VAT / TOTAL (no discount in v1). The current
+        # (statement) variant additionally shows Amount Paid + Balance Due so
+        # the vendor copy reflects payments already applied; the original
+        # document omits them entirely.
         totals_rows = [
             ["Sub Total", f"{po.currency} {po.subtotal:,.2f}"],
             ["VAT", f"{po.currency} {po.tax_total:,.2f}"],
             ["TOTAL", f"{po.currency} {po.total:,.2f}"],
         ]
+        if include_balance:
+            amount_paid = getattr(po, "amount_paid", Decimal("0.00"))
+            balance_due = getattr(po, "balance_due", po.total)
+            totals_rows.append(["Amount Paid", f"{po.currency} {amount_paid:,.2f}"])
+            totals_rows.append(["Balance Due", f"{po.currency} {balance_due:,.2f}"])
         totals_table = Table(totals_rows, colWidths=[40 * mm, 45 * mm], hAlign="RIGHT")
         totals_table.setStyle(
             TableStyle(
