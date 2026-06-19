@@ -305,6 +305,59 @@ export default function PurchaseOrderDetailPage() {
 
     const statusLabel = po.status.charAt(0).toUpperCase() + po.status.slice(1);
 
+    const documents = po.documents ?? [];
+    const hasDocument = (payment: PurchaseOrderPayment) =>
+        Boolean(payment.document_id && documents.some((d) => d.id === payment.document_id));
+
+    // Payments table columns — mirrors the invoices/PO list table format.
+    const paymentColumns = [
+        {
+            key: "number",
+            header: "#.",
+            render: (_payment: PurchaseOrderPayment, index: number) => (
+                <span className="text-content-primary">{index + 1}.</span>
+            ),
+            className: "w-[50px]",
+        },
+        {
+            key: "date",
+            header: "Date",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-content-primary">
+                    {payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
+                </span>
+            ),
+        },
+        {
+            key: "amount",
+            header: "Amount",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500">{formatCurrency(Number(payment.amount), currency)}</span>
+            ),
+        },
+        {
+            key: "reference",
+            header: "Reference",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500 truncate" title={payment.reference ?? undefined}>
+                    {payment.reference ?? "-"}
+                </span>
+            ),
+        },
+        {
+            key: "document",
+            header: "Document",
+            render: (payment: PurchaseOrderPayment) =>
+                hasDocument(payment) ? (
+                    <span className="inline-flex items-center gap-1 text-priori-purple">
+                        <Paperclip size={16} /> Attached
+                    </span>
+                ) : (
+                    <span className="text-gray-400">—</span>
+                ),
+        },
+    ];
+
     return (
         <div className="flex flex-col gap-6 font-sans pb-10">
             {/* Header: back + tabs + document actions */}
