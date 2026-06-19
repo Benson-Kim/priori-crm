@@ -340,6 +340,34 @@ def record_purchase_order_payment(
 
 
 @router.post(
+    "/{po_id}/mark-as-sent",
+    response_model=PurchaseOrderResponse,
+    summary="Mark a purchase order as sent (no email)",
+    description=(
+        "Transition a DRAFT purchase order to SENT WITHOUT dispatching an "
+        "email — for when it has been sent to the vendor offline. Stamps "
+        "sent_at and freezes the owner-header snapshot exactly like Send, but "
+        "queues no email. Only DRAFT purchase orders can be marked sent."
+    ),
+    responses={
+        200: {"description": "Purchase order marked as sent"},
+        400: {"description": "Not DRAFT"},
+        403: {"description": "Insufficient role to mark purchase orders sent"},
+        404: {"description": "Purchase order not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def mark_purchase_order_as_sent(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderResponse:
+    service.mark_as_sent(po_id)
+    # Re-read with vendor + line items eager-loaded for the response.
+    purchase_order = service.get_by_id(po_id)
+    return PurchaseOrderResponse.model_validate(purchase_order)
+
+
+@router.post(
     "/{po_id}/duplicate",
     response_model=PurchaseOrderDuplicateResponse,
     status_code=status.HTTP_201_CREATED,
