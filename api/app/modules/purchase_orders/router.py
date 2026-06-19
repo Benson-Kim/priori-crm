@@ -37,6 +37,8 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderDuplicateResponse,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
+    PurchaseOrderPaymentResponse,
     PurchaseOrderResponse,
     PurchaseOrderSendRequest,
     PurchaseOrderSendResponse,
@@ -44,7 +46,6 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
 )
-from app.modules.purchase_orders.service import PurchaseOrderService
 
 logger = logging.getLogger(__name__)
 
@@ -268,8 +269,9 @@ async def export_purchase_orders_to_excel(
 )
 def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
+    service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderCalculationResponse:
-    return PurchaseOrderService.calculate_totals(line_items)
+    return service.calculate_totals(line_items)
 
 
 @router.post(
@@ -289,8 +291,10 @@ def calculate_purchase_order_totals(
         400: {
             "description": ("Not DRAFT, or the vendor has no email address on record")
         },
+        403: {"description": "Insufficient role to send purchase orders"},
         404: {"description": "Purchase order not found"},
     },
+    dependencies=[Depends(require_privileged())],
 )
 def send_purchase_order(
     po_id: UUID,
@@ -306,6 +310,65 @@ def send_purchase_order(
         attach_pdf=request_data.attach_pdf,
     )
     return PurchaseOrderSendResponse(**result)
+
+
+@router.post(
+    "/{po_id}/payments",
+    response_model=PurchaseOrderPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a payment against a purchase order",
+    description=(
+        "Record an auditable payment against a SENT purchase order, reducing "
+        "its balance_due. When the balance reaches zero the purchase order is "
+        "settled to PAID. Overpayment is rejected. A DRAFT purchase order must "
+        "be sent first, and an already-PAID purchase order cannot take further "
+        "payment. Optionally supply documentId to link a proof-of-payment "
+        "document previously uploaded to this purchase order; the document "
+        "must belong to the same PO or a 404 is returned."
+    ),
+    responses={
+        201: {"description": "Payment recorded"},
+        400: {"description": "Not SENT, already paid, or overpayment"},
+        403: {"description": "Insufficient role to record payments"},
+        404: {"description": "Purchase order or proof-of-payment document not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def record_purchase_order_payment(
+    po_id: UUID,
+    body: PurchaseOrderPaymentCreate,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderPaymentResponse:
+    payment = service.record_payment(po_id, body, user_id=service.actor_id)
+    return PurchaseOrderPaymentResponse.model_validate(payment)
+
+
+@router.post(
+    "/{po_id}/mark-as-sent",
+    response_model=PurchaseOrderResponse,
+    summary="Mark a purchase order as sent (no email)",
+    description=(
+        "Transition a DRAFT purchase order to SENT WITHOUT dispatching an "
+        "email — for when it has been sent to the vendor offline. Stamps "
+        "sent_at and freezes the owner-header snapshot exactly like Send, but "
+        "queues no email. Only DRAFT purchase orders can be marked sent."
+    ),
+    responses={
+        200: {"description": "Purchase order marked as sent"},
+        400: {"description": "Not DRAFT"},
+        403: {"description": "Insufficient role to mark purchase orders sent"},
+        404: {"description": "Purchase order not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def mark_purchase_order_as_sent(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderResponse:
+    service.mark_as_sent(po_id)
+    # Re-read with vendor + line items eager-loaded for the response.
+    purchase_order = service.get_by_id(po_id)
+    return PurchaseOrderResponse.model_validate(purchase_order)
 
 
 @router.post(
@@ -419,33 +482,11 @@ def update_purchase_order(
     return PurchaseOrderResponse.model_validate(purchase_order)
 
 
-@router.post(
-    "/{po_id}/cancel",
-    response_model=PurchaseOrderResponse,
-    summary="Cancel purchase order",
-    description=(
-        "Cancel a purchase order (DRAFT or SENT only) -> CANCELED. The "
-        "record is preserved but becomes terminal: it can no longer be "
-        "edited, sent or converted. A BILLED or already-CANCELED purchase "
-        "order cannot be cancelled. A before/after-image audit row is "
-        "written atomically with the transition."
-    ),
-    responses={
-        200: {"description": "Purchase order canceled"},
-        400: {"description": "Invalid transition (BILLED or already CANCELED)"},
-        403: {"description": "Insufficient role to cancel purchase orders"},
-        404: {"description": "Purchase order not found"},
-    },
-    dependencies=[Depends(require_privileged())],
-)
-def cancel_purchase_order(
-    po_id: UUID,
-    service: PurchaseOrderServiceDep,
-) -> PurchaseOrderResponse:
-    service.cancel(po_id)
-    # Re-read with vendor + line items eager-loaded for the response.
-    purchase_order = service.get_by_id(po_id)
-    return PurchaseOrderResponse.model_validate(purchase_order)
+# NOTE: Cancel is DISABLED in v1. The CANCELED status and
+# PurchaseOrderService.cancel() are retained (dormant) but no route is
+# exposed, so a PO can never be canceled through the API. Re-enabling is a
+# code-only change: restore this endpoint and the SENT->CANCELED edge in
+# PurchaseOrderService.ALLOWED_TRANSITIONS.
 
 
 @router.delete(
@@ -453,10 +494,10 @@ def cancel_purchase_order(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete purchase order",
     description=(
-        "Delete a purchase order. Permitted only for DRAFT or CANCELED "
-        "purchase orders; a SENT or BILLED purchase order must be canceled "
-        "first. Line items are removed with it. A before-image audit row is "
-        "written atomically with the delete. The X-Delete-Type response "
+        "Delete a purchase order. Permitted only for DRAFT purchase orders; "
+        "a SENT or PAID purchase order is a permanent record and cannot be "
+        "deleted. Line items are removed with it. A before-image audit row "
+        "is written atomically with the delete. The X-Delete-Type response "
         "header reports 'hard'."
     ),
     responses={
@@ -515,8 +556,9 @@ async def download_purchase_order_pdf(
 
     # Cap concurrent PDF builds and run the blocking render in a worker
     # thread. Loads the PO once (no second query just for the filename).
+    # This is the ORIGINAL document: full amount, no payments shown.
     pdf_data, purchase_order = await run_export(
-        service.generate_pdf_for_download, po_id
+        service.generate_pdf_for_download, po_id, False
     )
 
     emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
@@ -525,6 +567,51 @@ async def download_purchase_order_pdf(
     filename = (
         f"PurchaseOrder_{purchase_order.po_reference}_"
         f"{_safe_filename_token(vendor_name)}.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get(
+    "/{po_id}/pdf/statement",
+    summary="Download the current (balance-aware) purchase-order PDF",
+    description=(
+        "Generate and stream the CURRENT purchase-order PDF: the same "
+        "document as /pdf but with Amount Paid and Balance Due rows appended "
+        "to the summary, reflecting payments recorded so far. Read-only and "
+        "available at any status; owner branding comes from the PO's "
+        "immutable snapshot once sent, else the live profile."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Purchase order not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_purchase_order_statement_pdf(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.export_limiter import run_export
+
+    # CURRENT document: payments applied + running balance.
+    pdf_data, purchase_order = await run_export(
+        service.generate_pdf_for_download, po_id, True
+    )
+
+    emit_event(PurchaseOrderEvent.PO_PDF_DOWNLOADED, {"po_id": str(po_id)})
+
+    vendor_name = getattr(purchase_order.vendor, "vendor_name", "vendor")
+    filename = (
+        f"PurchaseOrder_{purchase_order.po_reference}_"
+        f"{_safe_filename_token(vendor_name)}_current.pdf"
     )
     return StreamingResponse(
         io.BytesIO(pdf_data),

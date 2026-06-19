@@ -9,7 +9,6 @@ import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
-    cancelPurchaseOrder,
     deletePurchaseOrder,
     duplicatePurchaseOrder,
     exportPurchaseOrdersExcel,
@@ -20,7 +19,7 @@ import {
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { Ban, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -35,6 +34,7 @@ export default function PurchaseOrdersPage() {
         all: 0,
         draft: 0,
         sent: 0,
+        paid: 0,
         billed: 0,
         canceled: 0,
     });
@@ -123,23 +123,6 @@ export default function PurchaseOrdersPage() {
         }
     };
 
-    const handleCancel = (po: PurchaseOrderSummary) => {
-        showConfirm({
-            title: "Cancel purchase order?",
-            description: `Cancel ${po.po_reference}? This voids the purchase order; it cannot be edited or sent afterwards.`,
-            confirmLabel: "Yes, cancel it",
-            variant: "danger",
-            onConfirm: async () => {
-                try {
-                    await cancelPurchaseOrder(po.id);
-                    refreshAll();
-                } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to cancel purchase order");
-                }
-            },
-        });
-    };
-
     const handleDelete = (po: PurchaseOrderSummary) => {
         showConfirm({
             title: "Delete purchase order?",
@@ -207,17 +190,6 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
-        // Cancel applies to DRAFT or SENT; BILLED/CANCELED are terminal.
-        if (po.status === "draft" || po.status === "sent") {
-            actions.push({
-                key: "cancel",
-                label: "Cancel",
-                icon: <Ban size={16} />,
-                danger: true,
-                onClick: () => handleCancel(po),
-            });
-        }
-
         // Delete is permitted only for DRAFT or CANCELED (SENT/BILLED protected).
         if (po.status === "draft" || po.status === "canceled") {
             actions.push({
@@ -236,6 +208,7 @@ export default function PurchaseOrdersPage() {
         { key: "all", label: "All", count: counts.all },
         { key: "draft", label: "Draft", count: counts.draft },
         { key: "sent", label: "Sent", count: counts.sent },
+        { key: "paid", label: "Paid", count: counts.paid },
         { key: "billed", label: "Billed", count: counts.billed },
         { key: "canceled", label: "Canceled", count: counts.canceled },
     ];
