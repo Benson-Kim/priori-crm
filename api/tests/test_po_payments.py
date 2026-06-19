@@ -25,7 +25,6 @@ import pytest
 
 from app.common.exceptions import BadRequestException, NotFoundException
 from app.constants.enums import PurchaseOrderStatus
-from app.modules.purchase_orders.models import PurchaseOrderDocument
 from app.modules.purchase_orders.schemas import PurchaseOrderPaymentCreate
 from app.modules.purchase_orders.service import PurchaseOrderService
 
