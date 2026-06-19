@@ -1,4 +1,3 @@
-import { getComplianceRefLabel, getComplianceRefTooltip } from "@/lib/compliance";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -101,20 +100,7 @@ export function PurchaseOrderViewer({
                 {data.deliveryDate ? formatDisplayDate(data.deliveryDate) : "-"}
               </MetaField>
 
-              <MetaField label="Currency">{data.currency ?? "-"}</MetaField>
 
-              {data.complianceRef && (
-                <MetaField
-                  label={getComplianceRefLabel()}
-                  tooltip={getComplianceRefTooltip()}
-                >
-                  {data.complianceRef}
-                </MetaField>
-              )}
-
-              <MetaField label="Recurring">
-                {data.isRecurring ? "Yes" : "No"}
-              </MetaField>
             </div>
           </div>
         </div>
