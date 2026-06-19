@@ -2,13 +2,13 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import {
   getComplianceRefLabel,
   getComplianceRefTooltip,
   resolveDefaultTerms,
   resolveOrgJurisdiction,
 } from "@/lib/compliance";
-import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
@@ -449,44 +449,42 @@ export function PurchaseOrderEditor({
         </div>
 
         {/* Notes & Terms */}
-        <div className="p-6 flex flex-col gap-6">
-          <div>
-            <label
-              htmlFor="notes-input"
-              className="block text-[16px] font-bold text-gray-800 mb-3"
-            >
-              Notes
-            </label>
-            <textarea
-              id="notes-input"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes here"
-              rows={2}
-              disabled={restrictedMode}
-              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="terms-input"
-              className="block text-[16px] font-bold text-gray-800 mb-3"
-            >
-              Terms &amp; Conditions
-            </label>
-            <textarea
-              id="terms-input"
-              value={termsAndConditions}
-              onChange={(e) => setTermsAndConditions(e.target.value)}
-              placeholder="Add terms & conditions here"
-              rows={2}
-              maxLength={2000}
-              disabled={restrictedMode}
-              className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
-            />
-          </div>
+        <div className="px-8 py-6">
+          <label
+            htmlFor="notes-input"
+            className="block text-[16px] font-bold text-gray-800 mb-3"
+          >
+            Notes
+          </label>
+          <textarea
+            id="notes-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add notes here"
+            rows={2}
+            disabled={restrictedMode}
+            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
+          />
         </div>
+        <div className="px-8 pb-6">
+          <label
+            htmlFor="terms-input"
+            className="block text-[16px] font-bold text-gray-800 mb-3"
+          >
+            Terms & Conditions
+          </label>
+          <textarea
+            id="terms-input"
+            value={termsAndConditions}
+            onChange={(e) => setTermsAndConditions(e.target.value)}
+            placeholder="Add terms & conditions here"
+            rows={2}
+            maxLength={2000}
+            disabled={restrictedMode}
+            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
+          />
+        </div>
+
       </div>
 
       {!restrictedMode && (
