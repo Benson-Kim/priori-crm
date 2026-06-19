@@ -5,6 +5,7 @@ import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
+import { recordPurchaseOrderPayment, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
 import { CreditCard } from "lucide-react";
 import { startTransition, useEffect, useState } from "react";
 
@@ -12,13 +13,19 @@ interface RecordPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     entityId: string;
-    entityType: "invoice" | "expense";
+    entityType: "invoice" | "expense" | "purchaseOrder";
     balanceDue: number;
     currency: string;
     prefillAmount?: number;
     reference?: string; // e.g. Invoice Ref or Expense Ref for display
     onSuccess: () => void;
 }
+
+const ENTITY_TYPE_LABELS: Record<RecordPaymentModalProps["entityType"], string> = {
+    invoice: "Invoice",
+    expense: "Expense",
+    purchaseOrder: "Purchase Order",
+};
 
 const PAYMENT_METHODS = [
     { value: "cash", label: "Cash" },
@@ -82,6 +89,14 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     notes: notes || undefined,
                 };
                 await recordExpensePayment(entityId, payload);
+            } else if (entityType === "purchaseOrder") {
+                const payload: PurchaseOrderPaymentPayload = {
+                    amount: parsedAmount,
+                    paymentDate,
+                    reference: reference || undefined,
+                    notes: notes || undefined,
+                };
+                await recordPurchaseOrderPayment(entityId, payload);
             }
             console.log(`[RecordPayment] Success for ${entityType}`);
             onSuccess();
@@ -106,7 +121,7 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
         >
             <div className="space-y-4">
                 <div className="flex justify-between text-sm p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 capitalize">{entityType}: {displayRef || entityId.slice(0, 8)}</span>
+                    <span className="text-gray-500">{ENTITY_TYPE_LABELS[entityType]}: {displayRef || entityId.slice(0, 8)}</span>
                     <span className="font-medium text-gray-800">Balance: {formatCurrency(balanceDue, currency)}</span>
                 </div>
 
@@ -136,8 +151,9 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     />
                 </div>
 
-                {/* The expense payment API has no payment_method field, so the
-                    selection would be silently dropped — only show it for invoices. */}
+                {/* Only the invoice payment API carries a payment_method field; the
+                    expense and purchase-order payment APIs do not, so the selection
+                    would be silently dropped — only show it for invoices. */}
                 {entityType === "invoice" && (
                     <div>
                         <Label htmlFor="payment-method">Payment Method</Label>

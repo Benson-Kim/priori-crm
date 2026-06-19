@@ -36,6 +36,7 @@ export type PurchaseOrderCalculationResponse =
 export type PurchaseOrderDuplicateResponse =
   Schema<"PurchaseOrderDuplicateResponse">;
 export type PurchaseOrderSendResponse = Schema<"PurchaseOrderSendResponse">;
+export type PurchaseOrderPayment = Schema<"PurchaseOrderPaymentResponse">;
 
 // Payloads (hand-written camelCase transport shape).
 
@@ -83,6 +84,13 @@ export interface PurchaseOrderSendPayload {
   subject?: string | null;
   body?: string | null;
   attachPdf?: boolean;
+}
+
+export interface PurchaseOrderPaymentPayload {
+  amount: number;
+  paymentDate: string;
+  reference?: string | null;
+  notes?: string | null;
 }
 
 export interface PurchaseOrderListParams {
@@ -164,14 +172,42 @@ export function duplicatePurchaseOrder(id: string) {
   );
 }
 
-/** Cancel a purchase order (DRAFT or SENT only) -> CANCELED. */
-export function cancelPurchaseOrder(id: string) {
-  return apiPost<PurchaseOrderResponse>(`purchase-orders/${id}/cancel`, {});
+/**
+ * Mark a DRAFT purchase order as SENT WITHOUT sending an email (PO-20).
+ * For when the PO was sent to the vendor offline.
+ */
+export function markAsSentPurchaseOrder(id: string) {
+  return apiPost<PurchaseOrderResponse>(
+    `purchase-orders/${id}/mark-as-sent`,
+    {}
+  );
 }
 
-/** Download the purchase-order PDF as a Blob (caller saves with `saveBlob`). */
+/**
+ * Record a payment against a SENT purchase order (PO-19). When the balance
+ * clears, the PO is settled to PAID server-side.
+ */
+export function recordPurchaseOrderPayment(
+  id: string,
+  data: PurchaseOrderPaymentPayload
+) {
+  return apiPost<PurchaseOrderPayment>(`purchase-orders/${id}/payments`, data);
+}
+
+/**
+ * Download the ORIGINAL purchase-order PDF (full amount, no payments) as a
+ * Blob (caller saves with `saveBlob`).
+ */
 export function downloadPurchaseOrderPdf(id: string): Promise<Blob> {
   return apiDownload(`purchase-orders/${id}/pdf`);
+}
+
+/**
+ * Download the CURRENT (balance-aware) purchase-order PDF: the same document
+ * with Amount Paid + Balance Due rows reflecting payments recorded so far.
+ */
+export function downloadPurchaseOrderStatementPdf(id: string): Promise<Blob> {
+  return apiDownload(`purchase-orders/${id}/pdf/statement`);
 }
 
 export async function uploadPurchaseOrderDocument(
