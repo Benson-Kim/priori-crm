@@ -1,12 +1,13 @@
 import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer";
 import { useHeaderOverride } from "@/components/layout/header-context";
+import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Divider } from "@/components/ui/Divider";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
@@ -34,6 +35,7 @@ import {
     CreditCard,
     Download,
     FileText,
+    Paperclip,
     PaperclipIcon,
     Pencil,
     Plus,
@@ -64,6 +66,8 @@ export default function PurchaseOrderDetailPage() {
     const [isDownloadingOriginal, setIsDownloadingOriginal] = useState(false);
     const [isDownloadingCurrent, setIsDownloadingCurrent] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // Selected payment row — opens the view/update (attach document) modal.
+    const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
 
     useHeaderOverride(po?.po_reference, "");
 
