@@ -561,6 +561,58 @@ Best regards,
 {settings.APP_NAME}
 """
 
+    def mark_as_sent(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Mark a DRAFT purchase order as SENT WITHOUT dispatching an email.
+
+        For when the owner has sent the PO to the vendor offline (printed /
+        handed over) and just needs the record to reflect SENT. Mirrors the
+        locked phase of Send (validate Draft, DRAFT->SENT via the shared
+        state machine, stamp sent_at, capture the owner snapshot) but creates
+        NO outbox row and sends NO email.
+
+        Locked load: re-reads the row FOR UPDATE via the inherited
+        _get_locked so this serializes with Send / record_payment and the
+        Draft gate cannot act on a stale status (race-condition contract).
+        Only the in-memory transition + flush happen under the lock — no I/O.
+        The marked_sent audit row is written atomically with the transition.
+        """
+        from datetime import UTC, datetime
+
+        purchase_order = self._get_locked(po_id)
+
+        # Reuse the Send guard: Draft-only, else a typed 400.
+        self._validate_sendable(purchase_order)
+
+        previous_status = purchase_order.status
+        self._transition(purchase_order, PurchaseOrderStatus.SENT)
+        purchase_order.sent_at = datetime.now(UTC)
+        # Freeze the owner header exactly as Send does (idempotent if already
+        # captured), so a later printed/exported PO is never re-branded.
+        self._capture_owner_snapshot(purchase_order)
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="marked_sent",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(PurchaseOrderStatus.SENT)},
+        )
+
+        logger.info(
+            "Marked purchase order as sent (no email): %s",
+            purchase_order.po_reference,
+            extra={"po_id": str(purchase_order.id)},
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_MARKED_SENT,
+            {"po_id": str(purchase_order.id)},
+        )
+        return purchase_order
+
     def send_purchase_order(
         self,
         po_id: uuid.UUID,

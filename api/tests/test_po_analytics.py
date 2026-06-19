@@ -67,8 +67,8 @@ def _only(events, name):
 
 class TestEventCatalogue:
     def test_all_events_defined(self):
-        """The PRD §17 catalogue plus PO_PAYMENT_RECORDED — exactly 15 events."""
-        assert len(list(PurchaseOrderEvent)) == 15
+        """The PRD §17 catalogue plus PO_PAYMENT_RECORDED and PO_MARKED_SENT — 16 events."""
+        assert len(list(PurchaseOrderEvent)) == 16
 
     def test_event_names_are_snake_case_constants(self):
         for ev in PurchaseOrderEvent:
