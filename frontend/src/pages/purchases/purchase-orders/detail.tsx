@@ -596,6 +596,20 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             </div>
 
+            {/* Payment detail modal: view a recorded payment and attach
+                related proof-of-payment document(s). */}
+            <PurchaseOrderPaymentModal
+                isOpen={selectedPayment !== null}
+                onClose={() => setSelectedPayment(null)}
+                poId={po.id}
+                payment={selectedPayment}
+                documents={documents}
+                currency={currency}
+                onUpdated={() => {
+                    fetchPurchaseOrder();
+                }}
+            />
+
             {/* Record payment modal (PO-19): reuses the shared transactional modal. */}
             <RecordPaymentModal
                 isOpen={isPaymentModalOpen}
