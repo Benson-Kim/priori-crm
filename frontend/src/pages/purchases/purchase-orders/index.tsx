@@ -34,6 +34,7 @@ export default function PurchaseOrdersPage() {
         all: 0,
         draft: 0,
         sent: 0,
+        paid: 0,
         billed: 0,
         canceled: 0,
     });
@@ -207,6 +208,7 @@ export default function PurchaseOrdersPage() {
         { key: "all", label: "All", count: counts.all },
         { key: "draft", label: "Draft", count: counts.draft },
         { key: "sent", label: "Sent", count: counts.sent },
+        { key: "paid", label: "Paid", count: counts.paid },
         { key: "billed", label: "Billed", count: counts.billed },
         { key: "canceled", label: "Canceled", count: counts.canceled },
     ];
