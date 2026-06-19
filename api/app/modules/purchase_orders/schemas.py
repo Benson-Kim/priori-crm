@@ -41,6 +41,11 @@ class PurchaseOrderPaymentCreate(BaseModel):
     Mirrors ExpensePaymentCreate: no payment_method field. amount must be
     > 0 and is additionally validated server-side against the current
     balance_due (overpayment is rejected with a 400).
+
+    ``document_id`` optionally links a proof-of-payment document that was
+    previously uploaded to this purchase order (source: payment_modal).
+    The service validates that the document exists and belongs to the same
+    PO; an invalid or foreign document_id is rejected with a 404/400.
     """
 
     amount: Decimal = Field(
@@ -64,6 +69,15 @@ class PurchaseOrderPaymentCreate(BaseModel):
         max_length=2000,
         description="Internal notes for this payment entry",
     )
+    document_id: UUID | None = Field(
+        None,
+        alias="documentId",
+        description=(
+            "Optional proof-of-payment document previously uploaded to this "
+            "purchase order (source: payment_modal). The document must belong "
+            "to the same PO; a foreign or non-existent document_id is rejected."
+        ),
+    )
 
     @field_validator("reference", "notes", mode="before")
     @classmethod
@@ -78,6 +92,7 @@ class PurchaseOrderPaymentCreate(BaseModel):
                 "paymentDate": "2026-06-18",
                 "reference": "TXN-9981234",
                 "notes": "Paid via bank transfer",
+                "documentId": "123e4567-e89b-12d3-a456-426614174000",
             }
         },
     }
@@ -429,8 +444,17 @@ class PurchaseOrderResponse(BaseModel):
     @computed_field
     @property
     def is_paid(self) -> bool:
-        """Fully settled by status or a cleared balance."""
-        return self.status == PurchaseOrderStatus.PAID or self.balance_due <= 0
+        """Fully settled by explicit PAID status or a cleared balance on a SENT PO.
+
+        A DRAFT PO with a zero total must NOT be considered paid — it has
+        never been sent and no payment has been recorded against it. Only
+        a PO that has been explicitly transitioned to PAID, or a SENT PO
+        whose balance_due has been reduced to zero by recorded payments,
+        is treated as settled.
+        """
+        return self.status == PurchaseOrderStatus.PAID or (
+            self.status == PurchaseOrderStatus.SENT and self.balance_due <= 0
+        )
 
     model_config = {"from_attributes": True}
 
@@ -470,11 +494,15 @@ class PurchaseOrderStatusCounts(BaseModel):
 
     Mirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced
     via its own count and excluded from ``all`` (it is a voided PO).
+    PAID is a reachable lifecycle status (SENT -> PAID via record_payment)
+    and is included in both ``all`` and its own ``paid`` bucket so the
+    filter-tab bar can surface a "Paid" tab without silently under-counting.
     """
 
     all: int = 0
     draft: int = 0
     sent: int = 0
+    paid: int = 0  # fully settled POs (included in `all`)
     billed: int = 0
     canceled: int = 0  # voided POs (excluded from `all`)
 

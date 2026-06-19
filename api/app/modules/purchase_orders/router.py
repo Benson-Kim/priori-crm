@@ -322,13 +322,15 @@ def send_purchase_order(
         "its balance_due. When the balance reaches zero the purchase order is "
         "settled to PAID. Overpayment is rejected. A DRAFT purchase order must "
         "be sent first, and an already-PAID purchase order cannot take further "
-        "payment."
+        "payment. Optionally supply documentId to link a proof-of-payment "
+        "document previously uploaded to this purchase order; the document "
+        "must belong to the same PO or a 404 is returned."
     ),
     responses={
         201: {"description": "Payment recorded"},
         400: {"description": "Not SENT, already paid, or overpayment"},
         403: {"description": "Insufficient role to record payments"},
-        404: {"description": "Purchase order not found"},
+        404: {"description": "Purchase order or proof-of-payment document not found"},
     },
     dependencies=[Depends(require_privileged())],
 )

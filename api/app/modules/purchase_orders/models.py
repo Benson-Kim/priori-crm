@@ -323,8 +323,17 @@ class PurchaseOrder(Base):
 
     @property
     def is_paid(self) -> bool:
-        """Fully settled either by status or a cleared balance."""
-        return self.status == PurchaseOrderStatus.PAID or self.balance_due <= 0
+        """Fully settled by explicit PAID status or a cleared balance on a SENT PO.
+
+        A DRAFT PO with a zero total must NOT be considered paid — it has
+        never been sent and no payment has been recorded against it. Only
+        a PO that has been explicitly transitioned to PAID, or a SENT PO
+        whose balance_due has been reduced to zero by recorded payments,
+        is treated as settled.
+        """
+        return self.status == PurchaseOrderStatus.PAID or (
+            self.status == PurchaseOrderStatus.SENT and self.balance_due <= 0
+        )
 
     @property
     def is_editable(self) -> bool:
