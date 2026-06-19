@@ -272,7 +272,7 @@ def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderCalculationResponse:
-    return PurchaseOrderService.calculate_totals(line_items)
+    return service.calculate_totals(line_items)
 
 
 @router.post(

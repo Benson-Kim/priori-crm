@@ -21,6 +21,12 @@ interface RecordPaymentModalProps {
     onSuccess: () => void;
 }
 
+const ENTITY_TYPE_LABELS: Record<RecordPaymentModalProps["entityType"], string> = {
+    invoice: "Invoice",
+    expense: "Expense",
+    purchaseOrder: "Purchase Order",
+};
+
 const PAYMENT_METHODS = [
     { value: "cash", label: "Cash" },
     { value: "bank_transfer", label: "Bank Transfer" },
@@ -115,7 +121,7 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
         >
             <div className="space-y-4">
                 <div className="flex justify-between text-sm p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 capitalize">{entityType}: {displayRef || entityId.slice(0, 8)}</span>
+                    <span className="text-gray-500">{ENTITY_TYPE_LABELS[entityType]}: {displayRef || entityId.slice(0, 8)}</span>
                     <span className="font-medium text-gray-800">Balance: {formatCurrency(balanceDue, currency)}</span>
                 </div>
 
