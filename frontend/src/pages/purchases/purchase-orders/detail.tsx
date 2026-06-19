@@ -452,9 +452,11 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             )}
 
-            {/* Detail tab: the existing PO viewer verbatim (no behavioural change). */}
+            {/* Detail tab: the PO viewer, with the owner header editable so the
+                purchase-order owner details can be updated in place. */}
             {activeTab === "detail" && (
                 <PurchaseOrderViewer
+                    editableOwner
                     data={{
                         poReference: po.po_reference,
                         vendorId: po.vendor_id,
