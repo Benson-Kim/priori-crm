@@ -215,7 +215,7 @@ export function downloadPurchaseOrderStatementPdf(id: string): Promise<Blob> {
 export async function uploadPurchaseOrderDocument(
   id: string,
   file: File,
-  source: "form" | "view" = "view"
+  source: "form" | "view" | "payment_modal" = "view"
 ): Promise<PurchaseOrderDocument> {
   const formData = new FormData();
   formData.append("file", file);
