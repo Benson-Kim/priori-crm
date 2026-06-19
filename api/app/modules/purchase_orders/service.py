@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Any, ClassVar
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.common.analytics import (
     PurchaseOrderEvent,
@@ -41,6 +41,7 @@ from app.modules.purchase_orders.models import (
     PurchaseOrder,
     PurchaseOrderDocument,
     PurchaseOrderLineItem,
+    PurchaseOrderPayment,
 )
 from app.modules.purchase_orders.queries import (
     PurchaseOrderExportQuery,
@@ -52,6 +53,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderCreate,
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
     PurchaseOrderStatusCounts,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
@@ -60,18 +62,25 @@ from app.modules.purchase_orders.schemas import (
 logger = logging.getLogger(__name__)
 
 # Eager-load options shared by the single-resource reads so a PO detail
-# never triggers N+1 lazy loads for its vendor / line items.
+# never triggers N+1 lazy loads for its vendor / line items / payments /
+# documents. The vendor is many-to-one (safe to JOIN), but the three
+# one-to-many collections are loaded with selectinload: joined-eager-loading
+# more than one collection on a single query Cartesian-multiplies the rows
+# (and a .first()/.all() then requires .unique()). selectinload issues one
+# constant extra SELECT per collection, so the read stays N+1-free with no
+# row explosion (gate C) and needs no .unique(). Mirrors PurchaseOrderPayment
+# lazy="selectin" on the model.
 PO_EAGER_LOAD_OPTIONS = (
     joinedload(PurchaseOrder.vendor),
-    joinedload(PurchaseOrder.line_items),
-    joinedload(PurchaseOrder.documents),
+    selectinload(PurchaseOrder.line_items),
+    selectinload(PurchaseOrder.payments),
+    selectinload(PurchaseOrder.documents),
 )
 
-# Statuses from which a PO may be deleted. SENT / BILLED are
-# protected: a sent or billed PO must be Canceled or is immutable.
-_DELETABLE_STATUSES = frozenset(
-    {PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED}
-)
+# Statuses from which a PO may be deleted. Only DRAFT is deletable in v1:
+# once a PO is SENT (and thereafter PAID) it is a durable record and cannot
+# be deleted. Cancel is disabled, so there is no soft-void path either.
+_DELETABLE_STATUSES = frozenset({PurchaseOrderStatus.DRAFT})
 
 
 class PurchaseOrderService(BaseDocumentService):
@@ -81,9 +90,12 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle:
-        DRAFT → SENT → BILLED
-        DRAFT | SENT → CANCELED   (terminal)
+    Lifecycle (v1):
+        DRAFT → SENT → PAID
+    PAID is reached by full settlement (see record_payment), not a manual
+    edge. BILLED and CANCELED are DISABLED in v1: they remain valid enum /
+    DB-CHECK values but the state machine exposes no transition into them,
+    so they are currently unreachable (re-enabling is a code-only change).
     """
 
     MAX_RETRIES = 3
@@ -112,16 +124,14 @@ class PurchaseOrderService(BaseDocumentService):
     ALLOWED_TRANSITIONS: ClassVar[
         dict[PurchaseOrderStatus, list[PurchaseOrderStatus]]
     ] = {
-        PurchaseOrderStatus.DRAFT: [
-            PurchaseOrderStatus.SENT,
-            PurchaseOrderStatus.CANCELED,
-        ],
-        PurchaseOrderStatus.SENT: [
-            PurchaseOrderStatus.BILLED,
-            PurchaseOrderStatus.CANCELED,
-        ],
-        PurchaseOrderStatus.BILLED: [],  # terminal
-        PurchaseOrderStatus.CANCELED: [],  # terminal
+        PurchaseOrderStatus.DRAFT: [PurchaseOrderStatus.SENT],
+        # PAID is reached only by full settlement (record_payment, PO-19).
+        PurchaseOrderStatus.SENT: [PurchaseOrderStatus.PAID],
+        PurchaseOrderStatus.PAID: [],  # terminal
+        # BILLED / CANCELED are disabled in v1: retained as values but with
+        # no edge into them, so the state machine can never reach them.
+        PurchaseOrderStatus.BILLED: [],  # disabled (terminal)
+        PurchaseOrderStatus.CANCELED: [],  # disabled (terminal)
     }
 
     # REFERENCE GENERATION
@@ -257,6 +267,8 @@ class PurchaseOrderService(BaseDocumentService):
                 subtotal=subtotal,
                 tax_total=tax_total,
                 total=total,
+                amount_paid=Decimal("0.00"),
+                balance_due=total,
                 compliance_ref=data.compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
@@ -377,6 +389,7 @@ class PurchaseOrderService(BaseDocumentService):
                 PurchaseOrder.status,
                 PurchaseOrder.currency,
                 PurchaseOrder.total,
+                PurchaseOrder.balance_due,
                 PurchaseOrder.is_recurring,
                 PurchaseOrder.converted_bill_id,
                 PurchaseOrder.created_at,
@@ -406,6 +419,7 @@ class PurchaseOrderService(BaseDocumentService):
                     status=row.status,
                     currency=row.currency,
                     total=row.total,
+                    balance_due=row.balance_due,
                     is_recurring=row.is_recurring,
                     converted_bill_id=row.converted_bill_id,
                     created_at=row.created_at,
@@ -553,6 +567,58 @@ Thank you.
 Best regards,
 {settings.APP_NAME}
 """
+
+    def mark_as_sent(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Mark a DRAFT purchase order as SENT WITHOUT dispatching an email.
+
+        For when the owner has sent the PO to the vendor offline (printed /
+        handed over) and just needs the record to reflect SENT. Mirrors the
+        locked phase of Send (validate Draft, DRAFT->SENT via the shared
+        state machine, stamp sent_at, capture the owner snapshot) but creates
+        NO outbox row and sends NO email.
+
+        Locked load: re-reads the row FOR UPDATE via the inherited
+        _get_locked so this serializes with Send / record_payment and the
+        Draft gate cannot act on a stale status (race-condition contract).
+        Only the in-memory transition + flush happen under the lock — no I/O.
+        The marked_sent audit row is written atomically with the transition.
+        """
+        from datetime import UTC, datetime
+
+        purchase_order = self._get_locked(po_id)
+
+        # Reuse the Send guard: Draft-only, else a typed 400.
+        self._validate_sendable(purchase_order)
+
+        previous_status = purchase_order.status
+        self._transition(purchase_order, PurchaseOrderStatus.SENT)
+        purchase_order.sent_at = datetime.now(UTC)
+        # Freeze the owner header exactly as Send does (idempotent if already
+        # captured), so a later printed/exported PO is never re-branded.
+        self._capture_owner_snapshot(purchase_order)
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="marked_sent",
+            before={"status": status_value(previous_status)},
+            after={"status": status_value(PurchaseOrderStatus.SENT)},
+        )
+
+        logger.info(
+            "Marked purchase order as sent (no email): %s",
+            purchase_order.po_reference,
+            extra={"po_id": str(purchase_order.id)},
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_MARKED_SENT,
+            {"po_id": str(purchase_order.id)},
+        )
+        return purchase_order
 
     def send_purchase_order(
         self,
@@ -722,13 +788,29 @@ Best regards,
             line_items_data = self._build_line_items(typed_items)
 
             subtotal, tax_total = self._sum_line_totals(line_items_data)
+            total = subtotal + tax_total
+            balance_due = total - purchase_order.amount_paid
+
+            # Mirror Expenses: the new total can never drop below what has
+            # already been paid against the PO.
+            if balance_due < Decimal("0.00"):
+                raise BadRequestException(
+                    detail=(
+                        f"Cannot reduce the total below the amount already "
+                        f"paid ({purchase_order.currency} "
+                        f"{purchase_order.amount_paid}). Remove or reduce "
+                        "payments first."
+                    ),
+                    field="line_items",
+                )
 
             for item in line_items_data:
                 self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
-            update_data["total"] = subtotal + tax_total
+            update_data["total"] = total
+            update_data["balance_due"] = balance_due
 
         # Apply scalar updates (currency is never present — locked).
         for field, value in update_data.items():
@@ -909,6 +991,161 @@ Best regards,
                     extra={"storage_key": key},
                 )
 
+    # PAYMENT RECORDING
+
+    def _apply_payment(
+        self,
+        purchase_order: PurchaseOrder,
+        amount: Decimal,
+        payment_date,
+        *,
+        reference: str | None = None,
+        notes: str | None = None,
+        document_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderPayment:
+        """Apply a payment to an already-locked PO and settle if covered.
+
+        Single source of truth for record_payment (mirrors
+        ExpenseService._apply_payment): creates the audit-trail
+        PurchaseOrderPayment, advances amount_paid / balance_due, transitions
+        SENT->PAID via the shared state machine when the balance clears, and
+        bumps ``version`` exactly once. The caller must have already loaded
+        ``purchase_order`` FOR UPDATE and validated status/amount.
+        """
+        from datetime import UTC, datetime
+
+        payment = PurchaseOrderPayment(
+            po_id=purchase_order.id,
+            amount=amount,
+            payment_date=payment_date,
+            reference=reference,
+            notes=notes,
+            document_id=document_id,
+            recorded_by=user_id,
+        )
+        self._db.add(payment)
+
+        purchase_order.amount_paid += amount
+        purchase_order.balance_due = purchase_order.total - purchase_order.amount_paid
+
+        if purchase_order.balance_due <= Decimal("0.00"):
+            # Full settlement: route SENT->PAID through the state machine
+            # (it owns the single version bump for this op) and clamp the
+            # balance so a rounding residue never leaves a negative.
+            self._transition(purchase_order, PurchaseOrderStatus.PAID)
+            purchase_order.balance_due = Decimal("0.00")
+            purchase_order.paid_at = datetime.now(UTC)
+        else:
+            # Partial payment: no status edge, so bump the version here so
+            # the optimistic-lock counter still advances exactly once.
+            purchase_order.version += 1
+
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="payment_recorded",
+            after={
+                "payment_id": str(payment.id),
+                "amount": str(amount),
+                "new_balance": str(purchase_order.balance_due),
+                "new_status": status_value(purchase_order.status),
+            },
+        )
+        return payment
+
+    def record_payment(
+        self,
+        po_id: uuid.UUID,
+        data: PurchaseOrderPaymentCreate,
+        user_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderPayment:
+        """Record an auditable payment against a purchase order.
+
+        A payment is only meaningful once the PO has been sent: a DRAFT PO
+        must be sent first, and an already-PAID PO rejects further payment.
+        Overpayment (amount > balance_due) is rejected with a typed 400.
+        On full settlement the PO transitions SENT->PAID (see _apply_payment).
+
+        If ``data.document_id`` is supplied, the referenced document must
+        exist and belong to this purchase order (scoped lookup). A document
+        that does not exist or belongs to a different PO is rejected with a
+        404. Ideally the document should have source ``payment_modal``
+        (proof-of-payment), but this is not enforced so that documents
+        uploaded via other sources can still be linked if needed.
+
+        Locked load: the bare row is read FOR UPDATE via the inherited
+        _get_locked (lazyload('*') keeps the lock off the vendor outer join),
+        so concurrent payments serialize on the row lock instead of racing
+        (race-condition contract). No blocking I/O runs under the lock.
+        """
+        purchase_order = self._get_locked(po_id)
+
+        if purchase_order.status == PurchaseOrderStatus.PAID:
+            raise BadRequestException(
+                detail="Cannot record payment for an already-paid purchase order.",
+                field="status",
+            )
+        if purchase_order.status != PurchaseOrderStatus.SENT:
+            raise BadRequestException(
+                detail=(
+                    "Payments can only be recorded against a SENT purchase "
+                    "order. Send the purchase order first."
+                ),
+                field="status",
+            )
+        if data.amount > purchase_order.balance_due:
+            raise BadRequestException(
+                detail=(
+                    f"Payment amount ({data.amount}) exceeds the balance due "
+                    f"({purchase_order.balance_due}). Cannot overpay a "
+                    "purchase order."
+                ),
+                field="amount",
+            )
+
+        # Validate the optional proof-of-payment document. The scoped lookup
+        # (po_id + document_id) ensures a document from a different PO cannot
+        # be linked here — raises NotFoundException if not found.
+        document_id: uuid.UUID | None = data.document_id
+        if document_id is not None:
+            self.get_document(po_id, document_id)
+
+        payment = self._apply_payment(
+            purchase_order,
+            amount=data.amount,
+            payment_date=data.payment_date,
+            reference=data.reference,
+            notes=data.notes,
+            document_id=document_id,
+            user_id=user_id,
+        )
+
+        logger.info(
+            "Recorded payment for purchase order %s",
+            purchase_order.po_reference,
+            extra={
+                "po_id": str(purchase_order.id),
+                "payment_id": str(payment.id),
+                "amount": float(data.amount),
+                "new_balance": float(purchase_order.balance_due),
+                "new_status": purchase_order.status,
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_PAYMENT_RECORDED,
+            {
+                "po_id": str(purchase_order.id),
+                "settled": purchase_order.status == PurchaseOrderStatus.PAID,
+            },
+        )
+        return payment
+
     # CANCEL
 
     def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
@@ -961,12 +1198,14 @@ Best regards,
     # DELETE
 
     def delete(self, po_id: uuid.UUID) -> bool:
-        """Delete a purchase order — permitted only in DRAFT or CANCELED.
+        """Delete a purchase order — permitted only in DRAFT.
 
-        SENT / BILLED purchase orders are protected and raise
-        BadRequestException. A before-image audit row is written atomically
-        with the delete (committed by get_db()). v1 POs carry no payments, so
-        this is always a hard delete; line items cascade.
+        SENT and PAID purchase orders are protected and raise
+        BadRequestException: once sent, a PO is a durable record and cannot
+        be deleted (cancel is disabled in v1, so there is no void path). A
+        before-image audit row is written atomically with the delete
+        (committed by get_db()); this is always a hard delete and line items
+        cascade.
 
         Locked load: serializes with concurrent transitions (race-condition
         contract — all status-sensitive ops load FOR UPDATE) so the status
@@ -981,9 +1220,9 @@ Best regards,
             raise BadRequestException(
                 detail=(
                     f"Cannot delete a purchase order in "
-                    f"'{purchase_order.status}' status. Only DRAFT or CANCELED "
-                    "purchase orders can be deleted; cancel a sent purchase "
-                    "order instead."
+                    f"'{purchase_order.status}' status. Only DRAFT purchase "
+                    "orders can be deleted; a sent purchase order is a "
+                    "permanent record."
                 ),
                 field="status",
             )
@@ -1167,11 +1406,16 @@ Best regards,
 
     # PDF GENERATION
 
-    def _render_pdf(self, purchase_order: PurchaseOrder) -> bytes:
+    def _render_pdf(
+        self, purchase_order: PurchaseOrder, include_balance: bool = False
+    ) -> bytes:
         """Render a PDF for an already-loaded purchase order.
 
         Orchestration (owner branding + ReportLab generator) is shared with
         invoices/quotes via DocumentPdfRenderer — no PO-specific copy.
+
+        ``include_balance`` selects the original-amount document (False) or
+        the balance-aware current/statement document (True).
 
         A rendering failure is not swallowed: it surfaces as an explicit 500
         carrying the message so the UI can show "PDF could not be
@@ -1180,7 +1424,9 @@ Best regards,
         from app.common.pdf_renderer import DocumentPdfRenderer
 
         try:
-            return DocumentPdfRenderer(self._db).render_purchase_order(purchase_order)
+            return DocumentPdfRenderer(self._db).render_purchase_order(
+                purchase_order, include_balance=include_balance
+            )
         except Exception as exc:
             logger.exception(
                 "Failed to render purchase-order PDF %s",
@@ -1193,18 +1439,26 @@ Best regards,
                 error_code="PDF_GENERATION_FAILED",
             ) from exc
 
-    def generate_pdf(self, po_id: uuid.UUID) -> bytes:
-        """Generate the PDF for a purchase order by id."""
-        return self._render_pdf(self.get_by_id(po_id))
+    def generate_pdf(self, po_id: uuid.UUID, include_balance: bool = False) -> bytes:
+        """Generate the PDF for a purchase order by id.
+
+        ``include_balance`` selects the original-amount document (False) or
+        the balance-aware current/statement document (True).
+        """
+        return self._render_pdf(self.get_by_id(po_id), include_balance=include_balance)
 
     def generate_pdf_for_download(
-        self, po_id: uuid.UUID
+        self, po_id: uuid.UUID, include_balance: bool = False
     ) -> tuple[bytes, PurchaseOrder]:
         """Generate the PO PDF and return it with the loaded purchase order.
 
         Loads the PO once and renders from it, so the download endpoint does
         not re-query just for the attachment filename (mirrors
-        QuoteService.generate_pdf_for_download).
+        QuoteService.generate_pdf_for_download). ``include_balance`` selects
+        the original-amount vs balance-aware variant.
         """
         purchase_order = self.get_by_id(po_id)
-        return self._render_pdf(purchase_order), purchase_order
+        return (
+            self._render_pdf(purchase_order, include_balance=include_balance),
+            purchase_order,
+        )

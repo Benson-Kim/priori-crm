@@ -365,7 +365,45 @@ def test_status_counts_excludes_canceled_from_all(db):
     assert counts.sent == 1
     assert counts.billed == 1
     assert counts.canceled == 1
+    assert counts.paid == 0  # no PAID POs seeded
     assert counts.all == 3  # canceled excluded from the All tab
+
+
+def test_status_counts_includes_paid_bucket(db):
+    """PAID POs appear in both the ``paid`` bucket and the ``all`` total.
+
+    Finding 2: PurchaseOrderStatusCounts was missing a ``paid`` field, so
+    PAID POs were counted in ``all`` but appeared in no named bucket.
+    """
+    service = PurchaseOrderService(db)
+    vendor = _vendor(db)
+    today = date.today().strftime("%Y%m%d")
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-010",
+        reference="PO-000010",
+        status=PurchaseOrderStatus.DRAFT,
+    )
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-011",
+        reference="PO-000011",
+        status=PurchaseOrderStatus.PAID,
+    )
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-012",
+        reference="PO-000012",
+        status=PurchaseOrderStatus.PAID,
+    )
+
+    counts = service.get_status_counts()
+    assert counts.paid == 2, "PAID POs must appear in the paid bucket"
+    assert counts.draft == 1
+    assert counts.all == 3, "PAID POs must be included in the all total"
 
 
 def test_status_counts_uses_single_query(db):
