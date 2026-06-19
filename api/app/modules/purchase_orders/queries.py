@@ -112,6 +112,7 @@ class PurchaseOrderStatisticsRepository:
                 all=total,
                 draft=counts.get(PurchaseOrderStatus.DRAFT, 0),
                 sent=counts.get(PurchaseOrderStatus.SENT, 0),
+                paid=counts.get(PurchaseOrderStatus.PAID, 0),
                 billed=counts.get(PurchaseOrderStatus.BILLED, 0),
                 canceled=counts.get(PurchaseOrderStatus.CANCELED, 0),
             )
