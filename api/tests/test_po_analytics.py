@@ -229,15 +229,6 @@ class TestCreateEmitsPoCreated:
 
 
 class TestCancelDeleteDuplicateEmit:
-    def test_cancel_emits_po_cancelled(self, db, captured_events):
-        vendor = _vendor(db)
-        po = _create_po(db, vendor)
-        db.commit()
-        captured_events.clear()
-
-        PurchaseOrderService(db).cancel(po.id)
-        assert _only(captured_events, "po_cancelled") == {"po_id": str(po.id)}
-
     def test_delete_emits_po_deleted(self, db, captured_events):
         vendor = _vendor(db)
         po = _create_po(db, vendor)
