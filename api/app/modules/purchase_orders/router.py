@@ -46,7 +46,6 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
 )
-from app.modules.purchase_orders.service import PurchaseOrderService
 
 logger = logging.getLogger(__name__)
 
@@ -270,8 +269,9 @@ async def export_purchase_orders_to_excel(
 )
 def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
+    service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderCalculationResponse:
-    return PurchaseOrderService.calculate_totals(line_items)
+    return service.calculate_totals(line_items)
 
 
 @router.post(
@@ -291,8 +291,10 @@ def calculate_purchase_order_totals(
         400: {
             "description": ("Not DRAFT, or the vendor has no email address on record")
         },
+        403: {"description": "Insufficient role to send purchase orders"},
         404: {"description": "Purchase order not found"},
     },
+    dependencies=[Depends(require_privileged())],
 )
 def send_purchase_order(
     po_id: UUID,
