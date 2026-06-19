@@ -587,8 +587,18 @@ Best regards,
 
         purchase_order = self._get_locked(po_id)
 
-        # Reuse the Send guard: Draft-only, else a typed 400.
-        self._validate_sendable(purchase_order)
+        # "Any state can be marked as sent": a PO already in SENT (or beyond,
+        # e.g. PAID) is treated as an idempotent no-op rather than an error,
+        # so the action is always available from the View screen. Only a
+        # DRAFT PO actually transitions through the state machine.
+        if purchase_order.status != PurchaseOrderStatus.DRAFT:
+            logger.info(
+                "Mark-as-sent is a no-op for purchase order %s in '%s' status",
+                purchase_order.po_reference,
+                purchase_order.status,
+                extra={"po_id": str(purchase_order.id)},
+            )
+            return purchase_order
 
         previous_status = purchase_order.status
         self._transition(purchase_order, PurchaseOrderStatus.SENT)
