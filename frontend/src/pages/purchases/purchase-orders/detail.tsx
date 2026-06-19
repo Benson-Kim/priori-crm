@@ -38,6 +38,7 @@ import {
     Pencil,
     Plus,
     Send,
+    Trash,
     X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -91,8 +92,12 @@ export default function PurchaseOrderDetailPage() {
             description: `Send ${po.po_reference} to the vendor by email? It will be marked as Sent.`,
             confirmLabel: "Yes, send",
             onConfirm: async () => {
+                try {
                 await sendPurchaseOrder(po.id);
-                fetchPurchaseOrder();
+                    fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
             },
         });
     };
@@ -104,8 +109,12 @@ export default function PurchaseOrderDetailPage() {
             description: `Mark ${po.po_reference} as Sent without emailing the vendor? Use this when the PO was sent offline.`,
             confirmLabel: "Yes, mark as sent",
             onConfirm: async () => {
+                try {
                 await markAsSentPurchaseOrder(po.id);
                 fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
             },
         });
     };
@@ -246,7 +255,7 @@ export default function PurchaseOrderDetailPage() {
             onClick: () => navigate(`/purchase-orders/${po.id}/edit`),
         });
     }
-    if (status === "draft") {
+    // if (status === "draft") {
         actions.push({
             key: "send",
             label: "Send",
@@ -259,7 +268,7 @@ export default function PurchaseOrderDetailPage() {
             icon: <CheckCircle size={16} />,
             onClick: handleMarkAsSent,
         });
-    }
+    // }
 
     // Record payment: SENT only, while there is still a balance to clear.
     if (status === "sent" && balanceDue > 0) {
@@ -284,7 +293,7 @@ export default function PurchaseOrderDetailPage() {
         actions.push({
             key: "delete",
             label: "Delete",
-            icon: <X size={16} />,
+            icon: <Trash size={16} />,
             danger: true,
             onClick: handleDelete,
         });
@@ -368,7 +377,7 @@ export default function PurchaseOrderDetailPage() {
             {activeTab === "overview" && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* LEFT: descriptive summary + running totals. */}
-                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
                         <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
                                 <p className="text-[14px] text-gray-500">Vendor</p>
@@ -396,21 +405,7 @@ export default function PurchaseOrderDetailPage() {
                             <OverviewField label="Recurring" value={po.is_recurring ? "Yes" : "No"} />
                         </div>
 
-                        {po.notes && (
-                            <div>
-                                <p className="text-[14px] text-gray-500 mb-1">Notes</p>
-                                <p className="text-[16px] text-gray-700 whitespace-pre-wrap">{po.notes}</p>
-                            </div>
-                        )}
 
-                        {po.terms_and_conditions && (
-                            <div>
-                                <p className="text-[14px] text-gray-500 mb-1">Terms &amp; Conditions</p>
-                                <p className="text-[16px] text-gray-700 whitespace-pre-wrap">
-                                    {po.terms_and_conditions}
-                                </p>
-                            </div>
-                        )}
 
                         <Divider />
 
@@ -435,7 +430,7 @@ export default function PurchaseOrderDetailPage() {
                     </div>
 
                     {/* RIGHT: recorded payments (read-only, no per-row download). */}
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
+                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
                         <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
 
                         {payments.length === 0 ? (
