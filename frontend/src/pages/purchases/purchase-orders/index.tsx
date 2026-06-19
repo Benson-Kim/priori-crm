@@ -9,7 +9,6 @@ import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
-    cancelPurchaseOrder,
     deletePurchaseOrder,
     duplicatePurchaseOrder,
     exportPurchaseOrdersExcel,
@@ -20,7 +19,7 @@ import {
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { Ban, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -123,23 +122,6 @@ export default function PurchaseOrdersPage() {
         }
     };
 
-    const handleCancel = (po: PurchaseOrderSummary) => {
-        showConfirm({
-            title: "Cancel purchase order?",
-            description: `Cancel ${po.po_reference}? This voids the purchase order; it cannot be edited or sent afterwards.`,
-            confirmLabel: "Yes, cancel it",
-            variant: "danger",
-            onConfirm: async () => {
-                try {
-                    await cancelPurchaseOrder(po.id);
-                    refreshAll();
-                } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to cancel purchase order");
-                }
-            },
-        });
-    };
-
     const handleDelete = (po: PurchaseOrderSummary) => {
         showConfirm({
             title: "Delete purchase order?",
@@ -206,17 +188,6 @@ export default function PurchaseOrdersPage() {
             icon: <Copy size={16} />,
             onClick: () => handleDuplicate(po),
         });
-
-        // Cancel applies to DRAFT or SENT; BILLED/CANCELED are terminal.
-        if (po.status === "draft" || po.status === "sent") {
-            actions.push({
-                key: "cancel",
-                label: "Cancel",
-                icon: <Ban size={16} />,
-                danger: true,
-                onClick: () => handleCancel(po),
-            });
-        }
 
         // Delete is permitted only for DRAFT or CANCELED (SENT/BILLED protected).
         if (po.status === "draft" || po.status === "canceled") {
