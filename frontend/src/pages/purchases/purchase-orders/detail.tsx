@@ -433,50 +433,21 @@ export default function PurchaseOrderDetailPage() {
                         </div>
                     </div>
 
-                    {/* RIGHT: recorded payments (read-only, no per-row download). */}
+                    {/* RIGHT: recorded payments as a table (same format as the
+                        invoices table). Click a row to view the payment and
+                        attach related document(s). */}
                     <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
                         <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
 
-                        {payments.length === 0 ? (
-                            <div className="py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                                No payments recorded yet.
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-3">
-                                {payments.map((payment) => (
-                                    <Card
-                                        key={payment.id}
-                                        className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-gray-800">
-                                                    {formatCurrency(Number(payment.amount), currency)}
-                                                </p>
-                                                <p className="text-[14px] text-gray-500">
-                                                    {payment.payment_date
-                                                        ? formatDisplayDate(payment.payment_date)
-                                                        : "-"}
-                                                </p>
-                                            </div>
-                                            {payment.reference && (
-                                                <span
-                                                    className="text-[14px] text-gray-500 truncate max-w-[40%]"
-                                                    title={payment.reference}
-                                                >
-                                                    {payment.reference}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {payment.notes && (
-                                            <p className="text-[14px] text-gray-600 mt-2 whitespace-pre-wrap">
-                                                {payment.notes}
-                                            </p>
-                                        )}
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
+                        <div className="overflow-x-auto rounded-b-lg">
+                            <Table
+                                columns={paymentColumns}
+                                data={payments}
+                                rowKey={(payment) => payment.id}
+                                onRowClick={(payment) => setSelectedPayment(payment)}
+                                emptyMessage="No payments recorded yet."
+                            />
+                        </div>
                     </div>
                 </div>
             )}
