@@ -1,14 +1,15 @@
 import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer";
 import { useHeaderOverride } from "@/components/layout/header-context";
+import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Divider } from "@/components/ui/Divider";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
+import { ACCEPTED_UPLOAD_TYPES, DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
     PurchaseOrderLineItem,
@@ -34,10 +35,12 @@ import {
     CreditCard,
     Download,
     FileText,
+    Paperclip,
     PaperclipIcon,
     Pencil,
     Plus,
     Send,
+    Trash,
     X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -63,6 +66,8 @@ export default function PurchaseOrderDetailPage() {
     const [isDownloadingOriginal, setIsDownloadingOriginal] = useState(false);
     const [isDownloadingCurrent, setIsDownloadingCurrent] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // Selected payment row — opens the view/update (attach document) modal.
+    const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -91,8 +96,12 @@ export default function PurchaseOrderDetailPage() {
             description: `Send ${po.po_reference} to the vendor by email? It will be marked as Sent.`,
             confirmLabel: "Yes, send",
             onConfirm: async () => {
+                try {
                 await sendPurchaseOrder(po.id);
-                fetchPurchaseOrder();
+                    fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
             },
         });
     };
@@ -101,11 +110,15 @@ export default function PurchaseOrderDetailPage() {
         if (!po) return;
         showConfirm({
             title: "Mark as sent?",
-            description: `Mark ${po.po_reference} as Sent without emailing the vendor? Use this when the PO was sent offline.`,
+            description: "Are you sure you want to mark this item as sent?",
             confirmLabel: "Yes, mark as sent",
             onConfirm: async () => {
+                try {
                 await markAsSentPurchaseOrder(po.id);
                 fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
             },
         });
     };
@@ -227,7 +240,7 @@ export default function PurchaseOrderDetailPage() {
     }
 
     const status = po.status.toLowerCase();
-    const currency = po.currency ?? "Ksh";
+    const currency = po.currency ?? DEFAULT_CURRENCY;
     // Balance fields land with PO-19; default defensively so the UI is correct
     // even before any payment has been recorded.
     const total = Number(po.total);
@@ -246,7 +259,8 @@ export default function PurchaseOrderDetailPage() {
             onClick: () => navigate(`/purchase-orders/${po.id}/edit`),
         });
     }
-    if (status === "draft") {
+    // if (status === "draft") {
+    if (status != "sent") {
         actions.push({
             key: "send",
             label: "Send",
@@ -260,6 +274,7 @@ export default function PurchaseOrderDetailPage() {
             onClick: handleMarkAsSent,
         });
     }
+    // }
 
     // Record payment: SENT only, while there is still a balance to clear.
     if (status === "sent" && balanceDue > 0) {
@@ -284,13 +299,66 @@ export default function PurchaseOrderDetailPage() {
         actions.push({
             key: "delete",
             label: "Delete",
-            icon: <X size={16} />,
+            icon: <Trash size={16} />,
             danger: true,
             onClick: handleDelete,
         });
     }
 
     const statusLabel = po.status.charAt(0).toUpperCase() + po.status.slice(1);
+
+    const documents = po.documents ?? [];
+    const hasDocument = (payment: PurchaseOrderPayment) =>
+        Boolean(payment.document_id && documents.some((d) => d.id === payment.document_id));
+
+    // Payments table columns — mirrors the invoices/PO list table format.
+    const paymentColumns = [
+        {
+            key: "number",
+            header: "#.",
+            render: (_payment: PurchaseOrderPayment, index: number) => (
+                <span className="text-content-primary">{index + 1}.</span>
+            ),
+            className: "w-[50px]",
+        },
+        {
+            key: "date",
+            header: "Date",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-content-primary">
+                    {payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
+                </span>
+            ),
+        },
+        {
+            key: "amount",
+            header: "Amount",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500">{formatCurrency(Number(payment.amount), currency)}</span>
+            ),
+        },
+        {
+            key: "reference",
+            header: "Reference",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500 truncate" title={payment.reference ?? undefined}>
+                    {payment.reference ?? "-"}
+                </span>
+            ),
+        },
+        {
+            key: "document",
+            header: "Document",
+            render: (payment: PurchaseOrderPayment) =>
+                hasDocument(payment) ? (
+                    <span className="inline-flex items-center gap-1 text-priori-purple">
+                        <Paperclip size={16} /> Attached
+                    </span>
+                ) : (
+                    <span className="text-gray-400">—</span>
+                ),
+        },
+    ];
 
     return (
         <div className="flex flex-col gap-6 font-sans pb-10">
@@ -368,7 +436,7 @@ export default function PurchaseOrderDetailPage() {
             {activeTab === "overview" && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* LEFT: descriptive summary + running totals. */}
-                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
                         <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
                                 <p className="text-[14px] text-gray-500">Vendor</p>
@@ -379,9 +447,8 @@ export default function PurchaseOrderDetailPage() {
                             <Badge variant={status as BadgeVariant}>{statusLabel}</Badge>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
                             <OverviewField label="Reference" value={po.po_reference} />
-                            <OverviewField label="Currency" value={po.currency ?? "-"} />
                             <OverviewField
                                 label="Order Date"
                                 value={po.order_date ? formatDisplayDate(po.order_date) : "-"}
@@ -390,27 +457,9 @@ export default function PurchaseOrderDetailPage() {
                                 label="Delivery Date"
                                 value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
                             />
-                            {po.compliance_ref && (
-                                <OverviewField label="Compliance Ref" value={po.compliance_ref} />
-                            )}
-                            <OverviewField label="Recurring" value={po.is_recurring ? "Yes" : "No"} />
                         </div>
 
-                        {po.notes && (
-                            <div>
-                                <p className="text-[14px] text-gray-500 mb-1">Notes</p>
-                                <p className="text-[16px] text-gray-700 whitespace-pre-wrap">{po.notes}</p>
-                            </div>
-                        )}
 
-                        {po.terms_and_conditions && (
-                            <div>
-                                <p className="text-[14px] text-gray-500 mb-1">Terms &amp; Conditions</p>
-                                <p className="text-[16px] text-gray-700 whitespace-pre-wrap">
-                                    {po.terms_and_conditions}
-                                </p>
-                            </div>
-                        )}
 
                         <Divider />
 
@@ -434,57 +483,30 @@ export default function PurchaseOrderDetailPage() {
                         </div>
                     </div>
 
-                    {/* RIGHT: recorded payments (read-only, no per-row download). */}
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
+                    {/* RIGHT: recorded payments as a table (same format as the
+                        invoices table). Click a row to view the payment and
+                        attach related document(s). */}
+                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
                         <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
 
-                        {payments.length === 0 ? (
-                            <div className="py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                                No payments recorded yet.
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-3">
-                                {payments.map((payment) => (
-                                    <Card
-                                        key={payment.id}
-                                        className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-gray-800">
-                                                    {formatCurrency(Number(payment.amount), currency)}
-                                                </p>
-                                                <p className="text-[14px] text-gray-500">
-                                                    {payment.payment_date
-                                                        ? formatDisplayDate(payment.payment_date)
-                                                        : "-"}
-                                                </p>
-                                            </div>
-                                            {payment.reference && (
-                                                <span
-                                                    className="text-[14px] text-gray-500 truncate max-w-[40%]"
-                                                    title={payment.reference}
-                                                >
-                                                    {payment.reference}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {payment.notes && (
-                                            <p className="text-[14px] text-gray-600 mt-2 whitespace-pre-wrap">
-                                                {payment.notes}
-                                            </p>
-                                        )}
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
+                        <div className="overflow-x-auto rounded-b-lg">
+                            <Table
+                                columns={paymentColumns}
+                                data={payments}
+                                rowKey={(payment) => payment.id}
+                                onRowClick={(payment) => setSelectedPayment(payment)}
+                                emptyMessage="No payments recorded yet."
+                            />
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Detail tab: the existing PO viewer verbatim (no behavioural change). */}
+            {/* Detail tab: the PO viewer, with the owner header editable so the
+                purchase-order owner details can be updated in place. */}
             {activeTab === "detail" && (
                 <PurchaseOrderViewer
+                    editableOwner
                     data={{
                         poReference: po.po_reference,
                         vendorId: po.vendor_id,
@@ -571,7 +593,21 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             </div>
 
-            {/* Record payment modal (PO-19): reuses the shared transactional modal. */}
+            {/* Payment detail modal: view a recorded payment and attach
+                related proof-of-payment document(s). */}
+            <PurchaseOrderPaymentModal
+                isOpen={selectedPayment !== null}
+                onClose={() => setSelectedPayment(null)}
+                poId={po.id}
+                payment={selectedPayment}
+                documents={documents}
+                currency={currency}
+                onUpdated={() => {
+                    fetchPurchaseOrder();
+                }}
+            />
+
+            {/* Record payment modal */}
             <RecordPaymentModal
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
@@ -594,9 +630,9 @@ export default function PurchaseOrderDetailPage() {
 
 function OverviewField({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div className="min-w-0">
-            <p className="text-[14px] text-gray-500">{label}</p>
-            <p className="text-[16px] font-bold text-gray-800 truncate">{value}</p>
+        <div className="min-w-0 flex items-center justify-between">
+            <p className="text-[16px] text-gray-800">{label}</p>
+            <p className="text-[14px] text-gray-500 truncate">{value}</p>
         </div>
     );
 }
