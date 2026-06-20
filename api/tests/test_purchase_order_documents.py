@@ -9,7 +9,7 @@ Acceptance criteria proven here:
 - storage_key is NEVER returned in any API response (schema-level).
 - attach persists storage_key + mime_type + file_size_bytes; file_size_kb
   is derived for the list view.
-- attachments are addable at ANY status (DRAFT/SENT/BILLED/CANCELED) and do
+- attachments are addable at ANY status (DRAFT/SENT/PAID) and do
   not re-open edit mode (PO version unchanged).
 - get/delete are scoped to (po_id, document_id): a document on another PO
   is a 404, never cross-readable.
@@ -174,8 +174,7 @@ class TestAttach:
         [
             PurchaseOrderStatus.DRAFT,
             PurchaseOrderStatus.SENT,
-            PurchaseOrderStatus.BILLED,
-            PurchaseOrderStatus.CANCELED,
+            PurchaseOrderStatus.PAID,
         ],
     )
     def test_attach_allowed_at_any_status_without_reopening_edit(self, db, status):
