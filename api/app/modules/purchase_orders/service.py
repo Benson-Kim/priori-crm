@@ -351,9 +351,8 @@ class PurchaseOrderService(BaseDocumentService):
 
     # LIST / AGGREGATES
 
-    # Single source of truth for purchase-order filtering, including the
-    # CANCELED-visibility rule — module-level in queries.py so the export
-    # query shares the identical function.
+    # Single source of truth for purchase-order filtering — module-level in
+    # queries.py so the export query shares the identical function.
     _apply_filters = staticmethod(apply_purchase_order_filters)
 
     def list_purchase_orders(
@@ -480,10 +479,9 @@ class PurchaseOrderService(BaseDocumentService):
     def _validate_sendable(self, purchase_order: PurchaseOrder) -> None:
         """Reject sends for non-Draft purchase orders (DocumentSendMixin hook).
 
-        Send is a Draft-only action: a SENT / BILLED / CANCELED PO can never
-        be (re)sent — resend after Sent is intentionally
-        unavailable). The locked row is checked under FOR UPDATE so the gate
-        cannot act on a stale status.
+        Send is a Draft-only action: a SENT / PAID PO can never be (re)sent
+        (resend after Sent is intentionally unavailable). The locked row is
+        checked under FOR UPDATE so the gate cannot act on a stale status.
         """
         if purchase_order.status != PurchaseOrderStatus.DRAFT:
             raise BadRequestException(
