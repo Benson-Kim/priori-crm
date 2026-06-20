@@ -211,7 +211,7 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
-        // Delete is permitted only for DRAFT (SENT/BILLED protected).
+        // Delete is permitted only for DRAFT (SENT/PAID protected).
         if (po.status === "draft") {
             actions.push({
                 key: "delete",
