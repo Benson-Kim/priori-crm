@@ -5245,21 +5245,11 @@
         "type": "object"
       },
       "PurchaseOrderStatusCounts": {
-        "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nMirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced\nvia its own count and excluded from ``all`` (it is a voided PO).\nPAID is a reachable lifecycle status (SENT -> PAID via record_payment)\nand is included in both ``all`` and its own ``paid`` bucket so the\nfilter-tab bar can surface a \"Paid\" tab without silently under-counting.",
+        "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nThe PO lifecycle is DRAFT -> SENT -> PAID, so every status is included\nin ``all``. PAID is reached via record_payment (SENT -> PAID).",
         "properties": {
           "all": {
             "default": 0,
             "title": "All",
-            "type": "integer"
-          },
-          "billed": {
-            "default": 0,
-            "title": "Billed",
-            "type": "integer"
-          },
-          "canceled": {
-            "default": 0,
-            "title": "Canceled",
             "type": "integer"
           },
           "draft": {
@@ -5381,7 +5371,7 @@
         "type": "object"
       },
       "PurchaseOrderUpdate": {
-        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT                       -> editable\n    SENT / BILLED / CANCELED    -> BadRequestException (\u00a713 inline banner)",
+        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT          -> editable\n    SENT / PAID    -> BadRequestException (\u00a713 inline banner)",
         "properties": {
           "complianceRef": {
             "anyOf": [
@@ -13017,7 +13007,7 @@
         ]
       },
       "post": {
-        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form' or 'view'. storage_key is never returned.",
+        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form', 'view' or 'payment_modal' (proof-of-payment uploaded in the Record Payment modal). storage_key is never returned.",
         "operationId": "upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
         "parameters": [
           {
