@@ -718,7 +718,7 @@ Best regards,
     ) -> PurchaseOrder:
         """Update a purchase order with optimistic locking.
 
-        Editable only in DRAFT; SENT/BILLED/CANCELED raise BadRequestException
+        Editable only in DRAFT; any non-DRAFT status raises BadRequestException
         (the router maps this to the §13 inline-banner message). currency is
         locked — it is not present on PurchaseOrderUpdate, so it can never be
         applied here. Supplying line_items replaces the full set and recomputes
