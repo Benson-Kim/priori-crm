@@ -167,7 +167,7 @@ def test_duplicate_available_at_any_status(db):
     vendor = _vendor(db)
     original = _create_po(service, vendor)
     # Force a non-Draft status directly (Send/Convert tested elsewhere).
-    original.status = PurchaseOrderStatus.BILLED
+    original.status = PurchaseOrderStatus.SENT
     db.flush()
 
     dup = service.duplicate(original.id)

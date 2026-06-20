@@ -53,7 +53,7 @@ _HEADER_STYLE = ParagraphStyle(
 _TITLE_STYLE = ParagraphStyle(
     "DocTitle",
     parent=_STYLES["Normal"],
-    fontName="Open Sans",
+    fontName="Helvetica-Bold",
     fontSize=21,
     textColor=_INK,
     alignment=TA_RIGHT,
