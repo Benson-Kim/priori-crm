@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
 import { recordPurchaseOrderPayment, uploadPurchaseOrderDocument, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
-import { CreditCard, Paperclip, X } from "lucide-react";
+import { CreditCard, Paperclip, Plus, X } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 
 interface RecordPaymentModalProps {
@@ -23,11 +23,11 @@ interface RecordPaymentModalProps {
     onSuccess: () => void;
 }
 
-const ENTITY_TYPE_LABELS: Record<RecordPaymentModalProps["entityType"], string> = {
-    invoice: "Invoice",
-    expense: "Expense",
-    purchaseOrder: "Purchase Order",
-};
+// const ENTITY_TYPE_LABELS: Record<RecordPaymentModalProps["entityType"], string> = {
+//     invoice: "Invoice",
+//     expense: "Expense",
+//     purchaseOrder: "Purchase Order",
+// };
 
 const PAYMENT_METHODS = [
     { value: "cash", label: "Cash" },
@@ -38,7 +38,17 @@ const PAYMENT_METHODS = [
     { value: "other", label: "Other" },
 ];
 
-export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, balanceDue, currency, prefillAmount, reference: displayRef, onSuccess }: RecordPaymentModalProps) {
+export function RecordPaymentModal({
+    isOpen,
+    onClose,
+    entityId,
+    entityType,
+    balanceDue,
+    currency,
+    prefillAmount,
+    // reference: displayRef, 
+    onSuccess
+}: RecordPaymentModalProps) {
     const [amount, setAmount] = useState(String(prefillAmount ?? balanceDue));
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
     const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
@@ -149,35 +159,35 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
             onClose={onClose}
             title="Record Payment"
             icon={<CreditCard size={24} />}
-            confirmLabel="Record"
+            confirmLabel="Save Payment"
             cancelLabel="Cancel"
             onConfirm={handleRecord}
             isLoading={isSubmitting}
         >
-            <div className="space-y-4">
-                <div className="flex justify-between text-sm p-3 bg-gray-50 rounded-lg">
+            <div className="space-y-6 bg-white p-6 rounded-xl border border-gray-200">
+                {/* <div className="flex justify-between text-sm p-3 bg-gray-50 rounded-lg">
                     <span className="text-gray-500">{ENTITY_TYPE_LABELS[entityType]}: {displayRef || entityId.slice(0, 8)}</span>
                     <span className="font-medium text-gray-800">Balance: {formatCurrency(balanceDue, currency)}</span>
-                </div>
+                </div> */}
 
                 {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
                 )}
 
-                <div>
-                    <Label htmlFor="payment-amount">Amount</Label>
+                <div className="space-y-2">
+                    <Label htmlFor="payment-amount" className="font-bold text-base">Amount</Label>
                     <Input
                         id="payment-amount"
                         type="number"
                         step="0.01"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
+                        placeholder="Enter amount"
                     />
                 </div>
 
-                <div>
-                    <Label htmlFor="payment-date">Date</Label>
+                <div className="space-y-2">
+                    <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
                     <Input
                         id="payment-date"
                         type="date"
@@ -190,8 +200,8 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     expense and purchase-order payment APIs do not, so the selection
                     would be silently dropped — only show it for invoices. */}
                 {entityType === "invoice" && (
-                    <div>
-                        <Label htmlFor="payment-method">Payment Method</Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="payment-method" className="font-bold text-base">Payment Method</Label>
                         <Select
                             id="payment-method"
                             value={paymentMethod}
@@ -201,8 +211,8 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     </div>
                 )}
 
-                <div>
-                    <Label htmlFor="payment-reference">Reference (optional)</Label>
+                <div className="space-y-2">
+                    <Label htmlFor="payment-reference" className="font-bold text-base">Reference (optional)</Label>
                     <Input
                         id="payment-reference"
                         type="text"
@@ -212,8 +222,8 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                     />
                 </div>
 
-                <div>
-                    <Label htmlFor="payment-notes">Notes (optional)</Label>
+                <div className="space-y-2">
+                    <Label htmlFor="payment-notes" className="font-bold text-base">Notes (optional)</Label>
                     <Input
                         id="payment-notes"
                         type="text"
@@ -225,15 +235,15 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
 
                 {/* Proof-of-payment attachments (purchase orders only). */}
                 {supportsAttachments && (
-                    <div>
-                        <Label htmlFor="payment-documents">Attach document(s) (optional)</Label>
+                    <div className="space-y-2">
+                        {/* <Label htmlFor="payment-documents">Attach document(s) (optional)</Label> */}
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 w-full border-dashed h-28 text-[20px]"
                         >
-                            <Paperclip size={16} /> Attach document
+                            <Plus size={20} /> Upload document
                         </Button>
                         <input
                             id="payment-documents"
@@ -249,7 +259,7 @@ export function RecordPaymentModal({ isOpen, onClose, entityId, entityType, bala
                                 {files.map((file, index) => (
                                     <li
                                         key={`${file.name}-${index}`}
-                                        className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg"
+                                        className="flex items-center justify-between gap-3 px-3 py-4 bg-white border border-gray-200 rounded-lg"
                                     >
                                         <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
                                             <Paperclip size={16} className="shrink-0 text-gray-500" />

@@ -115,7 +115,7 @@ export default function PurchaseOrdersPage() {
     const handleMarkAsSent = (po: PurchaseOrderSummary) => {
         showConfirm({
             title: "Mark as sent?",
-            description: `Mark ${po.po_reference} as Sent without emailing the vendor? Use this when the PO was sent offline.`,
+            description: "Are you sure you want to mark this item as sent?",
             confirmLabel: "Yes, mark as sent",
             onConfirm: async () => {
                 try {
@@ -190,18 +190,20 @@ export default function PurchaseOrdersPage() {
                 onClick: () => handleEdit(po),
             });
         }
-        actions.push({
-            key: "send",
-            label: "Send",
-            icon: <Send size={16} />,
-            onClick: () => handleSend(po),
-        });
-        actions.push({
-            key: "mark-as-sent",
-            label: "Mark as sent",
-            icon: <CheckCircle size={16} />,
-            onClick: () => handleMarkAsSent(po),
-        });
+        if (po.status != "sent") {
+            actions.push({
+                key: "send",
+                label: "Send",
+                icon: <Send size={16} />,
+                onClick: () => handleSend(po),
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleMarkAsSent(po),
+            });
+        }
 
         // Duplicate is available at any status (also the way to "re-raise").
         actions.push({

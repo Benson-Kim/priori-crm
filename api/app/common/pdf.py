@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal
 
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -33,27 +34,88 @@ logger = logging.getLogger(__name__)
 _LOGO_MAX_HEIGHT_MM = 18
 _LOGO_MAX_WIDTH_MM = 60
 
+
+_INK = colors.HexColor("#333333")
+_TABLE_HEADER_BG = colors.HexColor("#666666")
+_TABLE_LINE = colors.HexColor("#E3E3E3")
+
 # Reusable styles
 _STYLES = getSampleStyleSheet()
+
 _HEADER_STYLE = ParagraphStyle(
     "DocHeader",
     parent=_STYLES["Heading1"],
-    fontSize=22,
-    textColor=colors.HexColor("#1A1A2E"),
-    spaceAfter=4 * mm,
+    fontSize=21,
+    textColor=_INK,
+    spaceAfter=1 * mm,
+    leading=24,
+)
+_TITLE_STYLE = ParagraphStyle(
+    "DocTitle",
+    parent=_STYLES["Normal"],
+    fontName="Open Sans",
+    fontSize=21,
+    textColor=_INK,
+    alignment=TA_RIGHT,
+    leading=25,
 )
 _SUB_STYLE = ParagraphStyle(
     "DocSub",
     parent=_STYLES["Normal"],
-    fontSize=10,
-    textColor=colors.HexColor("#6B7280"),
+    fontSize=14,
+    leading=18,
+    textColor=_INK,
+)
+_LABEL_STYLE = ParagraphStyle(
+    "DocLabel",
+    parent=_SUB_STYLE,
+    fontName="Helvetica-Bold",
+)
+_SECTION_LABEL_STYLE = ParagraphStyle(
+    "SectionLabel",
+    parent=_SUB_STYLE,
+    fontName="Helvetica-Bold",
+    textColor=colors.HexColor("#807D7D"),
 )
 _BODY_STYLE = ParagraphStyle(
     "DocBody",
     parent=_STYLES["Normal"],
-    fontSize=9,
-    leading=12,
+    fontSize=14,
+    leading=18,
+    textColor=_INK,
 )
+_ITEM_STYLE = ParagraphStyle(
+    "ItemDesc",
+    parent=_STYLES["Normal"],
+    fontSize=10,
+    leading=13,
+    textColor=_INK,
+)
+_ITEM_NUM_STYLE = ParagraphStyle(
+    "ItemNum",
+    parent=_ITEM_STYLE,
+    alignment=TA_RIGHT,
+)
+_ITEM_HEADER_STYLE = ParagraphStyle(
+    "ItemHeader",
+    parent=_STYLES["Normal"],
+    fontSize=10,
+    leading=13,
+    textColor=colors.white,
+)
+_ITEM_HEADER_NUM_STYLE = ParagraphStyle(
+    "ItemHeaderNum",
+    parent=_ITEM_HEADER_STYLE,
+    alignment=TA_RIGHT,
+)
+
+
+def _split_lines(value) -> list[str]:
+    """Split a possibly multi-line text field (e.g. a free-text address
+    block) into individual non-empty lines for separate Paragraphs."""
+    if not value:
+        return []
+    return [ln.strip() for ln in str(value).splitlines() if ln.strip()]
 
 
 class DocumentPDFGenerator:
@@ -163,6 +225,7 @@ class DocumentPDFGenerator:
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
+        content_width = doc.width
         elements: list = []
 
         # header — optional logo, then owner identity from the injected DTO
@@ -173,113 +236,155 @@ class DocumentPDFGenerator:
             elements.append(Spacer(1, 3 * mm))
 
         owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
-        elements.append(Paragraph(owner_name, _HEADER_STYLE))
+        left_cell: list = [Paragraph(owner_name, _HEADER_STYLE)]
 
         if owner is not None:
-            owner_lines = [
-                line
-                for line in (
-                    getattr(owner, "address", None),
-                    getattr(owner, "email", None),
-                    getattr(owner, "phone", None),
-                    (
-                        f"Tax PIN: {owner.tax_pin}"
-                        if getattr(owner, "tax_pin", None)
-                        else None
-                    ),
-                    getattr(owner, "website", None),
-                )
-                if line
-            ]
-            for line in owner_lines:
-                elements.append(Paragraph(str(line), _SUB_STYLE))
+            owner_text_fields = (
+                getattr(owner, "address", None),
+                getattr(owner, "email", None),
+                getattr(owner, "phone", None),
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
+                getattr(owner, "website", None),
+            )
+            for field in owner_text_fields:
+                for line in _split_lines(field):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
             if getattr(owner, "location_watermark", None):
-                elements.append(Paragraph(str(owner.location_watermark), _SUB_STYLE))
+                for line in _split_lines(owner.location_watermark):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
 
-        elements.append(Spacer(1, 6 * mm))
-        elements.append(
-            Paragraph(f"PURCHASE ORDER  •  {po.po_reference}", _HEADER_STYLE)
+        right_cell = [Paragraph("PURCHASE ORDER", _TITLE_STYLE)]
+
+        header_table = Table(
+            [[left_cell, right_cell]],
+            colWidths=[content_width - 78 * mm, 78 * mm],
         )
-        elements.append(Spacer(1, 4 * mm))
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(header_table)
+        elements.append(Spacer(1, 10 * mm))
 
         # vendor address block
         vendor = po.vendor
         vendor_name = getattr(vendor, "vendor_name", str(po.vendor_id))
-        elements.append(Paragraph("Vendor Address:", _SUB_STYLE))
-        elements.append(Paragraph(str(vendor_name), _BODY_STYLE))
-        for line in (
+        vendor_cell: list = [
+            Paragraph("Vendor Address:", _LABEL_STYLE),
+            Spacer(1, 2 * mm),
+            Paragraph(str(vendor_name), _SUB_STYLE),
+        ]
+        for field in (
             getattr(vendor, "address", None),
             getattr(vendor, "email", None),
             getattr(vendor, "phone_primary", None),
         ):
-            if line:
-                elements.append(Paragraph(str(line), _SUB_STYLE))
-        elements.append(Spacer(1, 6 * mm))
+            for line in _split_lines(field):
+                vendor_cell.append(Paragraph(line, _SUB_STYLE))
 
-        # metadata table — the Compliance Ref row is included only when set
-        # and omitted entirely when blank.
-        delivery = po.delivery_date.strftime("%d %b %Y") if po.delivery_date else "—"
-        meta_data = [
-            ["PO #", po.po_number, "Order Date", po.order_date.strftime("%d %b %Y")],
-            ["Currency", po.currency, "Delivery Date", delivery],
+        delivery = po.delivery_date.strftime("%b %d, %Y") if po.delivery_date else "—"
+        order_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
+        meta_rows = [
+            ["PO#", str(po.po_number)],
+            ["Order Date", order_date],
+            ["Delivery Date", delivery],
         ]
         if po.compliance_ref:
-            meta_data.append(["Compliance Ref", str(po.compliance_ref), "", ""])
-        meta_table = Table(meta_data, colWidths=[28 * mm, 52 * mm, 28 * mm, 52 * mm])
-        meta_table.setStyle(
-            TableStyle(
-                [
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#6B7280")),
-                    ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#6B7280")),
-                    ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
-                    ("FONTNAME", (3, 0), (3, -1), "Helvetica-Bold"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
+            meta_rows.append(["Compliance Ref", str(po.compliance_ref)])
+        meta_inner = Table(
+            [
+                [Paragraph(label, _LABEL_STYLE), Paragraph(value, _SUB_STYLE)]
+                for label, value in meta_rows
+            ],
+            colWidths=[33 * mm, 80 * mm - 33 * mm],
         )
-        elements.append(meta_table)
-        elements.append(Spacer(1, 8 * mm))
-
-        # line items table — "Rate"/"Amount" label unit_price/line_total.
-        header_row = ["#", "Item", "Description", "Qty", "Rate", "Amount"]
-        rows = [header_row]
-        for item in po.line_items:
-            rows.append(
-                [
-                    str(item.line_number),
-                    str(item.item_name),
-                    str(item.description)[:48],
-                    f"{item.quantity:,.2f}",
-                    f"{item.unit_price:,.2f}",
-                    f"{item.line_total:,.2f}",
-                ]
-            )
-        col_widths = [8 * mm, 40 * mm, 56 * mm, 20 * mm, 23 * mm, 23 * mm]
-        items_table = Table(rows, colWidths=col_widths, repeatRows=1)
-        items_table.setStyle(
+        meta_inner.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A1A2E")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 8),
-                    ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    (
-                        "ROWBACKGROUNDS",
-                        (0, 1),
-                        (-1, -1),
-                        [colors.white, colors.HexColor("#F9FAFB")],
-                    ),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
-                    ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                     ("TOPPADDING", (0, 0), (-1, -1), 3),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                 ]
             )
         )
+
+        vendor_meta_table = Table(
+            [[vendor_cell, meta_inner]],
+            colWidths=[content_width - 80 * mm, 80 * mm],
+        )
+        vendor_meta_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(vendor_meta_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        # line items table — "Rate"/"Amount" label unit_price/line_total.
+        header_row = [
+            Paragraph("Item Description", _ITEM_HEADER_STYLE),
+            Paragraph("Qty", _ITEM_HEADER_NUM_STYLE),
+            Paragraph("Rate", _ITEM_HEADER_NUM_STYLE),
+            Paragraph("Amount", _ITEM_HEADER_NUM_STYLE),
+        ]
+        rows = [header_row]
+        for item in po.line_items:
+            description = getattr(item, "description", None)
+            label = (
+                f"{item.item_name} ({description})"
+                if description
+                else str(item.item_name)
+            )
+            rows.append(
+                [
+                    Paragraph(label, _ITEM_STYLE),
+                    Paragraph(f"{item.quantity:,.2f}", _ITEM_NUM_STYLE),
+                    Paragraph(f"{item.unit_price:,.2f}", _ITEM_NUM_STYLE),
+                    Paragraph(f"{item.line_total:,.2f}", _ITEM_NUM_STYLE),
+                ]
+            )
+        col_widths = [
+            content_width - 75 * mm,
+            20 * mm,
+            25 * mm,
+            30 * mm,
+        ]
+
+        items_table = Table(rows, colWidths=col_widths, repeatRows=1)
+        items_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("LINEBELOW", (0, 1), (-1, -2), 0.5, _TABLE_LINE),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
         elements.append(items_table)
-        elements.append(Spacer(1, 6 * mm))
+        elements.append(Spacer(1, 1 * mm))
 
         # summary — Sub Total / VAT / TOTAL (no discount in v1). The current
         # (statement) variant additionally shows Amount Paid + Balance Due so
@@ -295,16 +400,21 @@ class DocumentPDFGenerator:
             balance_due = getattr(po, "balance_due", po.total)
             totals_rows.append(["Amount Paid", f"{po.currency} {amount_paid:,.2f}"])
             totals_rows.append(["Balance Due", f"{po.currency} {balance_due:,.2f}"])
-        totals_table = Table(totals_rows, colWidths=[40 * mm, 45 * mm], hAlign="RIGHT")
+        totals_table = Table(
+            totals_rows, colWidths=[content_width - 75 * mm, 50 * mm], hAlign="RIGHT"
+        )
         totals_table.setStyle(
             TableStyle(
                 [
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("FONTSIZE", (0, 0), (-1, -1), 11),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), _INK),
+                    ("ALIGN", (0, 0), (0, -1), "RIGHT"),
                     ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                    ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                    ("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#1A1A2E")),
-                    ("TOPPADDING", (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+                    ("LINEABOVE", (0, 0), (-1, 0), 0.75, _TABLE_LINE),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ]
             )
         )
@@ -313,21 +423,18 @@ class DocumentPDFGenerator:
         # notes
         if po.notes:
             elements.append(Spacer(1, 8 * mm))
-            elements.append(Paragraph("Notes", _SUB_STYLE))
+            elements.append(Paragraph("Notes", _SECTION_LABEL_STYLE))
             elements.append(Spacer(1, 2 * mm))
-            elements.append(Paragraph(str(po.notes), _BODY_STYLE))
+            for line in _split_lines(po.notes):
+                elements.append(Paragraph(line, _BODY_STYLE))
 
         # terms & conditions
         if po.terms_and_conditions:
             elements.append(Spacer(1, 6 * mm))
-            elements.append(Paragraph("Terms & Conditions", _SUB_STYLE))
+            elements.append(Paragraph("Terms & Conditions", _SECTION_LABEL_STYLE))
             elements.append(Spacer(1, 2 * mm))
-            elements.append(Paragraph(str(po.terms_and_conditions), _BODY_STYLE))
-
-        # footer
-        elements.append(Spacer(1, 12 * mm))
-        footer_text = f"Generated by {owner_name} • {date.today().strftime('%d %b %Y')}"
-        elements.append(Paragraph(footer_text, _SUB_STYLE))
+            for line in _split_lines(po.terms_and_conditions):
+                elements.append(Paragraph(line, _BODY_STYLE))
 
         doc.build(elements)
         pdf_bytes = buf.getvalue()

@@ -9,7 +9,7 @@ import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
+import { ACCEPTED_UPLOAD_TYPES, DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
     PurchaseOrderLineItem,
@@ -110,7 +110,7 @@ export default function PurchaseOrderDetailPage() {
         if (!po) return;
         showConfirm({
             title: "Mark as sent?",
-            description: `Mark ${po.po_reference} as Sent without emailing the vendor? Use this when the PO was sent offline.`,
+            description: "Are you sure you want to mark this item as sent?",
             confirmLabel: "Yes, mark as sent",
             onConfirm: async () => {
                 try {
@@ -240,7 +240,7 @@ export default function PurchaseOrderDetailPage() {
     }
 
     const status = po.status.toLowerCase();
-    const currency = po.currency ?? "Ksh";
+    const currency = po.currency ?? DEFAULT_CURRENCY;
     // Balance fields land with PO-19; default defensively so the UI is correct
     // even before any payment has been recorded.
     const total = Number(po.total);
@@ -260,6 +260,7 @@ export default function PurchaseOrderDetailPage() {
         });
     }
     // if (status === "draft") {
+    if (status != "sent") {
         actions.push({
             key: "send",
             label: "Send",
@@ -272,6 +273,7 @@ export default function PurchaseOrderDetailPage() {
             icon: <CheckCircle size={16} />,
             onClick: handleMarkAsSent,
         });
+    }
     // }
 
     // Record payment: SENT only, while there is still a balance to clear.
@@ -445,9 +447,8 @@ export default function PurchaseOrderDetailPage() {
                             <Badge variant={status as BadgeVariant}>{statusLabel}</Badge>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
                             <OverviewField label="Reference" value={po.po_reference} />
-                            <OverviewField label="Currency" value={po.currency ?? "-"} />
                             <OverviewField
                                 label="Order Date"
                                 value={po.order_date ? formatDisplayDate(po.order_date) : "-"}
@@ -456,10 +457,6 @@ export default function PurchaseOrderDetailPage() {
                                 label="Delivery Date"
                                 value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
                             />
-                            {po.compliance_ref && (
-                                <OverviewField label="Compliance Ref" value={po.compliance_ref} />
-                            )}
-                            <OverviewField label="Recurring" value={po.is_recurring ? "Yes" : "No"} />
                         </div>
 
 
@@ -610,7 +607,7 @@ export default function PurchaseOrderDetailPage() {
                 }}
             />
 
-            {/* Record payment modal (PO-19): reuses the shared transactional modal. */}
+            {/* Record payment modal */}
             <RecordPaymentModal
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
@@ -633,9 +630,9 @@ export default function PurchaseOrderDetailPage() {
 
 function OverviewField({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div className="min-w-0">
-            <p className="text-[14px] text-gray-500">{label}</p>
-            <p className="text-[16px] font-bold text-gray-800 truncate">{value}</p>
+        <div className="min-w-0 flex items-center justify-between">
+            <p className="text-[16px] text-gray-800">{label}</p>
+            <p className="text-[14px] text-gray-500 truncate">{value}</p>
         </div>
     );
 }
