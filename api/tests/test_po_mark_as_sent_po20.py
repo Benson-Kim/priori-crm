@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-from app.common.exceptions import BadRequestException
 from app.constants.enums import PurchaseOrderStatus
 from app.modules.purchase_orders.service import PurchaseOrderService
 
@@ -72,15 +71,21 @@ def test_mark_as_sent_transitions_draft_to_sent(monkeypatch) -> None:
     "status",
     [PurchaseOrderStatus.SENT, PurchaseOrderStatus.PAID],
 )
-def test_mark_as_sent_rejects_non_draft(
+def test_mark_as_sent_is_idempotent_for_non_draft(
     status: PurchaseOrderStatus, monkeypatch
 ) -> None:
+    # A PO that is already SENT (or PAID) genuinely was sent, so marking it
+    # sent again is an idempotent no-op: no error, status and version left
+    # untouched, and no state-machine transition fires.
     po = _FakePO(status=status)
+    po.version = 5
     service = _service_with(po, monkeypatch)
 
-    with pytest.raises(BadRequestException):
-        service.mark_as_sent(po.id)
+    result = service.mark_as_sent(po.id)
+
+    assert result is po
     assert po.status == status  # unchanged
+    assert po.version == 5  # no transition, no version bump
 
 
 def test_mark_as_sent_does_not_enqueue_email(monkeypatch) -> None:

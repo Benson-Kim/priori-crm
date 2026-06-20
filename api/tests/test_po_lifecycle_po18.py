@@ -1,7 +1,7 @@
-"""PO-18 lifecycle tests: DRAFT -> SENT -> PAID; BILLED/CANCELED disabled.
+"""PO-18 lifecycle tests: DRAFT -> SENT -> PAID.
 
 Proves work item #19 acceptance criteria:
-- enum has PAID and retains BILLED/CANCELED;
+- enum is exactly DRAFT/SENT/PAID (no billed/canceled);
 - ALLOWED_TRANSITIONS exposes only DRAFT->SENT and SENT->PAID, with the
   shared state machine raising on every illegal edge (no hand-rolled status
   writes);
@@ -25,33 +25,31 @@ from app.modules.purchase_orders.service import (
 )
 
 
-def test_enum_has_paid_and_retains_disabled_values() -> None:
-    # PAID added; BILLED/CANCELED kept (disabled, not removed).
+def test_enum_is_exactly_draft_sent_paid() -> None:
+    # The PO lifecycle has exactly three states; billed/canceled are gone.
     members = set(PurchaseOrderStatus)
-    assert PurchaseOrderStatus.PAID in members
-    assert PurchaseOrderStatus.BILLED in members
-    assert PurchaseOrderStatus.CANCELED in members
+    assert members == {
+        PurchaseOrderStatus.DRAFT,
+        PurchaseOrderStatus.SENT,
+        PurchaseOrderStatus.PAID,
+    }
     assert PurchaseOrderStatus.PAID.value == "paid"
+    assert not hasattr(PurchaseOrderStatus, "BILLED")
+    assert not hasattr(PurchaseOrderStatus, "CANCELED")
 
 
 def test_allowed_transitions_table_is_draft_sent_paid_only() -> None:
     table = PurchaseOrderService.ALLOWED_TRANSITIONS
     assert table[PurchaseOrderStatus.DRAFT] == [PurchaseOrderStatus.SENT]
     assert table[PurchaseOrderStatus.SENT] == [PurchaseOrderStatus.PAID]
-    # Terminal / disabled states have no outgoing edges.
+    # PAID is terminal.
     assert table[PurchaseOrderStatus.PAID] == []
-    assert table[PurchaseOrderStatus.BILLED] == []
-    assert table[PurchaseOrderStatus.CANCELED] == []
 
 
 @pytest.mark.parametrize(
     "frm, to",
     [
         (PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.PAID),
-        (PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELED),
-        (PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.BILLED),
-        (PurchaseOrderStatus.SENT, PurchaseOrderStatus.CANCELED),
-        (PurchaseOrderStatus.SENT, PurchaseOrderStatus.BILLED),
         (PurchaseOrderStatus.SENT, PurchaseOrderStatus.DRAFT),
         (PurchaseOrderStatus.PAID, PurchaseOrderStatus.SENT),
         (PurchaseOrderStatus.PAID, PurchaseOrderStatus.DRAFT),
@@ -82,7 +80,6 @@ def test_only_draft_is_deletable() -> None:
     assert frozenset({PurchaseOrderStatus.DRAFT}) == _DELETABLE_STATUSES
     assert PurchaseOrderStatus.SENT not in _DELETABLE_STATUSES
     assert PurchaseOrderStatus.PAID not in _DELETABLE_STATUSES
-    assert PurchaseOrderStatus.CANCELED not in _DELETABLE_STATUSES
 
 
 class _FakeTransitionTarget:
