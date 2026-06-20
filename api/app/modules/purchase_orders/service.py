@@ -90,12 +90,10 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle (v1):
+    Lifecycle:
         DRAFT → SENT → PAID
     PAID is reached by full settlement (see record_payment), not a manual
-    edge. BILLED and CANCELED are DISABLED in v1: they remain valid enum /
-    DB-CHECK values but the state machine exposes no transition into them,
-    so they are currently unreachable (re-enabling is a code-only change).
+    edge. There are no billed or canceled states for purchase orders.
     """
 
     MAX_RETRIES = 3
@@ -128,10 +126,6 @@ class PurchaseOrderService(BaseDocumentService):
         # PAID is reached only by full settlement (record_payment, PO-19).
         PurchaseOrderStatus.SENT: [PurchaseOrderStatus.PAID],
         PurchaseOrderStatus.PAID: [],  # terminal
-        # BILLED / CANCELED are disabled in v1: retained as values but with
-        # no edge into them, so the state machine can never reach them.
-        PurchaseOrderStatus.BILLED: [],  # disabled (terminal)
-        PurchaseOrderStatus.CANCELED: [],  # disabled (terminal)
     }
 
     # REFERENCE GENERATION
@@ -357,9 +351,8 @@ class PurchaseOrderService(BaseDocumentService):
 
     # LIST / AGGREGATES
 
-    # Single source of truth for purchase-order filtering, including the
-    # CANCELED-visibility rule — module-level in queries.py so the export
-    # query shares the identical function.
+    # Single source of truth for purchase-order filtering — module-level in
+    # queries.py so the export query shares the identical function.
     _apply_filters = staticmethod(apply_purchase_order_filters)
 
     def list_purchase_orders(
@@ -486,10 +479,9 @@ class PurchaseOrderService(BaseDocumentService):
     def _validate_sendable(self, purchase_order: PurchaseOrder) -> None:
         """Reject sends for non-Draft purchase orders (DocumentSendMixin hook).
 
-        Send is a Draft-only action: a SENT / BILLED / CANCELED PO can never
-        be (re)sent — resend after Sent is intentionally
-        unavailable). The locked row is checked under FOR UPDATE so the gate
-        cannot act on a stale status.
+        Send is a Draft-only action: a SENT / PAID PO can never be (re)sent
+        (resend after Sent is intentionally unavailable). The locked row is
+        checked under FOR UPDATE so the gate cannot act on a stale status.
         """
         if purchase_order.status != PurchaseOrderStatus.DRAFT:
             raise BadRequestException(
@@ -587,8 +579,18 @@ Best regards,
 
         purchase_order = self._get_locked(po_id)
 
-        # Reuse the Send guard: Draft-only, else a typed 400.
-        self._validate_sendable(purchase_order)
+        # "Any state can be marked as sent": a PO already in SENT (or beyond,
+        # e.g. PAID) is treated as an idempotent no-op rather than an error,
+        # so the action is always available from the View screen. Only a
+        # DRAFT PO actually transitions through the state machine.
+        if purchase_order.status != PurchaseOrderStatus.DRAFT:
+            logger.info(
+                "Mark-as-sent is a no-op for purchase order %s in '%s' status",
+                purchase_order.po_reference,
+                purchase_order.status,
+                extra={"po_id": str(purchase_order.id)},
+            )
+            return purchase_order
 
         previous_status = purchase_order.status
         self._transition(purchase_order, PurchaseOrderStatus.SENT)
@@ -716,7 +718,7 @@ Best regards,
     ) -> PurchaseOrder:
         """Update a purchase order with optimistic locking.
 
-        Editable only in DRAFT; SENT/BILLED/CANCELED raise BadRequestException
+        Editable only in DRAFT; any non-DRAFT status raises BadRequestException
         (the router maps this to the §13 inline-banner message). currency is
         locked — it is not present on PurchaseOrderUpdate, so it can never be
         applied here. Supplying line_items replaces the full set and recomputes

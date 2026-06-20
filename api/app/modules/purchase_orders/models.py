@@ -1,9 +1,8 @@
 """
 Purchase Order ORM models — Purchases module.
 
-Lifecycle: DRAFT → SENT → BILLED; DRAFT | SENT → CANCELED
-No discount field in v1. No payments table in v1.
-CANCELED is a terminal state (voided).
+Lifecycle: DRAFT → SENT → PAID
+No discount field in v1.
 
 Mirrors the Expense models (vendor-facing, document attachments) rather
 than the Quote/Invoice (customer-facing) models. Purchase Orders are
@@ -67,7 +66,7 @@ class PurchaseOrder(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'sent', 'paid', 'billed', 'canceled')",
+            "status IN ('draft', 'sent', 'paid')",
             name="ck_purchase_orders_valid_status",
         ),
         CheckConstraint(

@@ -657,7 +657,8 @@ def list_purchase_order_documents(
         "written to object storage, then its metadata is persisted. "
         "Attachments can be added from the View screen at any status "
         "(including SENT / BILLED / CANCELED) and do not re-open edit mode. "
-        "source must be 'form' or 'view'. storage_key is never returned."
+        "source must be 'form', 'view' or 'payment_modal' (proof-of-payment "
+        "uploaded in the Record Payment modal). storage_key is never returned."
     ),
     responses={
         201: {"description": "Document uploaded"},
@@ -676,19 +677,23 @@ def upload_purchase_order_document(
 
     user_id = service.actor_id
 
-    # PO documents only support form | view (no payment_modal): reject any
-    # other value with a clear 400 rather than letting the DB CHECK surface
-    # an opaque error.
+    # PO documents support form | view | payment_modal (proof-of-payment
+    # uploaded in the Record Payment modal): reject any other value with a
+    # clear 400 rather than letting the DB CHECK surface an opaque error.
     try:
         doc_source = DocumentSource(source)
     except ValueError as exc:
         raise BadRequestException(
-            detail="source must be 'form' or 'view'.",
+            detail="source must be 'form', 'view' or 'payment_modal'.",
             field="source",
         ) from exc
-    if doc_source not in (DocumentSource.FORM, DocumentSource.VIEW):
+    if doc_source not in (
+        DocumentSource.FORM,
+        DocumentSource.VIEW,
+        DocumentSource.PAYMENT_MODAL,
+    ):
         raise BadRequestException(
-            detail="source must be 'form' or 'view'.",
+            detail="source must be 'form', 'view' or 'payment_modal'.",
             field="source",
         )
 

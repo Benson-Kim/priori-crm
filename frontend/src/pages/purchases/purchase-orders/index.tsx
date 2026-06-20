@@ -14,12 +14,13 @@ import {
     exportPurchaseOrdersExcel,
     getPurchaseOrderCounts,
     getPurchaseOrders,
+    markAsSentPurchaseOrder,
     sendPurchaseOrder,
     type PaginatedPurchaseOrders,
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -35,8 +36,6 @@ export default function PurchaseOrdersPage() {
         draft: 0,
         sent: 0,
         paid: 0,
-        billed: 0,
-        canceled: 0,
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -113,6 +112,22 @@ export default function PurchaseOrdersPage() {
         });
     };
 
+    const handleMarkAsSent = (po: PurchaseOrderSummary) => {
+        showConfirm({
+            title: "Mark as sent?",
+            description: "Are you sure you want to mark this item as sent?",
+            confirmLabel: "Yes, mark as sent",
+            onConfirm: async () => {
+                try {
+                    await markAsSentPurchaseOrder(po.id);
+                    refreshAll();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to mark purchase order as sent");
+                }
+            },
+        });
+    };
+
     const handleDuplicate = async (po: PurchaseOrderSummary) => {
         try {
             const result = await duplicatePurchaseOrder(po.id);
@@ -174,11 +189,19 @@ export default function PurchaseOrdersPage() {
                 icon: <Pencil size={16} />,
                 onClick: () => handleEdit(po),
             });
+        }
+        if (po.status != "sent") {
             actions.push({
                 key: "send",
                 label: "Send",
                 icon: <Send size={16} />,
                 onClick: () => handleSend(po),
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleMarkAsSent(po),
             });
         }
 
@@ -190,8 +213,8 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
-        // Delete is permitted only for DRAFT or CANCELED (SENT/BILLED protected).
-        if (po.status === "draft" || po.status === "canceled") {
+        // Delete is permitted only for DRAFT (SENT/PAID protected).
+        if (po.status === "draft") {
             actions.push({
                 key: "delete",
                 label: "Delete",
@@ -209,8 +232,6 @@ export default function PurchaseOrdersPage() {
         { key: "draft", label: "Draft", count: counts.draft },
         { key: "sent", label: "Sent", count: counts.sent },
         { key: "paid", label: "Paid", count: counts.paid },
-        { key: "billed", label: "Billed", count: counts.billed },
-        { key: "canceled", label: "Canceled", count: counts.canceled },
     ];
 
     const columns = [
@@ -248,6 +269,13 @@ export default function PurchaseOrdersPage() {
             header: "Amount",
             render: (item: PurchaseOrderSummary) => (
                 <span className="text-gray-500">{formatCurrency(Number(item.total), item.currency)}</span>
+            ),
+        },
+        {
+            key: "balance",
+            header: "Balance",
+            render: (item: PurchaseOrderSummary) => (
+                <span className="text-gray-500">{formatCurrency(Number(item.balance_due), item.currency)}</span>
             ),
         },
         {
