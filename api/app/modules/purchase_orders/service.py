@@ -90,12 +90,10 @@ class PurchaseOrderService(BaseDocumentService):
     ``BaseDocumentService``; the transition table and reference-collision
     markers below stay PO-specific. Purchase orders are vendor-facing.
 
-    Lifecycle (v1):
+    Lifecycle:
         DRAFT → SENT → PAID
     PAID is reached by full settlement (see record_payment), not a manual
-    edge. BILLED and CANCELED are DISABLED in v1: they remain valid enum /
-    DB-CHECK values but the state machine exposes no transition into them,
-    so they are currently unreachable (re-enabling is a code-only change).
+    edge. There are no billed or canceled states for purchase orders.
     """
 
     MAX_RETRIES = 3
@@ -128,10 +126,6 @@ class PurchaseOrderService(BaseDocumentService):
         # PAID is reached only by full settlement (record_payment, PO-19).
         PurchaseOrderStatus.SENT: [PurchaseOrderStatus.PAID],
         PurchaseOrderStatus.PAID: [],  # terminal
-        # BILLED / CANCELED are disabled in v1: retained as values but with
-        # no edge into them, so the state machine can never reach them.
-        PurchaseOrderStatus.BILLED: [],  # disabled (terminal)
-        PurchaseOrderStatus.CANCELED: [],  # disabled (terminal)
     }
 
     # REFERENCE GENERATION

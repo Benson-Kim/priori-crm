@@ -4,8 +4,7 @@ Decomposes the read-heavy concerns out of PurchaseOrderService, mirroring
 the expenses/quotes layout exactly:
 
 - ``apply_purchase_order_filters`` — single source of truth for purchase-order
-  filtering, including the CANCELED-visibility rule, shared by the list view
-  and the export so they can never drift.
+  filtering, shared by the list view and the export so they can never drift.
 - ``PurchaseOrderStatisticsRepository`` — the status-count SQL for the
   filter-tab badges.
 - ``PurchaseOrderExportQuery`` — batch loading of full ORM rows for the Excel
@@ -36,20 +35,16 @@ def apply_purchase_order_filters(query, filters: PurchaseOrderFilterParams | Non
     """Single source of truth for purchase-order filtering.
 
     Shared by ``list_purchase_orders`` and ``PurchaseOrderExportQuery`` so the
-    Excel export can never drift from the list view. Owns the visibility rule
-    too: CANCELED is hidden unless explicitly requested via the status filter,
-    on both the filtered and unfiltered paths. Callers must have joined Vendor.
+    Excel export can never drift from the list view. Callers must have joined
+    Vendor.
     """
     from app.modules.vendors.models import Vendor
-
-    if filters and filters.status:
-        query = query.filter(PurchaseOrder.status == filters.status)
-    else:
-        query = query.filter(PurchaseOrder.status != PurchaseOrderStatus.CANCELED)
 
     if not filters:
         return query
 
+    if filters.status:
+        query = query.filter(PurchaseOrder.status == filters.status)
     if filters.vendor_id:
         query = query.filter(PurchaseOrder.vendor_id == filters.vendor_id)
     if filters.date_from:
@@ -86,8 +81,8 @@ class PurchaseOrderStatisticsRepository:
         """Single-query status counts for the filter-tab bar.
 
         One grouped COUNT over status — no N+1 and no second round-trip.
-        CANCELED is surfaced via its own bucket and excluded from ``all``
-        (it is a voided PO), matching the Expenses tab semantics.
+        The PO lifecycle is DRAFT -> SENT -> PAID, so every row is counted
+        in ``all``.
         """
         from sqlalchemy import func
 
@@ -105,16 +100,13 @@ class PurchaseOrderStatisticsRepository:
             total = 0
             for status_val, cnt in rows:
                 counts[status_val] = cnt
-                if status_val != PurchaseOrderStatus.CANCELED:
-                    total += cnt
+                total += cnt
 
             return PurchaseOrderStatusCounts(
                 all=total,
                 draft=counts.get(PurchaseOrderStatus.DRAFT, 0),
                 sent=counts.get(PurchaseOrderStatus.SENT, 0),
                 paid=counts.get(PurchaseOrderStatus.PAID, 0),
-                billed=counts.get(PurchaseOrderStatus.BILLED, 0),
-                canceled=counts.get(PurchaseOrderStatus.CANCELED, 0),
             )
 
         except SQLAlchemyError as exc:
