@@ -345,8 +345,8 @@ class PurchaseOrderUpdate(BaseModel):
     payload; since currency never appears here it can never be changed.
 
     Editing gate enforced in service:
-        DRAFT                       -> editable
-        SENT / BILLED / CANCELED    -> BadRequestException (§13 inline banner)
+        DRAFT          -> editable
+        SENT / PAID    -> BadRequestException (§13 inline banner)
     """
 
     vendor_id: UUID | None = Field(None, alias="vendorId")
@@ -492,19 +492,14 @@ class PurchaseOrderSummary(BaseModel):
 class PurchaseOrderStatusCounts(BaseModel):
     """Status counts for the filter-tab bar ("All (160)").
 
-    Mirrors ExpenseStatusCounts / QuoteStatusCounts. CANCELED is surfaced
-    via its own count and excluded from ``all`` (it is a voided PO).
-    PAID is a reachable lifecycle status (SENT -> PAID via record_payment)
-    and is included in both ``all`` and its own ``paid`` bucket so the
-    filter-tab bar can surface a "Paid" tab without silently under-counting.
+    The PO lifecycle is DRAFT -> SENT -> PAID, so every status is included
+    in ``all``. PAID is reached via record_payment (SENT -> PAID).
     """
 
     all: int = 0
     draft: int = 0
     sent: int = 0
     paid: int = 0  # fully settled POs (included in `all`)
-    billed: int = 0
-    canceled: int = 0  # voided POs (excluded from `all`)
 
 
 class PurchaseOrderFilterParams(BaseModel):
