@@ -2,7 +2,6 @@ import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { useConfirm } from "@/hooks/useConfirm";
 import {
   getComplianceRefLabel,
   getComplianceRefTooltip,
@@ -10,13 +9,11 @@ import {
   resolveOrgJurisdiction,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
-import { formatCurrency, saveBlob } from "@/lib/utils";
-import { deletePurchaseOrder, downloadPurchaseOrderPdf, markAsSentPurchaseOrder, sendPurchaseOrder } from "@/services/purchaseOrderApi";
+import { formatCurrency } from "@/lib/utils";
 import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
-import { Dropdown } from "../ui/Dropdown";
+import { Dropdown, type DropdownItem } from "../ui/Dropdown";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
@@ -250,105 +247,40 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const { showConfirm, ConfirmDialog } = useConfirm();
-  const navigate = useNavigate();
-
-
-  const handleSend = () => {
-    if (!po) return;
-    showConfirm({
-      title: "Send purchase order?",
-      description: `Send ${po.po_reference} to the vendor by email? It will be marked as Sent.`,
-      confirmLabel: "Yes, send",
-      onConfirm: async () => {
-        try {
-          await sendPurchaseOrder(po.id);
-          fetchPurchaseOrder();
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to send purchase order");
-        }
-      },
-    });
-  };
-
-  const handleMarkAsSent = () => {
-    if (!po) return;
-    showConfirm({
-      title: "Mark as sent?",
-      description: "Are you sure you want to mark this item as sent?",
-      confirmLabel: "Yes, mark as sent",
-      onConfirm: async () => {
-        try {
-          await markAsSentPurchaseOrder(po.id);
-          fetchPurchaseOrder();
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to send purchase order");
-        }
-      },
-    });
-  };
-
-
-  const handleDelete = () => {
-    if (!po) return;
-    showConfirm({
-      title: "Delete purchase order?",
-      description: `Delete ${po.po_reference}? This action is irreversible.`,
-      confirmLabel: "Delete",
-      variant: "danger",
-      onConfirm: async () => {
-        await deletePurchaseOrder(po.id);
-        navigate("/purchase-orders");
-      },
-    });
-  };
-
-  /** Original PO PDF: full amount, no payments applied. */
-  const handleDownloadPdf = async () => {
-    if (!po) return;
-    try {
-      const blob = await downloadPurchaseOrderPdf(po.id);
-      saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to download PDF");
-    }
-  };
-
-  // Build actions
-  const actions = [];
-
-  actions.push({
-    key: "pdf",
-    label: "Download PDF",
-    icon: <Download size={16} />,
-    onClick: handleDownloadPdf
-  });
-
-  if (status === "draft") {
-    actions.push({
-      key: "mark-sent"
-      , label: "Mark as Sent",
+  // Document actions (Download PDF / Mark as Sent / Send / Delete) act on a
+  // PERSISTED purchase order, which does not exist until the form is saved.
+  // They live on the detail page once the PO has an id; here in the editor we
+  // surface them in a disabled dropdown so the affordance is visible but
+  // cannot be triggered before the first save. The onClick handlers are no-ops
+  // because the dropdown is disabled (the trigger button is non-interactive).
+  const noop = () => undefined;
+  const actions: DropdownItem[] = [
+    {
+      key: "pdf",
+      label: "Download as PDF",
+      icon: <Download size={16} />,
+      onClick: noop,
+    },
+    {
+      key: "mark-sent",
+      label: "Mark as Sent",
       icon: <CheckCircle size={16} />,
-      onClick: handleMarkSent
-    });
-  }
-
-  actions.push({
-    key: "send",
-    label: "Send",
-    icon: <Send size={16} />,
-    onClick: () => setShowSendModal(true)
-  });
-
-  if (status === "draft") {
-    actions.push({
+      onClick: noop,
+    },
+    {
+      key: "send",
+      label: "Send",
+      icon: <Send size={16} />,
+      onClick: noop,
+    },
+    {
       key: "delete",
-      label: "Delete PO",
+      label: "Delete",
       icon: <Trash size={16} />,
-      onClick: handleDelete
-    });
-  }
-
+      danger: true,
+      onClick: noop,
+    },
+  ];
 
 
   return (
@@ -365,7 +297,15 @@ export function PurchaseOrderEditor({
             <Save size={18} /> Save &amp; Continue
           </Button>
         )}
-        <Dropdown items={actions} className="flex items-center gap-2 px-5 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
+        <div
+          title="Save the purchase order first to download, send, mark as sent or delete it"
+        >
+          <Dropdown
+            items={actions}
+            disabled
+            className="flex items-center gap-2 px-5 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans transition-colors opacity-50 cursor-not-allowed"
+          />
+        </div>
       </div>
       <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
         {/* Top Section */}
