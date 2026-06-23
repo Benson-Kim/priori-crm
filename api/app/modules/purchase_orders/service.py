@@ -454,6 +454,27 @@ class PurchaseOrderService(BaseDocumentService):
             filters, include_line_items=include_line_items, limit=limit
         )
 
+    def list_payments_for_export(
+        self, po_id: uuid.UUID
+    ) -> tuple[PurchaseOrder, list[PurchaseOrderPayment]]:
+        """Return a purchase order with its payments ordered for Excel export.
+
+        Loads the PO once (raising NotFoundException if missing) and returns
+        its payments ordered by payment_date ascending (then created_at) so
+        the workbook reads as a chronological statement. Read-only: no flush.
+        """
+        purchase_order = self.get_by_id(po_id)
+        payments = (
+            self._db.query(PurchaseOrderPayment)
+            .filter(PurchaseOrderPayment.po_id == po_id)
+            .order_by(
+                PurchaseOrderPayment.payment_date.asc(),
+                PurchaseOrderPayment.created_at.asc(),
+            )
+            .all()
+        )
+        return purchase_order, payments
+
     def get_status_counts(self) -> PurchaseOrderStatusCounts:
         """Per-status counts for the filter-tab badges.
 
