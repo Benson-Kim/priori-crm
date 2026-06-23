@@ -22,6 +22,7 @@ import {
     downloadPurchaseOrderPdf,
     downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
+    exportPurchaseOrderPaymentsExcel,
     getPurchaseOrder,
     markAsSentPurchaseOrder,
     sendPurchaseOrder,
@@ -163,11 +164,11 @@ export default function PurchaseOrderDetailPage() {
         }
     };
 
-    /** Export payments to excel */
+    /** Export this PO's recorded payments to an Excel workbook. */
     const handlePaymentsExport = async () => {
-        if (!po) return
+        if (!po) return;
         try {
-            const blob = await exportPaymentsExcel();
+            const blob = await exportPurchaseOrderPaymentsExcel(po.id);
             saveBlob(blob, `${po.po_reference}_Payments_${new Date().toISOString().split("T")[0]}.xlsx`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to export payments");
@@ -387,12 +388,17 @@ export default function PurchaseOrderDetailPage() {
             header: "Actions",
             render: (payment: PurchaseOrderPayment) =>
                 <button
-                    // onClick={setSelectedPayment(payment)}
-                    className="inline-flex gap-2.5 px-3 py-2 text-sm transition-colors cursor-pointer"
+                    type="button"
+                    onClick={(e) => {
+                        // Row also has an onRowClick handler; stop the event
+                        // bubbling so the modal isn't opened twice.
+                        e.stopPropagation();
+                        setSelectedPayment(payment);
+                    }}
+                    className="inline-flex items-center gap-2.5 px-3 py-2 text-sm text-priori-purple transition-colors cursor-pointer hover:underline"
                 >
                     <Eye size={16} /> View
                 </button>
-
         }
     ];
 
