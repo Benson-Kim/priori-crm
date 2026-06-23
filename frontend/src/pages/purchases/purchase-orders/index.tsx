@@ -1,3 +1,4 @@
+import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
@@ -20,7 +21,7 @@ import {
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { CheckCircle, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, Copy, CreditCard, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -39,6 +40,7 @@ export default function PurchaseOrdersPage() {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     const { showConfirm, ConfirmDialog } = useConfirm();
     const navigate = useNavigate();
@@ -213,6 +215,16 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
+        // Record payment: SENT only, while there is still a balance to clear.
+        if (po.status === "sent" && po.balance_due > 0) {
+            actions.push({
+                key: "record-payment",
+                label: "Record payment",
+                icon: <CreditCard size={16} />,
+                onClick: () => setIsPaymentModalOpen(true),
+            });
+        }
+
         // Delete is permitted only for DRAFT (SENT/PAID protected).
         if (po.status === "draft") {
             actions.push({
@@ -364,6 +376,20 @@ export default function PurchaseOrdersPage() {
                     onPerPageChange={setPerPage}
                 />
             </div>
+
+            <RecordPaymentModal
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                entityId={po.id}
+                entityType="purchaseOrder"
+                balanceDue={balanceDue}
+                currency={currency}
+                reference={po.po_reference}
+                onSuccess={() => {
+                    setIsPaymentModalOpen(false);
+                    fetchPurchaseOrders();
+                }}
+            />
 
             {/* Confirmation Dialog */}
             {ConfirmDialog}

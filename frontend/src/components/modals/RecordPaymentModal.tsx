@@ -165,11 +165,6 @@ export function RecordPaymentModal({
             isLoading={isSubmitting}
         >
             <div className="space-y-6 bg-white p-6 rounded-xl border border-gray-200">
-                {/* <div className="flex justify-between text-sm p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500">{ENTITY_TYPE_LABELS[entityType]}: {displayRef || entityId.slice(0, 8)}</span>
-                    <span className="font-medium text-gray-800">Balance: {formatCurrency(balanceDue, currency)}</span>
-                </div> */}
-
                 {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
                 )}
@@ -236,7 +231,6 @@ export function RecordPaymentModal({
                 {/* Proof-of-payment attachments (purchase orders only). */}
                 {supportsAttachments && (
                     <div className="space-y-2">
-                        {/* <Label htmlFor="payment-documents">Attach document(s) (optional)</Label> */}
                         <Button
                             type="button"
                             variant="outline"
