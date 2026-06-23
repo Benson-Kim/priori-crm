@@ -87,8 +87,6 @@ export function usePurchaseOrderForm(
           vendorId: payload.vendorId,
           orderDate: payload.orderDate,
           deliveryDate: payload.deliveryDate,
-          isRecurring: payload.isRecurring,
-          complianceRef: payload.complianceRef,
           notes: payload.notes,
           termsAndConditions: payload.termsAndConditions,
           lineItems,
@@ -100,31 +98,19 @@ export function usePurchaseOrderForm(
           initialData.version
         );
       } else {
+        // Currency, recurring and compliance ref are no longer collected on
+        // the form: currency is derived from the vendor server-side, and the
+        // other two were removed from the PO create flow.
         const createPayload: PurchaseOrderCreatePayload = {
           vendorId: payload.vendorId,
           orderDate: payload.orderDate,
           deliveryDate: payload.deliveryDate,
-          currency: payload.currency,
-          isRecurring: payload.isRecurring,
-          complianceRef: payload.complianceRef,
           notes: payload.notes,
           termsAndConditions: payload.termsAndConditions,
           lineItems,
         };
         const created = await createPurchaseOrder(createPayload);
         idToNavigate = created.id;
-      }
-
-      // Upload any queued documents after the save succeeds.
-      if (payload.files && payload.files.length > 0 && idToNavigate) {
-        const { uploadPurchaseOrderDocument } = await import(
-          "@/services/purchaseOrderApi"
-        );
-        await Promise.all(
-          payload.files.map((file) =>
-            uploadPurchaseOrderDocument(idToNavigate!, file, "form")
-          )
-        );
       }
 
       navigate(`/purchase-orders`);
