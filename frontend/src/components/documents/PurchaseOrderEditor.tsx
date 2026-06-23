@@ -3,15 +3,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import {
-  getComplianceRefLabel,
-  getComplianceRefTooltip,
   resolveDefaultTerms,
-  resolveOrgJurisdiction,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency } from "@/lib/utils";
 import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -37,13 +34,9 @@ export interface PurchaseOrderPayload {
   vendorId: string;
   orderDate: string;
   deliveryDate?: string | null;
-  currency: string;
-  isRecurring: boolean;
-  complianceRef?: string | null;
   notes?: string;
   termsAndConditions?: string | null;
   lineItems: PurchaseOrderLineItemPayload[];
-  files?: File[];
 }
 
 export interface PurchaseOrderInitialData {
@@ -91,7 +84,6 @@ export function PurchaseOrderEditor({
   // Org-scoped Settings defaults (PO-11), resolved from the persisted owner
   // profile with the built-in constants as fallback.
   const { profile } = useOwnerProfile();
-  const orgJurisdiction = resolveOrgJurisdiction(profile?.jurisdiction);
   const orgDefaultTerms = resolveDefaultTerms(
     profile?.defaultTermsAndConditions
   );
@@ -107,13 +99,10 @@ export function PurchaseOrderEditor({
     initialData?.deliveryDate ?? ""
   );
 
-  const [currency, setCurrency] = useState(initialData?.currency ?? "KES");
-  const [isRecurring, setIsRecurring] = useState(
-    initialData?.isRecurring ?? false
-  );
-  const [complianceRef, setComplianceRef] = useState(
-    initialData?.complianceRef ?? ""
-  );
+  // Currency is derived from the selected vendor server-side and is no longer
+  // editable on the form; it is kept here only as a display value for the
+  // client-side totals preview.
+  const currency = initialData?.currency ?? "KES";
   const [notes, setNotes] = useState(initialData?.notes ?? "");
   // T&C is prefilled with the org default on new POs only (PO-11); on edit it
   // shows the PO's saved value (which may be intentionally blank) and the
@@ -122,14 +111,6 @@ export function PurchaseOrderEditor({
   const [termsAndConditions, setTermsAndConditions] = useState(
     initialData?.termsAndConditions ?? (isEditing ? "" : orgDefaultTerms)
   );
-
-  // Jurisdiction-aware Compliance Ref label/tooltip (PO-10), resolved from the
-  // org's persisted jurisdiction so the form, View and PDF agree.
-  const complianceRefLabel = getComplianceRefLabel(orgJurisdiction);
-  const complianceRefTooltip = getComplianceRefTooltip(orgJurisdiction);
-  const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading] = useState(false);
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() => {
     if (initialData?.lineItems?.length) {
@@ -229,13 +210,9 @@ export function PurchaseOrderEditor({
       vendorId,
       orderDate,
       deliveryDate: deliveryDate || null,
-      currency,
-      isRecurring,
-      complianceRef: complianceRef.trim() || null,
       notes: notes.trim() || undefined,
       termsAndConditions: termsAndConditions.trim() || null,
       lineItems: items,
-      files: queuedFiles.length > 0 ? queuedFiles : undefined,
     };
 
     try {
