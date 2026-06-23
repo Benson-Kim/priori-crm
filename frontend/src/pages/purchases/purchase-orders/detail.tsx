@@ -36,6 +36,7 @@ import {
     Eye,
     FileClock,
     FileSpreadsheetIcon,
+    FileText,
     Paperclip,
     Pencil,
     Send,
@@ -297,22 +298,21 @@ export default function PurchaseOrderDetailPage() {
     }
 
     if (activeTab === "detail") {
-        // Download as PDF
-        // actions.push({
-        //     key: "download-original-pdf",
-        //     label: "Download Original PO",
-        //     icon: <File size={16} />,
-        //     onClick: handleDownloadOriginal,
-        // });
+        // Original PO PDF (full amount, no payments applied).
+        actions.push({
+            key: "download-original-pdf",
+            label: "Download as PDF",
+            icon: <FileText size={16} />,
+            onClick: handleDownloadOriginal,
+        });
+        // Current/statement PDF (payments applied + running balance).
         actions.push({
             key: "download-current-pdf",
             label: "Download statement",
             icon: <FileClock size={16} />,
             onClick: handleDownloadCurrent,
         });
-
-        // Export payments as excel
-
+        // Export this PO's payments to Excel.
         actions.push({
             key: "export-po-payments-excel",
             label: "Export payments",
