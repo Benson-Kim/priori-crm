@@ -80,8 +80,6 @@ export function usePurchaseOrderForm(
         taxType: li.taxType,
       }));
 
-      let idToNavigate = purchaseOrderId;
-
       if (purchaseOrderId && initialData) {
         const updatePayload: PurchaseOrderUpdatePayload = {
           vendorId: payload.vendorId,
@@ -109,8 +107,7 @@ export function usePurchaseOrderForm(
           termsAndConditions: payload.termsAndConditions,
           lineItems,
         };
-        const created = await createPurchaseOrder(createPayload);
-        idToNavigate = created.id;
+        await createPurchaseOrder(createPayload);
       }
 
       navigate(`/purchase-orders`);
