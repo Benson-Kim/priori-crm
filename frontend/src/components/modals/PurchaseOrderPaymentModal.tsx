@@ -130,10 +130,10 @@ export function PurchaseOrderPaymentModal({
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="payment-amount" className="font-bold text-base">Date</Label>
+                    <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
                     <Input
                         className="text-gray-700"
-                        id="payment-amount"
+                        id="payment-date"
                         type="text"
                         value={payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
                         disabled
@@ -141,27 +141,25 @@ export function PurchaseOrderPaymentModal({
                 </div>
                 {payment.reference && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-amount" className="font-bold text-base">Reference</Label>
+                        <Label htmlFor="payment-reference" className="font-bold text-base">Reference</Label>
                         <Input
                             className="text-gray-700"
                             id="payment-reference"
-                            type="number"
+                            type="text"
                             value={payment.reference}
                             disabled
-                            placeholder="Enter amount"
                         />
                     </div>
                 )}
                 {payment.notes && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-amount" className="font-bold text-base">Notes</Label>
+                        <Label htmlFor="payment-notes" className="font-bold text-base">Notes</Label>
                         <Input
                             className="text-gray-700"
                             id="payment-notes"
-                            type="number"
+                            type="text"
                             value={payment.notes}
                             disabled
-                            placeholder="Enter amount"
                         />
                     </div>
                 )}
