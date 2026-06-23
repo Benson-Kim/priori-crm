@@ -14,7 +14,9 @@
             "type": "string"
           }
         },
-        "required": ["file"],
+        "required": [
+          "file"
+        ],
         "title": "Body_attach_expense_document_api_v1_expenses__expense_id__documents_post",
         "type": "object"
       },
@@ -26,7 +28,9 @@
             "type": "string"
           }
         },
-        "required": ["file"],
+        "required": [
+          "file"
+        ],
         "title": "Body_upload_owner_logo_api_v1_owner_logo_put",
         "type": "object"
       },
@@ -43,7 +47,9 @@
             "type": "string"
           }
         },
-        "required": ["file"],
+        "required": [
+          "file"
+        ],
         "title": "Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
         "type": "object"
       },
@@ -79,7 +85,13 @@
             "type": "string"
           }
         },
-        "required": ["bucket_start", "bucket_end", "income", "expense", "net"],
+        "required": [
+          "bucket_start",
+          "bucket_end",
+          "income",
+          "expense",
+          "net"
+        ],
         "title": "CashflowBucket",
         "type": "object"
       },
@@ -99,7 +111,11 @@
             "type": "integer"
           }
         },
-        "required": ["all", "income", "expense"],
+        "required": [
+          "all",
+          "income",
+          "expense"
+        ],
         "title": "CashflowCounts",
         "type": "object"
       },
@@ -113,7 +129,10 @@
             "type": "string"
           },
           "category": {
-            "enum": ["income", "expense"],
+            "enum": [
+              "income",
+              "expense"
+            ],
             "title": "Category",
             "type": "string"
           },
@@ -141,7 +160,10 @@
             "type": "string"
           },
           "source_type": {
-            "enum": ["quote_invoice", "expense"],
+            "enum": [
+              "quote_invoice",
+              "expense"
+            ],
             "title": "Source Type",
             "type": "string"
           }
@@ -221,7 +243,10 @@
             "type": "integer"
           }
         },
-        "required": ["results", "total"],
+        "required": [
+          "results",
+          "total"
+        ],
         "title": "ContactSearchResponse",
         "type": "object"
       },
@@ -304,7 +329,10 @@
             "title": "Website"
           }
         },
-        "required": ["id", "full_name"],
+        "required": [
+          "id",
+          "full_name"
+        ],
         "title": "ContactSearchResult",
         "type": "object"
       },
@@ -332,13 +360,21 @@
             "type": "integer"
           }
         },
-        "required": ["count", "previous_count"],
+        "required": [
+          "count",
+          "previous_count"
+        ],
         "title": "CountMetric",
         "type": "object"
       },
       "Currency": {
         "description": "Supported currencies (ISO 4217).",
-        "enum": ["KES", "USD", "EUR", "GBP"],
+        "enum": [
+          "KES",
+          "USD",
+          "EUR",
+          "GBP"
+        ],
         "title": "Currency",
         "type": "string"
       },
@@ -531,7 +567,13 @@
             "title": "Website"
           }
         },
-        "required": ["customerType", "firstName", "lastName", "email", "phone"],
+        "required": [
+          "customerType",
+          "firstName",
+          "lastName",
+          "email",
+          "phone"
+        ],
         "title": "CustomerCreate",
         "type": "object"
       },
@@ -590,7 +632,12 @@
             "type": "array"
           }
         },
-        "required": ["can_delete", "can_hard_delete", "delete_type", "message"],
+        "required": [
+          "can_delete",
+          "can_hard_delete",
+          "delete_type",
+          "message"
+        ],
         "title": "CustomerDeleteCheckResponse",
         "type": "object"
       },
@@ -638,7 +685,11 @@
             "type": "array"
           }
         },
-        "required": ["customer_id", "delete_type", "deleted_at"],
+        "required": [
+          "customer_id",
+          "delete_type",
+          "deleted_at"
+        ],
         "title": "CustomerDeleteResponse",
         "type": "object"
       },
@@ -672,7 +723,10 @@
             "description": "Current period statement"
           }
         },
-        "required": ["customer", "financial_summary"],
+        "required": [
+          "customer",
+          "financial_summary"
+        ],
         "title": "CustomerDetailResponse",
         "type": "object"
       },
@@ -982,7 +1036,10 @@
       },
       "CustomerType": {
         "description": "Customer classification type.",
-        "enum": ["individual", "business"],
+        "enum": [
+          "individual",
+          "business"
+        ],
         "title": "CustomerType",
         "type": "string"
       },
@@ -1213,7 +1270,10 @@
             "type": "string"
           },
           "category": {
-            "enum": ["income", "expense"],
+            "enum": [
+              "income",
+              "expense"
+            ],
             "title": "Category",
             "type": "string"
           },
@@ -1259,7 +1319,10 @@
             "type": "string"
           },
           "source_type": {
-            "enum": ["quote_invoice", "expense"],
+            "enum": [
+              "quote_invoice",
+              "expense"
+            ],
             "title": "Source Type",
             "type": "string"
           },
@@ -1306,7 +1369,11 @@
             "$ref": "#/components/schemas/ResolvedPeriod"
           }
         },
-        "required": ["period", "currency", "items"],
+        "required": [
+          "period",
+          "currency",
+          "items"
+        ],
         "title": "DashboardTransactionsResponse",
         "type": "object"
       },
@@ -1372,7 +1439,10 @@
       },
       "DiscountType": {
         "description": "Discount calculation types.",
-        "enum": ["amount", "percentage"],
+        "enum": [
+          "amount",
+          "percentage"
+        ],
         "title": "DiscountType",
         "type": "string"
       },
@@ -1404,7 +1474,11 @@
             "type": "string"
           }
         },
-        "required": ["subtotal", "tax_total", "total_due"],
+        "required": [
+          "subtotal",
+          "tax_total",
+          "total_due"
+        ],
         "title": "ExpenseCalculationResponse",
         "type": "object"
       },
@@ -1480,7 +1554,11 @@
             "type": "string"
           }
         },
-        "required": ["vendorId", "dueDate", "lineItems"],
+        "required": [
+          "vendorId",
+          "dueDate",
+          "lineItems"
+        ],
         "title": "ExpenseCreate",
         "type": "object"
       },
@@ -1606,7 +1684,12 @@
             "title": "Unitprice"
           }
         },
-        "required": ["itemName", "description", "quantity", "unitPrice"],
+        "required": [
+          "itemName",
+          "description",
+          "quantity",
+          "unitPrice"
+        ],
         "title": "ExpenseLineItemCreate",
         "type": "object"
       },
@@ -1737,7 +1820,10 @@
             "title": "Reference"
           }
         },
-        "required": ["amount", "paymentDate"],
+        "required": [
+          "amount",
+          "paymentDate"
+        ],
         "title": "ExpensePaymentCreate",
         "type": "object"
       },
@@ -2331,7 +2417,11 @@
       },
       "Granularity": {
         "description": "Bucket size for the dashboard cashflow chart.",
-        "enum": ["day", "week", "month"],
+        "enum": [
+          "day",
+          "week",
+          "month"
+        ],
         "title": "Granularity",
         "type": "string"
       },
@@ -2369,7 +2459,12 @@
             "type": "string"
           }
         },
-        "required": ["status", "version", "environment", "timestamp"],
+        "required": [
+          "status",
+          "version",
+          "environment",
+          "timestamp"
+        ],
         "title": "HealthResponse",
         "type": "object"
       },
@@ -2402,7 +2497,11 @@
             "type": "integer"
           }
         },
-        "required": ["account_category", "document_count", "amount"],
+        "required": [
+          "account_category",
+          "document_count",
+          "amount"
+        ],
         "title": "IncomeStatementLine",
         "type": "object"
       },
@@ -2452,7 +2551,10 @@
             "type": "string"
           }
         },
-        "required": ["line_items", "total"],
+        "required": [
+          "line_items",
+          "total"
+        ],
         "title": "IncomeStatementSection",
         "type": "object"
       },
@@ -2489,7 +2591,12 @@
             "type": "string"
           }
         },
-        "required": ["subtotal", "discount_value", "tax_total", "total_due"],
+        "required": [
+          "subtotal",
+          "discount_value",
+          "tax_total",
+          "total_due"
+        ],
         "title": "InvoiceCalculationResponse",
         "type": "object"
       },
@@ -2619,7 +2726,11 @@
             "type": "string"
           }
         },
-        "required": ["customerId", "dueDate", "lineItems"],
+        "required": [
+          "customerId",
+          "dueDate",
+          "lineItems"
+        ],
         "title": "InvoiceCreate",
         "type": "object"
       },
@@ -2711,7 +2822,12 @@
             "title": "Unitprice"
           }
         },
-        "required": ["itemName", "description", "quantity", "unitPrice"],
+        "required": [
+          "itemName",
+          "description",
+          "quantity",
+          "unitPrice"
+        ],
         "title": "InvoiceLineItemCreate",
         "type": "object"
       },
@@ -3118,7 +3234,11 @@
             "type": "string"
           }
         },
-        "required": ["invoice_id", "sent_to", "sent_at"],
+        "required": [
+          "invoice_id",
+          "sent_to",
+          "sent_at"
+        ],
         "title": "InvoiceSendResponse",
         "type": "object"
       },
@@ -3492,7 +3612,10 @@
             "type": "string"
           }
         },
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "title": "LoginRequest",
         "type": "object"
       },
@@ -3504,7 +3627,9 @@
             "type": "string"
           }
         },
-        "required": ["refresh_token"],
+        "required": [
+          "refresh_token"
+        ],
         "title": "LogoutRequest",
         "type": "object"
       },
@@ -3536,7 +3661,9 @@
             "type": "string"
           }
         },
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "title": "MessageResponse",
         "type": "object"
       },
@@ -3566,7 +3693,10 @@
             "type": "string"
           }
         },
-        "required": ["amount", "previous_amount"],
+        "required": [
+          "amount",
+          "previous_amount"
+        ],
         "title": "OverviewMetric",
         "type": "object"
       },
@@ -3694,7 +3824,9 @@
             "title": "Website"
           }
         },
-        "required": ["fullName"],
+        "required": [
+          "fullName"
+        ],
         "title": "OwnerProfileResponse",
         "type": "object"
       },
@@ -3817,7 +3949,9 @@
             "title": "Website"
           }
         },
-        "required": ["fullName"],
+        "required": [
+          "fullName"
+        ],
         "title": "OwnerProfileUpdate",
         "type": "object"
       },
@@ -3833,7 +3967,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse",
         "type": "object"
       },
@@ -3850,7 +3987,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[CashflowEntry]",
         "type": "object"
       },
@@ -3867,7 +4007,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[CustomerSummary]",
         "type": "object"
       },
@@ -3884,7 +4027,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[ExpenseSummary]",
         "type": "object"
       },
@@ -3901,7 +4047,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[InvoiceSummary]",
         "type": "object"
       },
@@ -3918,7 +4067,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[PurchaseOrderSummary]",
         "type": "object"
       },
@@ -3935,7 +4087,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[QuoteSummary]",
         "type": "object"
       },
@@ -3952,7 +4107,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[VendorSummary]",
         "type": "object"
       },
@@ -3969,7 +4127,10 @@
             "$ref": "#/components/schemas/PaginationMetadata"
           }
         },
-        "required": ["items", "metadata"],
+        "required": [
+          "items",
+          "metadata"
+        ],
         "title": "PaginatedResponse[VendorTransactionSummary]",
         "type": "object"
       },
@@ -4015,7 +4176,12 @@
             "title": "Total Pages"
           }
         },
-        "required": ["page", "per_page", "has_next", "has_prev"],
+        "required": [
+          "page",
+          "per_page",
+          "has_next",
+          "has_prev"
+        ],
         "title": "PaginationMetadata",
         "type": "object"
       },
@@ -4080,7 +4246,10 @@
             "title": "Reference"
           }
         },
-        "required": ["amount", "paymentMethod"],
+        "required": [
+          "amount",
+          "paymentMethod"
+        ],
         "title": "PaymentCreate",
         "type": "object"
       },
@@ -4239,7 +4408,11 @@
             "type": "string"
           }
         },
-        "required": ["subtotal", "tax_total", "total"],
+        "required": [
+          "subtotal",
+          "tax_total",
+          "total"
+        ],
         "title": "PurchaseOrderCalculationResponse",
         "type": "object"
       },
@@ -4350,7 +4523,10 @@
             "type": "string"
           }
         },
-        "required": ["vendorId", "lineItems"],
+        "required": [
+          "vendorId",
+          "lineItems"
+        ],
         "title": "PurchaseOrderCreate",
         "type": "object"
       },
@@ -4441,7 +4617,11 @@
             "type": "string"
           }
         },
-        "required": ["original_po_id", "new_po_id", "new_po_reference"],
+        "required": [
+          "original_po_id",
+          "new_po_id",
+          "new_po_reference"
+        ],
         "title": "PurchaseOrderDuplicateResponse",
         "type": "object"
       },
@@ -4503,7 +4683,12 @@
             "title": "Unitprice"
           }
         },
-        "required": ["itemName", "description", "quantity", "unitPrice"],
+        "required": [
+          "itemName",
+          "description",
+          "quantity",
+          "unitPrice"
+        ],
         "title": "PurchaseOrderLineItemCreate",
         "type": "object"
       },
@@ -4648,7 +4833,10 @@
             "title": "Reference"
           }
         },
-        "required": ["amount", "paymentDate"],
+        "required": [
+          "amount",
+          "paymentDate"
+        ],
         "title": "PurchaseOrderPaymentCreate",
         "type": "object"
       },
@@ -4727,7 +4915,13 @@
             "title": "Reference"
           }
         },
-        "required": ["id", "po_id", "amount", "payment_date", "created_at"],
+        "required": [
+          "id",
+          "po_id",
+          "amount",
+          "payment_date",
+          "created_at"
+        ],
         "title": "PurchaseOrderPaymentResponse",
         "type": "object"
       },
@@ -5042,7 +5236,11 @@
             "type": "string"
           }
         },
-        "required": ["purchase_order_id", "sent_to", "sent_at"],
+        "required": [
+          "purchase_order_id",
+          "sent_to",
+          "sent_at"
+        ],
         "title": "PurchaseOrderSendResponse",
         "type": "object"
       },
@@ -5343,7 +5541,12 @@
             "type": "string"
           }
         },
-        "required": ["subtotal", "discount_value", "tax_total", "total_due"],
+        "required": [
+          "subtotal",
+          "discount_value",
+          "tax_total",
+          "total_due"
+        ],
         "title": "QuoteCalculationResponse",
         "type": "object"
       },
@@ -5370,7 +5573,11 @@
             "type": "string"
           }
         },
-        "required": ["quote_id", "invoice_id", "invoice_number"],
+        "required": [
+          "quote_id",
+          "invoice_id",
+          "invoice_number"
+        ],
         "title": "QuoteConvertToInvoiceResponse",
         "type": "object"
       },
@@ -5501,7 +5708,11 @@
             "type": "string"
           }
         },
-        "required": ["customerId", "dueDate", "lineItems"],
+        "required": [
+          "customerId",
+          "dueDate",
+          "lineItems"
+        ],
         "title": "QuoteCreate",
         "type": "object"
       },
@@ -5528,7 +5739,11 @@
             "type": "string"
           }
         },
-        "required": ["original_quote_id", "new_quote_id", "new_quote_number"],
+        "required": [
+          "original_quote_id",
+          "new_quote_id",
+          "new_quote_number"
+        ],
         "title": "QuoteDuplicateResponse",
         "type": "object"
       },
@@ -5590,7 +5805,12 @@
             "title": "Unitprice"
           }
         },
-        "required": ["itemName", "description", "quantity", "unitPrice"],
+        "required": [
+          "itemName",
+          "description",
+          "quantity",
+          "unitPrice"
+        ],
         "title": "QuoteLineItemCreate",
         "type": "object"
       },
@@ -6033,7 +6253,11 @@
             "type": "string"
           }
         },
-        "required": ["quote_id", "sent_to", "sent_at"],
+        "required": [
+          "quote_id",
+          "sent_to",
+          "sent_at"
+        ],
         "title": "QuoteSendResponse",
         "type": "object"
       },
@@ -6417,7 +6641,10 @@
             "type": "string"
           }
         },
-        "required": ["access_token", "refresh_token"],
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
         "title": "RefreshResponse",
         "type": "object"
       },
@@ -6429,7 +6656,9 @@
             "type": "string"
           }
         },
-        "required": ["refresh_token"],
+        "required": [
+          "refresh_token"
+        ],
         "title": "RefreshTokenRequest",
         "type": "object"
       },
@@ -6442,7 +6671,9 @@
             "type": "string"
           }
         },
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "title": "ResendOTPRequest",
         "type": "object"
       },
@@ -6577,13 +6808,25 @@
             "type": "string"
           }
         },
-        "required": ["date", "description", "amount", "payment", "balance"],
+        "required": [
+          "date",
+          "description",
+          "amount",
+          "payment",
+          "balance"
+        ],
         "title": "StatementTransaction",
         "type": "object"
       },
       "TaxType": {
         "description": "Tax types for invoice line items.",
-        "enum": ["vat_16", "vat_8", "vat_0", "exempt", "no_tax"],
+        "enum": [
+          "vat_16",
+          "vat_8",
+          "vat_0",
+          "exempt",
+          "no_tax"
+        ],
         "title": "TaxType",
         "type": "string"
       },
@@ -6607,7 +6850,11 @@
             "$ref": "#/components/schemas/UserResponse"
           }
         },
-        "required": ["access_token", "refresh_token", "user"],
+        "required": [
+          "access_token",
+          "refresh_token",
+          "user"
+        ],
         "title": "TokenResponse",
         "type": "object"
       },
@@ -6636,7 +6883,12 @@
             "type": "string"
           }
         },
-        "required": ["item_name", "units_sold", "document_count", "amount"],
+        "required": [
+          "item_name",
+          "units_sold",
+          "document_count",
+          "amount"
+        ],
         "title": "TopSaleLine",
         "type": "object"
       },
@@ -6656,7 +6908,11 @@
             "$ref": "#/components/schemas/ResolvedPeriod"
           }
         },
-        "required": ["period", "currency", "items"],
+        "required": [
+          "period",
+          "currency",
+          "items"
+        ],
         "title": "TopSalesResponse",
         "type": "object"
       },
@@ -6742,7 +6998,11 @@
             "type": "string"
           }
         },
-        "required": ["loc", "msg", "type"],
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
         "title": "ValidationError",
         "type": "object"
       },
@@ -6900,7 +7160,9 @@
             "title": "Website"
           }
         },
-        "required": ["vendorName"],
+        "required": [
+          "vendorName"
+        ],
         "title": "VendorCreate",
         "type": "object"
       },
@@ -6918,7 +7180,9 @@
             "type": "string"
           }
         },
-        "required": ["vendor_id"],
+        "required": [
+          "vendor_id"
+        ],
         "title": "VendorDeleteResponse",
         "type": "object"
       },
@@ -6951,7 +7215,9 @@
             ]
           }
         },
-        "required": ["exists"],
+        "required": [
+          "exists"
+        ],
         "title": "VendorDuplicateCheckResponse",
         "type": "object"
       },
@@ -7290,7 +7556,13 @@
             "type": "string"
           }
         },
-        "required": ["date", "description", "amount", "payment", "balance"],
+        "required": [
+          "date",
+          "description",
+          "amount",
+          "payment",
+          "balance"
+        ],
         "title": "VendorStatementTransaction",
         "type": "object"
       },
@@ -7389,7 +7661,11 @@
           },
           "transaction_type": {
             "description": "Source record type",
-            "enum": ["expense", "bill", "purchase_order"],
+            "enum": [
+              "expense",
+              "bill",
+              "purchase_order"
+            ],
             "title": "Transaction Type",
             "type": "string"
           }
@@ -7587,7 +7863,10 @@
             "type": "string"
           }
         },
-        "required": ["email", "code"],
+        "required": [
+          "email",
+          "code"
+        ],
         "title": "VerifyOTPRequest",
         "type": "object"
       },
@@ -7637,7 +7916,10 @@
             "type": "string"
           }
         },
-        "required": ["id", "vendor_name"],
+        "required": [
+          "id",
+          "vendor_name"
+        ],
         "title": "VendorSummary",
         "type": "object"
       },
@@ -7687,7 +7969,10 @@
             "type": "string"
           }
         },
-        "required": ["id", "vendor_name"],
+        "required": [
+          "id",
+          "vendor_name"
+        ],
         "title": "VendorSummary",
         "type": "object"
       },
@@ -7814,7 +8099,9 @@
           }
         },
         "summary": "Login",
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/auth/logout": {
@@ -7854,7 +8141,9 @@
           }
         },
         "summary": "Logout",
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/auth/refresh": {
@@ -7894,7 +8183,9 @@
           }
         },
         "summary": "Refresh Token",
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/auth/resend-otp": {
@@ -7934,7 +8225,9 @@
           }
         },
         "summary": "Resend Otp",
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/auth/verify-otp": {
@@ -7974,7 +8267,9 @@
           }
         },
         "summary": "Verify Otp",
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/customers": {
@@ -8089,7 +8384,9 @@
           }
         ],
         "summary": "List customers",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       },
       "post": {
         "description": "Create a new customer record with validation.",
@@ -8138,7 +8435,9 @@
           }
         ],
         "summary": "Create a new customer",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/counts": {
@@ -8163,7 +8462,9 @@
           }
         ],
         "summary": "Get customer status counts",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}": {
@@ -8240,7 +8541,9 @@
           }
         ],
         "summary": "Delete customer",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       },
       "get": {
         "description": "Retrieve detailed information for a specific customer including invoices and statements.",
@@ -8288,7 +8591,9 @@
           }
         ],
         "summary": "Get customer details",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       },
       "put": {
         "description": "Update an existing customer's information.",
@@ -8367,7 +8672,9 @@
           }
         ],
         "summary": "Update customer",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/activate": {
@@ -8420,7 +8727,9 @@
           }
         ],
         "summary": "Activate customer account",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/deactivate": {
@@ -8485,7 +8794,9 @@
           }
         ],
         "summary": "Deactivate customer account",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/delete-check": {
@@ -8535,7 +8846,9 @@
           }
         ],
         "summary": "Pre-delete validation check",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/financial-summary": {
@@ -8582,7 +8895,9 @@
           }
         ],
         "summary": "Get customer financial summary",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/invoices": {
@@ -8668,7 +8983,9 @@
           }
         ],
         "summary": "Get customer invoices",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/{customer_id}/statement": {
@@ -8751,7 +9068,9 @@
           }
         ],
         "summary": "Generate customer statement",
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/dashboard/cashflow-series": {
@@ -8869,7 +9188,9 @@
           }
         ],
         "summary": "Cashflow chart series",
-        "tags": ["Dashboard"]
+        "tags": [
+          "Dashboard"
+        ]
       }
     },
     "/api/v1/dashboard/summary": {
@@ -8969,7 +9290,9 @@
           }
         ],
         "summary": "Dashboard metric cards",
-        "tags": ["Dashboard"]
+        "tags": [
+          "Dashboard"
+        ]
       }
     },
     "/api/v1/dashboard/top-sales": {
@@ -9083,7 +9406,9 @@
           }
         ],
         "summary": "Top-selling items",
-        "tags": ["Dashboard"]
+        "tags": [
+          "Dashboard"
+        ]
       }
     },
     "/api/v1/dashboard/transactions": {
@@ -9197,7 +9522,9 @@
           }
         ],
         "summary": "Recent transactions",
-        "tags": ["Dashboard"]
+        "tags": [
+          "Dashboard"
+        ]
       }
     },
     "/api/v1/expenses": {
@@ -9422,7 +9749,9 @@
           }
         ],
         "summary": "List expenses",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       },
       "post": {
         "description": "Create a new expense record linked to a vendor. Calculates subtotal, tax_total, and total_due from line items. Initial status is always PENDING. No discount in v1.",
@@ -9474,7 +9803,9 @@
           }
         ],
         "summary": "Create a new expense",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/calculate": {
@@ -9521,7 +9852,9 @@
           }
         },
         "summary": "Preview expense totals",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/counts": {
@@ -9546,7 +9879,9 @@
           }
         ],
         "summary": "Get expense status counts",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/export/excel": {
@@ -9677,7 +10012,9 @@
           }
         ],
         "summary": "Export expenses to Excel",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/number/{expense_number}": {
@@ -9726,7 +10063,9 @@
           }
         ],
         "summary": "Get expense by number",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/stats/summary": {
@@ -9797,7 +10136,9 @@
           }
         ],
         "summary": "Get expense statistics",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}": {
@@ -9843,7 +10184,9 @@
           }
         ],
         "summary": "Delete expense",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       },
       "get": {
         "description": "Retrieve complete expense record including line items, payments, and documents.",
@@ -9891,7 +10234,9 @@
           }
         ],
         "summary": "Get expense details",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       },
       "put": {
         "description": "Update an expense record. Only PENDING and OVERDUE expenses are editable. PAID expenses are read-only. currency is always locked after first save. Supplying line_items replaces the full set.",
@@ -9973,7 +10318,9 @@
           }
         ],
         "summary": "Update expense",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/documents": {
@@ -10027,7 +10374,9 @@
           }
         ],
         "summary": "List expense documents",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       },
       "post": {
         "description": "Register document metadata after the file has been written to object storage by the client. The client must complete the storage upload before calling this endpoint. storage_key is the object path returned by the storage service. source must be: form | view | payment_modal.",
@@ -10085,7 +10434,9 @@
           }
         ],
         "summary": "Register an attached document",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/documents/{document_id}": {
@@ -10141,7 +10492,9 @@
           }
         ],
         "summary": "Delete a document",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/documents/{document_id}/download": {
@@ -10202,7 +10555,9 @@
           }
         ],
         "summary": "Download an expense document",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/duplicate": {
@@ -10255,7 +10610,9 @@
           }
         ],
         "summary": "Duplicate expense",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/mark-paid": {
@@ -10328,7 +10685,9 @@
           }
         ],
         "summary": "Mark expense as paid",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/expenses/{expense_id}/payments": {
@@ -10394,7 +10753,9 @@
           }
         ],
         "summary": "Record a payment",
-        "tags": ["Expenses"]
+        "tags": [
+          "Expenses"
+        ]
       }
     },
     "/api/v1/health": {
@@ -10414,7 +10775,9 @@
           }
         },
         "summary": "Basic health check",
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/health/detailed": {
@@ -10462,7 +10825,9 @@
           }
         },
         "summary": "Detailed health check",
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/invoices": {
@@ -10672,7 +11037,9 @@
           }
         ],
         "summary": "List invoices",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       },
       "post": {
         "description": "Create a new invoice with line items and automatic calculations.",
@@ -10724,7 +11091,9 @@
           }
         ],
         "summary": "Create a new invoice",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/calculate": {
@@ -10821,7 +11190,9 @@
           }
         },
         "summary": "Calculate invoice totals",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/counts": {
@@ -10877,7 +11248,9 @@
           }
         ],
         "summary": "Get invoice status counts",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/export/excel": {
@@ -10992,7 +11365,9 @@
           }
         ],
         "summary": "Export invoices to Excel",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/number/{invoice_number}": {
@@ -11041,7 +11416,9 @@
           }
         ],
         "summary": "Get invoice by number",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/stats/summary": {
@@ -11112,7 +11489,9 @@
           }
         ],
         "summary": "Get invoice statistics",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}": {
@@ -11162,7 +11541,9 @@
           }
         ],
         "summary": "Get invoice details",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       },
       "put": {
         "description": "Update invoice details (restrictions apply based on status).",
@@ -11244,7 +11625,9 @@
           }
         ],
         "summary": "Update invoice",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/cancel": {
@@ -11300,7 +11683,9 @@
           }
         ],
         "summary": "Cancel invoice",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/duplicate": {
@@ -11350,7 +11735,9 @@
           }
         ],
         "summary": "Duplicate invoice",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/mark-sent": {
@@ -11420,7 +11807,9 @@
           }
         ],
         "summary": "Mark invoice as sent",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/payments": {
@@ -11486,7 +11875,9 @@
           }
         ],
         "summary": "Record payment",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/pdf": {
@@ -11535,7 +11926,9 @@
           }
         ],
         "summary": "Download invoice as PDF",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/invoices/{invoice_id}/send": {
@@ -11608,7 +12001,9 @@
           }
         ],
         "summary": "Send invoice via email",
-        "tags": ["Invoices"]
+        "tags": [
+          "Invoices"
+        ]
       }
     },
     "/api/v1/owner": {
@@ -11633,7 +12028,9 @@
           }
         ],
         "summary": "Get the owner profile",
-        "tags": ["Owner"]
+        "tags": [
+          "Owner"
+        ]
       },
       "put": {
         "description": "Update the live owner profile. Does not affect already-issued documents.",
@@ -11676,7 +12073,9 @@
           }
         ],
         "summary": "Update the owner profile",
-        "tags": ["Owner"]
+        "tags": [
+          "Owner"
+        ]
       }
     },
     "/api/v1/owner/logo": {
@@ -11701,7 +12100,9 @@
           }
         ],
         "summary": "Remove the owner logo",
-        "tags": ["Owner"]
+        "tags": [
+          "Owner"
+        ]
       },
       "get": {
         "description": "Stream the logo binary (or redirect to a presigned URL on S3).\n\nAll storage access lives behind the service's public ``serve_logo`` API,\nso the router never depends on the storage backend.",
@@ -11729,7 +12130,9 @@
           }
         ],
         "summary": "Serve the owner logo",
-        "tags": ["Owner"]
+        "tags": [
+          "Owner"
+        ]
       },
       "put": {
         "description": "Validate and store a logo, replacing any existing one.",
@@ -11772,7 +12175,9 @@
           }
         ],
         "summary": "Upload / replace the owner logo",
-        "tags": ["Owner"]
+        "tags": [
+          "Owner"
+        ]
       }
     },
     "/api/v1/ping": {
@@ -11794,7 +12199,9 @@
           }
         },
         "summary": "Simple ping",
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/purchase-orders": {
@@ -12001,7 +12408,9 @@
           }
         ],
         "summary": "List purchase orders",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       },
       "post": {
         "description": "Create a new purchase order raised against a vendor. Calculates subtotal, tax_total and total from the line items. Initial status is always DRAFT. No discount in v1.",
@@ -12053,7 +12462,9 @@
           }
         ],
         "summary": "Create a new purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/calculate": {
@@ -12105,7 +12516,9 @@
           }
         ],
         "summary": "Preview purchase-order totals",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/counts": {
@@ -12130,7 +12543,9 @@
           }
         ],
         "summary": "Get purchase-order status counts",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/export/excel": {
@@ -12295,7 +12710,9 @@
           }
         ],
         "summary": "Export purchase orders to Excel",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/number/{po_number}": {
@@ -12344,7 +12761,9 @@
           }
         ],
         "summary": "Get purchase order by number",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}": {
@@ -12393,7 +12812,9 @@
           }
         ],
         "summary": "Delete purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       },
       "get": {
         "description": "Retrieve a complete purchase order including its vendor and line items.",
@@ -12441,7 +12862,9 @@
           }
         ],
         "summary": "Get purchase order details",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       },
       "put": {
         "description": "Update a purchase order. Only DRAFT purchase orders are editable; SENT / BILLED / CANCELED are read-only. currency is locked after the first save. Supplying lineItems replaces the full set. Pass expectedVersion (from your last GET) for optimistic-lock protection.",
@@ -12523,7 +12946,9 @@
           }
         ],
         "summary": "Update purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/documents": {
@@ -12577,7 +13002,9 @@
           }
         ],
         "summary": "List purchase-order documents",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       },
       "post": {
         "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form', 'view' or 'payment_modal' (proof-of-payment uploaded in the Record Payment modal). storage_key is never returned.",
@@ -12638,7 +13065,9 @@
           }
         ],
         "summary": "Upload a document to a purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/documents/{document_id}": {
@@ -12694,7 +13123,9 @@
           }
         ],
         "summary": "Delete a purchase-order document",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/documents/{document_id}/download": {
@@ -12755,7 +13186,9 @@
           }
         ],
         "summary": "Download a purchase-order document",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/duplicate": {
@@ -12805,7 +13238,9 @@
           }
         ],
         "summary": "Duplicate purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/mark-as-sent": {
@@ -12861,7 +13296,9 @@
           }
         ],
         "summary": "Mark a purchase order as sent (no email)",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/payments": {
@@ -12927,7 +13364,9 @@
           }
         ],
         "summary": "Record a payment against a purchase order",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/pdf": {
@@ -12979,7 +13418,9 @@
           }
         ],
         "summary": "Download purchase order as PDF",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/pdf/statement": {
@@ -13031,7 +13472,9 @@
           }
         ],
         "summary": "Download the current (balance-aware) purchase-order PDF",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/purchase-orders/{po_id}/send": {
@@ -13104,7 +13547,9 @@
           }
         ],
         "summary": "Send purchase order to the vendor by email",
-        "tags": ["Purchase Orders"]
+        "tags": [
+          "Purchase Orders"
+        ]
       }
     },
     "/api/v1/quotes": {
@@ -13314,7 +13759,9 @@
           }
         ],
         "summary": "List quotes",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       },
       "post": {
         "description": "Create a new quote with line items and automatic calculations.",
@@ -13366,7 +13813,9 @@
           }
         ],
         "summary": "Create a new quote",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/calculate": {
@@ -13463,7 +13912,9 @@
           }
         },
         "summary": "Calculate quote totals",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/counts": {
@@ -13488,7 +13939,9 @@
           }
         ],
         "summary": "Get quote status counts",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/export/excel": {
@@ -13603,7 +14056,9 @@
           }
         ],
         "summary": "Export quotes to Excel",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/number/{quote_number}": {
@@ -13652,7 +14107,9 @@
           }
         ],
         "summary": "Get quote by number",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/stats/summary": {
@@ -13723,7 +14180,9 @@
           }
         ],
         "summary": "Get quote statistics",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}": {
@@ -13769,7 +14228,9 @@
           }
         ],
         "summary": "Delete quote",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       },
       "get": {
         "description": "Retrieve complete quote information with line items.",
@@ -13817,7 +14278,9 @@
           }
         ],
         "summary": "Get quote details",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       },
       "put": {
         "description": "Update quote details (restrictions apply based on status).",
@@ -13899,7 +14362,9 @@
           }
         ],
         "summary": "Update quote",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/approve": {
@@ -13972,7 +14437,9 @@
           }
         ],
         "summary": "Approve quote",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/convert-to-invoice": {
@@ -14028,7 +14495,9 @@
           }
         ],
         "summary": "Convert quote to invoice",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/duplicate": {
@@ -14078,7 +14547,9 @@
           }
         ],
         "summary": "Duplicate quote",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/mark-sent": {
@@ -14148,7 +14619,9 @@
           }
         ],
         "summary": "Mark quote as sent",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/pdf": {
@@ -14197,7 +14670,9 @@
           }
         ],
         "summary": "Download quote as PDF",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/quotes/{quote_id}/send": {
@@ -14270,7 +14745,9 @@
           }
         ],
         "summary": "Send quote via email",
-        "tags": ["Quotes"]
+        "tags": [
+          "Quotes"
+        ]
       }
     },
     "/api/v1/statements/cashflow": {
@@ -14346,7 +14823,11 @@
             "schema": {
               "default": "all",
               "description": "Filter-tab category",
-              "enum": ["all", "income", "expense"],
+              "enum": [
+                "all",
+                "income",
+                "expense"
+              ],
               "title": "Category",
               "type": "string"
             }
@@ -14461,7 +14942,9 @@
           }
         ],
         "summary": "Cashflow ledger",
-        "tags": ["Statements"]
+        "tags": [
+          "Statements"
+        ]
       }
     },
     "/api/v1/statements/cashflow/counts": {
@@ -14599,7 +15082,9 @@
           }
         ],
         "summary": "Cashflow filter-tab counts",
-        "tags": ["Statements"]
+        "tags": [
+          "Statements"
+        ]
       }
     },
     "/api/v1/statements/income-statement": {
@@ -14699,7 +15184,9 @@
           }
         ],
         "summary": "Income statement",
-        "tags": ["Statements"]
+        "tags": [
+          "Statements"
+        ]
       }
     },
     "/api/v1/statements/overview": {
@@ -14799,7 +15286,9 @@
           }
         ],
         "summary": "Financial overview metrics",
-        "tags": ["Statements"]
+        "tags": [
+          "Statements"
+        ]
       }
     },
     "/api/v1/taxes": {
@@ -14823,7 +15312,9 @@
           }
         },
         "summary": "Get tax configuration",
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/vendors": {
@@ -14935,7 +15426,9 @@
           }
         ],
         "summary": "List vendors",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       },
       "post": {
         "description": "Create a new vendor record. Covers both modal paths: new from scratch (contactId omitted) and from existing contact (contactId provided). All fields except vendorName are optional.",
@@ -14987,7 +15480,9 @@
           }
         ],
         "summary": "Create a new vendor",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/check-email": {
@@ -15054,7 +15549,9 @@
           }
         ],
         "summary": "Check for duplicate vendor email",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/contacts/search": {
@@ -15121,7 +15618,9 @@
           }
         ],
         "summary": "Search existing contacts for vendor modal",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/counts": {
@@ -15146,7 +15645,9 @@
           }
         ],
         "summary": "Get vendor status counts",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}": {
@@ -15202,7 +15703,9 @@
           }
         ],
         "summary": "Delete vendor",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       },
       "get": {
         "description": "Retrieve the complete vendor record with computed payables aggregates. Powers the vendor detail view Overview tab",
@@ -15250,7 +15753,9 @@
           }
         ],
         "summary": "Get vendor details",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       },
       "put": {
         "description": "Partial update \u2014 only supplied fields are written. Pass X-Expected-Version header for optimistic locking.",
@@ -15332,7 +15837,9 @@
           }
         ],
         "summary": "Update vendor",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}/activate": {
@@ -15385,7 +15892,9 @@
           }
         ],
         "summary": "Activate vendor",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}/deactivate": {
@@ -15438,7 +15947,9 @@
           }
         ],
         "summary": "Deactivate vendor",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}/payables": {
@@ -15488,7 +15999,9 @@
           }
         ],
         "summary": "Get vendor payables summary",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}/statement": {
@@ -15576,7 +16089,9 @@
           }
         ],
         "summary": "Generate vendor statement",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     },
     "/api/v1/vendors/{vendor_id}/transactions": {
@@ -15685,7 +16200,9 @@
           }
         ],
         "summary": "Get vendor transaction list",
-        "tags": ["Vendors"]
+        "tags": [
+          "Vendors"
+        ]
       }
     }
   }
