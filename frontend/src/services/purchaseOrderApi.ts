@@ -274,3 +274,11 @@ export function exportPurchaseOrdersExcel(params?: {
     : "purchase-orders/export/excel";
   return apiDownload(path);
 }
+
+/**
+ * Download a single purchase order's recorded payments as an .xlsx workbook
+ * (one row per payment). Returns a Blob the caller saves with `saveBlob`.
+ */
+export function exportPurchaseOrderPaymentsExcel(id: string): Promise<Blob> {
+  return apiDownload(`purchase-orders/${id}/payments/export/excel`);
+}
