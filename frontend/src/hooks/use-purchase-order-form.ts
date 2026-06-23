@@ -127,7 +127,7 @@ export function usePurchaseOrderForm(
         );
       }
 
-      navigate(`/purchase-orders/${idToNavigate}`);
+      navigate(`/purchase-orders`);
     } catch (err) {
       setError(
         err instanceof Error

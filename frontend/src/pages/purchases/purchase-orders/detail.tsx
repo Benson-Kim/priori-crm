@@ -2,14 +2,13 @@ import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer"
 import { useHeaderOverride } from "@/components/layout/header-context";
 import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
-import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Divider } from "@/components/ui/Divider";
+import { Card } from "@/components/ui/Card";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { ACCEPTED_UPLOAD_TYPES, DEFAULT_CURRENCY } from "@/lib/constants";
+import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
     PurchaseOrderLineItem,
@@ -33,15 +32,13 @@ import {
     CheckCircle,
     Copy,
     CreditCard,
-    Download,
-    FileText,
+    Eye,
+    FileClock,
+    FileSpreadsheetIcon,
     Paperclip,
-    PaperclipIcon,
     Pencil,
-    Plus,
     Send,
-    Trash,
-    X,
+    Trash
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -62,9 +59,6 @@ export default function PurchaseOrderDetailPage() {
     // Document upload state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    // Two document-level downloads: original (full amount) and current (balance-aware).
-    const [isDownloadingOriginal, setIsDownloadingOriginal] = useState(false);
-    const [isDownloadingCurrent, setIsDownloadingCurrent] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     // Selected payment row — opens the view/update (attach document) modal.
     const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
@@ -97,7 +91,7 @@ export default function PurchaseOrderDetailPage() {
             confirmLabel: "Yes, send",
             onConfirm: async () => {
                 try {
-                await sendPurchaseOrder(po.id);
+                    await sendPurchaseOrder(po.id);
                     fetchPurchaseOrder();
                 } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to send purchase order");
@@ -114,8 +108,8 @@ export default function PurchaseOrderDetailPage() {
             confirmLabel: "Yes, mark as sent",
             onConfirm: async () => {
                 try {
-                await markAsSentPurchaseOrder(po.id);
-                fetchPurchaseOrder();
+                    await markAsSentPurchaseOrder(po.id);
+                    fetchPurchaseOrder();
                 } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to send purchase order");
                 }
@@ -150,28 +144,33 @@ export default function PurchaseOrderDetailPage() {
     /** Original PO PDF: full amount, no payments applied. */
     const handleDownloadOriginal = async () => {
         if (!po) return;
-        setIsDownloadingOriginal(true);
         try {
             const blob = await downloadPurchaseOrderPdf(po.id);
             saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to download PDF");
-        } finally {
-            setIsDownloadingOriginal(false);
         }
     };
 
     /** Current PDF: payments applied + running balance (statement variant). */
     const handleDownloadCurrent = async () => {
         if (!po) return;
-        setIsDownloadingCurrent(true);
         try {
             const blob = await downloadPurchaseOrderStatementPdf(po.id);
             saveBlob(blob, `PurchaseOrder_${po.po_reference}_Current.pdf`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to download current PDF");
-        } finally {
-            setIsDownloadingCurrent(false);
+        }
+    };
+
+    /** Export payments to excel */
+    const handlePaymentsExport = async () => {
+        if (!po) return
+        try {
+            const blob = await exportPaymentsExcel();
+            saveBlob(blob, `${po.po_reference}_Payments_${new Date().toISOString().split("T")[0]}.xlsx`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export payments");
         }
     };
 
@@ -287,14 +286,41 @@ export default function PurchaseOrderDetailPage() {
     }
 
     // Duplicate is available at any status.
-    actions.push({
-        key: "duplicate",
-        label: "Duplicate",
-        icon: <Copy size={16} />,
-        onClick: handleDuplicate,
-    });
+    if (activeTab === "overview") {
+        actions.push({
+            key: "duplicate",
+            label: "Duplicate",
+            icon: <Copy size={16} />,
+            onClick: handleDuplicate,
+        });
+    }
 
-    // Delete: DRAFT only (PO-18 lifecycle — SENT/PAID are protected).
+    if (activeTab === "detail") {
+        // Download as PDF
+        // actions.push({
+        //     key: "download-original-pdf",
+        //     label: "Download Original PO",
+        //     icon: <File size={16} />,
+        //     onClick: handleDownloadOriginal,
+        // });
+        actions.push({
+            key: "download-current-pdf",
+            label: "Download statement",
+            icon: <FileClock size={16} />,
+            onClick: handleDownloadCurrent,
+        });
+
+        // Export payments as excel
+
+        actions.push({
+            key: "export-po-payments-excel",
+            label: "Export payments",
+            icon: <FileSpreadsheetIcon size={16} />,
+            onClick: handlePaymentsExport,
+        });
+    }
+
+    // Delete: DRAFT only (SENT/PAID are protected).
     if (status === "draft") {
         actions.push({
             key: "delete",
@@ -304,8 +330,6 @@ export default function PurchaseOrderDetailPage() {
             onClick: handleDelete,
         });
     }
-
-    const statusLabel = po.status.charAt(0).toUpperCase() + po.status.slice(1);
 
     const documents = po.documents ?? [];
     const hasDocument = (payment: PurchaseOrderPayment) =>
@@ -358,6 +382,18 @@ export default function PurchaseOrderDetailPage() {
                     <span className="text-gray-400">—</span>
                 ),
         },
+        {
+            key: "actions",
+            header: "Actions",
+            render: (payment: PurchaseOrderPayment) =>
+                <button
+                    // onClick={setSelectedPayment(payment)}
+                    className="inline-flex gap-2.5 px-3 py-2 text-sm transition-colors cursor-pointer"
+                >
+                    <Eye size={16} /> View
+                </button>
+
+        }
     ];
 
     return (
@@ -403,21 +439,7 @@ export default function PurchaseOrderDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Document-level downloads (not per row). */}
-                    <Button
-                        variant="outline-secondary"
-                        onClick={handleDownloadOriginal}
-                        disabled={isDownloadingOriginal}
-                    >
-                        <FileText size={18} /> {isDownloadingOriginal ? "Preparing..." : "Original PO PDF"}
-                    </Button>
-                    <Button
-                        variant="outline-secondary"
-                        onClick={handleDownloadCurrent}
-                        disabled={isDownloadingCurrent}
-                    >
-                        <Download size={18} /> {isDownloadingCurrent ? "Preparing..." : "Current PDF"}
-                    </Button>
+
                     <Dropdown
                         items={actions}
                         className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors"
@@ -434,77 +456,7 @@ export default function PurchaseOrderDetailPage() {
 
             {/* Overview tab: descriptive header + totals (left), payments (right). */}
             {activeTab === "overview" && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* LEFT: descriptive summary + running totals. */}
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
-                        <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                                <p className="text-[14px] text-gray-500">Vendor</p>
-                                <p className="text-[20px] font-bold text-gray-800 truncate">
-                                    {po.vendor?.vendor_name ?? po.vendor_id}
-                                </p>
-                            </div>
-                            <Badge variant={status as BadgeVariant}>{statusLabel}</Badge>
-                        </div>
 
-                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
-                            <OverviewField label="Reference" value={po.po_reference} />
-                            <OverviewField
-                                label="Order Date"
-                                value={po.order_date ? formatDisplayDate(po.order_date) : "-"}
-                            />
-                            <OverviewField
-                                label="Delivery Date"
-                                value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
-                            />
-                        </div>
-
-
-
-                        <Divider />
-
-                        {/* Totals: Total / Amount Paid / Balance Due. */}
-                        <div className="w-full flex justify-end">
-                            <div className="min-w-72 flex flex-col gap-3 text-gray-800">
-                                <div className="flex justify-between items-center font-bold">
-                                    <span>Total</span>
-                                    <span>{formatCurrency(total, currency)}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span>Amount Paid</span>
-                                    <span>{formatCurrency(amountPaid, currency)}</span>
-                                </div>
-                                <Divider />
-                                <div className="flex justify-between items-center font-bold text-gray-900">
-                                    <span>Balance Due</span>
-                                    <span>{formatCurrency(balanceDue, currency)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* RIGHT: recorded payments as a table (same format as the
-                        invoices table). Click a row to view the payment and
-                        attach related document(s). */}
-                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
-                        <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
-
-                        <div className="overflow-x-auto rounded-b-lg">
-                            <Table
-                                columns={paymentColumns}
-                                data={payments}
-                                rowKey={(payment) => payment.id}
-                                onRowClick={(payment) => setSelectedPayment(payment)}
-                                emptyMessage="No payments recorded yet."
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Detail tab: the PO viewer, with the owner header editable so the
-                purchase-order owner details can be updated in place. */}
-            {activeTab === "detail" && (
                 <PurchaseOrderViewer
                     editableOwner
                     data={{
@@ -534,64 +486,72 @@ export default function PurchaseOrderDetailPage() {
                 />
             )}
 
-            {/* Documents Section */}
-            <div className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between py-4">
-                    <h3 className="text-xl font-bold text-gray-800">Documents</h3>
-                    <Button
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                        className="flex items-center gap-2"
-                    >
-                        <Plus size={16} /> {isUploading ? "Uploading..." : "Attach Document"}
-                    </Button>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        onChange={handleFileUpload}
-                        accept={ACCEPTED_UPLOAD_TYPES}
-                    />
-                </div>
+            {/* Detail tab: the PO viewer, with the owner header editable so the
+                purchase-order owner details can be updated in place. */}
+            {activeTab === "detail" && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* LEFT: descriptive summary + running totals. */}
+                    <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6">
+                        <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
+                            <div className="min-w-0">
+                                <p className="text-[14px] text-gray-500">Vendor</p>
+                                <p className="text-[20px] font-bold text-gray-800 truncate">
+                                    {po.vendor?.vendor_name ?? po.vendor_id}
+                                </p>
+                            </div>
+                        </div>
 
-                <div className="flex flex-col w-full sm:flex sm:items-center sm:justify-between gap-4">
-                    {po.documents?.length === 0 && !isUploading && (
-                        <div className="col-span-full w-full py-4 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                            No documents attached yet.
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
+                            <OverviewField label="Reference" value={po.po_reference} />
+                            <OverviewField
+                                label="Order Date"
+                                value={po.order_date ? formatDisplayDate(po.order_date) : "-"}
+                            />
+                            <OverviewField
+                                label="Delivery Date"
+                                value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
+                            />
                         </div>
-                    )}
-                    {po.documents?.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between w-full py-4 transition-colors">
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                <PaperclipIcon size={24} className="text-gray-700" />
-                                <div className="min-w-0">
-                                    <p className="text-gray-800 text-[16px] truncate" title={doc.filename}>{doc.filename}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-6">
-                                <p className="text-[16px] text-gray-500">{doc.file_size_kb.toFixed(1)} KB</p>
-                                <Button onClick={() => handleFileDownload(doc.id, doc.filename)} aria-label="Download document"
-                                    className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-priori-purple hover:text-priori-purple hover:bg-transparent">
-                                    <Download size={24} /> <span className="text-[16px] text-priori-purple">Download</span>
-                                </Button>
-                                <Button onClick={() => handleFileDelete(doc.id, doc.filename)} aria-label="Delete document"
-                                    className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-gray-600 hover:text-priori-purple hover:bg-transparent">
-                                    <X size={24} /> <span className="text-[16px] text-gray-800">Delete</span>
-                                </Button>
+
+                    </div>
+
+                    {/* RIGHT: recorded payments as a table (same format as the
+                    invoices table). Click a row to view the payment and
+                    attach related document(s). */}
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="grid grid-cols-2 gap-6">
+                            <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                                <p className="text-gray-500 text-lg py-3">Total</p>
+                                <p className="font-bold text-gray-800 text-2xl">
+                                    {formatCurrency(Number(total), currency ?? "")}
+                                </p>
+                            </Card>
+                            <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                                <p className="text-gray-500 text-lg py-3">Balance</p>
+                                <p className="font-bold text-gray-800 text-2xl">
+                                    {formatCurrency(Number(balanceDue), currency ?? "")}
+                                </p>
+                            </Card>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
+                            <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
+
+                            <div className="overflow-x-auto rounded-b-lg">
+                                <Table
+                                    columns={paymentColumns}
+                                    data={payments}
+                                    rowKey={(payment) => payment.id}
+                                    onRowClick={(payment) => setSelectedPayment(payment)}
+                                    emptyMessage="No payments recorded yet."
+                                />
                             </div>
                         </div>
-                    ))}
-                    {isUploading && (
-                        <div className="flex items-center justify-center p-4 border border-gray-200 rounded-xl bg-gray-50 opacity-50">
-                            <div className="flex items-center gap-2 text-priori-purple">
-                                <div className="w-4 h-4 border-2 border-priori-purple border-t-transparent rounded-full animate-spin"></div>
-                                <span className="text-sm font-medium">Uploading...</span>
-                            </div>
-                        </div>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
+
+
 
             {/* Payment detail modal: view a recorded payment and attach
                 related proof-of-payment document(s). */}
@@ -630,9 +590,9 @@ export default function PurchaseOrderDetailPage() {
 
 function OverviewField({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div className="min-w-0 flex items-center justify-between">
-            <p className="text-[16px] text-gray-800">{label}</p>
-            <p className="text-[14px] text-gray-500 truncate">{value}</p>
+        <div className="min-w-0 p-4">
+            <p className="text-[14px] text-gray-500">{label}</p>
+            <p className="text-[14px] text-gray-800 font-bold truncate">{value}</p>
         </div>
     );
 }

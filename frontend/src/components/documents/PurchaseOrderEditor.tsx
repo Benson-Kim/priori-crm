@@ -1,20 +1,22 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   getComplianceRefLabel,
   getComplianceRefTooltip,
   resolveDefaultTerms,
   resolveOrgJurisdiction,
 } from "@/lib/compliance";
-import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
-import { formatCurrency } from "@/lib/utils";
-import { PaperclipIcon, Plus, Save, X } from "lucide-react";
+import { formatCurrency, saveBlob } from "@/lib/utils";
+import { deletePurchaseOrder, downloadPurchaseOrderPdf, markAsSentPurchaseOrder, sendPurchaseOrder } from "@/services/purchaseOrderApi";
+import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
+import { Dropdown } from "../ui/Dropdown";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
@@ -147,7 +149,8 @@ export function PurchaseOrderEditor({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
 
   // Derived totals (client-side preview; server is the source of truth on save).
   const totals = useMemo(
@@ -207,7 +210,7 @@ export function PurchaseOrderEditor({
 
   // Submit
   const handleSubmit = async () => {
-    setSubmitError(null);
+    setError(null);
 
     const validationErrors = validate();
     setErrors(validationErrors);
@@ -241,11 +244,112 @@ export function PurchaseOrderEditor({
     try {
       await onSave(payload);
     } catch (err) {
-      setSubmitError(
+      setError(
         err instanceof Error ? err.message : "Failed to save. Please try again."
       );
     }
   };
+
+  const { showConfirm, ConfirmDialog } = useConfirm();
+  const navigate = useNavigate();
+
+
+  const handleSend = () => {
+    if (!po) return;
+    showConfirm({
+      title: "Send purchase order?",
+      description: `Send ${po.po_reference} to the vendor by email? It will be marked as Sent.`,
+      confirmLabel: "Yes, send",
+      onConfirm: async () => {
+        try {
+          await sendPurchaseOrder(po.id);
+          fetchPurchaseOrder();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to send purchase order");
+        }
+      },
+    });
+  };
+
+  const handleMarkAsSent = () => {
+    if (!po) return;
+    showConfirm({
+      title: "Mark as sent?",
+      description: "Are you sure you want to mark this item as sent?",
+      confirmLabel: "Yes, mark as sent",
+      onConfirm: async () => {
+        try {
+          await markAsSentPurchaseOrder(po.id);
+          fetchPurchaseOrder();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to send purchase order");
+        }
+      },
+    });
+  };
+
+
+  const handleDelete = () => {
+    if (!po) return;
+    showConfirm({
+      title: "Delete purchase order?",
+      description: `Delete ${po.po_reference}? This action is irreversible.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        await deletePurchaseOrder(po.id);
+        navigate("/purchase-orders");
+      },
+    });
+  };
+
+  /** Original PO PDF: full amount, no payments applied. */
+  const handleDownloadPdf = async () => {
+    if (!po) return;
+    try {
+      const blob = await downloadPurchaseOrderPdf(po.id);
+      saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download PDF");
+    }
+  };
+
+  // Build actions
+  const actions = [];
+
+  actions.push({
+    key: "pdf",
+    label: "Download PDF",
+    icon: <Download size={16} />,
+    onClick: handleDownloadPdf
+  });
+
+  if (status === "draft") {
+    actions.push({
+      key: "mark-sent"
+      , label: "Mark as Sent",
+      icon: <CheckCircle size={16} />,
+      onClick: handleMarkSent
+    });
+  }
+
+  actions.push({
+    key: "send",
+    label: "Send",
+    icon: <Send size={16} />,
+    onClick: () => setShowSendModal(true)
+  });
+
+  if (status === "draft") {
+    actions.push({
+      key: "delete",
+      label: "Delete PO",
+      icon: <Trash size={16} />,
+      onClick: handleDelete
+    });
+  }
+
+
 
   return (
     <div className="flex flex-col gap-6 font-sans">
@@ -256,16 +360,20 @@ export function PurchaseOrderEditor({
             variant="primary"
             onClick={handleSubmit}
             loading={isLoading}
-            className="px-8 py-3 flex items-center gap-2"
+            className="px-5 py-4 flex items-center gap-2"
           >
             <Save size={18} /> Save &amp; Continue
           </Button>
         )}
+        <Dropdown items={actions} className="flex items-center gap-2 px-5 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
       </div>
       <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
         {/* Top Section */}
-        <div className="p-6">
+        <div className="p-6 flex justify-between">
           <DocumentOwnerHeader editable={!restrictedMode} />
+          <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+            PURCHASE ORDER
+          </h2>
         </div>
 
         <div className="p-6">
@@ -293,9 +401,7 @@ export function PurchaseOrderEditor({
 
             {/* Metadata */}
             <div className="flex flex-col gap-2 items-end">
-              <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
-                PURCHASE ORDER
-              </h2>
+
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
                 {/* Reference */}
                 <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
@@ -340,55 +446,6 @@ export function PurchaseOrderEditor({
                   error={errors.deliveryDate}
                 />
 
-                {/* Currency */}
-                <label
-                  htmlFor="currency-select"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                >
-                  Currency
-                </label>
-                <Select
-                  id="currency-select"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  disabled={restrictedMode || !!initialData?.poReference}
-                  options={CURRENCY_OPTIONS}
-                />
-
-                {/* Compliance Ref (jurisdiction-aware label/tooltip) */}
-                <label
-                  htmlFor="compliance-ref"
-                  title={complianceRefTooltip}
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap cursor-help"
-                >
-                  {complianceRefLabel}
-                </label>
-                <Input
-                  id="compliance-ref"
-                  value={complianceRef}
-                  onChange={(e) => setComplianceRef(e.target.value)}
-                  disabled={restrictedMode}
-                  placeholder="Optional"
-                  title={complianceRefTooltip}
-                />
-
-                {/* Recurring */}
-                <span className="text-base font-bold leading-6 text-gray-800 text-right flex-1 whitespace-nowrap">
-                  Recurring?
-                </span>
-                <label className="relative inline-flex items-center text-right cursor-pointer shrink-0">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={isRecurring}
-                    onChange={(e) => setIsRecurring(e.target.checked)}
-                    disabled={restrictedMode}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-priori-purple"></div>
-                  <span className="ml-3 text-sm font-medium text-gray-900">
-                    {isRecurring ? "Yes" : "No"}
-                  </span>
-                </label>
               </div>
             </div>
           </div>
@@ -487,95 +544,10 @@ export function PurchaseOrderEditor({
 
       </div>
 
-      {!restrictedMode && (
-        <div className="flex flex-col h-full min-h-30">
-          <div className="flex items-center justify-between py-4">
-            <h3 className="text-xl font-bold text-gray-800">Documents</h3>
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="flex items-center gap-2"
-            >
-              <Plus size={16} />{" "}
-              {isUploading ? "Uploading..." : "Attach Document"}
-            </Button>
-          </div>
-
-          <div className="flex-1 p-4 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50">
-            {queuedFiles.length > 0 ? (
-              <div className="w-full flex flex-col gap-2 max-h-32 overflow-y-auto">
-                {queuedFiles.map((file, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between bg-white p-2 border border-gray-200 rounded"
-                  >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <PaperclipIcon size={24} className="text-gray-700" />
-                      <div className="min-w-0">
-                        <p
-                          className="text-gray-800 text-[16px] truncate"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() =>
-                        setQueuedFiles((prev) =>
-                          prev.filter((_, idx) => idx !== i)
-                        )
-                      }
-                      aria-label="Delete document"
-                      className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-gray-600 hover:text-priori-purple hover:bg-transparent"
-                    >
-                      <X size={24} />{" "}
-                      <span className="text-[16px] text-gray-800">Delete</span>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 text-center mb-2">
-                No documents attached yet.
-                <br />
-                They will be uploaded upon saving.
-              </p>
-            )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              multiple
-              accept={ACCEPTED_UPLOAD_TYPES}
-              onChange={(e) => {
-                if (e.target.files) {
-                  setQueuedFiles((prev) => [
-                    ...prev,
-                    ...Array.from(e.target.files!),
-                  ]);
-                }
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Attach Document
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Submit Error */}
-      {submitError && (
+      {error && (
         <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {submitError}
+          {error}
         </div>
       )}
     </div>

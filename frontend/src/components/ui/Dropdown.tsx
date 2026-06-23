@@ -82,7 +82,7 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
       {isOpen && createPortal(
         <div 
           ref={menuRef}
-          className="fixed z-50 mt-1 w-44 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl"
+          className="fixed z-50 mt-1 min-w-44 max-w-60 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl"
           style={{ top: coords.top, right: coords.right }}
         >
           {items.map((item) => (

@@ -20,8 +20,9 @@ import {
     downloadPurchaseOrderDocument,
     uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
-import { CreditCard, Download, Paperclip, X } from "lucide-react";
+import { CreditCard, Download, Paperclip, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Input } from "../ui/Input";
 
 interface PurchaseOrderPaymentModalProps {
     isOpen: boolean;
@@ -113,46 +114,63 @@ export function PurchaseOrderPaymentModal({
             onConfirm={handleSave}
             isLoading={isSaving}
         >
-            <div className="space-y-4">
+            <div className="space-y-6 bg-white p-6 rounded-xl border border-gray-200">
                 {error && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                        {error}
-                    </div>
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
                 )}
 
-                {/* Read-only payment summary. */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-white border border-gray-200 rounded-xl">
-                    <div>
-                        <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-bold text-gray-800">
-                            {formatCurrency(Number(payment.amount), currency)}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Date</p>
-                        <p className="font-bold text-gray-800">
-                            {payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
-                        </p>
-                    </div>
-                    {payment.reference && (
-                        <div>
-                            <p className="text-sm text-gray-500">Reference</p>
-                            <p className="font-medium text-gray-800 break-all">{payment.reference}</p>
-                        </div>
-                    )}
-                    {payment.notes && (
-                        <div className="col-span-2">
-                            <p className="text-sm text-gray-500">Notes</p>
-                            <p className="text-gray-700 whitespace-pre-wrap">{payment.notes}</p>
-                        </div>
-                    )}
+                <div className="space-y-2">
+                    <Label htmlFor="payment-amount" className="font-bold text-base">Amount</Label>
+                    <Input
+                        className="text-gray-700"
+                        id="payment-amount"
+                        type="text"
+                        value={formatCurrency(Number(payment.amount), currency)}
+                        disabled
+                    />
                 </div>
+                <div className="space-y-2">
+                    <Label htmlFor="payment-amount" className="font-bold text-base">Date</Label>
+                    <Input
+                        className="text-gray-700"
+                        id="payment-amount"
+                        type="text"
+                        value={payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
+                        disabled
+                    />
+                </div>
+                {payment.reference && (
+                    <div className="space-y-2">
+                        <Label htmlFor="payment-amount" className="font-bold text-base">Reference</Label>
+                        <Input
+                            className="text-gray-700"
+                            id="payment-reference"
+                            type="number"
+                            value={payment.reference}
+                            disabled
+                            placeholder="Enter amount"
+                        />
+                    </div>
+                )}
+                {payment.notes && (
+                    <div className="space-y-2">
+                        <Label htmlFor="payment-amount" className="font-bold text-base">Notes</Label>
+                        <Input
+                            className="text-gray-700"
+                            id="payment-notes"
+                            type="number"
+                            value={payment.notes}
+                            disabled
+                            placeholder="Enter amount"
+                        />
+                    </div>
+                )}
 
                 {/* Linked proof-of-payment document. */}
                 <div>
                     <Label>Related document</Label>
                     {linkedDocument ? (
-                        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200 rounded-lg focus-within:border-priori-purple focus-within:ring-priori-purple/10">
                             <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
                                 <Paperclip size={16} className="shrink-0 text-gray-500" />
                                 <span className="truncate" title={linkedDocument.filename}>
@@ -162,29 +180,29 @@ export function PurchaseOrderPaymentModal({
                             <button
                                 type="button"
                                 onClick={() => handleDownload(linkedDocument.id, linkedDocument.filename)}
-                                className="flex items-center gap-1 text-priori-purple hover:underline text-sm"
+                                className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
                             >
-                                <Download size={16} /> Download
+                                <Download size={20} /> Download
                             </button>
                         </div>
                     ) : (
-                        <p className="text-sm text-gray-400">No document linked to this payment.</p>
+                            <p className="text-base text-gray-400">No document linked to this payment.</p>
                     )}
                 </div>
 
                 {/* Attach additional document(s). */}
-                <div>
-                    <Label htmlFor="po-payment-doc">Attach related document(s)</Label>
+                <div className="space-y-2">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 w-full border-dashed h-28 text-[20px]"
                     >
-                        <Paperclip size={16} /> Attach document
+                        <Plus size={20} /> Upload document
                     </Button>
                     <input
-                        id="po-payment-doc"
+                        className="text-gray-700"
+                        id="payment-documents"
                         ref={fileInputRef}
                         type="file"
                         multiple
@@ -197,10 +215,11 @@ export function PurchaseOrderPaymentModal({
                             {files.map((file, index) => (
                                 <li
                                     key={`${file.name}-${index}`}
-                                    className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg"
+                                    className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200  rounded-lg transition-all
+                                     "
                                 >
-                                    <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
-                                        <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                    <span className="flex items-center gap-2 min-w-0 text-lg text-gray-700">
+                                        <Paperclip size={20} className="shrink-0 text-gray-500" />
                                         <span className="truncate" title={file.name}>{file.name}</span>
                                     </span>
                                     <button
@@ -209,13 +228,15 @@ export function PurchaseOrderPaymentModal({
                                         className="text-gray-400 hover:text-red-500 transition-colors"
                                         aria-label={`Remove ${file.name}`}
                                     >
-                                        <X size={18} />
+                                        <X size={20} />
                                     </button>
                                 </li>
                             ))}
                         </ul>
                     )}
                 </div>
+
+
             </div>
         </Dialog>
     );
