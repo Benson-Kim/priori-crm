@@ -9,7 +9,7 @@ Purchase Order CRUD + reference generation + optimistic locking.
 - Currency lock: rejected if changed after first save.
 - Editable only in DRAFT.
 - Optimistic locking: stale version -> 409; matching -> success.
-- DELETE allowed only on DRAFT/CANCELED; writes a before-image audit row.
+- DELETE allowed only on DRAFT; writes a before-image audit row.
 - terms_and_conditions <= 2000 chars.
 - No N+1: get_by_id eager-loads line_items + vendor.
 
@@ -344,15 +344,6 @@ class TestDelete:
         assert audit.before["status"] == PurchaseOrderStatus.DRAFT.value
         assert audit.before["po_reference"] == po.po_reference
 
-    def test_delete_canceled_allowed(self, db):
-        vendor = _vendor(db)
-        svc = PurchaseOrderService(db)
-        po = svc.create(_create_payload(vendor_id=vendor.id))
-        po.status = PurchaseOrderStatus.CANCELED
-        db.flush()
-
-        assert svc.delete(po.id) is False
-
     def test_delete_sent_rejected(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
@@ -363,11 +354,11 @@ class TestDelete:
         with pytest.raises(BadRequestException):
             svc.delete(po.id)
 
-    def test_delete_billed_rejected(self, db):
+    def test_delete_paid_rejected(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
         po = svc.create(_create_payload(vendor_id=vendor.id))
-        po.status = PurchaseOrderStatus.BILLED
+        po.status = PurchaseOrderStatus.PAID
         db.flush()
 
         with pytest.raises(BadRequestException):

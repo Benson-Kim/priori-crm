@@ -1,29 +1,52 @@
 import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer";
 import { useHeaderOverride } from "@/components/layout/header-context";
+import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
+import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Divider } from "@/components/ui/Divider";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
-import { saveBlob } from "@/lib/utils";
+import { ACCEPTED_UPLOAD_TYPES, DEFAULT_CURRENCY } from "@/lib/constants";
+import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
     PurchaseOrderLineItem,
+    PurchaseOrderPayment,
     PurchaseOrderResponse,
 } from "@/services/purchaseOrderApi";
 import {
-    cancelPurchaseOrder,
     deletePurchaseOrder,
     deletePurchaseOrderDocument,
     downloadPurchaseOrderDocument,
     downloadPurchaseOrderPdf,
+    downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
     getPurchaseOrder,
+    markAsSentPurchaseOrder,
     sendPurchaseOrder,
     uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
-import { ArrowLeft, Ban, Copy, Download, FileText, PaperclipIcon, Pencil, Plus, Send, X } from "lucide-react";
+import {
+    ArrowLeft,
+    CheckCircle,
+    Copy,
+    CreditCard,
+    Download,
+    FileText,
+    Paperclip,
+    PaperclipIcon,
+    Pencil,
+    Plus,
+    Send,
+    Trash,
+    X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+type DetailTab = "overview" | "detail";
 
 export default function PurchaseOrderDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -32,13 +55,19 @@ export default function PurchaseOrderDetailPage() {
     const [po, setPo] = useState<PurchaseOrderResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<DetailTab>("overview");
 
     const { showConfirm, ConfirmDialog } = useConfirm();
 
     // Document upload state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    // Two document-level downloads: original (full amount) and current (balance-aware).
+    const [isDownloadingOriginal, setIsDownloadingOriginal] = useState(false);
+    const [isDownloadingCurrent, setIsDownloadingCurrent] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // Selected payment row — opens the view/update (attach document) modal.
+    const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -67,8 +96,29 @@ export default function PurchaseOrderDetailPage() {
             description: `Send ${po.po_reference} to the vendor by email? It will be marked as Sent.`,
             confirmLabel: "Yes, send",
             onConfirm: async () => {
+                try {
                 await sendPurchaseOrder(po.id);
+                    fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
+            },
+        });
+    };
+
+    const handleMarkAsSent = () => {
+        if (!po) return;
+        showConfirm({
+            title: "Mark as sent?",
+            description: "Are you sure you want to mark this item as sent?",
+            confirmLabel: "Yes, mark as sent",
+            onConfirm: async () => {
+                try {
+                await markAsSentPurchaseOrder(po.id);
                 fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send purchase order");
+                }
             },
         });
     };
@@ -81,20 +131,6 @@ export default function PurchaseOrderDetailPage() {
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to duplicate purchase order");
         }
-    };
-
-    const handleCancel = () => {
-        if (!po) return;
-        showConfirm({
-            title: "Cancel purchase order?",
-            description: `Cancel ${po.po_reference}? This voids the purchase order; it cannot be edited or sent afterwards.`,
-            confirmLabel: "Yes, cancel it",
-            variant: "danger",
-            onConfirm: async () => {
-                await cancelPurchaseOrder(po.id);
-                fetchPurchaseOrder();
-            },
-        });
     };
 
     const handleDelete = () => {
@@ -111,16 +147,31 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
-    const handleDownloadPdf = async () => {
+    /** Original PO PDF: full amount, no payments applied. */
+    const handleDownloadOriginal = async () => {
         if (!po) return;
-        setIsDownloadingPdf(true);
+        setIsDownloadingOriginal(true);
         try {
             const blob = await downloadPurchaseOrderPdf(po.id);
             saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to download PDF");
         } finally {
-            setIsDownloadingPdf(false);
+            setIsDownloadingOriginal(false);
+        }
+    };
+
+    /** Current PDF: payments applied + running balance (statement variant). */
+    const handleDownloadCurrent = async () => {
+        if (!po) return;
+        setIsDownloadingCurrent(true);
+        try {
+            const blob = await downloadPurchaseOrderStatementPdf(po.id);
+            saveBlob(blob, `PurchaseOrder_${po.po_reference}_Current.pdf`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download current PDF");
+        } finally {
+            setIsDownloadingCurrent(false);
         }
     };
 
@@ -189,9 +240,17 @@ export default function PurchaseOrderDetailPage() {
     }
 
     const status = po.status.toLowerCase();
+    const currency = po.currency ?? DEFAULT_CURRENCY;
+    // Balance fields land with PO-19; default defensively so the UI is correct
+    // even before any payment has been recorded.
+    const total = Number(po.total);
+    const amountPaid = Number(po.amount_paid ?? 0);
+    const balanceDue = Number(po.balance_due ?? total - amountPaid);
+    const payments: PurchaseOrderPayment[] = po.payments ?? [];
+
     const actions: DropdownItem[] = [];
 
-    // Draft-only: editable and sendable.
+    // Draft-only: editable, sendable (email) and mark-as-sent (offline, no email).
     if (po.is_editable) {
         actions.push({
             key: "edit",
@@ -200,12 +259,30 @@ export default function PurchaseOrderDetailPage() {
             onClick: () => navigate(`/purchase-orders/${po.id}/edit`),
         });
     }
-    if (status === "draft") {
+    // if (status === "draft") {
+    if (status != "sent") {
         actions.push({
             key: "send",
             label: "Send",
             icon: <Send size={16} />,
             onClick: handleSend,
+        });
+        actions.push({
+            key: "mark-as-sent",
+            label: "Mark as sent",
+            icon: <CheckCircle size={16} />,
+            onClick: handleMarkAsSent,
+        });
+    }
+    // }
+
+    // Record payment: SENT only, while there is still a balance to clear.
+    if (status === "sent" && balanceDue > 0) {
+        actions.push({
+            key: "record-payment",
+            label: "Record payment",
+            icon: <CreditCard size={16} />,
+            onClick: () => setIsPaymentModalOpen(true),
         });
     }
 
@@ -217,48 +294,129 @@ export default function PurchaseOrderDetailPage() {
         onClick: handleDuplicate,
     });
 
-    // Cancel: DRAFT or SENT only.
-    if (status === "draft" || status === "sent") {
-        actions.push({
-            key: "cancel",
-            label: "Cancel",
-            icon: <Ban size={16} />,
-            danger: true,
-            onClick: handleCancel,
-        });
-    }
-
-    // Delete: DRAFT or CANCELED only.
-    if (status === "draft" || status === "canceled") {
+    // Delete: DRAFT only (PO-18 lifecycle — SENT/PAID are protected).
+    if (status === "draft") {
         actions.push({
             key: "delete",
             label: "Delete",
-            icon: <X size={16} />,
+            icon: <Trash size={16} />,
             danger: true,
             onClick: handleDelete,
         });
     }
 
+    const statusLabel = po.status.charAt(0).toUpperCase() + po.status.slice(1);
+
+    const documents = po.documents ?? [];
+    const hasDocument = (payment: PurchaseOrderPayment) =>
+        Boolean(payment.document_id && documents.some((d) => d.id === payment.document_id));
+
+    // Payments table columns — mirrors the invoices/PO list table format.
+    const paymentColumns = [
+        {
+            key: "number",
+            header: "#.",
+            render: (_payment: PurchaseOrderPayment, index: number) => (
+                <span className="text-content-primary">{index + 1}.</span>
+            ),
+            className: "w-[50px]",
+        },
+        {
+            key: "date",
+            header: "Date",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-content-primary">
+                    {payment.payment_date ? formatDisplayDate(payment.payment_date) : "-"}
+                </span>
+            ),
+        },
+        {
+            key: "amount",
+            header: "Amount",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500">{formatCurrency(Number(payment.amount), currency)}</span>
+            ),
+        },
+        {
+            key: "reference",
+            header: "Reference",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500 truncate" title={payment.reference ?? undefined}>
+                    {payment.reference ?? "-"}
+                </span>
+            ),
+        },
+        {
+            key: "document",
+            header: "Document",
+            render: (payment: PurchaseOrderPayment) =>
+                hasDocument(payment) ? (
+                    <span className="inline-flex items-center gap-1 text-priori-purple">
+                        <Paperclip size={16} /> Attached
+                    </span>
+                ) : (
+                    <span className="text-gray-400">—</span>
+                ),
+        },
+    ];
+
     return (
         <div className="flex flex-col gap-6 font-sans pb-10">
-            {/* Header */}
+            {/* Header: back + tabs + document actions */}
             <div className="flex items-center justify-between">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => navigate("/purchase-orders")}
-                    aria-label="Back to purchase orders"
-                >
-                    <ArrowLeft size={20} />
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => navigate("/purchase-orders")}
+                        aria-label="Back to purchase orders"
+                    >
+                        <ArrowLeft size={20} />
+                    </Button>
+
+                    <div className="flex items-center gap-1 border-b border-gray-200">
+                        <button
+                            onClick={() => setActiveTab("overview")}
+                            className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === "overview"
+                                ? "text-priori-purple"
+                                : "text-gray-500 hover:text-gray-700"
+                                }`}
+                        >
+                            Overview
+                            {activeTab === "overview" && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-priori-purple" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("detail")}
+                            className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === "detail"
+                                ? "text-priori-purple"
+                                : "text-gray-500 hover:text-gray-700"
+                                }`}
+                        >
+                            Detail
+                            {activeTab === "detail" && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-priori-purple" />
+                            )}
+                        </button>
+                    </div>
+                </div>
 
                 <div className="flex items-center gap-3">
+                    {/* Document-level downloads (not per row). */}
                     <Button
                         variant="outline-secondary"
-                        onClick={handleDownloadPdf}
-                        disabled={isDownloadingPdf}
+                        onClick={handleDownloadOriginal}
+                        disabled={isDownloadingOriginal}
                     >
-                        <FileText size={18} /> {isDownloadingPdf ? "Preparing..." : "Download PDF"}
+                        <FileText size={18} /> {isDownloadingOriginal ? "Preparing..." : "Original PO PDF"}
+                    </Button>
+                    <Button
+                        variant="outline-secondary"
+                        onClick={handleDownloadCurrent}
+                        disabled={isDownloadingCurrent}
+                    >
+                        <Download size={18} /> {isDownloadingCurrent ? "Preparing..." : "Current PDF"}
                     </Button>
                     <Dropdown
                         items={actions}
@@ -274,33 +432,107 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             )}
 
-            {/* Document Viewer */}
-            <PurchaseOrderViewer
-                data={{
-                    poReference: po.po_reference,
-                    vendorId: po.vendor_id,
-                    vendor: po.vendor,
-                    orderDate: po.order_date,
-                    deliveryDate: po.delivery_date,
-                    currency: po.currency,
-                    isRecurring: po.is_recurring,
-                    complianceRef: po.compliance_ref,
-                    notes: po.notes || undefined,
-                    termsAndConditions: po.terms_and_conditions,
-                    subtotal: Number(po.subtotal),
-                    taxTotal: Number(po.tax_total),
-                    total: Number(po.total),
-                    lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
-                        id: item.id ?? `line-${index}`,
-                        itemName: item.item_name,
-                        description: item.description,
-                        quantity: Number(item.quantity),
-                        unitPrice: Number(item.unit_price),
-                        taxType: item.tax_type,
-                        lineTotal: Number(item.line_total ?? Number(item.quantity) * Number(item.unit_price)),
-                    })),
-                }}
-            />
+            {/* Overview tab: descriptive header + totals (left), payments (right). */}
+            {activeTab === "overview" && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* LEFT: descriptive summary + running totals. */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-6">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="text-[14px] text-gray-500">Vendor</p>
+                                <p className="text-[20px] font-bold text-gray-800 truncate">
+                                    {po.vendor?.vendor_name ?? po.vendor_id}
+                                </p>
+                            </div>
+                            <Badge variant={status as BadgeVariant}>{statusLabel}</Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
+                            <OverviewField label="Reference" value={po.po_reference} />
+                            <OverviewField
+                                label="Order Date"
+                                value={po.order_date ? formatDisplayDate(po.order_date) : "-"}
+                            />
+                            <OverviewField
+                                label="Delivery Date"
+                                value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
+                            />
+                        </div>
+
+
+
+                        <Divider />
+
+                        {/* Totals: Total / Amount Paid / Balance Due. */}
+                        <div className="w-full flex justify-end">
+                            <div className="min-w-72 flex flex-col gap-3 text-gray-800">
+                                <div className="flex justify-between items-center font-bold">
+                                    <span>Total</span>
+                                    <span>{formatCurrency(total, currency)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span>Amount Paid</span>
+                                    <span>{formatCurrency(amountPaid, currency)}</span>
+                                </div>
+                                <Divider />
+                                <div className="flex justify-between items-center font-bold text-gray-900">
+                                    <span>Balance Due</span>
+                                    <span>{formatCurrency(balanceDue, currency)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RIGHT: recorded payments as a table (same format as the
+                        invoices table). Click a row to view the payment and
+                        attach related document(s). */}
+                    <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-6 flex flex-col gap-4">
+                        <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
+
+                        <div className="overflow-x-auto rounded-b-lg">
+                            <Table
+                                columns={paymentColumns}
+                                data={payments}
+                                rowKey={(payment) => payment.id}
+                                onRowClick={(payment) => setSelectedPayment(payment)}
+                                emptyMessage="No payments recorded yet."
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Detail tab: the PO viewer, with the owner header editable so the
+                purchase-order owner details can be updated in place. */}
+            {activeTab === "detail" && (
+                <PurchaseOrderViewer
+                    editableOwner
+                    data={{
+                        poReference: po.po_reference,
+                        vendorId: po.vendor_id,
+                        vendor: po.vendor,
+                        orderDate: po.order_date,
+                        deliveryDate: po.delivery_date,
+                        currency: po.currency,
+                        isRecurring: po.is_recurring,
+                        complianceRef: po.compliance_ref,
+                        notes: po.notes || undefined,
+                        termsAndConditions: po.terms_and_conditions,
+                        subtotal: Number(po.subtotal),
+                        taxTotal: Number(po.tax_total),
+                        total: Number(po.total),
+                        lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
+                            id: item.id ?? `line-${index}`,
+                            itemName: item.item_name,
+                            description: item.description,
+                            quantity: Number(item.quantity),
+                            unitPrice: Number(item.unit_price),
+                            taxType: item.tax_type,
+                            lineTotal: Number(item.line_total ?? Number(item.quantity) * Number(item.unit_price)),
+                        })),
+                    }}
+                />
+            )}
 
             {/* Documents Section */}
             <div className="flex flex-col gap-2.5">
@@ -361,8 +593,46 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             </div>
 
+            {/* Payment detail modal: view a recorded payment and attach
+                related proof-of-payment document(s). */}
+            <PurchaseOrderPaymentModal
+                isOpen={selectedPayment !== null}
+                onClose={() => setSelectedPayment(null)}
+                poId={po.id}
+                payment={selectedPayment}
+                documents={documents}
+                currency={currency}
+                onUpdated={() => {
+                    fetchPurchaseOrder();
+                }}
+            />
+
+            {/* Record payment modal */}
+            <RecordPaymentModal
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                entityId={po.id}
+                entityType="purchaseOrder"
+                balanceDue={balanceDue}
+                currency={currency}
+                reference={po.po_reference}
+                onSuccess={() => {
+                    setIsPaymentModalOpen(false);
+                    fetchPurchaseOrder();
+                }}
+            />
+
             {/* Confirm Dialog */}
             {ConfirmDialog}
+        </div>
+    );
+}
+
+function OverviewField({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+        <div className="min-w-0 flex items-center justify-between">
+            <p className="text-[16px] text-gray-800">{label}</p>
+            <p className="text-[14px] text-gray-500 truncate">{value}</p>
         </div>
     );
 }

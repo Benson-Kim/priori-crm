@@ -103,19 +103,12 @@ def _seed_one_per_status(db, vendor) -> dict[str, PurchaseOrder]:
             reference="PO-000002",
             status=PurchaseOrderStatus.SENT,
         ),
-        "billed": _po(
+        "paid": _po(
             db,
             vendor,
             number=f"PO-{today}-003",
             reference="PO-000003",
-            status=PurchaseOrderStatus.BILLED,
-        ),
-        "canceled": _po(
-            db,
-            vendor,
-            number=f"PO-{today}-004",
-            reference="PO-000004",
-            status=PurchaseOrderStatus.CANCELED,
+            status=PurchaseOrderStatus.PAID,
         ),
     }
 
@@ -153,8 +146,8 @@ def test_list_filters_by_status(db):
     assert statuses == {PurchaseOrderStatus.SENT.value}
 
 
-def test_list_hides_canceled_by_default(db):
-    """CANCELED is hidden unless explicitly requested (shared visibility rule)."""
+def test_list_returns_all_statuses(db):
+    """Every lifecycle status (draft/sent/paid) appears in the default list."""
     service = PurchaseOrderService(db)
     vendor = _vendor(db)
     seeded = _seed_one_per_status(db, vendor)
@@ -163,10 +156,9 @@ def test_list_hides_canceled_by_default(db):
         PaginationParams(), PurchaseOrderFilterParams()
     )
     ids = {item.id for item in result.items}
-    assert seeded["canceled"].id not in ids
     assert seeded["draft"].id in ids
     assert seeded["sent"].id in ids
-    assert seeded["billed"].id in ids
+    assert seeded["paid"].id in ids
 
 
 def test_list_filters_by_vendor(db):
@@ -355,7 +347,7 @@ def test_summary_excludes_line_items(db):
 # STATUS COUNTS
 
 
-def test_status_counts_excludes_canceled_from_all(db):
+def test_status_counts_cover_full_lifecycle(db):
     service = PurchaseOrderService(db)
     vendor = _vendor(db)
     _seed_one_per_status(db, vendor)
@@ -363,9 +355,45 @@ def test_status_counts_excludes_canceled_from_all(db):
     counts = service.get_status_counts()
     assert counts.draft == 1
     assert counts.sent == 1
-    assert counts.billed == 1
-    assert counts.canceled == 1
-    assert counts.all == 3  # canceled excluded from the All tab
+    assert counts.paid == 1
+    assert counts.all == 3  # every status is counted
+
+
+def test_status_counts_includes_paid_bucket(db):
+    """PAID POs appear in both the ``paid`` bucket and the ``all`` total.
+
+    Finding 2: PurchaseOrderStatusCounts was missing a ``paid`` field, so
+    PAID POs were counted in ``all`` but appeared in no named bucket.
+    """
+    service = PurchaseOrderService(db)
+    vendor = _vendor(db)
+    today = date.today().strftime("%Y%m%d")
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-010",
+        reference="PO-000010",
+        status=PurchaseOrderStatus.DRAFT,
+    )
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-011",
+        reference="PO-000011",
+        status=PurchaseOrderStatus.PAID,
+    )
+    _po(
+        db,
+        vendor,
+        number=f"PO-{today}-012",
+        reference="PO-000012",
+        status=PurchaseOrderStatus.PAID,
+    )
+
+    counts = service.get_status_counts()
+    assert counts.paid == 2, "PAID POs must appear in the paid bucket"
+    assert counts.draft == 1
+    assert counts.all == 3, "PAID POs must be included in the all total"
 
 
 def test_status_counts_uses_single_query(db):

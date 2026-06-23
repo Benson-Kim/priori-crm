@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import ClassVar
 
 import pytest
 
@@ -66,9 +67,33 @@ def _only(events, name):
 
 
 class TestEventCatalogue:
-    def test_all_fourteen_events_defined(self):
-        """The PRD §17 catalogue is complete — exactly 14 events."""
-        assert len(list(PurchaseOrderEvent)) == 14
+    # The 14 PRD §17 events, plus the two v1-lifecycle additions
+    # (PO_PAYMENT_RECORDED from PO-19, PO_MARKED_SENT from PO-20).
+    _PRD_EVENTS: ClassVar[set[str]] = {
+        "po_created",
+        "po_saved",
+        "po_viewed",
+        "po_sent",
+        "po_send_failed",
+        "po_converted_to_bill",
+        "po_pdf_downloaded",
+        "po_duplicated",
+        "po_cancelled",
+        "po_deleted",
+        "po_document_attached",
+        "po_document_downloaded",
+        "po_document_deleted",
+        "po_list_exported",
+    }
+    _LIFECYCLE_ADDITIONS: ClassVar[set[str]] = {"po_payment_recorded", "po_marked_sent"}
+
+    def test_prd_catalogue_is_complete(self):
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert defined >= self._PRD_EVENTS
+
+    def test_event_enum_is_exactly_prd_plus_lifecycle(self):
+        defined = {ev.value for ev in PurchaseOrderEvent}
+        assert defined == self._PRD_EVENTS | self._LIFECYCLE_ADDITIONS
 
     def test_event_names_are_snake_case_constants(self):
         for ev in PurchaseOrderEvent:
@@ -206,15 +231,6 @@ class TestCreateEmitsPoCreated:
 
 
 class TestCancelDeleteDuplicateEmit:
-    def test_cancel_emits_po_cancelled(self, db, captured_events):
-        vendor = _vendor(db)
-        po = _create_po(db, vendor)
-        db.commit()
-        captured_events.clear()
-
-        PurchaseOrderService(db).cancel(po.id)
-        assert _only(captured_events, "po_cancelled") == {"po_id": str(po.id)}
-
     def test_delete_emits_po_deleted(self, db, captured_events):
         vendor = _vendor(db)
         po = _create_po(db, vendor)
