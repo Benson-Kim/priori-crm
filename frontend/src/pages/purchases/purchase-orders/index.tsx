@@ -9,18 +9,18 @@ import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
-    cancelPurchaseOrder,
     deletePurchaseOrder,
     duplicatePurchaseOrder,
     exportPurchaseOrdersExcel,
     getPurchaseOrderCounts,
     getPurchaseOrders,
+    markAsSentPurchaseOrder,
     sendPurchaseOrder,
     type PaginatedPurchaseOrders,
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { Ban, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -35,8 +35,7 @@ export default function PurchaseOrdersPage() {
         all: 0,
         draft: 0,
         sent: 0,
-        billed: 0,
-        canceled: 0,
+        paid: 0,
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -113,6 +112,22 @@ export default function PurchaseOrdersPage() {
         });
     };
 
+    const handleMarkAsSent = (po: PurchaseOrderSummary) => {
+        showConfirm({
+            title: "Mark as sent?",
+            description: "Are you sure you want to mark this item as sent?",
+            confirmLabel: "Yes, mark as sent",
+            onConfirm: async () => {
+                try {
+                    await markAsSentPurchaseOrder(po.id);
+                    refreshAll();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to mark purchase order as sent");
+                }
+            },
+        });
+    };
+
     const handleDuplicate = async (po: PurchaseOrderSummary) => {
         try {
             const result = await duplicatePurchaseOrder(po.id);
@@ -121,23 +136,6 @@ export default function PurchaseOrdersPage() {
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to duplicate purchase order");
         }
-    };
-
-    const handleCancel = (po: PurchaseOrderSummary) => {
-        showConfirm({
-            title: "Cancel purchase order?",
-            description: `Cancel ${po.po_reference}? This voids the purchase order; it cannot be edited or sent afterwards.`,
-            confirmLabel: "Yes, cancel it",
-            variant: "danger",
-            onConfirm: async () => {
-                try {
-                    await cancelPurchaseOrder(po.id);
-                    refreshAll();
-                } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to cancel purchase order");
-                }
-            },
-        });
     };
 
     const handleDelete = (po: PurchaseOrderSummary) => {
@@ -191,11 +189,19 @@ export default function PurchaseOrdersPage() {
                 icon: <Pencil size={16} />,
                 onClick: () => handleEdit(po),
             });
+        }
+        if (po.status != "sent") {
             actions.push({
                 key: "send",
                 label: "Send",
                 icon: <Send size={16} />,
                 onClick: () => handleSend(po),
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleMarkAsSent(po),
             });
         }
 
@@ -207,19 +213,8 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
-        // Cancel applies to DRAFT or SENT; BILLED/CANCELED are terminal.
-        if (po.status === "draft" || po.status === "sent") {
-            actions.push({
-                key: "cancel",
-                label: "Cancel",
-                icon: <Ban size={16} />,
-                danger: true,
-                onClick: () => handleCancel(po),
-            });
-        }
-
-        // Delete is permitted only for DRAFT or CANCELED (SENT/BILLED protected).
-        if (po.status === "draft" || po.status === "canceled") {
+        // Delete is permitted only for DRAFT (SENT/PAID protected).
+        if (po.status === "draft") {
             actions.push({
                 key: "delete",
                 label: "Delete",
@@ -236,8 +231,7 @@ export default function PurchaseOrdersPage() {
         { key: "all", label: "All", count: counts.all },
         { key: "draft", label: "Draft", count: counts.draft },
         { key: "sent", label: "Sent", count: counts.sent },
-        { key: "billed", label: "Billed", count: counts.billed },
-        { key: "canceled", label: "Canceled", count: counts.canceled },
+        { key: "paid", label: "Paid", count: counts.paid },
     ];
 
     const columns = [
@@ -275,6 +269,13 @@ export default function PurchaseOrdersPage() {
             header: "Amount",
             render: (item: PurchaseOrderSummary) => (
                 <span className="text-gray-500">{formatCurrency(Number(item.total), item.currency)}</span>
+            ),
+        },
+        {
+            key: "balance",
+            header: "Balance",
+            render: (item: PurchaseOrderSummary) => (
+                <span className="text-gray-500">{formatCurrency(Number(item.balance_due), item.currency)}</span>
             ),
         },
         {

@@ -1,4 +1,3 @@
-import { getComplianceRefLabel, getComplianceRefTooltip } from "@/lib/compliance";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -37,10 +36,12 @@ export interface PurchaseOrderViewerData {
 
 interface PurchaseOrderViewerProps {
   data: PurchaseOrderViewerData;
+  editableOwner?: boolean;
 }
 
 export function PurchaseOrderViewer({
   data,
+  editableOwner = false,
 }: Readonly<PurchaseOrderViewerProps>) {
   // Build VAT label from line items (shared helper used by the other viewers).
   const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
@@ -50,7 +51,7 @@ export function PurchaseOrderViewer({
       {/* Top Section */}
       <div className="p-6">
         {/* Owner identity (logo + company block) - single source of truth. */}
-        <DocumentOwnerHeader />
+        <DocumentOwnerHeader editable={editableOwner} />
       </div>
 
       <div className="p-6">
@@ -101,20 +102,7 @@ export function PurchaseOrderViewer({
                 {data.deliveryDate ? formatDisplayDate(data.deliveryDate) : "-"}
               </MetaField>
 
-              <MetaField label="Currency">{data.currency ?? "-"}</MetaField>
 
-              {data.complianceRef && (
-                <MetaField
-                  label={getComplianceRefLabel()}
-                  tooltip={getComplianceRefTooltip()}
-                >
-                  {data.complianceRef}
-                </MetaField>
-              )}
-
-              <MetaField label="Recurring">
-                {data.isRecurring ? "Yes" : "No"}
-              </MetaField>
             </div>
           </div>
         </div>

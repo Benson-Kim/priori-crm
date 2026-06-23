@@ -1,9 +1,8 @@
 """
 Purchase Order ORM models — Purchases module.
 
-Lifecycle: DRAFT → SENT → BILLED; DRAFT | SENT → CANCELED
-No discount field in v1. No payments table in v1.
-CANCELED is a terminal state (voided).
+Lifecycle: DRAFT → SENT → PAID
+No discount field in v1.
 
 Mirrors the Expense models (vendor-facing, document attachments) rather
 than the Quote/Invoice (customer-facing) models. Purchase Orders are
@@ -67,7 +66,7 @@ class PurchaseOrder(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'sent', 'billed', 'canceled')",
+            "status IN ('draft', 'sent', 'paid')",
             name="ck_purchase_orders_valid_status",
         ),
         CheckConstraint(
@@ -89,6 +88,14 @@ class PurchaseOrder(Base):
         CheckConstraint(
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_purchase_orders_valid_currency",
+        ),
+        CheckConstraint(
+            "amount_paid >= 0",
+            name="ck_purchase_orders_amount_paid_non_negative",
+        ),
+        CheckConstraint(
+            "balance_due >= 0",
+            name="ck_purchase_orders_balance_due_non_negative",
         ),
         Index("ix_purchase_orders_vendor_status", "vendor_id", "status"),
         Index("ix_purchase_orders_status_delivery_date", "status", "delivery_date"),
@@ -196,6 +203,22 @@ class PurchaseOrder(Base):
         comment="subtotal + tax_total (no discount in v1)",
     )
 
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default=text("0.00"),
+        comment="Cumulative amount recorded via PurchaseOrderPayment records",
+    )
+
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default=text("0.00"),
+        comment="total - amount_paid",
+    )
+
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -229,6 +252,12 @@ class PurchaseOrder(Base):
         DateTime(timezone=True),
         nullable=True,
         comment="Timestamp when the PO transitioned to SENT",
+    )
+
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when the PO was fully settled (transitioned to PAID)",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -282,6 +311,28 @@ class PurchaseOrder(Base):
         lazy="selectin",
         foreign_keys="PurchaseOrderDocument.po_id",
     )
+
+    payments = relationship(
+        "PurchaseOrderPayment",
+        back_populates="purchase_order",
+        cascade="all, delete-orphan",
+        order_by="PurchaseOrderPayment.payment_date",
+        lazy="selectin",
+    )
+
+    @property
+    def is_paid(self) -> bool:
+        """Fully settled by explicit PAID status or a cleared balance on a SENT PO.
+
+        A DRAFT PO with a zero total must NOT be considered paid — it has
+        never been sent and no payment has been recorded against it. Only
+        a PO that has been explicitly transitioned to PAID, or a SENT PO
+        whose balance_due has been reduced to zero by recorded payments,
+        is treated as settled.
+        """
+        return self.status == PurchaseOrderStatus.PAID or (
+            self.status == PurchaseOrderStatus.SENT and self.balance_due <= 0
+        )
 
     @property
     def is_editable(self) -> bool:
@@ -435,15 +486,16 @@ class PurchaseOrderDocument(Base):
     Supporting document attached to a purchase order.
 
     source tracks upload context for audit:
-        form → Create / Edit form
-        view → View screen attach button
+        form          → Create / Edit form
+        view          → View screen attach button
+        payment_modal → Record Payment modal (proof-of-payment)
     """
 
     __tablename__ = "purchase_order_documents"
 
     __table_args__ = (
         CheckConstraint(
-            "source IN ('form', 'view')",
+            "source IN ('form', 'view', 'payment_modal')",
             name="ck_po_documents_valid_source",
         ),
         CheckConstraint(
@@ -495,7 +547,7 @@ class PurchaseOrderDocument(Base):
         nullable=False,
         default=DocumentSource.FORM,
         server_default=text("'form'"),
-        comment="Upload context: form | view",
+        comment="Upload context: form | view | payment_modal",
     )
 
     uploaded_at: Mapped[datetime] = mapped_column(
@@ -526,4 +578,101 @@ class PurchaseOrderDocument(Base):
         return (
             f"<PurchaseOrderDocument(id={self.id}, filename={self.filename}, "
             f"source={self.source})>"
+        )
+
+
+class PurchaseOrderPayment(Base):
+    """
+    Auditable payment recorded against a purchase order.
+
+    Mirrors ExpensePayment: no payment_method field, optional document_id
+    FK to a proof-of-payment attachment uploaded in the Record Payment
+    modal. Multiple payments accumulate; PurchaseOrderService.record_payment
+    advances PurchaseOrder.amount_paid / balance_due atomically and settles
+    the PO to PAID once the balance is cleared.
+
+    Defined AFTER PurchaseOrderDocument so the document_id FK resolves
+    without a forward reference at mapper-configuration time (mirrors the
+    Expense models' ordering).
+    """
+
+    __tablename__ = "purchase_order_payments"
+
+    __table_args__ = (
+        CheckConstraint(
+            "amount > 0",
+            name="ck_po_payments_amount_positive",
+        ),
+        Index("ix_purchase_order_payments_po_id", "po_id"),
+        Index("ix_purchase_order_payments_payment_date", "payment_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    po_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_orders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+        comment="Amount settled in this payment transaction",
+    )
+
+    payment_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        comment="Date payment was made — required",
+    )
+
+    reference: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="Transaction ID, cheque number, or remittance reference",
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Internal notes for this payment entry",
+    )
+
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_order_documents.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Optional proof-of-payment document",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    recorded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="User who recorded this payment",
+    )
+
+    purchase_order = relationship("PurchaseOrder", back_populates="payments")
+
+    proof_document = relationship(
+        "PurchaseOrderDocument",
+        foreign_keys=[document_id],
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<PurchaseOrderPayment(id={self.id}, po={self.po_id}, "
+            f"amount={self.amount}, date={self.payment_date})>"
         )

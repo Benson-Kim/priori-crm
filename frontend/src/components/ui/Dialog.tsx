@@ -52,20 +52,20 @@ export function Dialog({
       />
       <div
         className={cn(
-          "relative w-full max-w-2xl mx-4 rounded-xl bg-gray-100 p-6 shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto",
+          "relative w-full max-w-2xl mx-4 rounded-2xl bg-gray-100 p-6 shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto",
           "animate-in fade-in zoom-in-95 duration-200"
         )}
       >
-        <div className="flex items-center justify-between border-b border-gray-300 mb-8">
+        <div className="flex items-center justify-between border-b border-gray-300 mb-8 py-3">
           <div className="flex items-center gap-2 text-gray-800">
-            {icon || <SquarePen size={24} strokeWidth={2} />}
+            {icon || <SquarePen size={24} strokeWidth={1} />}
             <h3 className="text-2xl font-bold">
               {title}
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-500 hover:text-gray-600 transition-colors"
             aria-label="Close dialog"
           >
             <X size={32} strokeWidth={2} />
@@ -74,7 +74,7 @@ export function Dialog({
 
         <div className="flex flex-col gap-8">
           {description && (
-            <p className="text-sm text-gray-800 p-6 bg-white border border-gray-200 rounded-xl">
+            <p className="text-[20px] text-gray-800 p-6 bg-white border border-gray-200 rounded-xl">
               {description}
             </p>
           )}
@@ -82,11 +82,11 @@ export function Dialog({
           {children && <div className={onConfirm ? "mb-6" : ""}>{children}</div>}
 
           {onConfirm && (
-            <div className="flex items-center gap-2 justify-end">
+            <div className="flex items-center gap-8 justify-end">
               <Button
                 variant="outline-secondary"
                 onClick={onClose}
-                className="p-4 text-[20px] leading-7.5 border-gray-600 text-gray-600"
+                className="p-4 text-[20px] leading-7.5 border border-gray-600 text-gray-600"
               >
                 {cancelLabel}
               </Button>
@@ -94,7 +94,7 @@ export function Dialog({
                 variant={variant === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
                 loading={isLoading}
-                className="p-4 leading-7.5 font-sans"
+                className="p-4 text-[20px] leading-7.5 font-sans"
               >
                 {confirmLabel}
               </Button>

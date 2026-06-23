@@ -199,7 +199,7 @@ export function VendorSelector({
             ) : vendorId && vendorDetails ? (
                 <div className="flex flex-col gap-1">
                     <div className="relative">
-                        {/* <button
+                            {/* <button
                             type="button"
                             className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
                             onClick={() => setShowDropdown(!showDropdown)}
@@ -207,27 +207,27 @@ export function VendorSelector({
                             {vendorName} <SquarePen size={18} />
                         </button> */}
 
-                        <div
+                            <div
                             onClick={() => setShowDropdown(!showDropdown)}
                             className="flex items-center justify-between w-full max-w-[320px] py-3 px-3 gap-3 rounded-lg border border-gray-300 cursor-pointer hover:border-priori-purple transition-all"
-                        >
-                            <span className="text-[16px] font-medium text-gray-900 truncate">
-                                {vendorName || "Select vendor"}
-                            </span>
+                            >
+                                <span className="text-[16px] font-medium text-gray-900 truncate">
+                                    {vendorName || "Select vendor"}
+                                </span>
 
-                            <ChevronDown size={16} className="text-gray-500" />
-                        </div>
+                                <ChevronDown size={16} className="text-gray-500" />
+                            </div>
 
-                        {showDropdown && (
-                            <VendorDropdown
+                            {showDropdown && (
+                                <VendorDropdown
                                 onClose={() => setShowDropdown(false)}
                                 onAddNew={() => setShowAddModal(true)}
-                                searchQuery={searchQuery}
-                                onSearchChange={setSearchQuery}
-                                vendors={vendors}
-                                onSelectVendor={selectVendor}
-                            />
-                        )}
+                                    searchQuery={searchQuery}
+                                    onSearchChange={setSearchQuery}
+                                    vendors={vendors}
+                                    onSelectVendor={selectVendor}
+                                />
+                            )}
                     </div>
                     {vendorDetails.address && (
                         <p className="text-sm text-gray-600">{vendorDetails.address}</p>

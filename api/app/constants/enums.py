@@ -140,9 +140,12 @@ class DocumentSource(StrEnum):
 
 
 class PurchaseOrderStatus(StrEnum):
-    """Purchase Order lifecycle states"""
+    """Purchase Order lifecycle states.
+
+    Lifecycle: DRAFT -> SENT -> PAID. There are no billed or canceled
+    states for purchase orders.
+    """
 
     DRAFT = "draft"  # Created but not yet sent
-    SENT = "sent"  # Sent to the vendor by email
-    BILLED = "billed"  # PO has been converted to a Bill
-    CANCELED = "canceled"  # PO has been voided
+    SENT = "sent"  # Sent to the vendor (emailed or marked sent)
+    PAID = "paid"  # Fully settled via recorded payments
