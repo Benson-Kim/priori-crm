@@ -244,6 +244,54 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    def export_purchase_order_payments(
+        self,
+        purchase_order,
+        payments: list,
+    ) -> bytes:
+        """Export a single purchase order's recorded payments to .xlsx bytes.
+
+        One row per payment ordered as supplied by the caller (payment_date
+        ascending). The PO number/reference and currency are repeated on each
+        row so the sheet is self-describing when detached from the PO. Money
+        is rendered with the shared #,##0.00 format; no float is persisted in
+        the DB, this is display formatting only.
+        """
+        po_number = getattr(purchase_order, "po_number", "")
+        po_reference = getattr(purchase_order, "po_reference", "")
+        currency = getattr(purchase_order, "currency", "")
+
+        headers = [
+            "PO #",
+            "Reference",
+            "Payment Date",
+            "Currency",
+            "Amount",
+            "Payment Reference",
+            "Notes",
+        ]
+
+        def row_fn(payment):
+            return [
+                po_number,
+                po_reference,
+                payment.payment_date,
+                currency,
+                payment.amount,
+                payment.reference or "",
+                payment.notes or "",
+            ]
+
+        wb = self._build_workbook(
+            sheet_name="Payments",
+            headers=headers,
+            records=payments,
+            row_fn=row_fn,
+            money_cols=[5],  # Amount
+            date_cols=[3],  # Payment Date
+        )
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(
