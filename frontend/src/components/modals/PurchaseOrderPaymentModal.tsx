@@ -20,9 +20,10 @@ import {
     downloadPurchaseOrderDocument,
     uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
-import { CreditCard, Download, Paperclip, Plus, X } from "lucide-react";
+import { CreditCard, Download, Eye, Paperclip, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/Input";
+import { DocumentPreviewModal } from "./DocumentPreviewModal";
 
 interface PurchaseOrderPaymentModalProps {
     isOpen: boolean;
@@ -48,6 +49,7 @@ export function PurchaseOrderPaymentModal({
     const [files, setFiles] = useState<File[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -175,13 +177,22 @@ export function PurchaseOrderPaymentModal({
                                     {linkedDocument.filename}
                                 </span>
                             </span>
-                            <button
-                                type="button"
-                                onClick={() => handleDownload(linkedDocument.id, linkedDocument.filename)}
-                                className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
-                            >
-                                <Download size={20} /> Download
-                            </button>
+                            <div className="flex items-center gap-4 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPreviewOpen(true)}
+                                    className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
+                                >
+                                    <Eye size={20} /> Preview
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownload(linkedDocument.id, linkedDocument.filename)}
+                                    className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
+                                >
+                                    <Download size={20} /> Download
+                                </button>
+                            </div>
                         </div>
                     ) : (
                             <p className="text-base text-gray-400">No document linked to this payment.</p>
@@ -236,6 +247,18 @@ export function PurchaseOrderPaymentModal({
 
 
             </div>
+
+            {/* Inline preview of the linked proof-of-payment document. */}
+            {linkedDocument && (
+                <DocumentPreviewModal
+                    isOpen={isPreviewOpen}
+                    onClose={() => setIsPreviewOpen(false)}
+                    poId={poId}
+                    documentId={linkedDocument.id}
+                    filename={linkedDocument.filename}
+                    mimeType={linkedDocument.mime_type}
+                />
+            )}
         </Dialog>
     );
 }
