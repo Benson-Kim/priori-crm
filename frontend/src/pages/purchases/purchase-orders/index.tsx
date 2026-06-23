@@ -40,7 +40,10 @@ export default function PurchaseOrdersPage() {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    // The PO selected for the Record Payment modal. The modal is row-scoped:
+    // amount/balance/currency all come from this row, so it is null when the
+    // modal is closed.
+    const [paymentTarget, setPaymentTarget] = useState<PurchaseOrderSummary | null>(null);
 
     const { showConfirm, ConfirmDialog } = useConfirm();
     const navigate = useNavigate();
@@ -216,12 +219,12 @@ export default function PurchaseOrdersPage() {
         });
 
         // Record payment: SENT only, while there is still a balance to clear.
-        if (po.status === "sent" && po.balance_due > 0) {
+        if (po.status === "sent" && Number(po.balance_due) > 0) {
             actions.push({
                 key: "record-payment",
                 label: "Record payment",
                 icon: <CreditCard size={16} />,
-                onClick: () => setIsPaymentModalOpen(true),
+                onClick: () => setPaymentTarget(po),
             });
         }
 
@@ -378,16 +381,16 @@ export default function PurchaseOrdersPage() {
             </div>
 
             <RecordPaymentModal
-                isOpen={isPaymentModalOpen}
-                onClose={() => setIsPaymentModalOpen(false)}
-                entityId={po.id}
+                isOpen={paymentTarget !== null}
+                onClose={() => setPaymentTarget(null)}
+                entityId={paymentTarget?.id ?? ""}
                 entityType="purchaseOrder"
-                balanceDue={balanceDue}
-                currency={currency}
-                reference={po.po_reference}
+                balanceDue={Number(paymentTarget?.balance_due ?? 0)}
+                currency={paymentTarget?.currency ?? ""}
+                reference={paymentTarget?.po_reference}
                 onSuccess={() => {
-                    setIsPaymentModalOpen(false);
-                    fetchPurchaseOrders();
+                    setPaymentTarget(null);
+                    refreshAll();
                 }}
             />
 
