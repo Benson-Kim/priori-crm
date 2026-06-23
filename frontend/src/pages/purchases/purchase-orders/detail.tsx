@@ -1,5 +1,6 @@
 import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer";
 import { useHeaderOverride } from "@/components/layout/header-context";
+import { DocumentPreviewModal } from "@/components/modals/DocumentPreviewModal";
 import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +12,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
+    PurchaseOrderDocument,
     PurchaseOrderLineItem,
     PurchaseOrderPayment,
     PurchaseOrderResponse,
@@ -33,14 +35,17 @@ import {
     CheckCircle,
     Copy,
     CreditCard,
+    Download,
     Eye,
     FileClock,
     FileSpreadsheetIcon,
     FileText,
     Paperclip,
     Pencil,
+    Plus,
     Send,
-    Trash
+    Trash,
+    X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -64,6 +69,8 @@ export default function PurchaseOrderDetailPage() {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     // Selected payment row — opens the view/update (attach document) modal.
     const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
+    // Document selected for inline preview (PO attachments).
+    const [previewDocument, setPreviewDocument] = useState<PurchaseOrderDocument | null>(null);
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -519,6 +526,71 @@ export default function PurchaseOrderDetailPage() {
                             />
                         </div>
 
+                        {/* Documents: preview / download / delete PO attachments. */}
+                        <div className="flex flex-col gap-2 px-4 pb-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[16px] font-bold text-gray-800">Documents</h3>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Plus size={16} /> {isUploading ? "Uploading..." : "Attach"}
+                                </Button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    onChange={handleFileUpload}
+                                />
+                            </div>
+                            {documents.length === 0 ? (
+                                <p className="text-sm text-gray-400 py-2">No documents attached yet.</p>
+                            ) : (
+                                <ul className="flex flex-col gap-2">
+                                    {documents.map((doc) => (
+                                        <li
+                                            key={doc.id}
+                                            className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                                        >
+                                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                                <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                                <span className="truncate" title={doc.filename}>{doc.filename}</span>
+                                            </span>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewDocument(doc)}
+                                                    className="flex items-center gap-1 text-priori-purple hover:underline text-sm"
+                                                    aria-label={`Preview ${doc.filename}`}
+                                                >
+                                                    <Eye size={16} /> Preview
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleFileDownload(doc.id, doc.filename)}
+                                                    className="flex items-center gap-1 text-priori-purple hover:underline text-sm"
+                                                    aria-label={`Download ${doc.filename}`}
+                                                >
+                                                    <Download size={16} /> Download
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleFileDelete(doc.id, doc.filename)}
+                                                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors text-sm"
+                                                    aria-label={`Delete ${doc.filename}`}
+                                                >
+                                                    <X size={16} /> Delete
+                                                </button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
                     </div>
 
                     {/* RIGHT: recorded payments as a table (same format as the
@@ -558,6 +630,16 @@ export default function PurchaseOrderDetailPage() {
             )}
 
 
+
+            {/* Inline preview of a PO attachment. */}
+            <DocumentPreviewModal
+                isOpen={previewDocument !== null}
+                onClose={() => setPreviewDocument(null)}
+                poId={po.id}
+                documentId={previewDocument?.id ?? null}
+                filename={previewDocument?.filename ?? ""}
+                mimeType={previewDocument?.mime_type}
+            />
 
             {/* Payment detail modal: view a recorded payment and attach
                 related proof-of-payment document(s). */}
