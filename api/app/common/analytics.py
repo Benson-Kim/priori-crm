@@ -58,6 +58,7 @@ class PurchaseOrderEvent(StrEnum):
     - PO_LIST_EXPORTED      -> active_filter_tab, row_count
     - PO_PAYMENT_RECORDED   -> po_id, settled  (PO-19; settled = balance cleared)
     - PO_MARKED_SENT        -> po_id  (PO-20; DRAFT->SENT without email)
+    - PO_PAYMENTS_EXPORTED  -> po_id, row_count  (per-PO payments Excel export)
     """
 
     PO_CREATED = "po_created"
@@ -76,6 +77,7 @@ class PurchaseOrderEvent(StrEnum):
     PO_LIST_EXPORTED = "po_list_exported"
     PO_PAYMENT_RECORDED = "po_payment_recorded"
     PO_MARKED_SENT = "po_marked_sent"
+    PO_PAYMENTS_EXPORTED = "po_payments_exported"
 
 
 # Heuristic e-mail detector used to keep raw addresses out of analytics. We

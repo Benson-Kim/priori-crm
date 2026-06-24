@@ -503,6 +503,7 @@ class PurchaseOrderDocument(Base):
             name="ck_po_documents_size_positive",
         ),
         Index("ix_purchase_order_documents_po_id", "po_id"),
+        Index("ix_purchase_order_documents_payment_id", "payment_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -516,6 +517,28 @@ class PurchaseOrderDocument(Base):
         UUID(as_uuid=True),
         ForeignKey("purchase_orders.id", ondelete="CASCADE"),
         nullable=False,
+    )
+
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        # purchase_order_payments.document_id already points back here, so this
+        # FK closes a mutual cycle between the two tables. use_alter defers it
+        # to an ALTER TABLE after both tables exist, so create_all (used by the
+        # test schema builder) can order the tables without a
+        # CircularDependencyError.
+        ForeignKey(
+            "purchase_order_payments.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_po_documents_payment_id",
+        ),
+        nullable=True,
+        comment=(
+            "Payment this document is proof-of-payment for. Set for documents "
+            "uploaded in the Record Payment / payment-detail modal so a payment "
+            "can carry any number of proof documents; NULL for PO-level (form / "
+            "view) attachments."
+        ),
     )
 
     filename: Mapped[str] = mapped_column(
@@ -669,6 +692,17 @@ class PurchaseOrderPayment(Base):
     proof_document = relationship(
         "PurchaseOrderDocument",
         foreign_keys=[document_id],
+    )
+
+    # All proof-of-payment documents grouped under this payment (via
+    # PurchaseOrderDocument.payment_id). A payment may carry several; the
+    # collection is loaded eagerly so the payment view can list them all.
+    documents = relationship(
+        "PurchaseOrderDocument",
+        foreign_keys="PurchaseOrderDocument.payment_id",
+        order_by="PurchaseOrderDocument.uploaded_at",
+        lazy="selectin",
+        viewonly=True,
     )
 
     def __repr__(self) -> str:

@@ -45,6 +45,13 @@
             "default": "form",
             "title": "Source",
             "type": "string"
+          },
+          "paymentId": {
+            "anyOf": [
+              { "format": "uuid", "type": "string" },
+              { "type": "null" }
+            ],
+            "title": "Paymentid"
           }
         },
         "required": [
@@ -4526,6 +4533,18 @@
           "mime_type": {
             "title": "Mime Type",
             "type": "string"
+          },
+          "payment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Id"
           },
           "po_id": {
             "format": "uuid",
