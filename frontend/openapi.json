@@ -5146,20 +5146,8 @@
         "type": "object"
       },
       "PurchaseOrderUpdate": {
-        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT          -> editable\n    SENT / PAID    -> BadRequestException (\u00a713 inline banner)",
+        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\nDeliberately excluded from the writable surface:\n- ``currency`` \u2014 locked after first save (never editable);\n- ``compliance_ref`` \u2014 derived from the vendor; a vendor change re-derives\n  it in the service, so it is not client-editable;\n- ``is_recurring`` \u2014 the recurring field has been removed from the PO flow.\n\nThe service update() only applies fields present in the payload, so a\nfield absent here can never be changed through this endpoint.\n\nEditing gate enforced in service:\n    DRAFT          -> editable\n    SENT / PAID    -> BadRequestException (\u00a713 inline banner)",
         "properties": {
-          "complianceRef": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Complianceref"
-          },
           "deliveryDate": {
             "anyOf": [
               {
@@ -5171,17 +5159,6 @@
               }
             ],
             "title": "Deliverydate"
-          },
-          "isRecurring": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Isrecurring"
           },
           "lineItems": {
             "anyOf": [
