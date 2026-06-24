@@ -36,7 +36,7 @@ from app.common.exceptions import (
 )
 from app.common.financial import build_line_items, sum_line_totals
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DocumentSource, PurchaseOrderStatus
+from app.constants.enums import Currency, DocumentSource, PurchaseOrderStatus
 from app.modules.purchase_orders.models import (
     PurchaseOrder,
     PurchaseOrderDocument,
@@ -200,9 +200,13 @@ class PurchaseOrderService(BaseDocumentService):
 
         Validations: vendor must exist and be active; >=1 line item
         (schema-enforced); delivery_date >= order_date (schema + DB CHECK);
-        qty > 0 and unit_price >= 0 (schema + DB CHECK). Currency is pinned to
-        the vendor's currency so a schema default can never silently drift it.
-        Reference collisions are retried via the shared SAVEPOINT loop.
+        qty > 0 and unit_price >= 0 (schema + DB CHECK).
+
+        Vendor-derived fields (never client-supplied): the PO currency is
+        pinned to the vendor's currency, and the compliance / eTIMS reference
+        is taken from the vendor's tax_id_pin (KRA PIN). is_recurring is always
+        False (the recurring field was removed from the flow). Reference
+        collisions are retried via the shared SAVEPOINT loop.
         """
         from app.modules.vendors.models import Vendor
 
@@ -221,23 +225,11 @@ class PurchaseOrderService(BaseDocumentService):
                 field="vendor_id",
             )
 
-        # Single-currency-per-vendor (mirrors the Expenses rule): reject an
-        # explicitly mismatched currency; otherwise pin to the vendor's
-        # currency so the schema default can never silently drift it.
-        if (
-            "currency" in data.model_fields_set
-            and vendor.currency
-            and data.currency != vendor.currency
-        ):
-            raise BadRequestException(
-                detail=(
-                    f"Purchase order currency '{data.currency}' does not match "
-                    f"the vendor's currency '{vendor.currency}'. A vendor can "
-                    "only transact in a single currency."
-                ),
-                field="currency",
-            )
-        po_currency = vendor.currency or data.currency
+        # Vendor-derived, never client-supplied: pin currency to the vendor's
+        # currency (KES fallback) and take the compliance / eTIMS reference
+        # from the vendor's tax_id_pin (KRA PIN).
+        po_currency = vendor.currency or Currency.KES
+        compliance_ref = vendor.tax_id_pin
 
         # Deterministic, no DB writes — computed once outside the retry loop.
         line_items_data = self._build_line_items(data.line_items)
@@ -257,13 +249,13 @@ class PurchaseOrderService(BaseDocumentService):
                 delivery_date=data.delivery_date,
                 currency=po_currency,
                 status=PurchaseOrderStatus.DRAFT,
-                is_recurring=data.is_recurring,
+                is_recurring=False,
                 subtotal=subtotal,
                 tax_total=tax_total,
                 total=total,
                 amount_paid=Decimal("0.00"),
                 balance_due=total,
-                compliance_ref=data.compliance_ref,
+                compliance_ref=compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
                 created_by=user_id,
@@ -453,6 +445,27 @@ class PurchaseOrderService(BaseDocumentService):
         return PurchaseOrderExportQuery(self._db).list(
             filters, include_line_items=include_line_items, limit=limit
         )
+
+    def list_payments_for_export(
+        self, po_id: uuid.UUID
+    ) -> tuple[PurchaseOrder, list[PurchaseOrderPayment]]:
+        """Return a purchase order with its payments ordered for Excel export.
+
+        Loads the PO once (raising NotFoundException if missing) and returns
+        its payments ordered by payment_date ascending (then created_at) so
+        the workbook reads as a chronological statement. Read-only: no flush.
+        """
+        purchase_order = self.get_by_id(po_id)
+        payments = (
+            self._db.query(PurchaseOrderPayment)
+            .filter(PurchaseOrderPayment.po_id == po_id)
+            .order_by(
+                PurchaseOrderPayment.payment_date.asc(),
+                PurchaseOrderPayment.created_at.asc(),
+            )
+            .all()
+        )
+        return purchase_order, payments
 
     def get_status_counts(self) -> PurchaseOrderStatusCounts:
         """Per-status counts for the filter-tab badges.
@@ -765,6 +778,10 @@ Best regards,
                     ),
                     field="vendor_id",
                 )
+            # The compliance / eTIMS reference is vendor-derived, so a vendor
+            # change must re-derive it from the new vendor's tax_id_pin (KRA
+            # PIN). currency stays locked after first save and is not touched.
+            update_data["compliance_ref"] = vendor.tax_id_pin
 
         # Cross-field date validation across the mixed case (one date in the
         # payload, the other from the DB). Pydantic only guards when both are

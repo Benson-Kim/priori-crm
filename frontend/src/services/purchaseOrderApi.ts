@@ -60,11 +60,8 @@ export interface PurchaseOrderCreatePayload {
   vendorId: string;
   orderDate: string;
   deliveryDate?: string | null;
-  currency?: string;
-  isRecurring?: boolean;
   lineItems: PurchaseOrderLineItemPayload[];
   notes?: string | null;
-  complianceRef?: string | null;
   termsAndConditions?: string | null;
 }
 
@@ -72,9 +69,7 @@ export interface PurchaseOrderUpdatePayload {
   vendorId?: string;
   orderDate?: string;
   deliveryDate?: string | null;
-  isRecurring?: boolean;
   lineItems?: PurchaseOrderLineItemPayload[];
-  complianceRef?: string | null;
   notes?: string | null;
   termsAndConditions?: string | null;
 }
@@ -273,4 +268,12 @@ export function exportPurchaseOrdersExcel(params?: {
     ? `purchase-orders/export/excel?${query}`
     : "purchase-orders/export/excel";
   return apiDownload(path);
+}
+
+/**
+ * Download a single purchase order's recorded payments as an .xlsx workbook
+ * (one row per payment). Returns a Blob the caller saves with `saveBlob`.
+ */
+export function exportPurchaseOrderPaymentsExcel(id: string): Promise<Blob> {
+  return apiDownload(`purchase-orders/${id}/payments/export/excel`);
 }
