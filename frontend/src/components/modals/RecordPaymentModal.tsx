@@ -56,9 +56,10 @@ export function RecordPaymentModal({
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // Proof-of-payment attachments (purchase orders only). The selected files
-    // are uploaded with source `payment_modal` on submit; the first uploaded
-    // document is linked to the payment via documentId.
+    // Proof-of-payment attachments (purchase orders only). On submit the
+    // payment is recorded first, then every selected file is uploaded with
+    // source `payment_modal` and grouped under that payment (paymentId) so the
+    // payment carries the full set.
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
