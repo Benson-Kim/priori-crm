@@ -74,7 +74,6 @@ class PurchaseOrderEvent(StrEnum):
     PO_DOCUMENT_DOWNLOADED = "po_document_downloaded"
     PO_DOCUMENT_DELETED = "po_document_deleted"
     PO_LIST_EXPORTED = "po_list_exported"
-    PO_PAYMENTS_EXPORTED = "po_payments_exported"
     PO_PAYMENT_RECORDED = "po_payment_recorded"
     PO_MARKED_SENT = "po_marked_sent"
 
