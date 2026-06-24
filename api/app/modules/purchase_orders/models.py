@@ -521,7 +521,17 @@ class PurchaseOrderDocument(Base):
 
     payment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("purchase_order_payments.id", ondelete="SET NULL"),
+        # purchase_order_payments.document_id already points back here, so this
+        # FK closes a mutual cycle between the two tables. use_alter defers it
+        # to an ALTER TABLE after both tables exist, so create_all (used by the
+        # test schema builder) can order the tables without a
+        # CircularDependencyError.
+        ForeignKey(
+            "purchase_order_payments.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_po_documents_payment_id",
+        ),
         nullable=True,
         comment=(
             "Payment this document is proof-of-payment for. Set for documents "
