@@ -51,6 +51,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderCreate,
     PurchaseOrderDocumentResponse,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
     PurchaseOrderUpdate,
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
