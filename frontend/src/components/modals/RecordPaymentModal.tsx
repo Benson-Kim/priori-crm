@@ -127,8 +127,7 @@ export function RecordPaymentModal({
                 // Record the payment first to obtain its id, then upload every
                 // selected proof-of-payment document grouped under that payment
                 // (source payment_modal + paymentId) so the payment carries the
-                // full set. The first uploaded document is also linked as the
-                // primary document_id for back-compat.
+                // full set. Documents are resolved on view via payment_id.
                 const payload: PurchaseOrderPaymentPayload = {
                     amount: parsedAmount,
                     paymentDate,
