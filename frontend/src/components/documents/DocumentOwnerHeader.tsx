@@ -7,7 +7,7 @@
  * modal behind the previously-dead "Update" buttons.
  */
 import { SquarePen, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useCanEditOwner } from "@/hooks/auth-context";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
@@ -29,6 +29,15 @@ export function DocumentOwnerHeader({
   const showEdit = editable && canEdit;
   const [modalOpen, setModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Track image load failure so a transiently-broken blob URL falls back to
+  // the placeholder instead of the browser's broken-image + alt text. Reset
+  // whenever the logo URL changes (e.g. after an upload refetch).
+  const [logoError, setLogoError] = useState(false);
+  useEffect(() => {
+    setLogoError(false);
+  }, [logoUrl]);
+
+  const hasLogo = Boolean(profile?.hasLogo && logoUrl && !logoError);
 
   const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,15 +52,16 @@ export function DocumentOwnerHeader({
       <div className="flex flex-col gap-6">
         {/* Logo */}
         <div className="flex flex-col items-start gap-3">
-          {profile?.hasLogo && logoUrl ? (
+          {hasLogo ? (
             <img
-              src={logoUrl}
-              alt={`${profile.fullName} logo`}
+              src={logoUrl as string}
+              alt=""
+              onError={() => setLogoError(true)}
               className="max-h-12 w-auto"
             />
           ) : (
             <div className="h-12 flex items-center text-gray-400 text-sm">
-              No logo
+              {profile?.hasLogo ? "" : "No logo"}
             </div>
           )}
           {showEdit && (
