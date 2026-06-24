@@ -1,14 +1,23 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useConfirm } from "@/hooks/useConfirm";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, saveBlob } from "@/lib/utils";
+import {
+  deletePurchaseOrder,
+  downloadPurchaseOrderPdf,
+  markAsSentPurchaseOrder,
+  sendPurchaseOrder,
+  type PurchaseOrderResponse,
+} from "@/services/purchaseOrderApi";
 import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -66,9 +75,19 @@ export interface PurchaseOrderInitialData {
   }[];
 }
 
+/** Action selectable from the Save & Continue dropdown. */
+type EditorAction = "pdf" | "mark-sent" | "send" | "delete";
+
 interface PurchaseOrderEditorProps {
   initialData?: PurchaseOrderInitialData;
-  onSave: (payload: PurchaseOrderPayload) => Promise<void>;
+  /**
+   * Persist the PO. Pass `{ skipNavigate: true }` to keep the user on the
+   * editor and resolve the saved PO so a follow-up action can run against it.
+   */
+  onSave: (
+    payload: PurchaseOrderPayload,
+    options?: { skipNavigate?: boolean }
+  ) => Promise<PurchaseOrderResponse>;
   isLoading: boolean;
   restrictedMode?: boolean;
 }
@@ -84,6 +103,8 @@ export function PurchaseOrderEditor({
   // Org-scoped Settings defaults (PO-11), resolved from the persisted owner
   // profile with the built-in constants as fallback.
   const { profile } = useOwnerProfile();
+  const navigate = useNavigate();
+  const { showConfirm, ConfirmDialog } = useConfirm();
   const orgDefaultTerms = resolveDefaultTerms(
     profile?.defaultTermsAndConditions
   );
@@ -128,6 +149,9 @@ export function PurchaseOrderEditor({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // True while a dropdown action's save-then-act flow is running, so the
+  // dropdown trigger can be disabled and the user can't double-submit.
+  const [isActionRunning, setIsActionRunning] = useState(false);
 
 
   // Derived totals (client-side preview; server is the source of truth on save).
@@ -186,13 +210,13 @@ export function PurchaseOrderEditor({
     return v;
   };
 
-  // Submit
-  const handleSubmit = async () => {
-    setError(null);
-
+  // Validate the form and build the save payload. Returns null (and sets the
+  // field errors) when the form is invalid, so both Save & Continue and the
+  // action dropdown share one validation path.
+  const buildPayload = (): PurchaseOrderPayload | null => {
     const validationErrors = validate();
     setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
+    if (Object.keys(validationErrors).length > 0) return null;
 
     const validItems = lineItems.filter(
       (r) => r.description.trim() || r.itemName.trim()
@@ -206,7 +230,7 @@ export function PurchaseOrderEditor({
       taxType: r.taxType || "no_tax",
     }));
 
-    const payload: PurchaseOrderPayload = {
+    return {
       vendorId,
       orderDate,
       deliveryDate: deliveryDate || null,
@@ -214,6 +238,13 @@ export function PurchaseOrderEditor({
       termsAndConditions: termsAndConditions.trim() || null,
       lineItems: items,
     };
+  };
+
+  // Submit (plain Save & Continue): the form hook navigates to the list.
+  const handleSubmit = async () => {
+    setError(null);
+    const payload = buildPayload();
+    if (!payload) return;
 
     try {
       await onSave(payload);
@@ -224,38 +255,117 @@ export function PurchaseOrderEditor({
     }
   };
 
+  // Save-then-act for the dropdown actions. The PO is persisted first (created
+  // on a new PO), then the chosen action runs against the saved id reusing the
+  // existing API client. Destructive / sending actions confirm before saving.
+  const runAction = async (action: EditorAction) => {
+    setError(null);
+    const payload = buildPayload();
+    if (!payload) return;
+
+    const execute = async () => {
+      setIsActionRunning(true);
+      try {
+        const saved = await onSave(payload, { skipNavigate: true });
+        switch (action) {
+          case "pdf": {
+            const blob = await downloadPurchaseOrderPdf(saved.id);
+            saveBlob(blob, `PurchaseOrder_${saved.po_reference}.pdf`);
+            navigate(`/purchase-orders/${saved.id}`);
+            break;
+          }
+          case "mark-sent": {
+            await markAsSentPurchaseOrder(saved.id);
+            navigate(`/purchase-orders/${saved.id}`);
+            break;
+          }
+          case "send": {
+            await sendPurchaseOrder(saved.id);
+            navigate(`/purchase-orders/${saved.id}`);
+            break;
+          }
+          case "delete": {
+            await deletePurchaseOrder(saved.id);
+            navigate("/purchase-orders");
+            break;
+          }
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to complete the action. Please try again."
+        );
+      } finally {
+        setIsActionRunning(false);
+      }
+    };
+
+    if (action === "send") {
+      showConfirm({
+        title: "Save and send purchase order?",
+        description:
+          "The purchase order will be saved and emailed to the vendor, then marked as Sent.",
+        confirmLabel: "Yes, send",
+        onConfirm: execute,
+      });
+      return;
+    }
+    if (action === "mark-sent") {
+      showConfirm({
+        title: "Save and mark as sent?",
+        description:
+          "The purchase order will be saved and marked as Sent without emailing the vendor.",
+        confirmLabel: "Yes, mark as sent",
+        onConfirm: execute,
+      });
+      return;
+    }
+    if (action === "delete") {
+      showConfirm({
+        title: "Save and delete purchase order?",
+        description:
+          "The purchase order will be saved and then permanently deleted. This action cannot be undone.",
+        confirmLabel: "Yes, delete it",
+        variant: "danger",
+        onConfirm: execute,
+      });
+      return;
+    }
+    // Download as PDF needs no confirmation.
+    await execute();
+  };
+
   // Document actions (Download PDF / Mark as Sent / Send / Delete) act on a
-  // PERSISTED purchase order, which does not exist until the form is saved.
-  // They live on the detail page once the PO has an id; here in the editor we
-  // surface them in a disabled dropdown so the affordance is visible but
-  // cannot be triggered before the first save. The onClick handlers are no-ops
-  // because the dropdown is disabled (the trigger button is non-interactive).
-  const noop = () => undefined;
+  // PERSISTED purchase order. The PO does not exist until saved, so each
+  // action saves first (creating the PO) and then runs against the saved id
+  // via runAction. The dropdown is disabled in restricted (read-only) mode or
+  // while an action is already running.
   const actions: DropdownItem[] = [
     {
       key: "pdf",
       label: "Download as PDF",
       icon: <Download size={16} />,
-      onClick: noop,
+      onClick: () => void runAction("pdf"),
     },
     {
       key: "mark-sent",
       label: "Mark as Sent",
       icon: <CheckCircle size={16} />,
-      onClick: noop,
+      onClick: () => void runAction("mark-sent"),
     },
     {
       key: "send",
       label: "Send",
       icon: <Send size={16} />,
-      onClick: noop,
+      onClick: () => void runAction("send"),
     },
     {
       key: "delete",
       label: "Delete",
       icon: <Trash size={16} />,
       danger: true,
-      onClick: noop,
+      onClick: () => void runAction("delete"),
     },
   ];
 
@@ -274,15 +384,17 @@ export function PurchaseOrderEditor({
             <Save size={18} /> Save &amp; Continue
           </Button>
         )}
-        <div
-          title="Save the purchase order first to download, send, mark as sent or delete it"
-        >
-          <Dropdown
-            items={actions}
-            disabled
-            className="flex items-center gap-2 px-5 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans transition-colors opacity-50 cursor-not-allowed"
-          />
-        </div>
+        {!restrictedMode && (
+          <div
+            title="Saves the purchase order first, then runs the selected action"
+          >
+            <Dropdown
+              items={actions}
+              disabled={isLoading || isActionRunning}
+              className="flex items-center gap-2 px-5 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors"
+            />
+          </div>
+        )}
       </div>
       <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
         {/* Top Section */}
@@ -467,6 +579,9 @@ export function PurchaseOrderEditor({
           {error}
         </div>
       )}
+
+      {/* Confirmation dialog for the save-then-act dropdown actions. */}
+      {ConfirmDialog}
     </div>
   );
 }
