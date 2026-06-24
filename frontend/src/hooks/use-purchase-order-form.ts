@@ -10,13 +10,27 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+/** Options for a single save invocation. */
+export interface SaveOptions {
+  /**
+   * When true the form does NOT navigate away after a successful save and
+   * instead resolves the persisted PO. Used by the editor's action dropdown
+   * (Download PDF / Mark as Sent / Send / Delete) so the caller can run the
+   * chosen action against the freshly-saved PO id.
+   */
+  skipNavigate?: boolean;
+}
+
 interface UsePurchaseOrderFormReturn {
   initialData: PurchaseOrderResponse | null;
   isLoading: boolean;
   isFetching: boolean;
   error: string | null;
   isRestricted: boolean;
-  handleSave: (payload: PurchaseOrderPayload) => Promise<void>;
+  handleSave: (
+    payload: PurchaseOrderPayload,
+    options?: SaveOptions
+  ) => Promise<PurchaseOrderResponse>;
   handleCancel: () => void;
 }
 
@@ -67,7 +81,10 @@ export function usePurchaseOrderForm(
     );
   };
 
-  const handleSave = async (payload: PurchaseOrderPayload) => {
+  const handleSave = async (
+    payload: PurchaseOrderPayload,
+    options?: SaveOptions
+  ): Promise<PurchaseOrderResponse> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -80,6 +97,8 @@ export function usePurchaseOrderForm(
         taxType: li.taxType,
       }));
 
+      let saved: PurchaseOrderResponse;
+
       if (purchaseOrderId && initialData) {
         const updatePayload: PurchaseOrderUpdatePayload = {
           vendorId: payload.vendorId,
@@ -90,11 +109,14 @@ export function usePurchaseOrderForm(
           lineItems,
         };
         // Pass the loaded version for optimistic-lock (stale write -> 409).
-        await updatePurchaseOrder(
+        saved = await updatePurchaseOrder(
           purchaseOrderId,
           updatePayload,
           initialData.version
         );
+        // Keep the in-memory version fresh so a follow-up action-driven save
+        // in the same session doesn't 409 on a stale expected version.
+        setInitialData(saved);
       } else {
         // Currency, recurring and compliance ref are no longer collected on
         // the form: currency is derived from the vendor server-side, and the
@@ -107,10 +129,17 @@ export function usePurchaseOrderForm(
           termsAndConditions: payload.termsAndConditions,
           lineItems,
         };
-        await createPurchaseOrder(createPayload);
+        saved = await createPurchaseOrder(createPayload);
       }
 
-      navigate(`/purchase-orders`);
+      // Plain "Save & Continue" returns to the list; an action-driven save
+      // (skipNavigate) leaves navigation to the caller so it can run the
+      // chosen action against the persisted PO first.
+      if (!options?.skipNavigate) {
+        navigate(`/purchase-orders`);
+      }
+
+      return saved;
     } catch (err) {
       setError(
         err instanceof Error
