@@ -26,7 +26,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.common.validators import empty_str_to_none as normalize_empty_str
-from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
+from app.constants.enums import PurchaseOrderStatus, TaxType
 
 # TERMS & CONDITIONS length cap.
 MAX_TERMS_AND_CONDITIONS_LENGTH = 2000
@@ -246,6 +246,13 @@ class PurchaseOrderCreate(BaseModel):
     Mirrors ExpenseCreate adapted to the PO domain: ``order_date`` replaces
     ``expense_date`` and ``delivery_date`` is optional (and, when set, must be
     on or after ``order_date`` — also DB-enforced via a CHECK constraint).
+
+    Deliberately excluded from the writable surface (derived server-side):
+    - ``currency`` — pinned to the selected vendor's currency in the service;
+    - ``compliance_ref`` — the eTIMS / compliance reference is taken from the
+      vendor (its tax_id_pin) in the service, never client-supplied;
+    - ``is_recurring`` — the recurring flag has been removed from the PO
+      create flow (always persists False).
     """
 
     vendor_id: UUID = Field(
@@ -263,26 +270,11 @@ class PurchaseOrderCreate(BaseModel):
         alias="deliveryDate",
         description="Expected delivery date — if set must be on or after order_date",
     )
-    currency: Currency = Field(
-        default=Currency.KES,
-        description="ISO 4217 currency code — locked after first save",
-    )
-    is_recurring: bool = Field(
-        default=False,
-        alias="isRecurring",
-        description="Recurring-PO flag — informational only in v1",
-    )
     line_items: list[PurchaseOrderLineItemCreate] = Field(
         ...,
         min_length=1,
         alias="lineItems",
         description="At least one line item required",
-    )
-    compliance_ref: str | None = Field(
-        None,
-        max_length=255,
-        alias="complianceRef",
-        description="Jurisdiction-aware compliance reference (free text)",
     )
     notes: str | None = Field(
         None,
@@ -296,7 +288,7 @@ class PurchaseOrderCreate(BaseModel):
         description="Terms & conditions — max 2000 characters",
     )
 
-    @field_validator("compliance_ref", "notes", "terms_and_conditions", mode="before")
+    @field_validator("notes", "terms_and_conditions", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -315,8 +307,6 @@ class PurchaseOrderCreate(BaseModel):
                 "vendorId": "123e4567-e89b-12d3-a456-426614174000",
                 "orderDate": "2026-06-16",
                 "deliveryDate": "2026-06-30",
-                "currency": "KES",
-                "isRecurring": False,
                 "lineItems": [
                     {
                         "itemName": "Steel bolts M8",
@@ -326,7 +316,6 @@ class PurchaseOrderCreate(BaseModel):
                         "taxType": "vat_16",
                     }
                 ],
-                "complianceRef": "LPO-2026-0042",
                 "notes": "Deliver to the Upper Hill warehouse.",
                 "termsAndConditions": "Net 30. Goods remain returnable for 14 days.",
             }
@@ -340,9 +329,14 @@ class PurchaseOrderUpdate(BaseModel):
     PATCH semantics via model_dump(exclude_unset=True) in the service —
     identical to ExpenseUpdate / QuoteUpdate.
 
-    currency is deliberately excluded — it is locked after first save. The
-    service update() enforces this by only applying fields present in the
-    payload; since currency never appears here it can never be changed.
+    Deliberately excluded from the writable surface:
+    - ``currency`` — locked after first save (never editable);
+    - ``compliance_ref`` — derived from the vendor; a vendor change re-derives
+      it in the service, so it is not client-editable;
+    - ``is_recurring`` — the recurring field has been removed from the PO flow.
+
+    The service update() only applies fields present in the payload, so a
+    field absent here can never be changed through this endpoint.
 
     Editing gate enforced in service:
         DRAFT          -> editable
@@ -352,13 +346,11 @@ class PurchaseOrderUpdate(BaseModel):
     vendor_id: UUID | None = Field(None, alias="vendorId")
     order_date: date | None = Field(None, alias="orderDate")
     delivery_date: date | None = Field(None, alias="deliveryDate")
-    is_recurring: bool | None = Field(None, alias="isRecurring")
     line_items: list[PurchaseOrderLineItemCreate] | None = Field(
         None,
         min_length=1,
         alias="lineItems",
     )
-    compliance_ref: str | None = Field(None, max_length=255, alias="complianceRef")
     notes: str | None = Field(None, max_length=5000)
     terms_and_conditions: str | None = Field(
         None,
@@ -366,7 +358,7 @@ class PurchaseOrderUpdate(BaseModel):
         alias="termsAndConditions",
     )
 
-    @field_validator("compliance_ref", "notes", "terms_and_conditions", mode="before")
+    @field_validator("notes", "terms_and_conditions", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)

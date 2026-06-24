@@ -49,9 +49,14 @@ export function PurchaseOrderViewer({
   return (
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">
       {/* Top Section */}
-      <div className="p-6">
         {/* Owner identity (logo + company block) - single source of truth. */}
+
+
+      <div className="p-6 flex justify-between">
         <DocumentOwnerHeader editable={editableOwner} />
+        <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+          PURCHASE ORDER
+        </h2>
       </div>
 
       <div className="p-6">
@@ -85,10 +90,6 @@ export function PurchaseOrderViewer({
 
           {/* RIGHT - Metadata */}
           <div className="flex flex-col gap-6 min-w-0 self-end">
-            <h2 className="text-[22px] font-black text-priori-purple tracking-wider uppercase">
-              Purchase Order
-            </h2>
-
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
               <MetaField label="Reference">
                 {data.poReference ?? "-"}

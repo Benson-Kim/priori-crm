@@ -40,7 +40,7 @@ export function DocumentOwnerHeader({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="flex flex-col gap-6">
         {/* Logo */}
         <div className="flex flex-col items-start gap-3">
           {profile?.hasLogo && logoUrl ? (

@@ -1,3 +1,4 @@
+import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
@@ -20,7 +21,7 @@ import {
     type PurchaseOrderStatusCounts,
     type PurchaseOrderSummary,
 } from "@/services/purchaseOrderApi";
-import { CheckCircle, Copy, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, Copy, CreditCard, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -39,6 +40,10 @@ export default function PurchaseOrdersPage() {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // The PO selected for the Record Payment modal. The modal is row-scoped:
+    // amount/balance/currency all come from this row, so it is null when the
+    // modal is closed.
+    const [paymentTarget, setPaymentTarget] = useState<PurchaseOrderSummary | null>(null);
 
     const { showConfirm, ConfirmDialog } = useConfirm();
     const navigate = useNavigate();
@@ -213,6 +218,16 @@ export default function PurchaseOrdersPage() {
             onClick: () => handleDuplicate(po),
         });
 
+        // Record payment: SENT only, while there is still a balance to clear.
+        if (po.status === "sent" && Number(po.balance_due) > 0) {
+            actions.push({
+                key: "record-payment",
+                label: "Record payment",
+                icon: <CreditCard size={16} />,
+                onClick: () => setPaymentTarget(po),
+            });
+        }
+
         // Delete is permitted only for DRAFT (SENT/PAID protected).
         if (po.status === "draft") {
             actions.push({
@@ -364,6 +379,20 @@ export default function PurchaseOrdersPage() {
                     onPerPageChange={setPerPage}
                 />
             </div>
+
+            <RecordPaymentModal
+                isOpen={paymentTarget !== null}
+                onClose={() => setPaymentTarget(null)}
+                entityId={paymentTarget?.id ?? ""}
+                entityType="purchaseOrder"
+                balanceDue={Number(paymentTarget?.balance_due ?? 0)}
+                currency={paymentTarget?.currency ?? ""}
+                reference={paymentTarget?.po_reference}
+                onSuccess={() => {
+                    setPaymentTarget(null);
+                    refreshAll();
+                }}
+            />
 
             {/* Confirmation Dialog */}
             {ConfirmDialog}
