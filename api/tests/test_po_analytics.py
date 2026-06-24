@@ -85,7 +85,11 @@ class TestEventCatalogue:
         "po_document_deleted",
         "po_list_exported",
     }
-    _LIFECYCLE_ADDITIONS: ClassVar[set[str]] = {"po_payment_recorded", "po_marked_sent"}
+    _LIFECYCLE_ADDITIONS: ClassVar[set[str]] = {
+        "po_payment_recorded",
+        "po_marked_sent",
+        "po_payments_exported",
+    }
 
     def test_prd_catalogue_is_complete(self):
         defined = {ev.value for ev in PurchaseOrderEvent}
