@@ -41,17 +41,22 @@
             "title": "File",
             "type": "string"
           },
+          "paymentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paymentid"
+          },
           "source": {
             "default": "form",
             "title": "Source",
             "type": "string"
-          },
-          "paymentId": {
-            "anyOf": [
-              { "format": "uuid", "type": "string" },
-              { "type": "null" }
-            ],
-            "title": "Paymentid"
           }
         },
         "required": [
