@@ -148,27 +148,68 @@ export default function QuoteDetailPage() {
 
     // Build actions
     const actions = [];
+
     if (quote.is_editable) {
-        actions.push({ key: "edit", label: "Edit", icon: <Pencil size={16} />, onClick: () => navigate(`/quotes/${quote.id}/edit`) });
+        actions.push({
+            key: "edit",
+            label: "Edit",
+            icon: <Pencil size={16} />,
+            onClick: () => navigate(`/quotes/${quote.id}/edit`)
+        });
     }
     if (status === "draft") {
-        actions.push({ key: "mark-sent", label: "Mark as Sent", icon: <CheckCircle size={16} />, onClick: handleMarkSent });
+        actions.push({
+            key: "mark-sent"
+            , label: "Mark as Sent",
+            icon: <CheckCircle size={16} />,
+            onClick: handleMarkSent
+        });
     }
-    actions.push({ key: "send", label: "Send", icon: <Send size={16} />, onClick: () => setShowSendModal(true) });
+    actions.push({
+        key: "send",
+        label: "Send",
+        icon: <Send size={16} />,
+        onClick: () => setShowSendModal(true)
+    });
 
     if (["draft", "sent"].includes(status) && !quote.is_expired) {
-        actions.push({ key: "approve", label: "Approve", icon: <CheckCircle size={16} />, onClick: handleApprove });
+        actions.push({
+            key: "approve",
+            label: "Approve",
+            icon: <CheckCircle size={16} />,
+            onClick: handleApprove
+        });
     }
 
     if (quote.can_convert_to_invoice) {
-        actions.push({ key: "convert", label: "Convert to Invoice", icon: <FileText size={16} />, onClick: handleConvertToInvoice });
+        actions.push({
+            key: "convert",
+            label: "Convert to Invoice",
+            icon: <FileText size={16} />,
+            onClick: handleConvertToInvoice
+        });
     }
 
-    actions.push({ key: "pdf", label: "Download PDF", icon: <Download size={16} />, onClick: handleDownloadPdf });
-    actions.push({ key: "duplicate", label: "Duplicate", icon: <Copy size={16} />, onClick: handleDuplicate });
+    actions.push({
+        key: "pdf",
+        label: "Download PDF",
+        icon: <Download size={16} />,
+        onClick: handleDownloadPdf
+    });
+    actions.push({
+        key: "duplicate",
+        label: "Duplicate",
+        icon: <Copy size={16} />,
+        onClick: handleDuplicate
+    });
 
     if (status === "draft") {
-        actions.push({ key: "delete", label: "Delete Quote", icon: <Trash size={16} />, onClick: handleDelete });
+        actions.push({
+            key: "delete",
+            label: "Delete Quote",
+            icon: <Trash size={16} />,
+            onClick: handleDelete
+        });
     }
 
     return (
@@ -184,7 +225,7 @@ export default function QuoteDetailPage() {
                         {quote.is_expired ? `Expired` : status.charAt(0).toUpperCase() + status.slice(1)}
                     </Badge>
                 </div>
-                <Dropdown items={actions} className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
+                <Dropdown items={actions} className="flex items-center gap-2 px-3 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
             </div>
 
             <DocumentViewer

@@ -250,6 +250,60 @@ async def export_purchase_orders_to_excel(
     )
 
 
+@router.get(
+    "/{po_id}/payments/export/excel",
+    summary="Export a purchase order's payments to Excel",
+    description=(
+        "Export all payments recorded against a single purchase order as an "
+        ".xlsx workbook (one row per payment, ordered by payment date). The "
+        "workbook is rendered off the event loop. Returns 404 if the purchase "
+        "order does not exist."
+    ),
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        404: {"description": "Purchase order not found"},
+    },
+)
+async def export_purchase_order_payments_to_excel(
+    po_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
+
+    purchase_order, payments = service.list_payments_for_export(po_id)
+
+    # Fire-and-forget analytics: only the PO id and the row count, no PII.
+    emit_event(
+        PurchaseOrderEvent.PO_PAYMENTS_EXPORTED,
+        {"po_id": str(po_id), "row_count": len(payments)},
+    )
+
+    exporter = ExcelExporter()
+    xlsx_bytes = await run_export(
+        exporter.export_purchase_order_payments, purchase_order, payments
+    )
+
+    filename = (
+        f"PurchaseOrder_{purchase_order.po_reference}_"
+        f"Payments_{date.today().strftime('%Y%m%d')}.xlsx"
+    )
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 # FIXED PATHS  (must precede /{po_id})
 
 
