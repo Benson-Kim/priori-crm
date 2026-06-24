@@ -1,6 +1,5 @@
 import { PurchaseOrderViewer } from "@/components/documents/PurchaseOrderViewer";
 import { useHeaderOverride } from "@/components/layout/header-context";
-import { DocumentPreviewModal } from "@/components/modals/DocumentPreviewModal";
 import { PurchaseOrderPaymentModal } from "@/components/modals/PurchaseOrderPaymentModal";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Button } from "@/components/ui/Button";
@@ -12,45 +11,41 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import type {
-    PurchaseOrderDocument,
     PurchaseOrderLineItem,
     PurchaseOrderPayment,
     PurchaseOrderResponse,
 } from "@/services/purchaseOrderApi";
 import {
     deletePurchaseOrder,
-    deletePurchaseOrderDocument,
-    downloadPurchaseOrderDocument,
-    downloadPurchaseOrderPdf,
     downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
     exportPurchaseOrderPaymentsExcel,
     getPurchaseOrder,
     markAsSentPurchaseOrder,
     sendPurchaseOrder,
-    uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
 import {
     ArrowLeft,
     CheckCircle,
+    ChevronLeft,
+    ChevronRight,
     Copy,
     CreditCard,
-    Download,
     Eye,
     FileClock,
     FileSpreadsheetIcon,
-    FileText,
     Paperclip,
     Pencil,
-    Plus,
     Send,
     Trash,
-    X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 type DetailTab = "overview" | "detail";
+
+/** Recorded payments shown per page in the Detail-tab payments table. */
+const PAYMENTS_PER_PAGE = 5;
 
 export default function PurchaseOrderDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -63,14 +58,11 @@ export default function PurchaseOrderDetailPage() {
 
     const { showConfirm, ConfirmDialog } = useConfirm();
 
-    // Document upload state
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isUploading, setIsUploading] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    // Selected payment row — opens the view/update (attach document) modal.
+    // Selected payment row — opens the view/attach-document modal.
     const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
-    // Document selected for inline preview (PO attachments).
-    const [previewDocument, setPreviewDocument] = useState<PurchaseOrderDocument | null>(null);
+    // Current page (1-based) of the payments table.
+    const [paymentsPage, setPaymentsPage] = useState(1);
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -150,25 +142,14 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
-    /** Original PO PDF: full amount, no payments applied. */
-    const handleDownloadOriginal = async () => {
-        if (!po) return;
-        try {
-            const blob = await downloadPurchaseOrderPdf(po.id);
-            saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to download PDF");
-        }
-    };
-
     /** Current PDF: payments applied + running balance (statement variant). */
-    const handleDownloadCurrent = async () => {
+    const handleDownloadStatement = async () => {
         if (!po) return;
         try {
             const blob = await downloadPurchaseOrderStatementPdf(po.id);
-            saveBlob(blob, `PurchaseOrder_${po.po_reference}_Current.pdf`);
+            saveBlob(blob, `PurchaseOrder_${po.po_reference}_Statement.pdf`);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to download current PDF");
+            setError(err instanceof Error ? err.message : "Failed to download statement");
         }
     };
 
@@ -181,55 +162,6 @@ export default function PurchaseOrderDetailPage() {
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to export payments");
         }
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !id) return;
-        try {
-            setIsUploading(true);
-            await uploadPurchaseOrderDocument(id, file, "view");
-            fetchPurchaseOrder();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to upload document");
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = "";
-            }
-        }
-    };
-
-    const handleFileDelete = (docId: string, filename: string) => {
-        if (!id) return;
-        showConfirm({
-            title: "Delete Document",
-            description: `Are you sure you want to delete ${filename}?`,
-            confirmLabel: "Delete",
-            variant: "danger",
-            onConfirm: async () => {
-                await deletePurchaseOrderDocument(id, docId);
-                fetchPurchaseOrder();
-            },
-        });
-    };
-
-    const handleFileDownload = (docId: string, filename: string) => {
-        if (!id) return;
-        showConfirm({
-            title: "Download Document",
-            description: `Are you sure you want to download ${filename}?`,
-            confirmLabel: "Download",
-            variant: "default",
-            onConfirm: async () => {
-                try {
-                    const blob = await downloadPurchaseOrderDocument(id, docId);
-                    saveBlob(blob, filename);
-                } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to download document");
-                }
-            },
-        });
     };
 
     if (isLoading) {
@@ -249,75 +181,77 @@ export default function PurchaseOrderDetailPage() {
 
     const status = po.status.toLowerCase();
     const currency = po.currency ?? DEFAULT_CURRENCY;
-    // Balance fields land with PO-19; default defensively so the UI is correct
-    // even before any payment has been recorded.
     const total = Number(po.total);
     const amountPaid = Number(po.amount_paid ?? 0);
     const balanceDue = Number(po.balance_due ?? total - amountPaid);
     const payments: PurchaseOrderPayment[] = po.payments ?? [];
+    const documents = po.documents ?? [];
 
+    // Actions are scoped to the active tab so each tab surfaces only its
+    // logical actions:
+    //  - Overview (the document view): document-lifecycle actions.
+    //  - Detail (the financial view): payment + statement/export actions.
     const actions: DropdownItem[] = [];
 
-    // Draft-only: editable, sendable (email) and mark-as-sent (offline, no email).
-    if (po.is_editable) {
-        actions.push({
-            key: "edit",
-            label: "Edit",
-            icon: <Pencil size={16} />,
-            onClick: () => navigate(`/purchase-orders/${po.id}/edit`),
-        });
-    }
-    // if (status === "draft") {
-    if (status != "sent") {
-        actions.push({
-            key: "send",
-            label: "Send",
-            icon: <Send size={16} />,
-            onClick: handleSend,
-        });
-        actions.push({
-            key: "mark-as-sent",
-            label: "Mark as sent",
-            icon: <CheckCircle size={16} />,
-            onClick: handleMarkAsSent,
-        });
-    }
-    // }
-
-    // Record payment: SENT only, while there is still a balance to clear.
-    if (status === "sent" && balanceDue > 0) {
-        actions.push({
-            key: "record-payment",
-            label: "Record payment",
-            icon: <CreditCard size={16} />,
-            onClick: () => setIsPaymentModalOpen(true),
-        });
-    }
-
-    // Duplicate is available at any status.
     if (activeTab === "overview") {
+        // Draft-only: editable.
+        if (po.is_editable) {
+            actions.push({
+                key: "edit",
+                label: "Edit",
+                icon: <Pencil size={16} />,
+                onClick: () => navigate(`/purchase-orders/${po.id}/edit`),
+            });
+        }
+        // Sendable (email) and mark-as-sent (offline) while not yet sent.
+        if (status !== "sent") {
+            actions.push({
+                key: "send",
+                label: "Send",
+                icon: <Send size={16} />,
+                onClick: handleSend,
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: handleMarkAsSent,
+            });
+        }
+        // Duplicate is available at any status.
         actions.push({
             key: "duplicate",
             label: "Duplicate",
             icon: <Copy size={16} />,
             onClick: handleDuplicate,
         });
-    }
-
-    if (activeTab === "detail") {
-        // Original PO PDF (full amount, no payments applied).
+        // Delete: DRAFT only (SENT/PAID are protected records).
+        if (status === "draft") {
+            actions.push({
+                key: "delete",
+                label: "Delete",
+                icon: <Trash size={16} />,
+                danger: true,
+                onClick: handleDelete,
+            });
+        }
+    } else {
+        // Detail tab: financial actions only.
+        // Record payment: SENT only, while there is still a balance to clear.
+        if (status === "sent" && balanceDue > 0) {
+            actions.push({
+                key: "record-payment",
+                label: "Record payment",
+                icon: <CreditCard size={16} />,
+                onClick: () => setIsPaymentModalOpen(true),
+            });
+        }
+        // Balance-aware statement PDF (payments applied + running balance).
         actions.push({
-            key: "download-original-pdf",
-            label: "Download as PDF",
-            icon: <FileText size={16} />,
-            onClick: handleDownloadOriginal,
-        });
-        // Current/statement PDF (payments applied + running balance).
-        actions.push({
-            key: "download-current-pdf",
+            key: "download-statement",
             label: "Download statement",
             icon: <FileClock size={16} />,
-            onClick: handleDownloadCurrent,
+            onClick: handleDownloadStatement,
         });
         // Export this PO's payments to Excel.
         actions.push({
@@ -328,28 +262,28 @@ export default function PurchaseOrderDetailPage() {
         });
     }
 
-    // Delete: DRAFT only (SENT/PAID are protected).
-    if (status === "draft") {
-        actions.push({
-            key: "delete",
-            label: "Delete",
-            icon: <Trash size={16} />,
-            danger: true,
-            onClick: handleDelete,
-        });
-    }
-
-    const documents = po.documents ?? [];
     const hasDocument = (payment: PurchaseOrderPayment) =>
         Boolean(payment.document_id && documents.some((d) => d.id === payment.document_id));
 
-    // Payments table columns — mirrors the invoices/PO list table format.
+    // Client-side pagination for the payments table (PAYMENTS_PER_PAGE rows).
+    const totalPaymentPages = Math.max(1, Math.ceil(payments.length / PAYMENTS_PER_PAGE));
+    const currentPaymentsPage = Math.min(paymentsPage, totalPaymentPages);
+    const pagedPayments = payments.slice(
+        (currentPaymentsPage - 1) * PAYMENTS_PER_PAGE,
+        currentPaymentsPage * PAYMENTS_PER_PAGE,
+    );
+
+    // Payments table columns — mirrors the invoices/PO list table format. The
+    // row number is offset by the current page so it reflects the absolute
+    // position across all payments, not the position within the page.
     const paymentColumns = [
         {
             key: "number",
             header: "#.",
             render: (_payment: PurchaseOrderPayment, index: number) => (
-                <span className="text-content-primary">{index + 1}.</span>
+                <span className="text-content-primary">
+                    {(currentPaymentsPage - 1) * PAYMENTS_PER_PAGE + index + 1}.
+                </span>
             ),
             className: "w-[50px]",
         },
@@ -411,7 +345,7 @@ export default function PurchaseOrderDetailPage() {
 
     return (
         <div className="flex flex-col gap-6 font-sans pb-10">
-            {/* Header: back + tabs + document actions */}
+            {/* Header: back + tabs + action dropdown */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Button
@@ -452,11 +386,12 @@ export default function PurchaseOrderDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-
-                    <Dropdown
-                        items={actions}
-                        className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors"
-                    />
+                    {actions.length > 0 && (
+                        <Dropdown
+                            items={actions}
+                            className="flex items-center gap-2 px-4 py-3 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors"
+                        />
+                    )}
                 </div>
             </div>
 
@@ -467,9 +402,8 @@ export default function PurchaseOrderDetailPage() {
                 </div>
             )}
 
-            {/* Overview tab: descriptive header + totals (left), payments (right). */}
+            {/* Overview tab: descriptive header + totals. */}
             {activeTab === "overview" && (
-
                 <PurchaseOrderViewer
                     editableOwner
                     data={{
@@ -499,13 +433,12 @@ export default function PurchaseOrderDetailPage() {
                 />
             )}
 
-            {/* Detail tab: the PO viewer, with the owner header editable so the
-                purchase-order owner details can be updated in place. */}
+            {/* Detail tab: vendor summary + running totals + paginated payments. */}
             {activeTab === "detail" && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* LEFT: descriptive summary + running totals. */}
-                    <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6">
-                        <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
+                    {/* LEFT: vendor + key dates. */}
+                    <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6 h-fit">
+                        <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
                             <div className="min-w-0">
                                 <p className="text-[14px] text-gray-500">Vendor</p>
                                 <p className="text-[20px] font-bold text-gray-800 truncate">
@@ -514,7 +447,7 @@ export default function PurchaseOrderDetailPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-x-8 gap-y-4">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 pb-4">
                             <OverviewField label="Reference" value={po.po_reference} />
                             <OverviewField
                                 label="Order Date"
@@ -525,77 +458,10 @@ export default function PurchaseOrderDetailPage() {
                                 value={po.delivery_date ? formatDisplayDate(po.delivery_date) : "-"}
                             />
                         </div>
-
-                        {/* Documents: preview / download / delete PO attachments. */}
-                        <div className="flex flex-col gap-2 px-4 pb-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-[16px] font-bold text-gray-800">Documents</h3>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isUploading}
-                                    className="flex items-center gap-2"
-                                >
-                                    <Plus size={16} /> {isUploading ? "Uploading..." : "Attach"}
-                                </Button>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    onChange={handleFileUpload}
-                                />
-                            </div>
-                            {documents.length === 0 ? (
-                                <p className="text-sm text-gray-400 py-2">No documents attached yet.</p>
-                            ) : (
-                                <ul className="flex flex-col gap-2">
-                                    {documents.map((doc) => (
-                                        <li
-                                            key={doc.id}
-                                            className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg"
-                                        >
-                                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
-                                                <Paperclip size={16} className="shrink-0 text-gray-500" />
-                                                <span className="truncate" title={doc.filename}>{doc.filename}</span>
-                                            </span>
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewDocument(doc)}
-                                                    className="flex items-center gap-1 text-priori-purple hover:underline text-sm"
-                                                    aria-label={`Preview ${doc.filename}`}
-                                                >
-                                                    <Eye size={16} /> Preview
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleFileDownload(doc.id, doc.filename)}
-                                                    className="flex items-center gap-1 text-priori-purple hover:underline text-sm"
-                                                    aria-label={`Download ${doc.filename}`}
-                                                >
-                                                    <Download size={16} /> Download
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleFileDelete(doc.id, doc.filename)}
-                                                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors text-sm"
-                                                    aria-label={`Delete ${doc.filename}`}
-                                                >
-                                                    <X size={16} /> Delete
-                                                </button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-
                     </div>
 
-                    {/* RIGHT: recorded payments as a table (same format as the
-                    invoices table). Click a row to view the payment and
-                    attach related document(s). */}
+                    {/* RIGHT: totals + recorded payments table (paginated). Click a
+                        row to view the payment and its related document. */}
                     <div className="lg:col-span-2 space-y-4">
                         <div className="grid grid-cols-2 gap-6">
                             <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
@@ -618,31 +484,49 @@ export default function PurchaseOrderDetailPage() {
                             <div className="overflow-x-auto rounded-b-lg">
                                 <Table
                                     columns={paymentColumns}
-                                    data={payments}
+                                    data={pagedPayments}
                                     rowKey={(payment) => payment.id}
                                     onRowClick={(payment) => setSelectedPayment(payment)}
                                     emptyMessage="No payments recorded yet."
                                 />
                             </div>
+
+                            {/* Pagination controls — shown only when there is more
+                                than a single page of payments. */}
+                            {payments.length > PAYMENTS_PER_PAGE && (
+                                <div className="flex items-center justify-between pt-2">
+                                    <p className="text-sm text-gray-500">
+                                        Page {currentPaymentsPage} of {totalPaymentPages}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={currentPaymentsPage <= 1}
+                                            onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
+                                            aria-label="Previous page"
+                                        >
+                                            <ChevronLeft size={16} /> Previous
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={currentPaymentsPage >= totalPaymentPages}
+                                            onClick={() => setPaymentsPage((p) => Math.min(totalPaymentPages, p + 1))}
+                                            aria-label="Next page"
+                                        >
+                                            Next <ChevronRight size={16} />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
-
-
-            {/* Inline preview of a PO attachment. */}
-            <DocumentPreviewModal
-                isOpen={previewDocument !== null}
-                onClose={() => setPreviewDocument(null)}
-                poId={po.id}
-                documentId={previewDocument?.id ?? null}
-                filename={previewDocument?.filename ?? ""}
-                mimeType={previewDocument?.mime_type}
-            />
-
-            {/* Payment detail modal: view a recorded payment and attach
-                related proof-of-payment document(s). */}
+            {/* Payment detail modal: view a recorded payment and attach its
+                related proof-of-payment document. */}
             <PurchaseOrderPaymentModal
                 isOpen={selectedPayment !== null}
                 onClose={() => setSelectedPayment(null)}
