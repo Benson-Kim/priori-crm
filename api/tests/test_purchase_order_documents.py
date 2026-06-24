@@ -380,22 +380,36 @@ class TestPaymentDocumentGrouping:
     def test_response_exposes_payment_id(self):
         assert "payment_id" in PurchaseOrderDocumentResponse.model_fields
 
+    @pytest.mark.skipif(
+        not USING_POSTGRES,
+        reason="record_payment uses the FOR UPDATE locked load (Postgres-only).",
+    )
     def test_attach_persists_payment_id(self, db):
+        # The payment_id FK is enforced at the DB level, so the document must
+        # reference a real payment. Send the PO and record a payment first.
         po = _po(db)
-        payment_id = uuid.uuid4()
-        # The FK is nullable and only validated at the router layer, so the
-        # service simply persists whatever payment_id it is given.
-        doc = PurchaseOrderService(db).attach_document(
+        svc = PurchaseOrderService(db)
+        svc._transition(po, PurchaseOrderStatus.SENT)
+        db.flush()
+        payment = svc.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("10.00"),
+                paymentDate=date.today(),
+            ),
+        )
+
+        doc = svc.attach_document(
             po_id=po.id,
             filename="proof.pdf",
             file_size_bytes=1024,
             mime_type="application/pdf",
             storage_key=f"purchase_orders/{po.id}/{uuid.uuid4().hex}_proof.pdf",
             source=DocumentSource.PAYMENT_MODAL,
-            payment_id=payment_id,
+            payment_id=payment.id,
             storage=FakeStorage(),
         )
-        assert doc.payment_id == payment_id
+        assert doc.payment_id == payment.id
         assert doc.source == DocumentSource.PAYMENT_MODAL.value
 
     @pytest.mark.skipif(
