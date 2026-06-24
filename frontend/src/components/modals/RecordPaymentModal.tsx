@@ -56,9 +56,10 @@ export function RecordPaymentModal({
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // Proof-of-payment attachments (purchase orders only). The selected files
-    // are uploaded with source `payment_modal` on submit; the first uploaded
-    // document is linked to the payment via documentId.
+    // Proof-of-payment attachments (purchase orders only). On submit the
+    // payment is recorded first, then every selected file is uploaded with
+    // source `payment_modal` and grouped under that payment (paymentId) so the
+    // payment carries the full set.
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,25 +124,25 @@ export function RecordPaymentModal({
                 };
                 await recordExpensePayment(entityId, payload);
             } else if (entityType === "purchaseOrder") {
-                // Upload any selected proof-of-payment documents first (source
-                // payment_modal) so the first one can be linked to the payment.
-                let documentId: string | undefined;
-                for (let i = 0; i < files.length; i++) {
-                    const uploaded = await uploadPurchaseOrderDocument(
-                        entityId,
-                        files[i],
-                        "payment_modal"
-                    );
-                    if (i === 0) documentId = uploaded.id;
-                }
+                // Record the payment first to obtain its id, then upload every
+                // selected proof-of-payment document grouped under that payment
+                // (source payment_modal + paymentId) so the payment carries the
+                // full set. Documents are resolved on view via payment_id.
                 const payload: PurchaseOrderPaymentPayload = {
                     amount: parsedAmount,
                     paymentDate,
                     reference: reference || undefined,
                     notes: notes || undefined,
-                    documentId,
                 };
-                await recordPurchaseOrderPayment(entityId, payload);
+                const payment = await recordPurchaseOrderPayment(entityId, payload);
+                for (const f of files) {
+                    await uploadPurchaseOrderDocument(
+                        entityId,
+                        f,
+                        "payment_modal",
+                        payment.id
+                    );
+                }
             }
             console.log(`[RecordPayment] Success for ${entityType}`);
             onSuccess();

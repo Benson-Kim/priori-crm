@@ -3,9 +3,11 @@
  * related proof-of-payment document(s) to it.
  *
  * Payments are immutable financial records, so the amount/date/reference are
- * read-only here. The one supported "update" is attaching additional
- * documents (uploaded with source `payment_modal`) and linking the first one
- * to the payment when it has none yet.
+ * read-only here. The supported "update" is attaching additional documents
+ * (uploaded with source `payment_modal` and grouped under the payment via
+ * paymentId). A payment can carry any number of proof documents; they are
+ * resolved from the PO's document set by `payment_id` (with the legacy
+ * single `payment.document_id` included for back-compat) and all are listed.
  */
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -30,7 +32,7 @@ interface PurchaseOrderPaymentModalProps {
     onClose: () => void;
     poId: string;
     payment: PurchaseOrderPayment | null;
-    /** All PO documents, used to resolve the payment's linked attachment. */
+    /** All PO documents, used to resolve this payment's related attachments. */
     documents: PurchaseOrderDocument[];
     currency: string;
     /** Called after a successful upload so the parent can refetch the PO. */
@@ -49,22 +51,26 @@ export function PurchaseOrderPaymentModal({
     const [files, setFiles] = useState<File[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    // Document selected for inline preview (one of this payment's documents).
+    const [previewDocument, setPreviewDocument] = useState<PurchaseOrderDocument | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isOpen) {
             setFiles([]);
             setError(null);
+            setPreviewDocument(null);
         }
     }, [isOpen, payment?.id]);
 
     if (!payment) return null;
 
-    // The proof-of-payment document linked to this payment (if any).
-    const linkedDocument = payment.document_id
-        ? documents.find((d) => d.id === payment.document_id)
-        : undefined;
+    // All proof-of-payment documents related to this payment: those grouped
+    // under it via payment_id, plus the legacy single document_id link (kept
+    // for back-compat). De-duplicated by id.
+    const relatedDocuments = documents.filter(
+        (d) => d.payment_id === payment.id || d.id === payment.document_id
+    );
 
     const handleFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
         const picked = Array.from(e.target.files ?? []);
@@ -92,8 +98,10 @@ export function PurchaseOrderPaymentModal({
         setError(null);
         setIsSaving(true);
         try {
+            // Group every attached file under this payment so they all appear
+            // on the payment (resolved on view via payment_id).
             for (const file of files) {
-                await uploadPurchaseOrderDocument(poId, file, "payment_modal");
+                await uploadPurchaseOrderDocument(poId, file, "payment_modal", payment.id);
             }
             setFiles([]);
             onUpdated();
@@ -166,36 +174,45 @@ export function PurchaseOrderPaymentModal({
                     </div>
                 )}
 
-                {/* Linked proof-of-payment document. */}
-                <div>
-                    <Label>Related document</Label>
-                    {linkedDocument ? (
-                        <div className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200 rounded-lg focus-within:border-priori-purple focus-within:ring-priori-purple/10">
-                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
-                                <Paperclip size={16} className="shrink-0 text-gray-500" />
-                                <span className="truncate" title={linkedDocument.filename}>
-                                    {linkedDocument.filename}
-                                </span>
-                            </span>
-                            <div className="flex items-center gap-4 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPreviewOpen(true)}
-                                    className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
+                {/* Related proof-of-payment documents (all of them). */}
+                <div className="space-y-2">
+                    <Label>Related documents</Label>
+                    {relatedDocuments.length > 0 ? (
+                        <ul className="flex flex-col gap-2">
+                            {relatedDocuments.map((doc) => (
+                                <li
+                                    key={doc.id}
+                                    className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200 rounded-lg"
                                 >
-                                    <Eye size={20} /> Preview
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDownload(linkedDocument.id, linkedDocument.filename)}
-                                    className="flex items-center gap-2 text-priori-purple hover:underline text-[20px]"
-                                >
-                                    <Download size={20} /> Download
-                                </button>
-                            </div>
-                        </div>
+                                    <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                        <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                        <span className="truncate" title={doc.filename}>
+                                            {doc.filename}
+                                        </span>
+                                    </span>
+                                    <div className="flex items-center gap-4 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPreviewDocument(doc)}
+                                            className="flex items-center gap-2 text-priori-purple hover:underline text-sm"
+                                            aria-label={`Preview ${doc.filename}`}
+                                        >
+                                            <Eye size={18} /> Preview
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDownload(doc.id, doc.filename)}
+                                            className="flex items-center gap-2 text-priori-purple hover:underline text-sm"
+                                            aria-label={`Download ${doc.filename}`}
+                                        >
+                                            <Download size={18} /> Download
+                                        </button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     ) : (
-                            <p className="text-base text-gray-400">No document linked to this payment.</p>
+                        <p className="text-base text-gray-400">No documents linked to this payment.</p>
                     )}
                 </div>
 
@@ -223,8 +240,7 @@ export function PurchaseOrderPaymentModal({
                             {files.map((file, index) => (
                                 <li
                                     key={`${file.name}-${index}`}
-                                    className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200  rounded-lg transition-all
-                                     "
+                                    className="flex items-center justify-between gap-3 px-3 py-4 bg-gray-50 border border-gray-200 rounded-lg transition-all"
                                 >
                                     <span className="flex items-center gap-2 min-w-0 text-lg text-gray-700">
                                         <Paperclip size={20} className="shrink-0 text-gray-500" />
@@ -243,19 +259,17 @@ export function PurchaseOrderPaymentModal({
                         </ul>
                     )}
                 </div>
-
-
             </div>
 
-            {/* Inline preview of the linked proof-of-payment document. */}
-            {linkedDocument && (
+            {/* Inline preview of a selected proof-of-payment document. */}
+            {previewDocument && (
                 <DocumentPreviewModal
-                    isOpen={isPreviewOpen}
-                    onClose={() => setIsPreviewOpen(false)}
+                    isOpen={previewDocument !== null}
+                    onClose={() => setPreviewDocument(null)}
                     poId={poId}
-                    documentId={linkedDocument.id}
-                    filename={linkedDocument.filename}
-                    mimeType={linkedDocument.mime_type}
+                    documentId={previewDocument.id}
+                    filename={previewDocument.filename}
+                    mimeType={previewDocument.mime_type}
                 />
             )}
         </Dialog>
