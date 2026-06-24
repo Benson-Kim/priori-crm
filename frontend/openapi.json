@@ -4358,6 +4358,18 @@
             "title": "Mime Type",
             "type": "string"
           },
+          "payment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Id"
+          },
           "po_id": {
             "format": "uuid",
             "title": "Po Id",
