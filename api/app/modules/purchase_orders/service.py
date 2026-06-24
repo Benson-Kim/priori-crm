@@ -860,6 +860,7 @@ Best regards,
         storage_key: str,
         source: DocumentSource = DocumentSource.FORM,
         user_id: uuid.UUID | None = None,
+        payment_id: uuid.UUID | None = None,
         storage: Any | None = None,
     ) -> PurchaseOrderDocument:
         """Persist document metadata after the file has been written to storage.
@@ -891,6 +892,7 @@ Best regards,
 
         document = PurchaseOrderDocument(
             po_id=po_id,
+            payment_id=payment_id,
             filename=filename,
             file_size_bytes=file_size_bytes,
             mime_type=mime_type,
@@ -922,6 +924,35 @@ Best regards,
             },
         )
         return document
+
+    def get_payment(
+        self,
+        po_id: uuid.UUID,
+        payment_id: uuid.UUID,
+    ) -> PurchaseOrderPayment:
+        """Fetch a single payment record, scoped to its owning PO.
+
+        Scoping the lookup to ``(po_id, payment_id)`` means a proof-of-payment
+        upload can never group a document under a payment that belongs to a
+        different PO (mirrors ``get_document`` scoping). Raises
+        NotFoundException when the payment does not exist on this PO.
+        """
+        payment = (
+            self._db.query(PurchaseOrderPayment)
+            .filter(
+                PurchaseOrderPayment.id == payment_id,
+                PurchaseOrderPayment.po_id == po_id,
+            )
+            .first()
+        )
+        if not payment:
+            raise NotFoundException(
+                detail=(
+                    f"Payment '{payment_id}' not found on purchase order '{po_id}'"
+                ),
+                resource="purchase_order_payment",
+            )
+        return payment
 
     def get_document(
         self,

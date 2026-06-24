@@ -725,6 +725,7 @@ def upload_purchase_order_document(
     service: PurchaseOrderServiceDep,
     file: UploadFile = File(...),
     source: str = Form("form"),
+    payment_id: UUID | None = Form(None, alias="paymentId"),
 ) -> PurchaseOrderDocumentResponse:
     from app.common.exceptions import BadRequestException
     from app.constants.enums import DocumentSource
@@ -755,6 +756,13 @@ def upload_purchase_order_document(
     # otherwise, so we never write an object for a non-existent PO.
     service.get_by_id(po_id)
 
+    # When the upload is proof-of-payment for a specific payment, validate the
+    # payment belongs to this PO before touching storage (scoped lookup raises
+    # 404 on a foreign / unknown payment), so a document can never be grouped
+    # under another PO's payment.
+    if payment_id is not None:
+        service.get_payment(po_id, payment_id)
+
     mime_type = file.content_type or "application/octet-stream"
 
     # Single source of truth for the upload attack surface:
@@ -778,6 +786,7 @@ def upload_purchase_order_document(
         storage_key=storage_key,
         source=doc_source,
         user_id=user_id,
+        payment_id=payment_id,
     )
     return PurchaseOrderDocumentResponse.model_validate(document)
 

@@ -132,6 +132,7 @@ class PurchaseOrderDocumentResponse(BaseModel):
 
     id: UUID
     po_id: UUID
+    payment_id: UUID | None = None
     filename: str
     file_size_bytes: int
     file_size_kb: float  # @property on the model — readable via from_attributes
