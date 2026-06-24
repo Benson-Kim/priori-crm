@@ -42,11 +42,14 @@ pytestmark = pytest.mark.skipif(
 # HELPERS
 
 
-def _vendor(db, *, name="Acme Supplies", email="acme@vendor.test") -> Vendor:
+def _vendor(
+    db, *, name="Acme Supplies", email="acme@vendor.test", tax_id_pin=None
+) -> Vendor:
     vendor = Vendor(
         vendor_name=name,
         email=email,
         currency=Currency.KES,
+        tax_id_pin=tax_id_pin,
         status=VendorStatus.ACTIVE,
     )
     db.add(vendor)
@@ -71,7 +74,6 @@ def _create_po(service, vendor, **kw):
         "vendor_id": vendor.id,
         "order_date": date.today(),
         "line_items": [_line_item(), _line_item(item_name="Washers")],
-        "compliance_ref": "LPO-2026-0042",
         "notes": "Deliver to the Upper Hill warehouse.",
         "terms_and_conditions": "Net 30.",
         "delivery_date": date.today() + timedelta(days=14),
@@ -125,11 +127,12 @@ def test_duplicate_copies_content_and_resets_order_date(db):
 
 def test_duplicate_clears_compliance_ref(db):
     service = PurchaseOrderService(db)
-    vendor = _vendor(db)
-    original = _create_po(service, vendor, compliance_ref="LPO-2026-0042")
+    # compliance_ref is derived from the vendor's tax_id_pin, not the payload.
+    vendor = _vendor(db, tax_id_pin="P051234567X")
+    original = _create_po(service, vendor)
 
     dup = service.duplicate(original.id)
-    assert original.compliance_ref == "LPO-2026-0042"
+    assert original.compliance_ref == "P051234567X"
     assert dup.compliance_ref is None
 
 

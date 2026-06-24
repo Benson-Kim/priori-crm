@@ -192,11 +192,14 @@ class TestReferenceGeneration:
 
 
 class TestCurrencyLock:
-    def test_explicit_currency_mismatch_rejected_on_create(self, db):
+    def test_explicit_currency_is_ignored_and_pinned_to_vendor(self, db):
+        # Currency is derived from the vendor server-side: an explicit
+        # (mismatching) currency on the create payload is ignored, not
+        # rejected, and the PO is pinned to the vendor's currency.
         vendor = _vendor(db, currency=Currency.KES)
         svc = PurchaseOrderService(db)
-        with pytest.raises(BadRequestException):
-            svc.create(_create_payload(vendor_id=vendor.id, currency=Currency.USD))
+        po = svc.create(_create_payload(vendor_id=vendor.id, currency=Currency.USD))
+        assert po.currency == Currency.KES
 
     def test_currency_absent_from_update_schema(self):
         # currency is locked: the update schema must not even accept it.
