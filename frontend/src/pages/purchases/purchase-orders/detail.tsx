@@ -263,7 +263,9 @@ export default function PurchaseOrderDetailPage() {
     }
 
     const hasDocument = (payment: PurchaseOrderPayment) =>
-        Boolean(payment.document_id && documents.some((d) => d.id === payment.document_id));
+        documents.some(
+            (d) => d.payment_id === payment.id || d.id === payment.document_id
+        );
 
     // Client-side pagination for the payments table (PAYMENTS_PER_PAGE rows).
     const totalPaymentPages = Math.max(1, Math.ceil(payments.length / PAYMENTS_PER_PAGE));
