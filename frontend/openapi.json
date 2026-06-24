@@ -4417,12 +4417,9 @@
         "type": "object"
       },
       "PurchaseOrderCreate": {
-        "description": "Payload for creating a new purchase order (always starts as DRAFT).\n\nMirrors ExpenseCreate adapted to the PO domain: ``order_date`` replaces\n``expense_date`` and ``delivery_date`` is optional (and, when set, must be\non or after ``order_date`` \u2014 also DB-enforced via a CHECK constraint).",
+        "description": "Payload for creating a new purchase order (always starts as DRAFT).\n\nMirrors ExpenseCreate adapted to the PO domain: ``order_date`` replaces\n``expense_date`` and ``delivery_date`` is optional (and, when set, must be\non or after ``order_date`` \u2014 also DB-enforced via a CHECK constraint).\n\nDeliberately excluded from the writable surface (derived server-side):\n- ``currency`` \u2014 pinned to the selected vendor's currency in the service;\n- ``compliance_ref`` \u2014 the eTIMS / compliance reference is taken from the\n  vendor (its tax_id_pin) in the service, never client-supplied;\n- ``is_recurring`` \u2014 the recurring flag has been removed from the PO\n  create flow (always persists False).",
         "example": {
-          "complianceRef": "LPO-2026-0042",
-          "currency": "KES",
           "deliveryDate": "2026-06-30",
-          "isRecurring": false,
           "lineItems": [
             {
               "description": "Box of 500 grade-8.8 bolts",
@@ -4438,24 +4435,6 @@
           "vendorId": "123e4567-e89b-12d3-a456-426614174000"
         },
         "properties": {
-          "complianceRef": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Jurisdiction-aware compliance reference (free text)",
-            "title": "Complianceref"
-          },
-          "currency": {
-            "$ref": "#/components/schemas/Currency",
-            "default": "KES",
-            "description": "ISO 4217 currency code \u2014 locked after first save"
-          },
           "deliveryDate": {
             "anyOf": [
               {
@@ -4468,12 +4447,6 @@
             ],
             "description": "Expected delivery date \u2014 if set must be on or after order_date",
             "title": "Deliverydate"
-          },
-          "isRecurring": {
-            "default": false,
-            "description": "Recurring-PO flag \u2014 informational only in v1",
-            "title": "Isrecurring",
-            "type": "boolean"
           },
           "lineItems": {
             "description": "At least one line item required",
@@ -5371,20 +5344,8 @@
         "type": "object"
       },
       "PurchaseOrderUpdate": {
-        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\ncurrency is deliberately excluded \u2014 it is locked after first save. The\nservice update() enforces this by only applying fields present in the\npayload; since currency never appears here it can never be changed.\n\nEditing gate enforced in service:\n    DRAFT          -> editable\n    SENT / PAID    -> BadRequestException (\u00a713 inline banner)",
+        "description": "Payload for updating an existing purchase order.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service \u2014\nidentical to ExpenseUpdate / QuoteUpdate.\n\nDeliberately excluded from the writable surface:\n- ``currency`` \u2014 locked after first save (never editable);\n- ``compliance_ref`` \u2014 derived from the vendor; a vendor change re-derives\n  it in the service, so it is not client-editable;\n- ``is_recurring`` \u2014 the recurring field has been removed from the PO flow.\n\nThe service update() only applies fields present in the payload, so a\nfield absent here can never be changed through this endpoint.\n\nEditing gate enforced in service:\n    DRAFT          -> editable\n    SENT / PAID    -> BadRequestException (\u00a713 inline banner)",
         "properties": {
-          "complianceRef": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Complianceref"
-          },
           "deliveryDate": {
             "anyOf": [
               {
@@ -5396,17 +5357,6 @@
               }
             ],
             "title": "Deliverydate"
-          },
-          "isRecurring": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Isrecurring"
           },
           "lineItems": {
             "anyOf": [
