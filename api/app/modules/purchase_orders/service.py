@@ -36,7 +36,7 @@ from app.common.exceptions import (
 )
 from app.common.financial import build_line_items, sum_line_totals
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DocumentSource, PurchaseOrderStatus
+from app.constants.enums import Currency, DocumentSource, PurchaseOrderStatus
 from app.modules.purchase_orders.models import (
     PurchaseOrder,
     PurchaseOrderDocument,
@@ -200,9 +200,13 @@ class PurchaseOrderService(BaseDocumentService):
 
         Validations: vendor must exist and be active; >=1 line item
         (schema-enforced); delivery_date >= order_date (schema + DB CHECK);
-        qty > 0 and unit_price >= 0 (schema + DB CHECK). Currency is pinned to
-        the vendor's currency so a schema default can never silently drift it.
-        Reference collisions are retried via the shared SAVEPOINT loop.
+        qty > 0 and unit_price >= 0 (schema + DB CHECK).
+
+        Vendor-derived fields (never client-supplied): the PO currency is
+        pinned to the vendor's currency, and the compliance / eTIMS reference
+        is taken from the vendor's tax_id_pin (KRA PIN). is_recurring is always
+        False (the recurring field was removed from the flow). Reference
+        collisions are retried via the shared SAVEPOINT loop.
         """
         from app.modules.vendors.models import Vendor
 
@@ -221,23 +225,11 @@ class PurchaseOrderService(BaseDocumentService):
                 field="vendor_id",
             )
 
-        # Single-currency-per-vendor (mirrors the Expenses rule): reject an
-        # explicitly mismatched currency; otherwise pin to the vendor's
-        # currency so the schema default can never silently drift it.
-        if (
-            "currency" in data.model_fields_set
-            and vendor.currency
-            and data.currency != vendor.currency
-        ):
-            raise BadRequestException(
-                detail=(
-                    f"Purchase order currency '{data.currency}' does not match "
-                    f"the vendor's currency '{vendor.currency}'. A vendor can "
-                    "only transact in a single currency."
-                ),
-                field="currency",
-            )
-        po_currency = vendor.currency or data.currency
+        # Vendor-derived, never client-supplied: pin currency to the vendor's
+        # currency (KES fallback) and take the compliance / eTIMS reference
+        # from the vendor's tax_id_pin (KRA PIN).
+        po_currency = vendor.currency or Currency.KES
+        compliance_ref = vendor.tax_id_pin
 
         # Deterministic, no DB writes — computed once outside the retry loop.
         line_items_data = self._build_line_items(data.line_items)
@@ -257,13 +249,13 @@ class PurchaseOrderService(BaseDocumentService):
                 delivery_date=data.delivery_date,
                 currency=po_currency,
                 status=PurchaseOrderStatus.DRAFT,
-                is_recurring=data.is_recurring,
+                is_recurring=False,
                 subtotal=subtotal,
                 tax_total=tax_total,
                 total=total,
                 amount_paid=Decimal("0.00"),
                 balance_due=total,
-                compliance_ref=data.compliance_ref,
+                compliance_ref=compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
                 created_by=user_id,
