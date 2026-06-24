@@ -778,6 +778,10 @@ Best regards,
                     ),
                     field="vendor_id",
                 )
+            # The compliance / eTIMS reference is vendor-derived, so a vendor
+            # change must re-derive it from the new vendor's tax_id_pin (KRA
+            # PIN). currency stays locked after first save and is not touched.
+            update_data["compliance_ref"] = vendor.tax_id_pin
 
         # Cross-field date validation across the mixed case (one date in the
         # payload, the other from the DB). Pydantic only guards when both are
