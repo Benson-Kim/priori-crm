@@ -210,7 +210,6 @@ export function PurchaseOrderPaymentModal({
                         <Plus size={20} /> Upload document
                     </Button>
                     <input
-                        className="text-gray-700"
                         id="payment-documents"
                         ref={fileInputRef}
                         type="file"
