@@ -60,11 +60,8 @@ export interface PurchaseOrderCreatePayload {
   vendorId: string;
   orderDate: string;
   deliveryDate?: string | null;
-  currency?: string;
-  isRecurring?: boolean;
   lineItems: PurchaseOrderLineItemPayload[];
   notes?: string | null;
-  complianceRef?: string | null;
   termsAndConditions?: string | null;
 }
 
@@ -72,9 +69,7 @@ export interface PurchaseOrderUpdatePayload {
   vendorId?: string;
   orderDate?: string;
   deliveryDate?: string | null;
-  isRecurring?: boolean;
   lineItems?: PurchaseOrderLineItemPayload[];
-  complianceRef?: string | null;
   notes?: string | null;
   termsAndConditions?: string | null;
 }
