@@ -13319,6 +13319,57 @@
         ]
       }
     },
+    "/api/v1/purchase-orders/{po_id}/payments/export/excel": {
+      "get": {
+        "description": "Export all payments recorded against a single purchase order as an .xlsx workbook (one row per payment, ordered by payment date). The workbook is rendered off the event loop. Returns 404 if the purchase order does not exist.",
+        "operationId": "export_purchase_order_payments_to_excel_api_v1_purchase_orders__po_id__payments_export_excel_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel file"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export a purchase order's payments to Excel",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
     "/api/v1/purchase-orders/{po_id}/pdf": {
       "get": {
         "description": "Generate and stream the purchase-order PDF. The document is read-only: no edit controls, action buttons or attachments list. Available at any status. Owner branding comes from the PO's immutable snapshot once sent, else the live profile for a Draft preview.",
