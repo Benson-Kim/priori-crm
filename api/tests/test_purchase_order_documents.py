@@ -51,6 +51,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderCreate,
     PurchaseOrderDocumentResponse,
     PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
     PurchaseOrderUpdate,
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
@@ -369,3 +370,104 @@ class TestDuplicateExcludesDocuments:
 
         reloaded = svc.get_by_id(dup.id)
         assert reloaded.documents == []
+
+
+# PAYMENT-SCOPED PROOF DOCUMENTS (payment_id grouping)
+
+
+class TestPaymentDocumentGrouping:
+    @pytest.mark.no_db
+    def test_response_exposes_payment_id(self):
+        assert "payment_id" in PurchaseOrderDocumentResponse.model_fields
+
+    @pytest.mark.skipif(
+        not USING_POSTGRES,
+        reason="record_payment uses the FOR UPDATE locked load (Postgres-only).",
+    )
+    def test_attach_persists_payment_id(self, db):
+        # The payment_id FK is enforced at the DB level, so the document must
+        # reference a real payment. Send the PO and record a payment first.
+        po = _po(db)
+        svc = PurchaseOrderService(db)
+        svc._transition(po, PurchaseOrderStatus.SENT)
+        db.flush()
+        payment = svc.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("10.00"),
+                paymentDate=date.today(),
+            ),
+        )
+
+        doc = svc.attach_document(
+            po_id=po.id,
+            filename="proof.pdf",
+            file_size_bytes=1024,
+            mime_type="application/pdf",
+            storage_key=f"purchase_orders/{po.id}/{uuid.uuid4().hex}_proof.pdf",
+            source=DocumentSource.PAYMENT_MODAL,
+            payment_id=payment.id,
+            storage=FakeStorage(),
+        )
+        assert doc.payment_id == payment.id
+        assert doc.source == DocumentSource.PAYMENT_MODAL.value
+
+    @pytest.mark.skipif(
+        not USING_POSTGRES,
+        reason="record_payment uses the FOR UPDATE locked load (Postgres-only).",
+    )
+    def test_payment_groups_multiple_documents(self, db):
+        # Send the PO so a payment can be recorded against it.
+        po = _po(db)
+        svc = PurchaseOrderService(db)
+        svc._transition(po, PurchaseOrderStatus.SENT)
+        db.flush()
+
+        payment = svc.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("10.00"),
+                paymentDate=date.today(),
+            ),
+        )
+
+        # Attach two proof documents grouped under the payment.
+        for name in ("a.pdf", "b.pdf"):
+            svc.attach_document(
+                po_id=po.id,
+                filename=name,
+                file_size_bytes=512,
+                mime_type="application/pdf",
+                storage_key=f"purchase_orders/{po.id}/{uuid.uuid4().hex}_{name}",
+                source=DocumentSource.PAYMENT_MODAL,
+                payment_id=payment.id,
+                storage=FakeStorage(),
+            )
+        db.flush()
+        db.expire_all()
+
+        reloaded = svc.get_payment(po.id, payment.id)
+        names = sorted(doc.filename for doc in reloaded.documents)
+        assert names == ["a.pdf", "b.pdf"]
+
+    @pytest.mark.skipif(
+        not USING_POSTGRES,
+        reason="record_payment uses the FOR UPDATE locked load (Postgres-only).",
+    )
+    def test_get_payment_is_scoped_to_po(self, db):
+        po = _po(db)
+        svc = PurchaseOrderService(db)
+        svc._transition(po, PurchaseOrderStatus.SENT)
+        db.flush()
+        payment = svc.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("10.00"),
+                paymentDate=date.today(),
+            ),
+        )
+
+        # A different PO must not resolve this payment.
+        other = _po(db)
+        with pytest.raises(NotFoundException):
+            svc.get_payment(other.id, payment.id)

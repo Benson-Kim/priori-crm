@@ -210,11 +210,15 @@ export function downloadPurchaseOrderStatementPdf(id: string): Promise<Blob> {
 export async function uploadPurchaseOrderDocument(
   id: string,
   file: File,
-  source: "form" | "view" | "payment_modal" = "view"
+  source: "form" | "view" | "payment_modal" = "view",
+  paymentId?: string
 ): Promise<PurchaseOrderDocument> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("source", source);
+  // Group proof-of-payment documents under their payment so a payment can
+  // carry several; omitted for PO-level (form / view) attachments.
+  if (paymentId) formData.append("paymentId", paymentId);
   return apiUpload<PurchaseOrderDocument>(
     `purchase-orders/${id}/documents`,
     formData
