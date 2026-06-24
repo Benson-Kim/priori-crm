@@ -860,6 +860,7 @@ Best regards,
         storage_key: str,
         source: DocumentSource = DocumentSource.FORM,
         user_id: uuid.UUID | None = None,
+        payment_id: uuid.UUID | None = None,
         storage: Any | None = None,
     ) -> PurchaseOrderDocument:
         """Persist document metadata after the file has been written to storage.
@@ -891,6 +892,7 @@ Best regards,
 
         document = PurchaseOrderDocument(
             po_id=po_id,
+            payment_id=payment_id,
             filename=filename,
             file_size_bytes=file_size_bytes,
             mime_type=mime_type,
