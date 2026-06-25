@@ -423,9 +423,7 @@ def update_purchase_order_payment(
     body: PurchaseOrderPaymentUpdate,
     service: PurchaseOrderServiceDep,
 ) -> PurchaseOrderPaymentResponse:
-    payment = service.update_payment(
-        po_id, payment_id, body, user_id=service.actor_id
-    )
+    payment = service.update_payment(po_id, payment_id, body, user_id=service.actor_id)
     return PurchaseOrderPaymentResponse.model_validate(payment)
 
 
