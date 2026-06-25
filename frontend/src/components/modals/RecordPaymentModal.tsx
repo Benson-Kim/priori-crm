@@ -7,7 +7,7 @@ import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
-import { recordPurchaseOrderPayment, uploadPurchaseOrderDocument, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
+import { recordPurchaseOrderPayment, updatePurchaseOrderPayment, uploadPurchaseOrderDocument, type PurchaseOrderPayment, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
 import { CreditCard, Paperclip, Plus, X } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 
@@ -20,6 +20,13 @@ interface RecordPaymentModalProps {
     currency: string;
     prefillAmount?: number;
     reference?: string; // e.g. Invoice Ref or Expense Ref for display
+    /**
+     * When supplied, the modal edits this existing payment (purchase orders
+     * only) instead of recording a new one: fields prefill from it and Save
+     * calls updatePurchaseOrderPayment. The editable balance is the live
+     * balanceDue plus this payment's own amount (removing it frees that).
+     */
+    editPayment?: PurchaseOrderPayment | null;
     onSuccess: () => void;
 }
 
@@ -47,8 +54,15 @@ export function RecordPaymentModal({
     currency,
     prefillAmount,
     // reference: displayRef, 
+    editPayment,
     onSuccess
 }: RecordPaymentModalProps) {
+    const isEditing = !!editPayment;
+    // In edit mode the amount can grow back into the balance this payment
+    // already occupies, so the effective cap is balanceDue + its own amount.
+    const effectiveBalance = isEditing
+        ? balanceDue + Number(editPayment.amount)
+        : balanceDue;
     const [amount, setAmount] = useState(String(prefillAmount ?? balanceDue));
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
     const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
@@ -65,21 +79,34 @@ export function RecordPaymentModal({
 
     // Only the purchase-order payment API supports linking a proof-of-payment
     // document, so the attach control is shown for that entity type only.
-    const supportsAttachments = entityType === "purchaseOrder";
+    // New PO payments can attach proof-of-payment files; the edit flow updates
+    // the payment record only (documents are managed from the view modal).
+    const supportsAttachments = entityType === "purchaseOrder" && !isEditing;
 
     useEffect(() => {
         if (isOpen) {
             startTransition(() => {
-                setAmount(String(prefillAmount ?? balanceDue));
-                setPaymentDate(new Date().toISOString().split("T")[0]);
+                if (editPayment) {
+                    setAmount(String(editPayment.amount));
+                    setPaymentDate(
+                        editPayment.payment_date
+                            ? String(editPayment.payment_date).split("T")[0]
+                            : new Date().toISOString().split("T")[0]
+                    );
+                    setReference(editPayment.reference ?? "");
+                    setNotes(editPayment.notes ?? "");
+                } else {
+                    setAmount(String(prefillAmount ?? balanceDue));
+                    setPaymentDate(new Date().toISOString().split("T")[0]);
+                    setReference("");
+                    setNotes("");
+                }
                 setPaymentMethod("bank_transfer");
-                setReference("");
-                setNotes("");
                 setFiles([]);
                 setError(null);
             })
         }
-    }, [isOpen, prefillAmount, balanceDue]);
+    }, [isOpen, prefillAmount, balanceDue, editPayment]);
 
     const handleFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
         const picked = Array.from(e.target.files ?? []);
@@ -99,13 +126,25 @@ export function RecordPaymentModal({
             setError("Amount must be greater than 0");
             return;
         }
-        if (parsedAmount > balanceDue) {
-            setError(`Amount cannot exceed balance due (${formatCurrency(balanceDue, currency)})`);
+        if (parsedAmount > effectiveBalance) {
+            setError(`Amount cannot exceed balance due (${formatCurrency(effectiveBalance, currency)})`);
             return;
         }
 
         setIsSubmitting(true);
         try {
+            // Edit mode (purchase orders only): update the existing payment
+            // and re-derive the PO balance / status server-side.
+            if (isEditing && entityType === "purchaseOrder") {
+                await updatePurchaseOrderPayment(entityId, editPayment.id, {
+                    amount: parsedAmount,
+                    paymentDate,
+                    reference: reference || undefined,
+                    notes: notes || undefined,
+                });
+                onSuccess();
+                return;
+            }
             if (entityType === "invoice") {
                 const payload: InvoicePaymentPayload = {
                     amount: parsedAmount,
@@ -158,9 +197,9 @@ export function RecordPaymentModal({
         <Dialog
             isOpen={isOpen}
             onClose={onClose}
-            title="Record Payment"
+            title={isEditing ? "Edit Payment" : "Record Payment"}
             icon={<CreditCard size={24} />}
-            confirmLabel="Save Payment"
+            confirmLabel={isEditing ? "Save changes" : "Save Payment"}
             cancelLabel="Cancel"
             onConfirm={handleRecord}
             isLoading={isSubmitting}
