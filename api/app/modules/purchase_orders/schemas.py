@@ -210,6 +210,10 @@ class VendorSummary(BaseModel):
     email: str | None = None
     phone_primary: str | None = None
     phone_secondary: str | None = None
+    # Vendor's currency is the single source of truth for the PO currency
+    # (pinned server-side on create). Surfaced so the editor preview can
+    # display the right symbol without a separate vendor fetch.
+    currency: str | None = None
 
     model_config = {"from_attributes": True}
 
