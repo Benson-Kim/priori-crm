@@ -90,6 +90,13 @@ export interface PurchaseOrderPaymentPayload {
   documentId?: string | null;
 }
 
+export interface PurchaseOrderPaymentUpdatePayload {
+  amount?: number;
+  paymentDate?: string;
+  reference?: string | null;
+  notes?: string | null;
+}
+
 export interface PurchaseOrderListParams {
   [key: string]: string | number | boolean | undefined;
   page?: number;
@@ -189,6 +196,29 @@ export function recordPurchaseOrderPayment(
   data: PurchaseOrderPaymentPayload
 ) {
   return apiPost<PurchaseOrderPayment>(`purchase-orders/${id}/payments`, data);
+}
+
+/**
+ * Edit a recorded payment. Changing the amount re-derives the PO balance and
+ * may re-open a PAID PO to SENT (or settle a SENT one to PAID) server-side.
+ */
+export function updatePurchaseOrderPayment(
+  id: string,
+  paymentId: string,
+  data: PurchaseOrderPaymentUpdatePayload
+) {
+  return apiPut<PurchaseOrderPayment>(
+    `purchase-orders/${id}/payments/${paymentId}`,
+    data
+  );
+}
+
+/**
+ * Delete a recorded payment. The PO balance is re-derived and a PO settled by
+ * this payment reverts from PAID to SENT server-side.
+ */
+export function deletePurchaseOrderPayment(id: string, paymentId: string) {
+  return apiDelete<void>(`purchase-orders/${id}/payments/${paymentId}`);
 }
 
 /**
