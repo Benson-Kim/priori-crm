@@ -18,6 +18,7 @@ import type {
 import {
     deletePurchaseOrder,
     deletePurchaseOrderPayment,
+    downloadPurchaseOrderPdf,
     downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
     exportPurchaseOrderPaymentsExcel,
@@ -168,6 +169,17 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
+    /** Original PDF */
+    const handleDownloadPO = async () => {
+        if (!po) return;
+        try {
+            const blob = await downloadPurchaseOrderPdf(po.id);
+            saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download PO");
+        }
+    };
+
     /** Current PDF: payments applied + running balance (statement variant). */
     const handleDownloadStatement = async () => {
         if (!po) return;
@@ -252,10 +264,10 @@ export default function PurchaseOrderDetailPage() {
             onClick: handleDuplicate,
         });
         actions.push({
-            key: "download-statement",
-            label: "Download statement",
+            key: "download-po",
+            label: "Download PO",
             icon: <FileClock size={16} />,
-            onClick: handleDownloadStatement,
+            onClick: handleDownloadPO,
         });
         // Delete: DRAFT only (SENT/PAID are protected records).
         if (status === "draft") {

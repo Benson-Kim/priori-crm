@@ -69,23 +69,25 @@ export function PurchaseOrderViewer({
               {data.vendor?.vendor_name ?? data.vendorId}
             </p>
 
-            {data.vendor && (
               <>
-                {data.vendor.address && (
+              {data.vendor?.address && (
                   <p className="text-sm text-gray-600 whitespace-pre-wrap">
                     {data.vendor.address}
                   </p>
                 )}
 
+              {(data.vendor?.phone_primary || data.vendor?.phone_secondary) && (
                 <p className="text-sm text-gray-600">
                   {data.vendor.phone_primary ?? data.vendor.phone_secondary}
                 </p>
+              )}
 
+              {data.vendor?.email && (
                 <p className="text-sm text-gray-600 break-all">
                   {data.vendor.email}
                 </p>
-              </>
-            )}
+              )}
+            </>
           </div>
 
           {/* RIGHT - Metadata */}
