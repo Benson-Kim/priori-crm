@@ -4922,6 +4922,75 @@
         "title": "PurchaseOrderPaymentResponse",
         "type": "object"
       },
+      "PurchaseOrderPaymentUpdate": {
+        "description": "Payload for editing an existing payment recorded against a PO.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service: only\nsupplied fields are applied. Changing ``amount`` re-derives the PO's\namount_paid / balance_due and may re-open a PAID PO back to SENT (or\nsettle a SENT PO to PAID) \u2014 handled atomically in the service under a\nrow lock. The new amount is validated against the balance freed by\nremoving this payment's previous amount, so an edit can never overpay.",
+        "example": {
+          "amount": 4500.0,
+          "notes": "Corrected amount",
+          "paymentDate": "2026-06-19",
+          "reference": "TXN-9981234"
+        },
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New payment amount \u2014 must be > 0 and not overpay the PO",
+            "title": "Amount"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Internal notes for this payment entry",
+            "title": "Notes"
+          },
+          "paymentDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Date the payment was made",
+            "title": "Paymentdate"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Transaction ID, cheque number, or remittance reference",
+            "title": "Reference"
+          }
+        },
+        "title": "PurchaseOrderPaymentUpdate",
+        "type": "object"
+      },
       "PurchaseOrderResponse": {
         "description": "Full purchase-order detail \u2014 returned by create, update, and get.\n\nMirrors ExpenseResponse adapted to the PO domain. ``storage_key`` is\nnever present on any nested schema, per the security gate.",
         "properties": {
@@ -7900,6 +7969,17 @@
       "app__modules__purchase_orders__schemas__VendorSummary": {
         "description": "Vendor fields surfaced on purchase-order responses.\n\nMirrors the Expenses VendorSummary. ``email`` is included because the\nPO Send flow resolves the recipient from the vendor.",
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "email": {
             "anyOf": [
               {
@@ -13389,6 +13469,140 @@
           }
         ],
         "summary": "Export a purchase order's payments to Excel",
+        "tags": [
+          "Purchase Orders"
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{po_id}/payments/{payment_id}": {
+      "delete": {
+        "description": "Delete a payment recorded against a purchase order. amount_paid / balance_due are re-derived and, if this payment had settled the purchase order, it reverts from PAID to SENT. Any proof-of-payment documents grouped under the payment are retained on the purchase order (their payment link is cleared). Returns 404 if the payment does not belong to the purchase order.",
+        "operationId": "delete_purchase_order_payment_api_v1_purchase_orders__po_id__payments__payment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Payment deleted"
+          },
+          "403": {
+            "description": "Insufficient role to delete payments"
+          },
+          "404": {
+            "description": "Purchase order or payment not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete a recorded payment",
+        "tags": [
+          "Purchase Orders"
+        ]
+      },
+      "put": {
+        "description": "Edit a payment recorded against a purchase order. Changing the amount re-derives amount_paid / balance_due and may re-open a PAID purchase order to SENT or settle a SENT one to PAID. The new amount cannot overpay the purchase order. Returns 404 if the payment does not belong to the purchase order.",
+        "operationId": "update_purchase_order_payment_api_v1_purchase_orders__po_id__payments__payment_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "po_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Po Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrderPaymentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderPaymentResponse"
+                }
+              }
+            },
+            "description": "Payment updated"
+          },
+          "400": {
+            "description": "Overpayment or validation error"
+          },
+          "403": {
+            "description": "Insufficient role to edit payments"
+          },
+          "404": {
+            "description": "Purchase order or payment not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit a recorded payment",
         "tags": [
           "Purchase Orders"
         ]
