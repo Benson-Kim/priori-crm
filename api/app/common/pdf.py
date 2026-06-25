@@ -119,6 +119,19 @@ _ITEM_HEADER_RIGHT_STYLE = ParagraphStyle(
     alignment=TA_RIGHT,
 )
 
+_META_VAL_STYLE = ParagraphStyle("MetaVal", parent=_SUB_STYLE, alignment=TA_RIGHT)
+_IQ_STYLE = ParagraphStyle("IQ", parent=_ITEM_NUM_STYLE, alignment=TA_CENTER)
+_TOTAL_LBL_STYLE = ParagraphStyle("TotalLbl", parent=_SUB_STYLE, alignment=TA_RIGHT)
+_VAL_BOLD_STYLE = ParagraphStyle(
+    "ValBold", parent=_SUB_STYLE, fontName="Helvetica-Bold", alignment=TA_RIGHT
+)
+_SUMMARY_VAL_STYLE = ParagraphStyle("SummaryVal", parent=_SUB_STYLE, alignment=TA_RIGHT)
+_STMT_NUM_STYLE = ParagraphStyle("StmtNum", parent=_ITEM_STYLE, alignment=TA_RIGHT)
+_CLOSING_LBL_STYLE = ParagraphStyle("ClosingLbl", parent=_SUB_STYLE, alignment=TA_RIGHT)
+_CLOSING_VAL_STYLE = ParagraphStyle(
+    "ClosingVal", parent=_SUB_STYLE, fontName="Helvetica-Bold", alignment=TA_RIGHT
+)
+
 
 def _split_lines(value) -> list[str]:
     """Split a possibly multi-line text field (e.g. a free-text address
@@ -245,9 +258,6 @@ class DocumentPDFGenerator:
         content_width = doc.width
         elements: list = []
 
-        # Header — logo + owner identity in the left cell, title on the right.
-        # Logo is included inside the cell (not prepended) so it participates
-        # in the same vertical flow as the owner text.
         logo_flowable = self._build_logo(logo_bytes)
         owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
 
@@ -298,7 +308,6 @@ class DocumentPDFGenerator:
         elements.append(header_table)
         elements.append(Spacer(1, 10 * mm))
 
-        # Vendor address block (left) + PO metadata (right), side by side.
         vendor = po.vendor
         vendor_name = getattr(vendor, "vendor_name", str(po.vendor_id))
         vendor_cell: list = [
@@ -321,16 +330,13 @@ class DocumentPDFGenerator:
         delivery = po.delivery_date.strftime("%b %d, %Y") if po.delivery_date else "—"
         order_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
         meta_rows = [
-            ["PO#", str(po.po_number)],
+            ["PO#", str(po.po_reference)],
             ["Order Date", order_date],
             ["Delivery Date", delivery],
         ]
         if po.compliance_ref:
             meta_rows.append(["Compliance Ref", str(po.compliance_ref)])
 
-        _META_VAL_STYLE = ParagraphStyle(
-            "MetaVal", parent=_SUB_STYLE, alignment=TA_RIGHT
-        )
         meta_inner = Table(
             [
                 [Paragraph(label, _LABEL_STYLE), Paragraph(value, _META_VAL_STYLE)]
@@ -365,11 +371,6 @@ class DocumentPDFGenerator:
         elements.append(vm_table)
         elements.append(Spacer(1, 8 * mm))
 
-        # Line items table. Descriptions are wrapped in Paragraphs so long
-        # names flow onto a second line rather than overflowing the Qty column.
-        # The (description) suffix is preserved from the original engineering
-        # convention when an item carries a separate description field.
-        _IQ_STYLE = ParagraphStyle("IQ", parent=_ITEM_NUM_STYLE, alignment=TA_CENTER)
         header_row = [
             Paragraph("Item Description", _ITEM_HEADER_STYLE),
             Paragraph("Qty", _ITEM_HEADER_CENTER_STYLE),
@@ -414,61 +415,25 @@ class DocumentPDFGenerator:
         elements.append(items_table)
         elements.append(Spacer(1, 5 * mm))
 
-        # Totals — aligned to the right using the same 62.5 mm column width
-        # as the metadata block so the figures sit under the meta values.
-        # The include_balance variant appends Amount Paid + Balance Due for
-        # vendor statement copies.
-        _VAL_BOLD = ParagraphStyle(
-            "ValBold", parent=_SUB_STYLE, fontName="Helvetica-Bold", alignment=TA_RIGHT
-        )
-        _TOTAL_LBL = ParagraphStyle("TotalLbl", parent=_SUB_STYLE, alignment=TA_RIGHT)
-
         tax_rate = getattr(po, "tax_rate", None)
-        vat_label = f"VAT ({(tax_rate)}%)" if tax_rate else "VAT"
+        vat_label = f"VAT ({tax_rate}%)" if tax_rate else "VAT"
 
         totals_rows = [
             [
-                Paragraph("Sub Total", _TOTAL_LBL),
-                Paragraph(f"{po.subtotal:,.2f}", _VAL_BOLD),
+                Paragraph("Sub Total", _TOTAL_LBL_STYLE),
+                Paragraph(f"{po.subtotal:,.2f}", _VAL_BOLD_STYLE),
             ],
             [
-                Paragraph(vat_label, _TOTAL_LBL),
-                Paragraph(f"{po.tax_total:,.2f}", _VAL_BOLD),
+                Paragraph(vat_label, _TOTAL_LBL_STYLE),
+                Paragraph(f"{po.tax_total:,.2f}", _VAL_BOLD_STYLE),
             ],
             [
-                Paragraph("TOTAL", _TOTAL_LBL),
-                Paragraph(f"{po.currency}{po.total:,.2f}", _VAL_BOLD),
+                Paragraph("TOTAL", _TOTAL_LBL_STYLE),
+                Paragraph(f"{po.currency} {po.total:,.2f}", _VAL_BOLD_STYLE),
             ],
         ]
-        if include_balance:
-            amount_paid = getattr(po, "amount_paid", Decimal("0.00"))
-            balance_due = getattr(po, "balance_due", po.total)
-            totals_rows.append(
-                [
-                    Paragraph("Amount Paid", _TOTAL_LBL),
-                    Paragraph(f"{po.currency} {amount_paid:.2f}", _VAL_BOLD),
-                ]
-            )
-            totals_rows.append(
-                [
-                    Paragraph("Balance Due", _TOTAL_LBL),
-                    Paragraph(f"{po.currency} {balance_due:.2f}", _VAL_BOLD),
-                ]
-            )
-
-        inner_totals = Table(totals_rows, colWidths=[32.5 * mm, 30 * mm])
-        inner_totals.setStyle(
-            TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
-        )
         totals_wrapper = Table(
-            [[Spacer(1, 1), inner_totals]],
+            [[Spacer(1, 1), Table(totals_rows, colWidths=[32.5 * mm, 30 * mm])]],
             colWidths=[content_width - 62.5 * mm, 62.5 * mm],
         )
         totals_wrapper.setStyle(
@@ -482,8 +447,6 @@ class DocumentPDFGenerator:
         )
         elements.append(totals_wrapper)
 
-        # Notes and Terms & Conditions — iterated together to avoid repetition.
-        # Lines within each block are separated by a small spacer for legibility.
         for title, content in [
             ("Notes", po.notes),
             ("Terms & Conditions", po.terms_and_conditions),
@@ -593,19 +556,16 @@ class DocumentPDFGenerator:
         delivery = po.delivery_date.strftime("%b %d, %Y") if po.delivery_date else "—"
         order_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
         meta_rows = [
-            ["PO#", str(po.po_number)],
+            ["PO#", str(po.po_reference)],
             ["Order Date", order_date],
             ["Delivery Date", delivery],
         ]
         if po.compliance_ref:
             meta_rows.append(["Compliance Ref", str(po.compliance_ref)])
 
-        meta_val_style = ParagraphStyle(
-            "MetaVal", parent=_SUB_STYLE, alignment=TA_RIGHT
-        )
         meta_inner = Table(
             [
-                [Paragraph(label, _LABEL_STYLE), Paragraph(value, meta_val_style)]
+                [Paragraph(label, _LABEL_STYLE), Paragraph(value, _META_VAL_STYLE)]
                 for label, value in meta_rows
             ],
             colWidths=[32.5 * mm, 30 * mm],
@@ -682,46 +642,41 @@ class DocumentPDFGenerator:
         amount_paid = getattr(po, "amount_paid", Decimal("0.00"))
         balance = getattr(po, "balance_due", total - amount_paid)
 
-        # SUMMARY — bold label, regular value (PO Amount / Paid / Balance).
-        elements.append(Paragraph("SUMMARY", _SECTION_LABEL_STYLE))
-        elements.append(Spacer(1, 3 * mm))
-
-        summary_val_style = ParagraphStyle(
-            "SummaryVal", parent=_SUB_STYLE, alignment=TA_RIGHT
-        )
+        # SUMMARY
         summary_rows = [
+            [Paragraph("SUMMARY", _SECTION_LABEL_STYLE), ""],
             [
-                Paragraph("PO Amount:", _LABEL_STYLE),
-                Paragraph(f"{currency} {total:,.2f}", summary_val_style),
+                Paragraph("PO Amount", _LABEL_STYLE),
+                Paragraph(f"{currency} {total:,.2f}", _SUMMARY_VAL_STYLE),
             ],
             [
-                Paragraph("Paid:", _LABEL_STYLE),
-                Paragraph(f"{currency} {amount_paid:,.2f}", summary_val_style),
+                Paragraph("Paid", _LABEL_STYLE),
+                Paragraph(f"{currency} {amount_paid:,.2f}", _SUMMARY_VAL_STYLE),
             ],
             [
-                Paragraph("Balance:", _LABEL_STYLE),
-                Paragraph(f"{currency} {balance:,.2f}", summary_val_style),
+                Paragraph("Balance", _LABEL_STYLE),
+                Paragraph(f"{currency} {balance:,.2f}", _SUMMARY_VAL_STYLE),
             ],
         ]
-        summary_table = Table(summary_rows, colWidths=[32.5 * mm, 40 * mm])
+        summary_table = Table(
+            summary_rows, colWidths=[32.5 * mm, 40 * mm], hAlign="RIGHT"
+        )
         summary_table.setStyle(
             TableStyle(
                 [
+                    ("SPAN", (0, 0), (1, 0)),  # title spans both columns
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 3 * mm),  # space under title
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
                 ]
             )
         )
+
         elements.append(summary_table)
         elements.append(Spacer(1, 8 * mm))
 
-        # Reducing-balance table. Row 1 is the billed invoice for the full PO
-        # amount; each subsequent row is a payment reducing the running
-        # balance. Payments are taken in chronological order (the model orders
-        # the collection by payment_date).
-        right_style = ParagraphStyle("StmtNum", parent=_ITEM_STYLE, alignment=TA_RIGHT)
         header_row = [
             Paragraph("Date", _ITEM_HEADER_STYLE),
             Paragraph("Details", _ITEM_HEADER_STYLE),
@@ -750,8 +705,8 @@ class DocumentPDFGenerator:
             [
                 Paragraph(billed_date, _ITEM_STYLE),
                 Paragraph(line_details, _ITEM_STYLE),
-                Paragraph(f"{total:,.2f}", right_style),
-                Paragraph(f"{running_balance:,.2f}", right_style),
+                Paragraph(f"{total:,.2f}", _STMT_NUM_STYLE),
+                Paragraph(f"{running_balance:,.2f}", _STMT_NUM_STYLE),
             ]
         )
 
@@ -762,15 +717,17 @@ class DocumentPDFGenerator:
                 if payment.payment_date
                 else "—"
             )
-            detail = "Payment"
-            if getattr(payment, "reference", None):
-                detail = f"Payment ({payment.reference})"
+            detail = (
+                f"Payment ({payment.reference})"
+                if getattr(payment, "reference", None)
+                else "Payment"
+            )
             rows.append(
                 [
                     Paragraph(pay_date, _ITEM_STYLE),
                     Paragraph(detail, _ITEM_STYLE),
-                    Paragraph(f"-{payment.amount:,.2f}", right_style),
-                    Paragraph(f"{running_balance:,.2f}", right_style),
+                    Paragraph(f"-{payment.amount:,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(f"{running_balance:,.2f}", _STMT_NUM_STYLE),
                 ]
             )
 
@@ -779,6 +736,7 @@ class DocumentPDFGenerator:
             colWidths=[28 * mm, content_width - 88 * mm, 30 * mm, 30 * mm],
             repeatRows=1,
         )
+
         stmt_table.setStyle(
             TableStyle(
                 [
@@ -795,21 +753,11 @@ class DocumentPDFGenerator:
         elements.append(stmt_table)
         elements.append(Spacer(1, 6 * mm))
 
-        # Closing balance row: "Balance: <value>".
-        closing_lbl = ParagraphStyle(
-            "ClosingLbl", parent=_SUB_STYLE, alignment=TA_RIGHT
-        )
-        closing_val = ParagraphStyle(
-            "ClosingVal",
-            parent=_SUB_STYLE,
-            fontName="Helvetica-Bold",
-            alignment=TA_RIGHT,
-        )
         closing = Table(
             [
                 [
-                    Paragraph("Balance:", closing_lbl),
-                    Paragraph(f"{currency} {balance:,.2f}", closing_val),
+                    Paragraph("Balance:", _CLOSING_LBL_STYLE),
+                    Paragraph(f"{currency} {balance:,.2f}", _CLOSING_VAL_STYLE),
                 ]
             ],
             colWidths=[content_width - 60 * mm, 60 * mm],
