@@ -8,6 +8,7 @@ import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
+import { Select } from "@/components/ui/Select";
 import { Table } from "@/components/ui/Table";
 import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
 import {
@@ -43,7 +44,7 @@ export default function VendorDetailPage() {
 
   // Transaction table state
   const [activeTab, setActiveTab] = useState("all");
-  // Source filter: all | expense | purchase_order (PO-13).
+  // Source filter: all | expense | purchase_order
   const [typeTab, setTypeTab] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -222,10 +223,11 @@ export default function VendorDetailPage() {
 
   // Source filter (PO-13): isolate Expenses or Purchase Orders.
   const TYPE_TABS = [
-    { key: "all", label: "All Types" },
-    { key: "expense", label: "Expenses" },
-    { key: "purchase_order", label: "Purchase Orders" },
+    { value: "all", label: "All Types" },
+    { value: "expense", label: "Expenses" },
+    { value: "purchase_order", label: "Purchase Orders" },
   ];
+
 
   const columns = [
     {
@@ -243,19 +245,10 @@ export default function VendorDetailPage() {
       header: "Reference No.",
       render: (item: VendorTransactionSummary) => (
         <span
-          className="text-gray-500 max-w-[150px] truncate block"
+          className="text-gray-500 max-w-37.5 truncate block"
           title={item.ref_no}
         >
           {item.ref_no}
-        </span>
-      ),
-    },
-    {
-      key: "type",
-      header: "Type",
-      render: (item: VendorTransactionSummary) => (
-        <span className="text-gray-500 capitalize">
-          {item.transaction_type}
         </span>
       ),
     },
@@ -479,12 +472,18 @@ export default function VendorDetailPage() {
                   tabs={TABS}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
+                  className="gap-4"
                 />
-                <FilterTabs
+                <Select
+                  options={TYPE_TABS}
+                  onChange={(e) => setTypeTab(e.target.value)}
+                />
+                {/* <FilterTabs
                   tabs={TYPE_TABS}
                   activeTab={typeTab}
                   onTabChange={setTypeTab}
-                />
+                  className="gap-4"
+                /> */}
               </div>
 
               <div className="rounded-b-lg border border-white">
