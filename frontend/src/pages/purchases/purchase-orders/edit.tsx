@@ -29,9 +29,6 @@ export default function EditPurchaseOrderPage() {
                 vendor: initialData.vendor,
                 orderDate: initialData.order_date,
                 deliveryDate: initialData.delivery_date,
-                currency: initialData.currency,
-                isRecurring: initialData.is_recurring,
-                complianceRef: initialData.compliance_ref,
                 notes: initialData.notes || undefined,
                 termsAndConditions: initialData.terms_and_conditions,
                 lineItems: (initialData.line_items ?? []).map((li: PurchaseOrderLineItem) => ({
