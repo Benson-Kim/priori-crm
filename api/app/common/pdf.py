@@ -225,6 +225,13 @@ class DocumentPDFGenerator:
         purchase_order,
         include_balance: bool = False,
     ) -> bytes:
+        # The balance-aware variant is a distinct STATEMENT document (reducing
+        # balances), not the PURCHASE ORDER layout, so it is built separately.
+        if include_balance:
+            return self._build_purchase_order_statement_pdf(
+                owner=owner, logo_bytes=logo_bytes, purchase_order=purchase_order
+            )
+
         po = purchase_order
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -497,6 +504,328 @@ class DocumentPDFGenerator:
 
         logger.info(
             "Generated purchase_order PDF: %s (%d bytes)",
+            po.po_reference,
+            len(pdf_bytes),
+        )
+        return pdf_bytes
+
+    def _po_header_and_meta(
+        self, *, owner, logo_bytes, po, content_width, doc_type_label: str
+    ) -> list:
+        """Build the shared header + vendor/metadata flowables for a PO document.
+
+        Returns the elements list (logo + owner identity on the left, the
+        document title on the right, then the vendor address block beside the
+        PO metadata). Shared by the PURCHASE ORDER and STATEMENT layouts so the
+        owner and vendor blocks render identically across both.
+        """
+        elements: list = []
+
+        logo_flowable = self._build_logo(logo_bytes)
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+
+        left_cell: list = []
+        if logo_flowable is not None:
+            left_cell.append(logo_flowable)
+            left_cell.append(Spacer(1, 4 * mm))
+        left_cell.append(Paragraph(owner_name, _HEADER_STYLE))
+        left_cell.append(Spacer(1, 2 * mm))
+
+        if owner is not None:
+            owner_text_fields = (
+                getattr(owner, "address", None),
+                getattr(owner, "email", None),
+                getattr(owner, "phone", None),
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
+                getattr(owner, "website", None),
+            )
+            for field in owner_text_fields:
+                lines = _split_lines(field)
+                for i, line in enumerate(lines):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
+                    if i < len(lines) - 1:
+                        left_cell.append(Spacer(1, 1.2 * mm))
+            if getattr(owner, "location_watermark", None):
+                for line in _split_lines(owner.location_watermark):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
+
+        header_table = Table(
+            [[left_cell, Paragraph(doc_type_label, _TITLE_STYLE)]],
+            colWidths=[content_width - 85 * mm, 85 * mm],
+        )
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(header_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        vendor = po.vendor
+        vendor_name = getattr(vendor, "vendor_name", str(po.vendor_id))
+        vendor_cell: list = [
+            Paragraph("Vendor Address:", _LABEL_STYLE),
+            Spacer(1, 3 * mm),
+            Paragraph(str(vendor_name), _SUB_STYLE),
+            Spacer(1, 1.5 * mm),
+        ]
+        for field in (
+            getattr(vendor, "address", None),
+            getattr(vendor, "email", None),
+            getattr(vendor, "phone_primary", None),
+        ):
+            lines = _split_lines(field)
+            for i, line in enumerate(lines):
+                vendor_cell.append(Paragraph(line, _SUB_STYLE))
+                if i < len(lines) - 1:
+                    vendor_cell.append(Spacer(1, 1.2 * mm))
+
+        delivery = po.delivery_date.strftime("%b %d, %Y") if po.delivery_date else "—"
+        order_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
+        meta_rows = [
+            ["PO#", str(po.po_number)],
+            ["Order Date", order_date],
+            ["Delivery Date", delivery],
+        ]
+        if po.compliance_ref:
+            meta_rows.append(["Compliance Ref", str(po.compliance_ref)])
+
+        meta_val_style = ParagraphStyle(
+            "MetaVal", parent=_SUB_STYLE, alignment=TA_RIGHT
+        )
+        meta_inner = Table(
+            [
+                [Paragraph(label, _LABEL_STYLE), Paragraph(value, meta_val_style)]
+                for label, value in meta_rows
+            ],
+            colWidths=[32.5 * mm, 30 * mm],
+        )
+        meta_inner.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+
+        vm_table = Table(
+            [[vendor_cell, meta_inner]],
+            colWidths=[content_width - 62.5 * mm, 62.5 * mm],
+        )
+        vm_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(vm_table)
+        elements.append(Spacer(1, 8 * mm))
+        return elements
+
+    def _build_purchase_order_statement_pdf(
+        self,
+        *,
+        owner,
+        logo_bytes: bytes | None,
+        purchase_order,
+    ) -> bytes:
+        """Render the STATEMENT variant of a purchase order (reducing balances).
+
+        Layout:
+          - title "STATEMENT"; same owner + vendor + PO metadata blocks as the
+            PURCHASE ORDER document;
+          - a SUMMARY section: bold labels / regular values for PO Amount,
+            Paid and Balance;
+          - a Date | Details | Amount | Balance table whose first row is the
+            billed invoice for the full PO amount (Balance = PO amount) and
+            whose subsequent rows are the recorded payments, each reducing the
+            running balance; a final "Balance:" row shows the closing balance.
+        """
+        po = purchase_order
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        content_width = doc.width
+
+        elements = self._po_header_and_meta(
+            owner=owner,
+            logo_bytes=logo_bytes,
+            po=po,
+            content_width=content_width,
+            doc_type_label="STATEMENT",
+        )
+
+        currency = po.currency
+        total = po.total
+        amount_paid = getattr(po, "amount_paid", Decimal("0.00"))
+        balance = getattr(po, "balance_due", total - amount_paid)
+
+        # SUMMARY — bold label, regular value (PO Amount / Paid / Balance).
+        elements.append(Paragraph("SUMMARY", _SECTION_LABEL_STYLE))
+        elements.append(Spacer(1, 3 * mm))
+
+        summary_val_style = ParagraphStyle(
+            "SummaryVal", parent=_SUB_STYLE, alignment=TA_RIGHT
+        )
+        summary_rows = [
+            [
+                Paragraph("PO Amount:", _LABEL_STYLE),
+                Paragraph(f"{currency} {total:,.2f}", summary_val_style),
+            ],
+            [
+                Paragraph("Paid:", _LABEL_STYLE),
+                Paragraph(f"{currency} {amount_paid:,.2f}", summary_val_style),
+            ],
+            [
+                Paragraph("Balance:", _LABEL_STYLE),
+                Paragraph(f"{currency} {balance:,.2f}", summary_val_style),
+            ],
+        ]
+        summary_table = Table(summary_rows, colWidths=[32.5 * mm, 40 * mm])
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+        elements.append(summary_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        # Reducing-balance table. Row 1 is the billed invoice for the full PO
+        # amount; each subsequent row is a payment reducing the running
+        # balance. Payments are taken in chronological order (the model orders
+        # the collection by payment_date).
+        right_style = ParagraphStyle("StmtNum", parent=_ITEM_STYLE, alignment=TA_RIGHT)
+        header_row = [
+            Paragraph("Date", _ITEM_HEADER_STYLE),
+            Paragraph("Details", _ITEM_HEADER_STYLE),
+            Paragraph("Amount", _ITEM_HEADER_RIGHT_STYLE),
+            Paragraph("Balance", _ITEM_HEADER_RIGHT_STYLE),
+        ]
+        rows = [header_row]
+
+        # Billed-invoice opening row: Details references the line items as
+        # "Item name (description)"; the amount and opening balance are the
+        # full PO total.
+        line_details = "; ".join(
+            (
+                f"{item.item_name} ({item.description})"
+                if getattr(item, "description", None)
+                else str(item.item_name)
+            )
+            for item in po.line_items
+        ) or "Purchase order billed"
+        billed_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
+        running_balance = total
+        rows.append(
+            [
+                Paragraph(billed_date, _ITEM_STYLE),
+                Paragraph(line_details, _ITEM_STYLE),
+                Paragraph(f"{total:,.2f}", right_style),
+                Paragraph(f"{running_balance:,.2f}", right_style),
+            ]
+        )
+
+        for payment in po.payments:
+            running_balance -= payment.amount
+            pay_date = (
+                payment.payment_date.strftime("%b %d, %Y")
+                if payment.payment_date
+                else "—"
+            )
+            detail = "Payment"
+            if getattr(payment, "reference", None):
+                detail = f"Payment ({payment.reference})"
+            rows.append(
+                [
+                    Paragraph(pay_date, _ITEM_STYLE),
+                    Paragraph(detail, _ITEM_STYLE),
+                    Paragraph(f"-{payment.amount:,.2f}", right_style),
+                    Paragraph(f"{running_balance:,.2f}", right_style),
+                ]
+            )
+
+        stmt_table = Table(
+            rows,
+            colWidths=[28 * mm, content_width - 88 * mm, 30 * mm, 30 * mm],
+            repeatRows=1,
+        )
+        stmt_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        elements.append(stmt_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        # Closing balance row: "Balance: <value>".
+        closing_lbl = ParagraphStyle("ClosingLbl", parent=_SUB_STYLE, alignment=TA_RIGHT)
+        closing_val = ParagraphStyle(
+            "ClosingVal",
+            parent=_SUB_STYLE,
+            fontName="Helvetica-Bold",
+            alignment=TA_RIGHT,
+        )
+        closing = Table(
+            [
+                [
+                    Paragraph("Balance:", closing_lbl),
+                    Paragraph(f"{currency} {balance:,.2f}", closing_val),
+                ]
+            ],
+            colWidths=[content_width - 60 * mm, 60 * mm],
+        )
+        closing.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        elements.append(closing)
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+
+        logger.info(
+            "Generated purchase_order STATEMENT PDF: %s (%d bytes)",
             po.po_reference,
             len(pdf_bytes),
         )
