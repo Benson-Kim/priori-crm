@@ -39,6 +39,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderLineItemCreate,
     PurchaseOrderPaymentCreate,
     PurchaseOrderPaymentResponse,
+    PurchaseOrderPaymentUpdate,
     PurchaseOrderResponse,
     PurchaseOrderSendRequest,
     PurchaseOrderSendResponse,
@@ -395,6 +396,64 @@ def record_purchase_order_payment(
 ) -> PurchaseOrderPaymentResponse:
     payment = service.record_payment(po_id, body, user_id=service.actor_id)
     return PurchaseOrderPaymentResponse.model_validate(payment)
+
+
+@router.put(
+    "/{po_id}/payments/{payment_id}",
+    response_model=PurchaseOrderPaymentResponse,
+    summary="Edit a recorded payment",
+    description=(
+        "Edit a payment recorded against a purchase order. Changing the "
+        "amount re-derives amount_paid / balance_due and may re-open a PAID "
+        "purchase order to SENT or settle a SENT one to PAID. The new amount "
+        "cannot overpay the purchase order. Returns 404 if the payment does "
+        "not belong to the purchase order."
+    ),
+    responses={
+        200: {"description": "Payment updated"},
+        400: {"description": "Overpayment or validation error"},
+        403: {"description": "Insufficient role to edit payments"},
+        404: {"description": "Purchase order or payment not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def update_purchase_order_payment(
+    po_id: UUID,
+    payment_id: UUID,
+    body: PurchaseOrderPaymentUpdate,
+    service: PurchaseOrderServiceDep,
+) -> PurchaseOrderPaymentResponse:
+    payment = service.update_payment(
+        po_id, payment_id, body, user_id=service.actor_id
+    )
+    return PurchaseOrderPaymentResponse.model_validate(payment)
+
+
+@router.delete(
+    "/{po_id}/payments/{payment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a recorded payment",
+    description=(
+        "Delete a payment recorded against a purchase order. amount_paid / "
+        "balance_due are re-derived and, if this payment had settled the "
+        "purchase order, it reverts from PAID to SENT. Any proof-of-payment "
+        "documents grouped under the payment are retained on the purchase "
+        "order (their payment link is cleared). Returns 404 if the payment "
+        "does not belong to the purchase order."
+    ),
+    responses={
+        204: {"description": "Payment deleted"},
+        403: {"description": "Insufficient role to delete payments"},
+        404: {"description": "Purchase order or payment not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def delete_purchase_order_payment(
+    po_id: UUID,
+    payment_id: UUID,
+    service: PurchaseOrderServiceDep,
+) -> None:
+    service.delete_payment(po_id, payment_id, user_id=service.actor_id)
 
 
 @router.post(
