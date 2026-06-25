@@ -17,6 +17,7 @@ import type {
 } from "@/services/purchaseOrderApi";
 import {
     deletePurchaseOrder,
+    downloadPurchaseOrderPdf,
     downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
     exportPurchaseOrderPaymentsExcel,
@@ -33,14 +34,16 @@ import {
     CreditCard,
     Eye,
     FileClock,
-    FileSpreadsheetIcon,
     Paperclip,
     Pencil,
     Send,
-    Trash,
+    Trash
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+import ExcelSvg from "@/assets/icons/excel-document-svgrepo-com.svg?react";
+
 
 type DetailTab = "overview" | "detail";
 
@@ -142,6 +145,17 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
+    /** Original PDF: The original PO as viewed. */
+    const handleDownloadPO = async () => {
+        if (!po) return;
+        try {
+            const blob = await downloadPurchaseOrderPdf(po.id);
+            saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to download the PO");
+        }
+    };
+
     /** Current PDF: payments applied + running balance (statement variant). */
     const handleDownloadStatement = async () => {
         if (!po) return;
@@ -218,12 +232,18 @@ export default function PurchaseOrderDetailPage() {
                 onClick: handleMarkAsSent,
             });
         }
-        // Duplicate is available at any status.
+        // Duplicate and download is available at any status.
         actions.push({
             key: "duplicate",
             label: "Duplicate",
             icon: <Copy size={16} />,
             onClick: handleDuplicate,
+        });
+        actions.push({
+            key: "download-statement",
+            label: "Download statement",
+            icon: <FileClock size={16} />,
+            onClick: handleDownloadPO,
         });
         // Delete: DRAFT only (SENT/PAID are protected records).
         if (status === "draft") {
@@ -257,7 +277,7 @@ export default function PurchaseOrderDetailPage() {
         actions.push({
             key: "export-po-payments-excel",
             label: "Export payments",
-            icon: <FileSpreadsheetIcon size={16} />,
+            icon: <ExcelSvg className="w-4 h-4" />,
             onClick: handlePaymentsExport,
         });
     }
@@ -330,18 +350,47 @@ export default function PurchaseOrderDetailPage() {
             key: "actions",
             header: "Actions",
             render: (payment: PurchaseOrderPayment) =>
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        // Row also has an onRowClick handler; stop the event
-                        // bubbling so the modal isn't opened twice.
-                        e.stopPropagation();
-                        setSelectedPayment(payment);
-                    }}
-                    className="inline-flex items-center gap-2.5 px-3 py-2 text-sm text-priori-purple transition-colors cursor-pointer hover:underline"
-                >
-                    <Eye size={16} /> View
-                </button>
+                <div className="inline-flex items-center gap-8">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            // Row also has an onRowClick handler; stop the event
+                            // bubbling so the modal isn't opened twice.
+                            e.stopPropagation();
+                            setSelectedPayment(payment);
+                        }}
+                        aria-label="View"
+                        className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer"
+                    >
+                        <Eye size={18} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            // Row also has an onRowClick handler; stop the event
+                            // bubbling so the modal isn't opened twice.
+                            e.stopPropagation();
+                            setSelectedPayment(payment);
+                        }}
+                        aria-label="Edit"
+                        className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer"
+                    >
+                        <Pencil size={18} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            // Row also has an onRowClick handler; stop the event
+                            // bubbling so the modal isn't opened twice.
+                            e.stopPropagation();
+                            setSelectedPayment(payment);
+                        }}
+                        aria-label="Delete"
+                        className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer"
+                    >
+                        <Trash size={18} />
+                    </button>
+                </div> 
         }
     ];
 
