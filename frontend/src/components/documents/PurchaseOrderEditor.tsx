@@ -1,8 +1,8 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { useConfirm } from "@/hooks/useConfirm";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
@@ -57,12 +57,10 @@ export interface PurchaseOrderInitialData {
     phone_primary?: string | null;
     phone_secondary?: string | null;
     address?: string;
+    currency?: string | null;
   };
   orderDate?: string;
   deliveryDate?: string | null;
-  currency?: string;
-  isRecurring?: boolean;
-  complianceRef?: string | null;
   notes?: string;
   termsAndConditions?: string | null;
   lineItems?: {
@@ -120,14 +118,11 @@ export function PurchaseOrderEditor({
     initialData?.deliveryDate ?? ""
   );
 
-  // Currency is derived from the selected vendor server-side and is no longer
-  // editable on the form; it is kept here only as a display value for the
-  // client-side totals preview.
-  const currency = initialData?.currency ?? "KES";
+  // Currency is derived from the selected vendor server-side
+  const currency = initialData?.vendor?.currency ?? "Ksh";
+
   const [notes, setNotes] = useState(initialData?.notes ?? "");
-  // T&C is prefilled with the org default on new POs only (PO-11); on edit it
-  // shows the PO's saved value (which may be intentionally blank) and the
-  // default is never re-applied.
+
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
     initialData?.termsAndConditions ?? (isEditing ? "" : orgDefaultTerms)
@@ -506,7 +501,7 @@ export function PurchaseOrderEditor({
               <div className="flex justify-between items-center font-bold">
                 <span>Subtotal</span>
                 <span>
-                  {formatCurrency(totals.subtotal, currency ?? "Ksh")}
+                  {formatCurrency(totals.subtotal, currency)}
                 </span>
               </div>
 
@@ -516,7 +511,7 @@ export function PurchaseOrderEditor({
                   <div className="flex justify-between items-center text-gray-800">
                     <span>{vatLabel ?? "VAT"}</span>
                     <span>
-                      {formatCurrency(totals.taxTotal, currency ?? "Ksh")}
+                      {formatCurrency(totals.taxTotal, currency)}
                     </span>
                   </div>
                 </>
@@ -527,7 +522,7 @@ export function PurchaseOrderEditor({
               <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
                 <span>Total</span>
                 <span>
-                  {formatCurrency(totals.subtotal + totals.taxTotal, currency ?? "Ksh")}
+                  {formatCurrency(totals.subtotal + totals.taxTotal, currency)}
                 </span>
               </div>
             </div>
