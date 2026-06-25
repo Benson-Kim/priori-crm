@@ -20,9 +20,20 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
+    #
+    # Connection-pool capacity MUST be >= the request threadpool size,
+    # otherwise sync `def` endpoints (which run in Starlette's threadpool)
+    # contend for fewer connections than there are worker threads and block
+    # on DB_POOL_TIMEOUT before failing — surfacing as hung/failed requests.
+    # Default total capacity (DB_POOL_SIZE + DB_MAX_OVERFLOW = 40) matches
+    # the default Starlette/anyio threadpool of 40. Invariant enforced in
+    # validate_pool_vs_threadpool below.
     DATABASE_URL: PostgresDsn
-    DB_POOL_SIZE: int = Field(default=20, ge=5, le=100)
+    DB_POOL_SIZE: int = Field(default=30, ge=5, le=100)
     DB_MAX_OVERFLOW: int = Field(default=10, ge=0, le=50)
+    # Expected request threadpool size (Starlette/anyio default is 40). Used
+    # only to validate the pool-capacity invariant.
+    REQUEST_THREADPOOL_SIZE: int = Field(default=40, ge=1, le=200)
     DB_POOL_TIMEOUT: int = Field(default=30, ge=10, le=60)
     DB_POOL_RECYCLE: int = Field(default=3600, ge=300)
     DB_ECHO: bool = Field(default=False)
@@ -114,6 +125,25 @@ class Settings(BaseSettings):
         if not str(v).startswith(("postgresql://", "postgresql+psycopg2://")):
             raise ValueError("DATABASE_URL must be a valid PostgreSQL URL")
         return v
+
+    @model_validator(mode="after")
+    def validate_pool_vs_threadpool(self) -> "Settings":
+        """Total DB pool capacity must cover the request threadpool.
+
+        Sync endpoints run in the request threadpool; if there are more
+        worker threads than available connections, threads block on
+        DB_POOL_TIMEOUT and then fail, which appears to clients as a hung or
+        failed request. Enforce pool_size + max_overflow >= threadpool size.
+        """
+        total_capacity = self.DB_POOL_SIZE + self.DB_MAX_OVERFLOW
+        if total_capacity < self.REQUEST_THREADPOOL_SIZE:
+            raise ValueError(
+                "DB pool capacity too small: DB_POOL_SIZE + DB_MAX_OVERFLOW "
+                f"({total_capacity}) must be >= REQUEST_THREADPOOL_SIZE "
+                f"({self.REQUEST_THREADPOOL_SIZE}) so sync endpoints do not "
+                "block waiting for a connection."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_production_hardening(self) -> "Settings":

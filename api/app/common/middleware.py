@@ -202,9 +202,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     sub = payload.get("sub")
                     if sub:
                         return f"user:{sub}"
-                except Exception:
-                    # Invalid/expired token: fall through to IP-based identity.
-                    pass
+                except Exception as exc:
+                    # Invalid/expired token is expected here (this is only a
+                    # rate-limit bucket key, not an authz decision): fall
+                    # through to IP-based identity. Log at debug so the
+                    # failure is observable but not noisy, instead of being
+                    # swallowed silently.
+                    logger.debug(
+                        "Rate-limit bucket: token decode failed, using IP",
+                        extra={"error": type(exc).__name__},
+                    )
 
         # Only trust X-Forwarded-For when the setting is explicitly enabled
         # (exactly True, not merely truthy) and the header is a real string.

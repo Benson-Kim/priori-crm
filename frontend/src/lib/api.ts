@@ -51,6 +51,35 @@ function withAuthHeaders(headers: HeadersInit = {}): Headers {
   return result;
 }
 
+// Network-level guardrails shared by every request.
+const REQUEST_TIMEOUT_MS = 20_000;
+// Status codes that are safe to retry once for idempotent requests.
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+/**
+ * fetch wrapper that enforces a timeout and converts transient transport
+ * failures (DNS blip, aborted request, CORS rejection) into a typed
+ * ApiError(status=0) instead of an opaque TypeError. Network errors surface
+ * with the same shape as the buildUrl guard ("Server is not responding").
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError("The request timed out. Please try again.", 0);
+    }
+    throw new ApiError("Server is not responding", 0);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Single-flight refresh: concurrent 401s share one refresh request.
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -100,16 +129,33 @@ function redirectToLogin(): void {
 
 /**
  * Perform a fetch with bearer auth and a one-time 401 -> refresh -> retry.
+ *
+ * Idempotent requests (GET / download) additionally get a single backoff
+ * retry on a transient transport failure or a 502/503/504 — never for
+ * mutating methods, which are unsafe to replay.
  */
 async function authedFetch(
   url: string,
   init: RequestInit,
   allowRetry = true
 ): Promise<Response> {
-  const response = await fetch(url, {
-    ...init,
-    headers: withAuthHeaders(init.headers),
-  });
+  const method = (init.method ?? "GET").toUpperCase();
+  const isIdempotent = method === "GET" || method === "HEAD";
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(url, {
+      ...init,
+      headers: withAuthHeaders(init.headers),
+    });
+  } catch (err) {
+    // Transient transport failure: retry once for idempotent requests only.
+    if (isIdempotent && allowRetry) {
+      await delay(300);
+      return authedFetch(url, init, false);
+    }
+    throw err;
+  }
 
   if (response.status === 401 && allowRetry) {
     const refreshed = await refreshAccessToken();
@@ -117,9 +163,20 @@ async function authedFetch(
       return authedFetch(url, init, false);
     }
     redirectToLogin();
+    return response;
+  }
+
+  // Retry once on a transient upstream error for idempotent requests.
+  if (isIdempotent && allowRetry && RETRYABLE_STATUSES.has(response.status)) {
+    await delay(300);
+    return authedFetch(url, init, false);
   }
 
   return response;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
