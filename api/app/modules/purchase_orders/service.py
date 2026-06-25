@@ -54,6 +54,7 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderFilterParams,
     PurchaseOrderLineItemCreate,
     PurchaseOrderPaymentCreate,
+    PurchaseOrderPaymentUpdate,
     PurchaseOrderStatusCounts,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
