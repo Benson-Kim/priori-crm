@@ -1196,6 +1196,197 @@ Best regards,
         )
         return payment
 
+    def _resync_after_payment_change(self, purchase_order: PurchaseOrder) -> None:
+        """Recompute amount_paid / balance_due / status from the payment rows.
+
+        Single source of truth for the post-edit / post-delete financial
+        state. Sums the PO's remaining payments, recomputes the balance and
+        re-derives the lifecycle status:
+
+        - balance cleared on a SENT PO  -> PAID  (stamp paid_at);
+        - balance re-opened on a PAID PO -> SENT (clear paid_at).
+
+        The caller must have loaded ``purchase_order`` FOR UPDATE. The
+        version bump is owned here so each edit / delete advances the
+        optimistic-lock counter exactly once.
+        """
+        from datetime import UTC, datetime
+
+        total_paid = (
+            self._db.query(PurchaseOrderPayment)
+            .with_entities(PurchaseOrderPayment.amount)
+            .filter(PurchaseOrderPayment.po_id == purchase_order.id)
+            .all()
+        )
+        amount_paid = sum((row.amount for row in total_paid), Decimal("0.00"))
+
+        purchase_order.amount_paid = amount_paid
+        balance_due = purchase_order.total - amount_paid
+        purchase_order.balance_due = max(balance_due, Decimal("0.00"))
+
+        if (
+            purchase_order.status == PurchaseOrderStatus.PAID
+            and purchase_order.balance_due > Decimal("0.00")
+        ):
+            # The settling payment was reduced / removed: re-open to SENT so
+            # the remaining balance can be collected again.
+            purchase_order.status = PurchaseOrderStatus.SENT
+            purchase_order.paid_at = None
+        elif (
+            purchase_order.status == PurchaseOrderStatus.SENT
+            and purchase_order.balance_due <= Decimal("0.00")
+        ):
+            # An edit pushed the balance to zero: settle to PAID.
+            purchase_order.status = PurchaseOrderStatus.PAID
+            purchase_order.paid_at = datetime.now(UTC)
+
+        purchase_order.version += 1
+
+    def update_payment(
+        self,
+        po_id: uuid.UUID,
+        payment_id: uuid.UUID,
+        data: "PurchaseOrderPaymentUpdate",
+        user_id: uuid.UUID | None = None,
+    ) -> PurchaseOrderPayment:
+        """Edit a recorded payment and re-derive the PO's financial state.
+
+        Only SENT / PAID purchase orders carry payments, so an edit is valid
+        in either status. Changing ``amount`` is validated against the
+        balance freed by removing this payment's previous amount, so the
+        edit can never push amount_paid above the PO total (overpayment).
+
+        Locked load: the PO row is read FOR UPDATE so a concurrent
+        record/edit/delete serializes on the row lock and the recomputed
+        balance can never race.
+        """
+        purchase_order = self._get_locked(po_id)
+        payment = self.get_payment(po_id, payment_id)
+
+        update_data = data.model_dump(exclude_unset=True, mode="python")
+        if not update_data:
+            return payment  # no-op
+
+        previous_amount = payment.amount
+
+        if "amount" in update_data:
+            new_amount = update_data["amount"]
+            # Balance available to this payment = current balance + what this
+            # payment currently contributes. The new amount must fit within it.
+            available = purchase_order.balance_due + previous_amount
+            if new_amount > available:
+                raise BadRequestException(
+                    detail=(
+                        f"Payment amount ({new_amount}) exceeds the available "
+                        f"balance ({available}). Cannot overpay a purchase order."
+                    ),
+                    field="amount",
+                )
+
+        for field, value in update_data.items():
+            setattr(payment, field, value)
+        self._db.flush()
+
+        self._resync_after_payment_change(purchase_order)
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="payment_updated",
+            before={"payment_id": str(payment.id), "amount": str(previous_amount)},
+            after={
+                "payment_id": str(payment.id),
+                "amount": str(payment.amount),
+                "new_balance": str(purchase_order.balance_due),
+                "new_status": status_value(purchase_order.status),
+            },
+        )
+
+        logger.info(
+            "Updated payment %s on purchase order %s",
+            payment_id,
+            purchase_order.po_reference,
+            extra={
+                "po_id": str(purchase_order.id),
+                "payment_id": str(payment_id),
+                "new_balance": float(purchase_order.balance_due),
+                "new_status": purchase_order.status,
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_PAYMENT_RECORDED,
+            {
+                "po_id": str(purchase_order.id),
+                "settled": purchase_order.status == PurchaseOrderStatus.PAID,
+            },
+        )
+        return payment
+
+    def delete_payment(
+        self,
+        po_id: uuid.UUID,
+        payment_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+    ) -> None:
+        """Delete a recorded payment and re-derive the PO's financial state.
+
+        Removing a payment reduces amount_paid and re-opens the balance; if
+        the PO had been settled to PAID by this payment it reverts to SENT
+        and paid_at is cleared. Any proof-of-payment documents grouped under
+        the payment have their payment_id set NULL by the FK (ON DELETE SET
+        NULL) — the documents themselves are retained on the PO.
+
+        Locked load: the PO row is read FOR UPDATE so the recompute cannot
+        race a concurrent payment mutation.
+        """
+        purchase_order = self._get_locked(po_id)
+        payment = self.get_payment(po_id, payment_id)
+
+        removed_amount = payment.amount
+
+        self._db.delete(payment)
+        self._db.flush()
+
+        self._resync_after_payment_change(purchase_order)
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=user_id,
+            entity_type="purchase_order",
+            entity_id=purchase_order.id,
+            action="payment_deleted",
+            before={"payment_id": str(payment_id), "amount": str(removed_amount)},
+            after={
+                "new_balance": str(purchase_order.balance_due),
+                "new_status": status_value(purchase_order.status),
+            },
+        )
+
+        logger.info(
+            "Deleted payment %s from purchase order %s",
+            payment_id,
+            purchase_order.po_reference,
+            extra={
+                "po_id": str(purchase_order.id),
+                "payment_id": str(payment_id),
+                "new_balance": float(purchase_order.balance_due),
+                "new_status": purchase_order.status,
+            },
+        )
+
+        emit_event(
+            PurchaseOrderEvent.PO_PAYMENT_RECORDED,
+            {
+                "po_id": str(purchase_order.id),
+                "settled": purchase_order.status == PurchaseOrderStatus.PAID,
+            },
+        )
+
     # CANCEL
 
     def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
