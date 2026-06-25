@@ -17,7 +17,7 @@ import type {
 } from "@/services/purchaseOrderApi";
 import {
     deletePurchaseOrder,
-    downloadPurchaseOrderPdf,
+    deletePurchaseOrderPayment,
     downloadPurchaseOrderStatementPdf,
     duplicatePurchaseOrder,
     exportPurchaseOrderPaymentsExcel,
@@ -64,6 +64,8 @@ export default function PurchaseOrderDetailPage() {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     // Selected payment row — opens the view/attach-document modal.
     const [selectedPayment, setSelectedPayment] = useState<PurchaseOrderPayment | null>(null);
+    // Payment being edited — opens RecordPaymentModal in edit mode.
+    const [editingPayment, setEditingPayment] = useState<PurchaseOrderPayment | null>(null);
     // Current page (1-based) of the payments table.
     const [paymentsPage, setPaymentsPage] = useState(1);
 
@@ -145,15 +147,25 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
-    /** Original PDF: The original PO as viewed. */
-    const handleDownloadPO = async () => {
+    /** Delete a recorded payment (re-derives PO balance/status server-side). */
+    const handleDeletePayment = (payment: PurchaseOrderPayment) => {
         if (!po) return;
-        try {
-            const blob = await downloadPurchaseOrderPdf(po.id);
-            saveBlob(blob, `PurchaseOrder_${po.po_reference}.pdf`);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to download the PO");
-        }
+        showConfirm({
+            title: "Delete payment?",
+            description:
+                "Delete this payment? The purchase order balance will be " +
+                "recalculated and a settled order may revert to Sent.",
+            confirmLabel: "Delete",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    await deletePurchaseOrderPayment(po.id, payment.id);
+                    fetchPurchaseOrder();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete payment");
+                }
+            },
+        });
     };
 
     /** Current PDF: payments applied + running balance (statement variant). */
@@ -243,7 +255,7 @@ export default function PurchaseOrderDetailPage() {
             key: "download-statement",
             label: "Download statement",
             icon: <FileClock size={16} />,
-            onClick: handleDownloadPO,
+            onClick: handleDownloadStatement,
         });
         // Delete: DRAFT only (SENT/PAID are protected records).
         if (status === "draft") {
@@ -368,9 +380,9 @@ export default function PurchaseOrderDetailPage() {
                         type="button"
                         onClick={(e) => {
                             // Row also has an onRowClick handler; stop the event
-                            // bubbling so the modal isn't opened twice.
+                            // bubbling so the view modal isn't opened too.
                             e.stopPropagation();
-                            setSelectedPayment(payment);
+                            setEditingPayment(payment);
                         }}
                         aria-label="Edit"
                         className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer"
@@ -381,12 +393,12 @@ export default function PurchaseOrderDetailPage() {
                         type="button"
                         onClick={(e) => {
                             // Row also has an onRowClick handler; stop the event
-                            // bubbling so the modal isn't opened twice.
+                            // bubbling so the view modal isn't opened too.
                             e.stopPropagation();
-                            setSelectedPayment(payment);
+                            handleDeletePayment(payment);
                         }}
                         aria-label="Delete"
-                        className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer"
+                        className="text-gray-700 hover:text-red-500 transition-colors cursor-pointer"
                     >
                         <Trash size={18} />
                     </button>
@@ -601,6 +613,22 @@ export default function PurchaseOrderDetailPage() {
                 reference={po.po_reference}
                 onSuccess={() => {
                     setIsPaymentModalOpen(false);
+                    fetchPurchaseOrder();
+                }}
+            />
+
+            {/* Edit payment modal (reuses RecordPaymentModal in edit mode) */}
+            <RecordPaymentModal
+                isOpen={editingPayment !== null}
+                onClose={() => setEditingPayment(null)}
+                entityId={po.id}
+                entityType="purchaseOrder"
+                balanceDue={balanceDue}
+                currency={currency}
+                reference={po.po_reference}
+                editPayment={editingPayment}
+                onSuccess={() => {
+                    setEditingPayment(null);
                     fetchPurchaseOrder();
                 }}
             />
