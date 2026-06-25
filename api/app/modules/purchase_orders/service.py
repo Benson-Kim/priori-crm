@@ -1247,7 +1247,7 @@ Best regards,
         self,
         po_id: uuid.UUID,
         payment_id: uuid.UUID,
-        data: "PurchaseOrderPaymentUpdate",
+        data: PurchaseOrderPaymentUpdate,
         user_id: uuid.UUID | None = None,
     ) -> PurchaseOrderPayment:
         """Edit a recorded payment and re-derive the PO's financial state.

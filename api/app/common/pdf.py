@@ -733,14 +733,17 @@ class DocumentPDFGenerator:
         # Billed-invoice opening row: Details references the line items as
         # "Item name (description)"; the amount and opening balance are the
         # full PO total.
-        line_details = "; ".join(
-            (
-                f"{item.item_name} ({item.description})"
-                if getattr(item, "description", None)
-                else str(item.item_name)
+        line_details = (
+            "; ".join(
+                (
+                    f"{item.item_name} ({item.description})"
+                    if getattr(item, "description", None)
+                    else str(item.item_name)
+                )
+                for item in po.line_items
             )
-            for item in po.line_items
-        ) or "Purchase order billed"
+            or "Purchase order billed"
+        )
         billed_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
         running_balance = total
         rows.append(
@@ -793,7 +796,9 @@ class DocumentPDFGenerator:
         elements.append(Spacer(1, 6 * mm))
 
         # Closing balance row: "Balance: <value>".
-        closing_lbl = ParagraphStyle("ClosingLbl", parent=_SUB_STYLE, alignment=TA_RIGHT)
+        closing_lbl = ParagraphStyle(
+            "ClosingLbl", parent=_SUB_STYLE, alignment=TA_RIGHT
+        )
         closing_val = ParagraphStyle(
             "ClosingVal",
             parent=_SUB_STYLE,
