@@ -98,6 +98,57 @@ class PurchaseOrderPaymentCreate(BaseModel):
     }
 
 
+class PurchaseOrderPaymentUpdate(BaseModel):
+    """Payload for editing an existing payment recorded against a PO.
+
+    PATCH semantics via model_dump(exclude_unset=True) in the service: only
+    supplied fields are applied. Changing ``amount`` re-derives the PO's
+    amount_paid / balance_due and may re-open a PAID PO back to SENT (or
+    settle a SENT PO to PAID) — handled atomically in the service under a
+    row lock. The new amount is validated against the balance freed by
+    removing this payment's previous amount, so an edit can never overpay.
+    """
+
+    amount: Decimal | None = Field(
+        None,
+        gt=0,
+        decimal_places=2,
+        description="New payment amount — must be > 0 and not overpay the PO",
+    )
+    payment_date: date | None = Field(
+        None,
+        alias="paymentDate",
+        description="Date the payment was made",
+    )
+    reference: str | None = Field(
+        None,
+        max_length=200,
+        description="Transaction ID, cheque number, or remittance reference",
+    )
+    notes: str | None = Field(
+        None,
+        max_length=2000,
+        description="Internal notes for this payment entry",
+    )
+
+    @field_validator("reference", "notes", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: str | None) -> str | None:
+        return normalize_empty_str(v)
+
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "amount": 4500.00,
+                "paymentDate": "2026-06-19",
+                "reference": "TXN-9981234",
+                "notes": "Corrected amount",
+            }
+        },
+    }
+
+
 class PurchaseOrderPaymentResponse(BaseModel):
     """Payment record in API responses.
 
