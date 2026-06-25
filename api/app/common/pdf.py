@@ -325,7 +325,7 @@ class DocumentPDFGenerator:
             for i, line in enumerate(lines):
                 vendor_cell.append(Paragraph(line, _SUB_STYLE))
                 if i < len(lines) - 1:
-                    vendor_cell.append(Spacer(1, 1.2 * mm))
+                    vendor_cell.append(Spacer(1, 1.5 * mm))
 
         delivery = po.delivery_date.strftime("%b %d, %Y") if po.delivery_date else "—"
         order_date = po.order_date.strftime("%b %d, %Y") if po.order_date else "—"
@@ -659,13 +659,13 @@ class DocumentPDFGenerator:
             ],
         ]
         summary_table = Table(
-            summary_rows, colWidths=[32.5 * mm, 40 * mm], hAlign="RIGHT"
+            summary_rows, colWidths=[32.5 * mm, 30 * mm], hAlign="RIGHT"
         )
         summary_table.setStyle(
             TableStyle(
                 [
                     ("SPAN", (0, 0), (1, 0)),  # title spans both columns
-                    ("BOTTOMPADDING", (0, 0), (1, 0), 3 * mm),  # space under title
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 2 * mm),  # space under title
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 0),
@@ -733,7 +733,7 @@ class DocumentPDFGenerator:
 
         stmt_table = Table(
             rows,
-            colWidths=[28 * mm, content_width - 88 * mm, 30 * mm, 30 * mm],
+            colWidths=[32.5 * mm, content_width - 92.5 * mm, 30 * mm, 30 * mm],
             repeatRows=1,
         )
 
@@ -760,7 +760,7 @@ class DocumentPDFGenerator:
                     Paragraph(f"{currency} {balance:,.2f}", _CLOSING_VAL_STYLE),
                 ]
             ],
-            colWidths=[content_width - 60 * mm, 60 * mm],
+            colWidths=[content_width - 30 * mm, 30 * mm],
         )
         closing.setStyle(
             TableStyle(
