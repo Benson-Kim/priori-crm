@@ -35,6 +35,13 @@ class _FakeLineItem:
         self.tax_amount = Decimal("160.00")
 
 
+class _FakePayment:
+    def __init__(self) -> None:
+        self.amount = Decimal("400.00")
+        self.payment_date = date(2026, 6, 20)
+        self.reference = "PAY-0001"
+
+
 class _FakePO:
     def __init__(self) -> None:
         self.id = "00000000-0000-0000-0000-000000000020"
@@ -51,6 +58,7 @@ class _FakePO:
         self.total = Decimal("1160.00")
         self.amount_paid = Decimal("400.00")
         self.balance_due = Decimal("760.00")
+        self.payments = [_FakePayment()]
         self.line_items = [_FakeLineItem()]
         self.notes = None
         self.terms_and_conditions = None
