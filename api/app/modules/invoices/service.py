@@ -674,16 +674,27 @@ class InvoiceService(BaseDocumentService):
         invoice.amount_paid += data.amount
         invoice.balance_due = invoice.total_due - invoice.amount_paid
 
-        # Update status based on new balance, routed through the state machine
-        # so ALLOWED_TRANSITIONS is enforced and the version bump is owned in
-        # one place. _transition increments invoice.version. A balance of zero
-        # or below (overpaid) settles the invoice; balance_due keeps its real
-        # signed value so an overpayment shows as negative.
+        # Update status based on the new balance. The transition is
+        # idempotent: an extra payment recorded against an already-PAID /
+        # overpaid invoice (reconciliation use case) must NOT call
+        # _transition(PAID -> PAID), which the state machine rejects
+        # (ALLOWED_TRANSITIONS[PAID] = [CANCELED]). When the status does not
+        # change we bump the version directly so the optimistic-lock counter
+        # still advances exactly once. balance_due keeps its real signed
+        # value, so each further payment drives it further negative.
         if invoice.balance_due <= 0:
-            self._transition(invoice, InvoiceStatus.PAID)
-            invoice.paid_at = datetime.now(UTC)
+            # Exact or overpaid -> settled.
+            if invoice.status != InvoiceStatus.PAID:
+                self._transition(invoice, InvoiceStatus.PAID)
+                invoice.paid_at = datetime.now(UTC)
+            else:
+                invoice.version += 1
         elif invoice.amount_paid > 0:
-            self._transition(invoice, InvoiceStatus.PARTIAL)
+            # Re-opened / partial balance remaining.
+            if invoice.status != InvoiceStatus.PARTIAL:
+                self._transition(invoice, InvoiceStatus.PARTIAL)
+            else:
+                invoice.version += 1
         else:
             invoice.version += 1
 
