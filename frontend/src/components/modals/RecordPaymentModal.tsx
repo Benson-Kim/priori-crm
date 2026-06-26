@@ -7,8 +7,16 @@ import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
-import { recordPurchaseOrderPayment, updatePurchaseOrderPayment, uploadPurchaseOrderDocument, type PurchaseOrderPayment, type PurchaseOrderPaymentPayload } from "@/services/purchaseOrderApi";
-import { CreditCard, Paperclip, Plus, X } from "lucide-react";
+import {
+    deletePurchaseOrderDocument,
+    recordPurchaseOrderPayment,
+    updatePurchaseOrderPayment,
+    uploadPurchaseOrderDocument,
+    type PurchaseOrderDocument,
+    type PurchaseOrderPayment,
+    type PurchaseOrderPaymentPayload,
+} from "@/services/purchaseOrderApi";
+import { CreditCard, Paperclip, Plus, Trash2, X } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 
 interface RecordPaymentModalProps {
@@ -19,7 +27,7 @@ interface RecordPaymentModalProps {
     balanceDue: number;
     currency: string;
     prefillAmount?: number;
-    reference?: string; // e.g. Invoice Ref or Expense Ref for display
+    reference?: string;
     /**
      * When supplied, the modal edits this existing payment (purchase orders
      * only) instead of recording a new one: fields prefill from it and Save
@@ -27,14 +35,14 @@ interface RecordPaymentModalProps {
      * balanceDue plus this payment's own amount (removing it frees that).
      */
     editPayment?: PurchaseOrderPayment | null;
+    /**
+     * All PO documents — used in edit mode to resolve and display documents
+     * already linked to this payment. Callers pass the full PO document array;
+     * the modal filters to the relevant subset internally.
+     */
+    existingDocuments?: PurchaseOrderDocument[];
     onSuccess: () => void;
 }
-
-// const ENTITY_TYPE_LABELS: Record<RecordPaymentModalProps["entityType"], string> = {
-//     invoice: "Invoice",
-//     expense: "Expense",
-//     purchaseOrder: "Purchase Order",
-// };
 
 const PAYMENT_METHODS = [
     { value: "cash", label: "Cash" },
@@ -53,8 +61,8 @@ export function RecordPaymentModal({
     balanceDue,
     currency,
     prefillAmount,
-    // reference: displayRef, 
     editPayment,
+    existingDocuments = [],
     onSuccess
 }: RecordPaymentModalProps) {
     const isEditing = !!editPayment;
@@ -70,18 +78,24 @@ export function RecordPaymentModal({
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // Proof-of-payment attachments (purchase orders only). On submit the
-    // payment is recorded first, then every selected file is uploaded with
-    // source `payment_modal` and grouped under that payment (paymentId) so the
-    // payment carries the full set.
+    // New files to upload on submit.
     const [files, setFiles] = useState<File[]>([]);
+    // IDs of existing documents the user marked for deletion.
+    const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Only the purchase-order payment API supports linking a proof-of-payment
     // document, so the attach control is shown for that entity type only.
-    // New PO payments can attach proof-of-payment files; the edit flow updates
-    // the payment record only (documents are managed from the view modal).
-    const supportsAttachments = entityType === "purchaseOrder" && !isEditing;
+    const supportsAttachments = entityType === "purchaseOrder";
+
+    // Existing documents linked to this payment (edit mode only).
+    const relatedDocuments = isEditing
+        ? existingDocuments.filter(
+              (d) =>
+                  (d.payment_id === editPayment.id || d.id === editPayment.document_id) &&
+                  !deletedDocIds.has(d.id)
+          )
+        : [];
 
     useEffect(() => {
         if (isOpen) {
@@ -103,6 +117,7 @@ export function RecordPaymentModal({
                 }
                 setPaymentMethod("bank_transfer");
                 setFiles([]);
+                setDeletedDocIds(new Set());
                 setError(null);
             })
         }
@@ -119,6 +134,10 @@ export function RecordPaymentModal({
     const removeFile = (index: number) =>
         setFiles((prev) => prev.filter((_, i) => i !== index));
 
+    const markExistingForDeletion = (docId: string) => {
+        setDeletedDocIds((prev) => new Set(prev).add(docId));
+    };
+
     const handleRecord = async () => {
         setError(null);
         const parsedAmount = parseFloat(amount);
@@ -126,15 +145,11 @@ export function RecordPaymentModal({
             setError("Amount must be greater than 0");
             return;
         }
-        if (parsedAmount > effectiveBalance) {
-            setError(`Amount cannot exceed balance due (${formatCurrency(effectiveBalance, currency)})`);
-            return;
-        }
 
         setIsSubmitting(true);
         try {
-            // Edit mode (purchase orders only): update the existing payment
-            // and re-derive the PO balance / status server-side.
+            // Edit mode (purchase orders only): update the existing payment,
+            // delete removed documents, upload new ones.
             if (isEditing && entityType === "purchaseOrder") {
                 await updatePurchaseOrderPayment(entityId, editPayment.id, {
                     amount: parsedAmount,
@@ -142,6 +157,19 @@ export function RecordPaymentModal({
                     reference: reference || undefined,
                     notes: notes || undefined,
                 });
+                // Delete documents the user removed.
+                for (const docId of deletedDocIds) {
+                    await deletePurchaseOrderDocument(entityId, docId);
+                }
+                // Upload newly attached files.
+                for (const f of files) {
+                    await uploadPurchaseOrderDocument(
+                        entityId,
+                        f,
+                        "payment_modal",
+                        editPayment.id
+                    );
+                }
                 onSuccess();
                 return;
             }
@@ -271,6 +299,37 @@ export function RecordPaymentModal({
                 {/* Proof-of-payment attachments (purchase orders only). */}
                 {supportsAttachments && (
                     <div className="space-y-2">
+                        {/* Existing documents (edit mode) — shown with a delete button. */}
+                        {relatedDocuments.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="font-bold text-base">Current documents</Label>
+                                <ul className="flex flex-col gap-2">
+                                    {relatedDocuments.map((doc) => (
+                                        <li
+                                            key={doc.id}
+                                            className="flex items-center justify-between gap-3 px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg"
+                                        >
+                                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                                <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                                <span className="truncate" title={doc.filename}>
+                                                    {doc.filename}
+                                                </span>
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => markExistingForDeletion(doc.id)}
+                                                className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors"
+                                                aria-label={`Remove ${doc.filename}`}
+                                            >
+                                                <Trash2 size={16} />
+                                                Remove
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         <Button
                             type="button"
                             variant="outline"

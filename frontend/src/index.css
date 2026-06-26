@@ -24,6 +24,10 @@
   --color-purple-25: #e3c9df;
   --color-blue-500:#007BFF;
 
+  --color-priori-blue: #2c1a54;
+  --color-priori-light-purple: #daa3c8;
+  --color-priori-light-purple-2: #CB3694;
+
   --color-green-25: #f0fdf4;
   --color-green-50: #e8f7f0;
   --color-green-600: #039855;
@@ -69,7 +73,7 @@
   }
 
   body {
-    @apply bg-gray-100 text-gray-800 overflow-x-hidden px-2;
+    @apply bg-gray-100 text-gray-800 overflow-x-hidden;
   }
 
   td[data-selected="true"] button {
