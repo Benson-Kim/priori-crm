@@ -121,14 +121,14 @@ class LocalStorageBackend:
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
         """Yield the object's bytes in chunks from the contained path."""
         handle = self.open_file(storage_key)
-        
+
         def _stream():
             try:
                 while chunk := handle.read(64 * 1024):
                     yield chunk
             finally:
                 handle.close()
-                
+
         return _stream()
 
     def delete_file(self, storage_key: str) -> bool:
@@ -210,13 +210,13 @@ class S3StorageBackend:
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
         """Yield the object's bytes in chunks straight from S3."""
         body = self._get_object(storage_key)["Body"]
-        
+
         def _stream():
             try:
                 yield from body.iter_chunks(chunk_size=64 * 1024)
             finally:
                 body.close()
-                
+
         return _stream()
 
     def delete_file(self, storage_key: str) -> bool:
