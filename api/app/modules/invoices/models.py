@@ -66,10 +66,11 @@ class Invoice(Base):
             "amount_paid >= 0",
             name="ck_invoices_amount_paid_non_negative",
         ),
-        CheckConstraint(
-            "balance_due >= 0",
-            name="ck_invoices_balance_non_negative",
-        ),
+        # NOTE: there is deliberately no ``balance_due >= 0`` CHECK. This app
+        # records payments rather than taking them, so an overpayment is a
+        # legitimate recordable event and balance_due (= total_due -
+        # amount_paid) is allowed to go negative to represent a credit owed
+        # back. See migration a6b7c8d9e0f1.
         CheckConstraint(
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_invoices_valid_currency",
