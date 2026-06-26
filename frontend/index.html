@@ -52,9 +52,10 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- Performance: warm up the API origin and pre-load the app entry. -->
-    <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
-    <link rel="dns-prefetch" href="%VITE_API_BASE_URL%" />
+    <!-- Performance: pre-load the app entry module for a faster first paint.
+         (The API origin is warmed at runtime in appConfig, which reads
+         VITE_API_BASE_URL; a build-time placeholder here would ship a broken
+         href when the var is unset.) -->
     <link rel="modulepreload" href="/src/main.tsx" />
   </head>
   <body>
