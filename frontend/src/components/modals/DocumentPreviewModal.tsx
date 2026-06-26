@@ -21,12 +21,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-// Bundle the pdf.js worker locally so its version always matches react-pdf's
-// pinned pdfjs-dist. A CDN worker whose version drifts (or whose .mjs path
-// 404s) leaves the worker uninitialized and pdf.js reports the document as
-// empty/invalid.
-import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface DocumentPreviewModalProps {
     isOpen: boolean;
