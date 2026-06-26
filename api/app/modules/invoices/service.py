@@ -866,6 +866,13 @@ class InvoiceService(BaseDocumentService):
             .scalar()
         ) or Decimal("0.00")
 
+        # Per-invoice balance_due may now be negative (overpaid), but the
+        # denormalized customer rollup is constrained to be non-negative
+        # (ck_customers_balance_non_negative). A credit from one overpaid
+        # invoice is represented on that invoice's signed balance_due, not as
+        # a negative account-level balance, so clamp the aggregate at zero.
+        outstanding = max(outstanding, Decimal("0.00"))
+
         customer = self._db.query(Customer).filter(Customer.id == customer_id).first()
         if customer:
             customer.balance = Decimal(str(outstanding))
