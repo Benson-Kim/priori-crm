@@ -27,7 +27,7 @@ export const buttonVariants = cva(
           "border border-gray-300 text-secondary-foreground bg-white hover:bg-secondary",
       },
       size: {
-        default: "px-3 py-4",
+        default: "px-3 py-3.5",
         sm: "rounded-md py-1.5 px-3",
         lg: "rounded-md py-4 px-8",
         icon: "h-10 w-10",
