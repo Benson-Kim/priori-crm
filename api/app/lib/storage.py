@@ -119,15 +119,22 @@ class LocalStorageBackend:
         return open(path, "rb")
 
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
-        """Yield the object's bytes in chunks from the contained path."""
-        handle = self.open_file(storage_key)
+        """Yield the object's bytes in chunks from the contained path.
 
-        def _stream():
-            try:
+        Resolve and validate the key eagerly so a bad/missing key raises now
+        (not mid-stream), but open the handle lazily inside the generator so
+        its lifetime is bound to the iteration by StreamingResponse. Opening
+        eagerly let the handle be closed/GC'd before the response iterated it,
+        which surfaced as a zero-byte download.
+        """
+        path = self.resolve_safe_path(storage_key)
+        if not path.is_file():
+            raise NotFoundException(detail="File not found on server", resource="file")
+
+        def _stream() -> Iterator[bytes]:
+            with open(path, "rb") as handle:
                 while chunk := handle.read(64 * 1024):
                     yield chunk
-            finally:
-                handle.close()
 
         return _stream()
 
@@ -208,10 +215,18 @@ class S3StorageBackend:
         return self._get_object(storage_key)["Body"]
 
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
-        """Yield the object's bytes in chunks straight from S3."""
-        body = self._get_object(storage_key)["Body"]
+        """Yield the object's bytes in chunks straight from S3.
 
-        def _stream():
+        Sanitize the key eagerly, but fetch the object Body lazily inside the
+        generator so the streaming HTTP connection's lifetime is bound to the
+        iteration by StreamingResponse. Fetching the Body eagerly (before the
+        generator ran) let the connection be reaped before the response
+        iterated it, surfacing as a zero-byte download.
+        """
+        key = sanitize_storage_key(storage_key)
+
+        def _stream() -> Iterator[bytes]:
+            body = self._get_object(key)["Body"]
             try:
                 yield from body.iter_chunks(chunk_size=64 * 1024)
             finally:
