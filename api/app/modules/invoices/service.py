@@ -652,15 +652,10 @@ class InvoiceService(BaseDocumentService):
                 detail="Cannot record payment for canceled invoice", field="status"
             )
 
-        # Validate payment amount
-        if data.amount > invoice.balance_due:
-            raise BadRequestException(
-                detail=(
-                    f"Payment amount ({data.amount}) exceeds balance due ({invoice.balance_due}). "
-                    f"Cannot overpay invoice."
-                ),
-                field="amount",
-            )
+        # Overpayment is allowed: this app records payments, it does not take
+        # them, so an amount exceeding the balance is a legitimate event. It
+        # drives balance_due negative (a credit owed back), which is no longer
+        # constrained at the DB level.
 
         # Create payment record
         payment = Payment(
@@ -681,7 +676,9 @@ class InvoiceService(BaseDocumentService):
 
         # Update status based on new balance, routed through the state machine
         # so ALLOWED_TRANSITIONS is enforced and the version bump is owned in
-        # one place. _transition increments invoice.version.
+        # one place. _transition increments invoice.version. A balance of zero
+        # or below (overpaid) settles the invoice; balance_due keeps its real
+        # signed value so an overpayment shows as negative.
         if invoice.balance_due <= 0:
             self._transition(invoice, InvoiceStatus.PAID)
             invoice.paid_at = datetime.now(UTC)

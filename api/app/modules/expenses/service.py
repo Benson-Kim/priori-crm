@@ -520,10 +520,11 @@ class ExpenseService(BaseDocumentService):
         expense.balance_due = expense.total_due - expense.amount_paid
 
         if expense.balance_due <= Decimal("0.00"):
-            # Full settlement. Set status directly (not via _transition) so the
-            # single version bump below is the only increment for this op.
+            # Settlement (exact or overpaid). Set status directly (not via
+            # _transition) so the single version bump below is the only
+            # increment for this op. balance_due is NOT clamped: an
+            # overpayment leaves it negative to represent the credit owed back.
             expense.status = ExpenseStatus.PAID
-            expense.balance_due = Decimal("0.00")
             expense.paid_at = paid_at or datetime.now(UTC)
 
         expense.version += 1
@@ -643,14 +644,9 @@ class ExpenseService(BaseDocumentService):
                 field="status",
             )
 
-        if data.amount > expense.balance_due:
-            raise BadRequestException(
-                detail=(
-                    f"Payment amount ({data.amount}) exceeds balance due "
-                    f"({expense.balance_due}). Cannot overpay an expense."
-                ),
-                field="amount",
-            )
+        # Overpayment is allowed: this app records payments rather than taking
+        # them. An amount exceeding the balance drives balance_due negative (a
+        # credit owed back) and is no longer rejected.
 
         payment = self._apply_payment(
             expense,

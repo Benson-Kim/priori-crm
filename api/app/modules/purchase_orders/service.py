@@ -1081,11 +1081,11 @@ Best regards,
         purchase_order.balance_due = purchase_order.total - purchase_order.amount_paid
 
         if purchase_order.balance_due <= Decimal("0.00"):
-            # Full settlement: route SENT->PAID through the state machine
-            # (it owns the single version bump for this op) and clamp the
-            # balance so a rounding residue never leaves a negative.
+            # Settlement (exact or overpaid): route SENT->PAID through the
+            # state machine (it owns the single version bump for this op).
+            # balance_due is NOT clamped: an overpayment leaves it negative to
+            # represent the credit owed back to the payer.
             self._transition(purchase_order, PurchaseOrderStatus.PAID)
-            purchase_order.balance_due = Decimal("0.00")
             purchase_order.paid_at = datetime.now(UTC)
         else:
             # Partial payment: no status edge, so bump the version here so
