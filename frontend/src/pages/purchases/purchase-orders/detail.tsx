@@ -70,6 +70,8 @@ export default function PurchaseOrderDetailPage() {
     // Current page (1-based) of the payments table.
     const [paymentsPage, setPaymentsPage] = useState(1);
 
+    console.log(po)
+
     useHeaderOverride(po?.po_reference, "");
 
     const fetchPurchaseOrder = useCallback(async () => {
@@ -221,7 +223,7 @@ export default function PurchaseOrderDetailPage() {
     const currency = po.currency ?? DEFAULT_CURRENCY;
     const total = Number(po.total);
     const amountPaid = Number(po.amount_paid ?? 0);
-    const balanceDue = Number(po.balance_due ?? total - amountPaid);
+    const balanceDue = Number(total - amountPaid);
     const payments: PurchaseOrderPayment[] = po.payments ?? [];
     const documents = po.documents ?? [];
 
