@@ -221,7 +221,7 @@ export default function VendorDetailPage() {
     { key: "overdue", label: "Overdue" },
   ];
 
-  // Source filter (PO-13): isolate Expenses or Purchase Orders.
+  // Source filter: isolate Expenses or Purchase Orders.
   const TYPE_TABS = [
     { value: "all", label: "All Types" },
     { value: "expense", label: "Expenses" },

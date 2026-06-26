@@ -9,7 +9,7 @@
  * rather than hand-mirrored interfaces.
  */
 
-import { apiPost } from "@/lib/api";
+import { apiPost, apiPostPublic } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import { clearTokens, getRefreshToken, setTokens } from "@/lib/auth-storage";
 
@@ -23,7 +23,7 @@ type TokenResponse = Schema<"TokenResponse">;
  * and returns a confirmation message (with the masked address).
  */
 export async function login(email: string, password: string): Promise<string> {
-  const result = await apiPost<MessageResponse>("auth/login", {
+  const result = await apiPostPublic<MessageResponse>("auth/login", {
     email,
     password,
   });
@@ -34,7 +34,7 @@ export async function login(email: string, password: string): Promise<string> {
  * Resend the OTP verification code.
  */
 export async function resendOtp(email: string): Promise<string> {
-  const result = await apiPost<MessageResponse>("auth/resend-otp", {
+  const result = await apiPostPublic<MessageResponse>("auth/resend-otp", {
     email,
   });
   return result.message;
@@ -49,7 +49,7 @@ export async function verifyOtp(
   email: string,
   code: string
 ): Promise<AuthUser> {
-  const result = await apiPost<TokenResponse>("auth/verify-otp", {
+  const result = await apiPostPublic<TokenResponse>("auth/verify-otp", {
     email,
     code,
   });
