@@ -93,10 +93,9 @@ class PurchaseOrder(Base):
             "amount_paid >= 0",
             name="ck_purchase_orders_amount_paid_non_negative",
         ),
-        CheckConstraint(
-            "balance_due >= 0",
-            name="ck_purchase_orders_balance_due_non_negative",
-        ),
+        # NOTE: no ``balance_due >= 0`` CHECK on purpose. Overpayment is
+        # recordable and balance_due (= total - amount_paid) may go negative
+        # to represent a credit owed back. See migration a6b7c8d9e0f1.
         Index("ix_purchase_orders_vendor_status", "vendor_id", "status"),
         Index("ix_purchase_orders_status_delivery_date", "status", "delivery_date"),
         Index("ix_purchase_orders_order_date", "order_date"),
