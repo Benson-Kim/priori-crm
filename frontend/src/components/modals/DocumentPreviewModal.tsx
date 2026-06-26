@@ -43,6 +43,7 @@ export function DocumentPreviewModal({
 }: Readonly<DocumentPreviewModalProps>) {
     const [objectUrl, setObjectUrl] = useState<string | null>(null);
     const [blob, setBlob] = useState<Blob | null>(null);
+    const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(0);
@@ -60,17 +61,20 @@ export function DocumentPreviewModal({
         setError(null);
         setBlob(null);
         setObjectUrl(null);
+        setPdfData(null)
         setNumPages(0);
 
         (async () => {
             try {
                 const fetched = await downloadPurchaseOrderDocument(poId, documentId);
+                if (cancelled) return;
 
+                const buffer = await fetched.arrayBuffer();
                 if (cancelled) return;
 
                 createdUrl = URL.createObjectURL(fetched);
-
                 setBlob(fetched);
+                setPdfData(buffer);
                 setObjectUrl(createdUrl);
             } catch (err) {
                 if (!cancelled) {
@@ -94,6 +98,7 @@ export function DocumentPreviewModal({
 
             setBlob(null);
             setObjectUrl(null);
+            setPdfData(null);
             setNumPages(0);
         };
     }, [isOpen, poId, documentId]);
@@ -170,6 +175,11 @@ export function DocumentPreviewModal({
     const pageNumbers = useMemo(() => {
         return Array.from({ length: numPages }, (_, index) => index + 1);
     }, [numPages]);
+
+    const pdfFile = useMemo(
+        () => (pdfData ? { data: pdfData.slice(0) } : null),
+        [pdfData]
+    );
 
     const handleDownload = () => {
         if (blob) {
@@ -270,9 +280,9 @@ export function DocumentPreviewModal({
                         </div>
                     )}
 
-                    {!isLoading && !error && objectUrl && isPdf && (
+                    {!isLoading && !error && pdfFile && isPdf && (
                         <Document
-                            file={objectUrl}
+                            file={pdfFile}
                             loading={
                                 <div className="mt-20 flex items-center gap-2 rounded-full bg-white px-5 py-3 text-gray-700 shadow-lg ring-1 ring-black/10">
                                     <Loader2 size={20} className="animate-spin" />
