@@ -106,20 +106,41 @@ async function authedFetch(
   init: RequestInit,
   allowRetry = true
 ): Promise<Response> {
-  const response = await fetch(url, {
-    ...init,
-    headers: withAuthHeaders(init.headers),
-  });
+  const isIdempotent = !init.method || ["GET", "HEAD", "OPTIONS"].includes(init.method.toUpperCase());
+  const maxRetries = isIdempotent ? 2 : 0;
 
-  if (response.status === 401 && allowRetry) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      return authedFetch(url, init, false);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...init,
+        headers: withAuthHeaders(init.headers),
+      });
+
+      if (response.status === 401 && allowRetry) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          return authedFetch(url, init, false);
+        }
+        redirectToLogin();
+      }
+
+      return response;
+    } catch (error) {
+      if (error instanceof TypeError && attempt < maxRetries) {
+        // NetworkError or CORS error; retry after a delay
+        await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+        continue;
+      }
+      if (error instanceof TypeError) {
+        throw new ApiError(
+          "Network error: Unable to reach the server. Please check your connection or try again.",
+          0
+        );
+      }
+      throw error;
     }
-    redirectToLogin();
   }
-
-  return response;
+  throw new ApiError("Unexpected fetch failure", 0);
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -171,6 +192,25 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   return handleResponse<T>(response);
+}
+
+export async function apiPostPublic<T>(path: string, body: unknown): Promise<T> {
+  try {
+    const response = await fetch(buildUrl(path), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return await handleResponse<T>(response);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new ApiError(
+        "Network error: Unable to reach the server. Please check your connection or try again.",
+        0
+      );
+    }
+    throw error;
+  }
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {

@@ -74,13 +74,13 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
         {trigger || (
           <>
             Actions
-            <ChevronDown size={14} />
+            <ChevronDown size={18} />
           </>
         )}
       </button>
 
       {isOpen && createPortal(
-        <div 
+        <div
           ref={menuRef}
           className="fixed z-50 mt-1 min-w-44 max-w-60 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl"
           style={{ top: coords.top, right: coords.right }}
