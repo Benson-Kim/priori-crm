@@ -121,11 +121,15 @@ class LocalStorageBackend:
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
         """Yield the object's bytes in chunks from the contained path."""
         handle = self.open_file(storage_key)
-        try:
-            while chunk := handle.read(64 * 1024):
-                yield chunk
-        finally:
-            handle.close()
+        
+        def _stream():
+            try:
+                while chunk := handle.read(64 * 1024):
+                    yield chunk
+            finally:
+                handle.close()
+                
+        return _stream()
 
     def delete_file(self, storage_key: str) -> bool:
         """Delete a file. True if deleted or already absent; False on bad key."""
@@ -206,10 +210,14 @@ class S3StorageBackend:
     def download_stream(self, storage_key: str) -> Iterator[bytes]:
         """Yield the object's bytes in chunks straight from S3."""
         body = self._get_object(storage_key)["Body"]
-        try:
-            yield from body.iter_chunks(chunk_size=64 * 1024)
-        finally:
-            body.close()
+        
+        def _stream():
+            try:
+                yield from body.iter_chunks(chunk_size=64 * 1024)
+            finally:
+                body.close()
+                
+        return _stream()
 
     def delete_file(self, storage_key: str) -> bool:
         """Delete an object. True on success (idempotent); False on bad key."""
