@@ -1149,15 +1149,7 @@ Best regards,
                 ),
                 field="status",
             )
-        if data.amount > purchase_order.balance_due:
-            raise BadRequestException(
-                detail=(
-                    f"Payment amount ({data.amount}) exceeds the balance due "
-                    f"({purchase_order.balance_due}). Cannot overpay a "
-                    "purchase order."
-                ),
-                field="amount",
-            )
+
 
         # Validate the optional proof-of-payment document. The scoped lookup
         # (po_id + document_id) ensures a document from a different PO cannot
@@ -1223,7 +1215,7 @@ Best regards,
 
         purchase_order.amount_paid = amount_paid
         balance_due = purchase_order.total - amount_paid
-        purchase_order.balance_due = max(balance_due, Decimal("0.00"))
+        purchase_order.balance_due = balance_due
 
         if (
             purchase_order.status == PurchaseOrderStatus.PAID
@@ -1253,9 +1245,8 @@ Best regards,
         """Edit a recorded payment and re-derive the PO's financial state.
 
         Only SENT / PAID purchase orders carry payments, so an edit is valid
-        in either status. Changing ``amount`` is validated against the
-        balance freed by removing this payment's previous amount, so the
-        edit can never push amount_paid above the PO total (overpayment).
+        in either status. Overpayments are allowed — the balance_due will go
+        negative to reflect the excess.
 
         Locked load: the PO row is read FOR UPDATE so a concurrent
         record/edit/delete serializes on the row lock and the recomputed
@@ -1270,19 +1261,7 @@ Best regards,
 
         previous_amount = payment.amount
 
-        if "amount" in update_data:
-            new_amount = update_data["amount"]
-            # Balance available to this payment = current balance + what this
-            # payment currently contributes. The new amount must fit within it.
-            available = purchase_order.balance_due + previous_amount
-            if new_amount > available:
-                raise BadRequestException(
-                    detail=(
-                        f"Payment amount ({new_amount}) exceeds the available "
-                        f"balance ({available}). Cannot overpay a purchase order."
-                    ),
-                    field="amount",
-                )
+
 
         for field, value in update_data.items():
             setattr(payment, field, value)
