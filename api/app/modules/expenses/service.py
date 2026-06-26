@@ -524,8 +524,13 @@ class ExpenseService(BaseDocumentService):
             # _transition) so the single version bump below is the only
             # increment for this op. balance_due is NOT clamped: an
             # overpayment leaves it negative to represent the credit owed back.
+            #
+            # Idempotent for the reconciliation case: a further payment on an
+            # already-PAID expense keeps it PAID and preserves the original
+            # paid_at (only the first settlement stamps the timestamp).
             expense.status = ExpenseStatus.PAID
-            expense.paid_at = paid_at or datetime.now(UTC)
+            if expense.paid_at is None:
+                expense.paid_at = paid_at or datetime.now(UTC)
 
         expense.version += 1
         self._db.flush()
@@ -638,9 +643,12 @@ class ExpenseService(BaseDocumentService):
                 resource="expense",
             )
 
-        if expense.status == ExpenseStatus.PAID:
+        # An extra payment may be recorded against an already-PAID / overpaid
+        # expense (reconciliation use case), so there is no PAID rejection
+        # here. A CANCELED expense is the only non-recordable terminal state.
+        if expense.status == ExpenseStatus.CANCELED:
             raise BadRequestException(
-                detail="Cannot record payment for an already-paid expense",
+                detail="Cannot record payment for a canceled expense",
                 field="status",
             )
 
