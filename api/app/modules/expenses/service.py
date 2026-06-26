@@ -583,14 +583,37 @@ class ExpenseService(BaseDocumentService):
                 resource="expense",
             )
 
-        if expense.status == ExpenseStatus.PAID:
+        # A CANCELED (voided) expense can never be marked paid.
+        if expense.status == ExpenseStatus.CANCELED:
             raise BadRequestException(
-                detail="Expense is already paid",
+                detail="Cannot mark a canceled expense as paid",
                 field="status",
             )
 
         now = paid_at or datetime.now(UTC)
         settlement_amount = expense.balance_due
+
+        # Idempotent reconciliation: an already-settled expense (balance
+        # cleared or overpaid) is a no-op rather than a rejection — the user
+        # may re-run mark-as-paid on something already paid. A non-positive
+        # settlement amount would also violate the amount > 0 CHECK on the
+        # payment row, so never create one here.
+        if settlement_amount <= Decimal("0.00"):
+            # Ensure the status reflects PAID even if it was left PENDING/
+            # OVERDUE with a zero balance for some reason, without recording a
+            # spurious payment.
+            if expense.status != ExpenseStatus.PAID:
+                expense.status = ExpenseStatus.PAID
+                if expense.paid_at is None:
+                    expense.paid_at = now
+                expense.version += 1
+                self._db.flush()
+            logger.info(
+                "mark_as_paid no-op: expense %s already settled",
+                expense.expense_reference,
+                extra={"expense_id": str(expense.id)},
+            )
+            return expense
 
         self._apply_payment(
             expense,
