@@ -108,43 +108,169 @@ erDiagram
         uuid id PK
         string email UK
         string password_hash
+        string first_name
+        string last_name
         string role "admin|manager|member"
         bool is_active
+        datetime created_at
     }
     OTP_CODES {
         uuid id PK
         uuid user_id FK
         string code "sha-256 digest"
         bool is_used
+        int attempt_count
         datetime expires_at
+        datetime created_at
+    }
+    CUSTOMERS {
+        uuid id PK
+        string customer_type "individual|business"
+        string status "active|inactive|suspended|deleted"
+        string company_name "nullable"
+        string first_name
+        string last_name
+        string email UK
+        string phone
+        string currency "KES|USD|EUR|GBP"
+        numeric balance
+        int version "optimistic lock"
+    }
+    QUOTES {
+        uuid id PK
+        uuid customer_id FK
+        uuid related_invoice_id FK "nullable"
+        uuid owner_snapshot_id FK "nullable"
+        string quote_number UK
+        string quote_reference UK
+        string status "draft|sent|approved|invoiced|expired"
+        date transaction_date
+        date due_date
+        numeric subtotal
+        numeric tax_total
+        numeric total_due
+        int version "optimistic lock"
+    }
+    QUOTE_LINE_ITEMS {
+        uuid id PK
+        uuid quote_id FK
+        int line_number
+        string item_name
+        numeric quantity
+        numeric unit_price
+        numeric line_total
+        string tax_type
+        numeric tax_amount
     }
     INVOICES {
         uuid id PK
         uuid customer_id FK
+        uuid owner_snapshot_id FK "nullable"
+        string invoice_number UK
         string invoice_reference UK
         string status "draft|sent|partial|paid|overdue|canceled"
+        date transaction_date
+        date due_date
+        numeric subtotal
+        numeric tax_total
         numeric total_due
         numeric amount_paid
         numeric balance_due
         int version "optimistic lock"
     }
+    INVOICE_LINE_ITEMS {
+        uuid id PK
+        uuid invoice_id FK
+        int line_number
+        string item_name
+        numeric quantity
+        numeric unit_price
+        numeric line_total
+        string tax_type
+        numeric tax_amount
+    }
+    PAYMENTS {
+        uuid id PK
+        uuid invoice_id FK
+        numeric amount
+        date payment_date
+        string payment_method
+        string reference "nullable"
+    }
+    VENDORS {
+        uuid id PK
+        string vendor_name
+        string email "unique, nullable"
+        string currency "KES|USD|EUR|GBP"
+        string status "active|inactive"
+        string vat_number "nullable"
+        int version "optimistic lock"
+    }
+    EXPENSES {
+        uuid id PK
+        uuid vendor_id FK
+        string status "pending|paid|overdue|canceled"
+        numeric total
+        numeric amount_paid
+        numeric balance_due
+    }
     PURCHASE_ORDERS {
         uuid id PK
         uuid vendor_id FK
+        uuid owner_snapshot_id FK "nullable"
+        uuid converted_bill_id "nullable, no FK yet"
+        string po_number UK
         string po_reference UK
         string status "draft|sent|paid"
+        date order_date
+        date delivery_date "nullable"
+        numeric subtotal
+        numeric tax_total
         numeric total
+        numeric amount_paid
         numeric balance_due
         int version "optimistic lock"
+    }
+    PO_LINE_ITEMS {
+        uuid id PK
+        uuid po_id FK
+        int line_number
+        string item_name
+        numeric quantity
+        numeric unit_price
+        numeric line_total
+        string tax_type
+        numeric tax_amount
+    }
+    PO_PAYMENTS {
+        uuid id PK
+        uuid po_id FK
+        uuid document_id FK "nullable"
+        numeric amount
+        date payment_date
+        string reference "nullable"
     }
     PO_DOCUMENTS {
         uuid id PK
         uuid po_id FK
         uuid payment_id FK "nullable"
+        string filename
+        bigint file_size_bytes
+        string mime_type
         string storage_key "never exposed"
         string source "form|view|payment_modal"
     }
+    OWNER_PROFILE_SNAPSHOTS {
+        uuid id PK
+        datetime created_at
+    }
 ```
+
+> Table/column names follow the ORM models in `api/app/modules/*/models.py`.
+> `EXPENSES` and `OWNER_PROFILE_SNAPSHOTS` show representative columns; see
+> their model files for the full set. Note the deliberate cycle between
+> `PO_PAYMENTS.document_id` and `PO_DOCUMENTS.payment_id`: a payment may carry
+> several proof documents, and the FK is deferred via `use_alter`.
 
 ## Document Workflows
 
