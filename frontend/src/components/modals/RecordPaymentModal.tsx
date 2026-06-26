@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
-import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
 import {
@@ -59,18 +58,12 @@ export function RecordPaymentModal({
     entityId,
     entityType,
     balanceDue,
-    currency,
     prefillAmount,
     editPayment,
     existingDocuments = [],
     onSuccess
 }: RecordPaymentModalProps) {
     const isEditing = !!editPayment;
-    // In edit mode the amount can grow back into the balance this payment
-    // already occupies, so the effective cap is balanceDue + its own amount.
-    const effectiveBalance = isEditing
-        ? balanceDue + Number(editPayment.amount)
-        : balanceDue;
     const [amount, setAmount] = useState(String(prefillAmount ?? balanceDue));
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
     const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
@@ -91,10 +84,10 @@ export function RecordPaymentModal({
     // Existing documents linked to this payment (edit mode only).
     const relatedDocuments = isEditing
         ? existingDocuments.filter(
-              (d) =>
-                  (d.payment_id === editPayment.id || d.id === editPayment.document_id) &&
-                  !deletedDocIds.has(d.id)
-          )
+            (d) =>
+                (d.payment_id === editPayment.id || d.id === editPayment.document_id) &&
+                !deletedDocIds.has(d.id)
+        )
         : [];
 
     useEffect(() => {

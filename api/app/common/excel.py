@@ -259,22 +259,24 @@ class ExcelExporter:
         po_reference = getattr(purchase_order, "po_reference", "")
         vendor_name = getattr(purchase_order, "vendor_name", None)
         if not vendor_name and hasattr(purchase_order, "vendor"):
-            vendor_name = getattr(purchase_order.vendor, "vendor_name", str(purchase_order.vendor_id))
-        
+            vendor_name = getattr(
+                purchase_order.vendor, "vendor_name", str(purchase_order.vendor_id)
+            )
+
         title_text = f"{vendor_name}_{po_reference}" if vendor_name else po_reference
-        
+
         # Determine currency formatting (fallback to standard $ if unknown, though frontend formats as needed)
         # Using a simple formatting string to show symbol + amount.
         currency = getattr(purchase_order, "currency", "USD")
         curr_map = {"USD": "$", "KES": "KES", "EUR": "€", "GBP": "£"}
         sym = curr_map.get(currency, currency)
         money_fmt = f'"{sym}" #,##0.00'
-        
+
         thin_border = Border(
-            left=Side(style="thin"), 
-            right=Side(style="thin"), 
-            top=Side(style="thin"), 
-            bottom=Side(style="thin")
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
         )
 
         # Row 1: Title
@@ -284,7 +286,14 @@ class ExcelExporter:
         title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
         # Row 2: Headers
-        headers = ["Date", "Reference", "Amount", "Payment Reference", "Amount", "Notes"]
+        headers = [
+            "Date",
+            "Reference",
+            "Amount",
+            "Payment Reference",
+            "Amount",
+            "Notes",
+        ]
         header_font = Font(name="Calibri", bold=True, color="912B90")
         for col_idx, header in enumerate(headers, 1):
             cell = ws.cell(row=2, column=col_idx, value=header)
@@ -296,16 +305,16 @@ class ExcelExporter:
         # Row 3: PO Row
         po_date = purchase_order.order_date
         po_total = purchase_order.total or Decimal("0.00")
-        
+
         c_po_date = ws.cell(row=row_idx, column=1, value=po_date)
         c_po_date.number_format = _DATE_FORMAT
         ws.cell(row=row_idx, column=2, value=po_reference)
         c_po_amt = ws.cell(row=row_idx, column=3, value=po_total)
         c_po_amt.number_format = money_fmt
-        
+
         for col_i in range(1, 7):
             ws.cell(row=row_idx, column=col_i).border = thin_border
-            
+
         row_idx += 1
 
         # Payment Rows
@@ -317,10 +326,10 @@ class ExcelExporter:
             c_p_amt = ws.cell(row=row_idx, column=5, value=p.amount)
             c_p_amt.number_format = money_fmt
             ws.cell(row=row_idx, column=6, value=p.notes or "")
-            
+
             for col_i in range(1, 7):
                 ws.cell(row=row_idx, column=col_i).border = thin_border
-                
+
             total_payments += p.amount
             row_idx += 1
 
@@ -352,23 +361,23 @@ class ExcelExporter:
         # Balance row
         balance = po_total - total_payments
         color = "EF4444" if balance < 0 else "000000"
-        
+
         c_bal_lbl = ws.cell(row=row_idx, column=1, value="Bal")
         c_bal_lbl.font = Font(name="Calibri", size=10, color=color)
         c_bal_val = ws.cell(row=row_idx, column=5, value=balance)
         c_bal_val.number_format = money_fmt
         c_bal_val.font = Font(name="Calibri", size=10, color=color)
-        
+
         for col_i in range(1, 7):
             ws.cell(row=row_idx, column=col_i).border = thin_border
 
         # Set column widths
-        ws.column_dimensions['A'].width = 15
-        ws.column_dimensions['B'].width = 18
-        ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 20
-        ws.column_dimensions['E'].width = 15
-        ws.column_dimensions['F'].width = 25
+        ws.column_dimensions["A"].width = 15
+        ws.column_dimensions["B"].width = 18
+        ws.column_dimensions["C"].width = 15
+        ws.column_dimensions["D"].width = 20
+        ws.column_dimensions["E"].width = 15
+        ws.column_dimensions["F"].width = 25
 
         return self._to_bytes(wb)
 

@@ -1150,7 +1150,6 @@ Best regards,
                 field="status",
             )
 
-
         # Validate the optional proof-of-payment document. The scoped lookup
         # (po_id + document_id) ensures a document from a different PO cannot
         # be linked here — raises NotFoundException if not found.
@@ -1260,8 +1259,6 @@ Best regards,
             return payment  # no-op
 
         previous_amount = payment.amount
-
-
 
         for field, value in update_data.items():
             setattr(payment, field, value)
