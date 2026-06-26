@@ -2,9 +2,60 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Primary metadata -->
+    <title>Priori Accounting &amp; CRM</title>
+    <meta
+      name="description"
+      content="Priori Technologies accounting and CRM platform: manage customers, vendors, quotes, invoices, purchase orders, expenses and payments in one place."
+    />
+    <meta name="application-name" content="Priori CRM" />
+    <meta name="author" content="Priori Technologies" />
+    <meta name="generator" content="React + Vite" />
+
+    <!-- Internal business app: keep it out of search indexes. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!-- Theme / installable behaviour -->
+    <meta name="theme-color" content="#3a1078" />
+    <meta name="color-scheme" content="light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Priori CRM" />
+
+    <!-- Don't let mobile browsers auto-link phone numbers / amounts. -->
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+
+    <!-- Open Graph (internal link unfurls) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Priori CRM" />
+    <meta property="og:title" content="Priori Accounting &amp; CRM" />
+    <meta
+      property="og:description"
+      content="Manage customers, vendors, quotes, invoices, purchase orders, expenses and payments in one place."
+    />
+    <meta property="og:image" content="/Logo%20Priori.svg" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Priori Accounting &amp; CRM" />
+    <meta
+      name="twitter:description"
+      content="Manage customers, vendors, quotes, invoices, purchase orders, expenses and payments in one place."
+    />
+    <meta name="twitter:image" content="/Logo%20Priori.svg" />
+
+    <!-- Icons + manifest -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Accounting System</title>
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Performance: warm up the API origin and pre-load the app entry. -->
+    <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_API_BASE_URL%" />
+    <link rel="modulepreload" href="/src/main.tsx" />
   </head>
   <body>
     <div id="root"></div>
