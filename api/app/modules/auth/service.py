@@ -103,7 +103,18 @@ class AuthService:
         self._send_otp_email(user.email, otp_code)
 
     def resend_otp(self, email: str) -> None:
-        """Resend OTP code to an existing user."""
+        """Resend an OTP code, but only once the previous one has expired.
+
+        A resend may only mint and email a new code after the full
+        OTP_EXPIRY_MINUTES window has elapsed since the last code was sent.
+        While a live (unexpired, unused) code still exists the request is a
+        silent no-op: the existing code stays valid and no new email is sent.
+        This stops a caller from spamming OTP emails and from invalidating
+        their own in-flight code by resending early. It mirrors the
+        enumeration-safe contract of the rest of the flow — every outcome is
+        indistinguishable to the caller (the router always returns the same
+        generic message), so it never reveals account or code state.
+        """
         self._enforce_attempt_throttle(email)
 
         user = self._get_user_by_email(email)
@@ -112,6 +123,25 @@ class AuthService:
 
         if not user.is_active:
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
+
+        # Find the latest live (unused) code. If it has not yet expired, the
+        # 5-minute window has not elapsed since it was sent, so honour the
+        # gate and send nothing rather than re-issuing early.
+        latest_otp = (
+            self._db.query(OTPCode)
+            .filter(
+                OTPCode.user_id == user.id,
+                OTPCode.is_used.is_(False),
+            )
+            .order_by(OTPCode.created_at.desc())
+            .first()
+        )
+        if latest_otp is not None and not latest_otp.is_expired:
+            logger.info(
+                "Resend OTP suppressed for user %s: live code not yet expired",
+                user.email,
+            )
+            return
 
         otp_code = self._create_otp(user)
         self._send_otp_email(user.email, otp_code)

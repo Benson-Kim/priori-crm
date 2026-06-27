@@ -89,19 +89,7 @@ export default function ForgotPasswordPage() {
               The link expires shortly for your security. Didn&apos;t get it?
               Check your spam folder, or try again.
             </p>
-            <div className="flex items-center justify-between gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={() => {
-                  setSubmitted(false);
-                  setEmail("");
-                }}
-                className="w-full text-[18px] font-bold"
-              >
-                Try another email
-              </Button>
+            <div className="flex flex-col items-stretch gap-6">
               <Button
                 asChild
                 variant="primary"
@@ -110,6 +98,17 @@ export default function ForgotPasswordPage() {
               >
                 <Link to="/login">Back to sign in</Link>
               </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitted(false);
+                  setEmail("");
+                }}
+                className="flex items-center justify-center gap-2 text-[16px] text-priori-purple hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="size-4" />
+                Try another email
+              </button>
             </div>
           </div>
         ) : (
