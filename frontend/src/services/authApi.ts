@@ -40,6 +40,36 @@ export async function resendOtp(email: string): Promise<string> {
   return result.message;
 }
 
+/**
+ * Request a password-reset link. The backend always responds with the same
+ * generic message regardless of whether the account exists (enumeration-safe),
+ * so the caller should show that confirmation verbatim and never branch on it.
+ */
+export async function forgotPassword(email: string): Promise<string> {
+  const result = await apiPostPublic<MessageResponse>("auth/forgot-password", {
+    email,
+  });
+  return result.message;
+}
+
+/**
+ * Complete a password reset with the emailed token and a new password.
+ *
+ * The endpoint issues no tokens (the user signs in normally afterwards) and
+ * returns a generic 401 for any invalid / expired / used token. The field is
+ * sent as `newPassword` to match the backend request alias.
+ */
+export async function resetPassword(
+  token: string,
+  newPassword: string
+): Promise<string> {
+  const result = await apiPostPublic<MessageResponse>("auth/reset-password", {
+    token,
+    newPassword,
+  });
+  return result.message;
+}
+
 
 /**
  * Step 2: verify the OTP. On success the access and refresh tokens are
