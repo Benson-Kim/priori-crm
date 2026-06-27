@@ -53,21 +53,26 @@ function withAuthHeaders(headers: HeadersInit = {}): Headers {
 
 // Network-level guardrails shared by every request.
 const REQUEST_TIMEOUT_MS = 20_000;
-// Status codes that are safe to retry once for idempotent requests.
+const DOWNLOAD_TIMEOUT_MS = 120_000;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+const MAX_RETRY_AFTER_MS = 10_000;
 
 /**
  * fetch wrapper that enforces a timeout and converts transient transport
  * failures (DNS blip, aborted request, CORS rejection) into a typed
  * ApiError(status=0) instead of an opaque TypeError. Network errors surface
  * with the same shape as the buildUrl guard ("Server is not responding").
+ *
+ * `timeoutMs` lets slow, legitimate endpoints (e.g. report generation) opt
+ * into a longer budget than the default request timeout.
  */
 async function fetchWithTimeout(
   url: string,
-  init: RequestInit
+  init: RequestInit,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
@@ -78,6 +83,29 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Parse a Retry-After header (seconds, or an HTTP date) into milliseconds.
+ * Returns null if the header is absent or unparseable.
+ */
+function parseRetryAfterMs(response: Response): number | null {
+  const header = response.headers.get("Retry-After");
+  if (!header) {
+    return null;
+  }
+
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    return Math.max(0, dateMs - Date.now());
+  }
+
+  return null;
 }
 
 // Single-flight refresh: concurrent 401s share one refresh request.
@@ -132,48 +160,103 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Options controlling authedFetch's retry behavior. The two concerns are
+ * tracked independently so that, e.g., a transport-failure retry on a GET
+ * doesn't also disable the 401 -> refresh -> retry path on that retry: a
+ * request can legitimately need both a transport retry AND a token refresh
+ * in the same lifecycle.
+ */
+interface AuthedFetchOptions {
+  /** Per-request timeout override (defaults to REQUEST_TIMEOUT_MS). */
+  timeoutMs?: number;
+  /** Whether a transient-failure / retryable-5xx retry is still allowed. */
+  retryAllowed?: boolean;
+  /** Whether a 401 -> refresh -> retry attempt is still allowed. */
+  refreshAllowed?: boolean;
+}
+
+/**
  * Perform a fetch with bearer auth and a one-time 401 -> refresh -> retry.
  *
  * Idempotent requests (GET / HEAD) additionally get a single backoff retry
  * on a transient transport failure or a 502/503/504 — never for mutating
- * methods, which are unsafe to replay.
+ * methods, which are unsafe to replay. The transport/5xx retry budget and
+ * the 401-refresh budget are tracked separately, so a request that needs
+ * both (e.g. a flaky network on a request whose token also happens to have
+ * expired) still gets refreshed rather than being bounced to login.
  */
 async function authedFetch(
   url: string,
   init: RequestInit,
-  allowRetry = true
+  options: AuthedFetchOptions = {}
 ): Promise<Response> {
+  const {
+    timeoutMs,
+    retryAllowed = true,
+    refreshAllowed = true,
+  } = options;
+
   const method = (init.method ?? "GET").toUpperCase();
   const isIdempotent = method === "GET" || method === "HEAD";
 
   let response: Response;
   try {
-    response = await fetchWithTimeout(url, {
-      ...init,
-      headers: withAuthHeaders(init.headers),
-    });
+    response = await fetchWithTimeout(
+      url,
+      { ...init, headers: withAuthHeaders(init.headers) },
+      timeoutMs
+    );
   } catch (err) {
     // Transient transport failure: retry once for idempotent requests only.
-    if (isIdempotent && allowRetry) {
+    // refreshAllowed is preserved untouched so a 401 on the retry still
+    // gets a chance to refresh instead of bouncing straight to login.
+    if (isIdempotent && retryAllowed) {
       await delay(300);
-      return authedFetch(url, init, false);
+      return authedFetch(url, init, {
+        timeoutMs,
+        retryAllowed: false,
+        refreshAllowed,
+      });
     }
     throw err;
   }
 
-  if (response.status === 401 && allowRetry) {
+  if (response.status === 401 && refreshAllowed) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      return authedFetch(url, init, false);
+      // The retry-after-refresh is a fresh attempt at the original request;
+      // a transient transport failure on it is still worth one retry, but
+      // we never refresh twice for the same call.
+      return authedFetch(url, init, {
+        timeoutMs,
+        retryAllowed,
+        refreshAllowed: false,
+      });
     }
     redirectToLogin();
     return response;
   }
 
-  // Retry once on a transient upstream error for idempotent requests.
-  if (isIdempotent && allowRetry && RETRYABLE_STATUSES.has(response.status)) {
-    await delay(300);
-    return authedFetch(url, init, false);
+  // Retry once on a transient upstream error for idempotent requests. If the
+  // server tells us how long to wait (Retry-After — e.g. an export queue at
+  // capacity), honor that instead of hammering it again after 300ms, and
+  // skip the retry entirely if the wait would be unreasonably long.
+  if (isIdempotent && retryAllowed && RETRYABLE_STATUSES.has(response.status)) {
+    const retryAfterMs = parseRetryAfterMs(response);
+    if (retryAfterMs === null) {
+      await delay(300);
+    } else if (retryAfterMs <= MAX_RETRY_AFTER_MS) {
+      await delay(retryAfterMs);
+    } else {
+      // Server asked us to back off longer than we're willing to block the
+      // caller for; surface the response as-is rather than retrying.
+      return response;
+    }
+    return authedFetch(url, init, {
+      timeoutMs,
+      retryAllowed: false,
+      refreshAllowed,
+    });
   }
 
   return response;
@@ -291,13 +374,20 @@ export async function apiUploadPut<T>(path: string, formData: FormData): Promise
 
 /**
  * Download a binary resource (PDF, Excel, document) through the shared client
- * so it carries auth and refresh on 401.
+ * so it carries auth and refresh on 401. Uses DOWNLOAD_TIMEOUT_MS rather than
+ * the default request budget since report/export generation on the backend
+ * can legitimately run far longer than a normal API call before it starts
+ * streaming a response.
  */
 export async function apiDownload(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ): Promise<Blob> {
-  const response = await authedFetch(buildUrl(path, params), { method: "GET" });
+  const response = await authedFetch(
+    buildUrl(path, params),
+    { method: "GET" },
+    { timeoutMs: DOWNLOAD_TIMEOUT_MS }
+  );
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new ApiError(
