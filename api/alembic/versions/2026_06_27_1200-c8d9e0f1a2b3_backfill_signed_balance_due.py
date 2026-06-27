@@ -106,6 +106,5 @@ def downgrade() -> None:
     for table, _total_column, checks in _BALANCE_TABLES:
         op.execute(f"UPDATE {table} SET balance_due = 0 WHERE balance_due < 0")
         op.execute(
-            f'ALTER TABLE {table} ADD CONSTRAINT "{checks[0]}" '
-            "CHECK (balance_due >= 0)"
+            f'ALTER TABLE {table} ADD CONSTRAINT "{checks[0]}" CHECK (balance_due >= 0)'
         )
