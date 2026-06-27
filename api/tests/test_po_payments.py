@@ -127,9 +127,7 @@ def test_overpayment_accepted(monkeypatch) -> None:
 
     service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(
-            amount=Decimal("1000.01"), paymentDate=date.today()
-        ),
+        PurchaseOrderPaymentCreate(amount=Decimal("1000.01"), paymentDate=date.today()),
     )
     # Overpayment is recorded: balance_due goes negative (credit owed back)
     # and the document settles to PAID.
@@ -163,9 +161,7 @@ def test_payment_on_already_paid_accepted(monkeypatch) -> None:
     # accepted and drives balance_due negative (credit owed back).
     service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(
-            amount=Decimal("1.00"), paymentDate=date.today()
-        ),
+        PurchaseOrderPaymentCreate(amount=Decimal("1.00"), paymentDate=date.today()),
     )
     assert po.amount_paid == Decimal("1001.00")
     assert po.balance_due == Decimal("-1.00")
