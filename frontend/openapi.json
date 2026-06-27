@@ -1796,7 +1796,7 @@
                 "type": "string"
               }
             ],
-            "description": "Payment amount \u2014 must be > 0 and \u2264 current balance_due",
+            "description": "Payment amount \u2014 must be > 0. May exceed the current balance_due (overpayment is recorded and drives balance_due negative).",
             "title": "Amount"
           },
           "notes": {
@@ -4761,7 +4761,7 @@
         "type": "object"
       },
       "PurchaseOrderPaymentCreate": {
-        "description": "Payload for recording a payment against a purchase order.\n\nMirrors ExpensePaymentCreate: no payment_method field. amount must be\n> 0 and is additionally validated server-side against the current\nbalance_due (overpayment is rejected with a 400).\n\n``document_id`` optionally links a proof-of-payment document that was\npreviously uploaded to this purchase order (source: payment_modal).\nThe service validates that the document exists and belongs to the same\nPO; an invalid or foreign document_id is rejected with a 404/400.",
+        "description": "Payload for recording a payment against a purchase order.\n\nMirrors ExpensePaymentCreate: no payment_method field. amount must be\n> 0. Overpayment is allowed: this app records and reconciles payments\nrather than taking them, so an amount exceeding the current balance_due\nis recorded and drives balance_due negative (a credit owed back).\n\n``document_id`` optionally links a proof-of-payment document that was\npreviously uploaded to this purchase order (source: payment_modal).\nThe service validates that the document exists and belongs to the same\nPO; an invalid or foreign document_id is rejected with a 404/400.",
         "example": {
           "amount": 5000.0,
           "documentId": "123e4567-e89b-12d3-a456-426614174000",
@@ -4781,7 +4781,7 @@
                 "type": "string"
               }
             ],
-            "description": "Payment amount \u2014 must be > 0 and <= current balance_due",
+            "description": "Payment amount \u2014 must be > 0. May exceed the current balance_due (overpayment is recorded and drives balance_due negative).",
             "title": "Amount"
           },
           "documentId": {
@@ -4923,7 +4923,7 @@
         "type": "object"
       },
       "PurchaseOrderPaymentUpdate": {
-        "description": "Payload for editing an existing payment recorded against a PO.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service: only\nsupplied fields are applied. Changing ``amount`` re-derives the PO's\namount_paid / balance_due and may re-open a PAID PO back to SENT (or\nsettle a SENT PO to PAID) \u2014 handled atomically in the service under a\nrow lock. The new amount is validated against the balance freed by\nremoving this payment's previous amount, so an edit can never overpay.",
+        "description": "Payload for editing an existing payment recorded against a PO.\n\nPATCH semantics via model_dump(exclude_unset=True) in the service: only\nsupplied fields are applied. Changing ``amount`` re-derives the PO's\namount_paid / balance_due and may re-open a PAID PO back to SENT (or\nsettle a SENT PO to PAID) \u2014 handled atomically in the service under a\nrow lock. Overpayment is allowed: the new amount may exceed the PO total,\nleaving balance_due negative to represent the credit owed back.",
         "example": {
           "amount": 4500.0,
           "notes": "Corrected amount",
@@ -4945,7 +4945,7 @@
                 "type": "null"
               }
             ],
-            "description": "New payment amount \u2014 must be > 0 and not overpay the PO",
+            "description": "New payment amount \u2014 must be > 0. May overpay the PO (balance_due goes negative to represent the credit owed back).",
             "title": "Amount"
           },
           "notes": {
