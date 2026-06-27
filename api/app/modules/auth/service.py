@@ -200,12 +200,13 @@ class AuthService:
     def reset_password(self, raw_token: str, new_password: str) -> None:
         """Complete a password reset given a token and a new password.
 
-        The token is matched by its SHA-256 digest against the latest live
-        reset token. Wrong / expired / used / unknown tokens all fail with the
-        same generic error so nothing about the token or account state leaks.
-        A wrong token is attempt-counted and consumed once the cap is reached
-        (committed explicitly, like OTP verification, so the 401 rollback can
-        never discard the increment and leave the token brute-forceable).
+        The token is matched by its SHA-256 digest. Wrong / expired / used /
+        unknown tokens all fail with the same generic error so nothing about
+        the token or account state leaks. Brute-force resistance comes from the
+        token's 256-bit entropy (secrets.token_urlsafe(32)) — a wrong guess
+        simply matches no row — backed by the per-token-digest attempt
+        throttle; unlike the 6-digit OTP, there is no low-entropy secret to
+        attempt-count per row.
 
         On success: the new bcrypt password hash is stored, the token is
         marked used, any other pending reset tokens are invalidated, and the
