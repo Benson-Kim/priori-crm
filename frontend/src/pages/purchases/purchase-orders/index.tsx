@@ -296,11 +296,19 @@ export default function PurchaseOrdersPage() {
         {
             key: "status",
             header: "Status",
-            render: (item: PurchaseOrderSummary) => (
-                <Badge variant={item.status.toLowerCase() as BadgeVariant}>
-                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </Badge>
-            ),
+            render: (item: PurchaseOrderSummary) => {
+                // A PAID PO whose balance has gone negative has been settled
+                // beyond its total: present it as "Overpaid" (the ledger status
+                // stays "paid"; this is a display-only derivation).
+                const isOverpaid =
+                    item.status.toLowerCase() === "paid" &&
+                    Number(item.balance_due) < 0;
+                const variant = (isOverpaid ? "overpaid" : item.status.toLowerCase()) as BadgeVariant;
+                const label = isOverpaid
+                    ? "Overpaid"
+                    : item.status.charAt(0).toUpperCase() + item.status.slice(1);
+                return <Badge variant={variant}>{label}</Badge>;
+            },
         },
         {
             key: "actions",
