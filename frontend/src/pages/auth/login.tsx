@@ -141,7 +141,7 @@ export default function LoginPage() {
               <Label htmlFor="remember_me" className="text-gray-700 text-[16px] leading-6">Remember me</Label>
             </div>
             <Link
-              to="#"
+              to="/forgot-password"
               className="text-[16px] text-priori-purple hover:underline"
             >
               Forgot Password?

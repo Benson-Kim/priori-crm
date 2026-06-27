@@ -1,5 +1,7 @@
+import ForgotPasswordPage from "@/pages/auth/forgot-password";
 import LoginPage from "@/pages/auth/login";
 import OTPPage from "@/pages/auth/otp";
+import ResetPasswordPage from "@/pages/auth/reset-password";
 import ExpensesPage from "@/pages/purchases/expenses";
 import AddExpensePage from "@/pages/purchases/expenses/add";
 import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
@@ -41,6 +43,14 @@ const routes = [
     {
         path: "/verify-otp",
         element: <OTPPage />,
+    },
+    {
+        path: "/forgot-password",
+        element: <ForgotPasswordPage />,
+    },
+    {
+        path: "/reset-password",
+        element: <ResetPasswordPage />,
     },
     {
         element: <RequireAuth />,
