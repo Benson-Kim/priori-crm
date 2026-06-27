@@ -48,17 +48,48 @@ down_revision: Union[str, None] = "b7c8d9e0f1a2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# (table, total_column) for each payable/receivable document. balance_due and
-# amount_paid are named identically across all three tables.
-_BALANCE_TABLES: tuple[tuple[str, str], ...] = (
-    ("invoices", "total_due"),
-    ("expenses", "total_due"),
-    ("purchase_orders", "total"),
+# (table, total_column, [balance_check_names]) for each payable/receivable
+# document. balance_due and amount_paid are named identically across all three
+# tables. The balance_due >= 0 checks were created with Alembic's naming
+# convention applied on top of an already table-prefixed name, so the real
+# constraint in the DB carries a DOUBLED prefix. a6b7c8d9e0f1 tried to drop
+# them by the single-prefix name and silently missed, so they may still be
+# present here; both spellings are dropped IF EXISTS to cover every database.
+_BALANCE_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "invoices",
+        "total_due",
+        (
+            "ck_invoices_ck_invoices_balance_non_negative",
+            "ck_invoices_balance_non_negative",
+        ),
+    ),
+    (
+        "expenses",
+        "total_due",
+        (
+            "ck_expenses_ck_expenses_balance_due_non_negative",
+            "ck_expenses_balance_due_non_negative",
+        ),
+    ),
+    (
+        "purchase_orders",
+        "total",
+        (
+            "ck_purchase_orders_ck_purchase_orders_balance_due_non_negative",
+            "ck_purchase_orders_balance_due_non_negative",
+        ),
+    ),
 )
 
 
 def upgrade() -> None:
-    for table, total_column in _BALANCE_TABLES:
+    for table, total_column, checks in _BALANCE_TABLES:
+        # Drop any surviving balance_due >= 0 check first. a6b7c8d9e0f1 was
+        # meant to remove these but used the wrong constraint name, so the
+        # negative balances written below would otherwise violate them.
+        for check in checks:
+            op.execute(f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{check}"')
         # Recompute the canonical balance only where the stored value drifted,
         # so the write set is limited to the historically clamped/overpaid
         # rows and the migration is a no-op on a healthy database.
@@ -70,7 +101,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Mirror the pre-fix state: the old CHECK could only ever hold a
-    # non-negative balance, so clamp the credits back to 0.
-    for table, _total_column in _BALANCE_TABLES:
+    # Mirror the pre-fix state: clamp the credits back to 0 and re-add the
+    # balance_due >= 0 check under its canonical (doubled-prefix) name.
+    for table, _total_column, checks in _BALANCE_TABLES:
         op.execute(f"UPDATE {table} SET balance_due = 0 WHERE balance_due < 0")
+        op.execute(
+            f'ALTER TABLE {table} ADD CONSTRAINT "{checks[0]}" CHECK (balance_due >= 0)'
+        )
