@@ -34,6 +34,13 @@ OTP_EXPIRY_MINUTES = 5
 # was wrong, or an OTP was wrong/expired/exhausted.
 _GENERIC_AUTH_ERROR = "Invalid email or code."
 
+# Single generic password-reset failure message. Unknown / wrong / expired /
+# already-used tokens all surface this same text so the endpoint never reveals
+# token or account state.
+_GENERIC_RESET_ERROR = "This password reset link is invalid or has expired."
+
+PASSWORD_RESET_TOKEN_BYTES = 32
+
 
 @lru_cache(maxsize=1)
 def _auth_throttle_store() -> RateLimitStore:
@@ -342,9 +349,24 @@ class AuthService:
             )
             .delete(synchronize_session=False)
         )
+        reset_deleted = (
+            self._db.query(PasswordResetToken)
+            .filter(
+                PasswordResetToken.created_at < cutoff,
+                or_(
+                    PasswordResetToken.is_used.is_(True),
+                    PasswordResetToken.expires_at < datetime.now(UTC),
+                ),
+            )
+            .delete(synchronize_session=False)
+        )
         self._db.commit()
-        logger.info("Purged %d expired/used OTP rows", deleted)
-        return deleted
+        logger.info(
+            "Purged %d expired/used OTP rows and %d reset-token rows",
+            deleted,
+            reset_deleted,
+        )
+        return deleted + reset_deleted
 
     # Private Helpers
 
@@ -368,6 +390,78 @@ class AuthService:
     def _hash_otp(code: str) -> str:
         """SHA-256 digest of an OTP code (codes are never stored plaintext)."""
         return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _hash_token(raw_token: str) -> str:
+        """SHA-256 digest of a reset token (tokens are never stored plaintext).
+
+        The token is a high-entropy URL-safe random string, so a fast hash
+        (SHA-256) is appropriate: there is nothing to brute force the way
+        there is for a human password.
+        """
+        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    def _create_password_reset_token(self, user: User) -> str:
+        """Generate a single-use reset token, persist its digest, return the raw.
+
+        Any pending reset tokens for the user are invalidated first so only
+        the newest link is ever live. Only the SHA-256 digest is stored; the
+        returned plaintext is placed solely in the outgoing email link.
+        """
+        self._invalidate_pending_reset_tokens(user.id)
+
+        raw_token = secrets.token_urlsafe(PASSWORD_RESET_TOKEN_BYTES)
+        reset = PasswordResetToken(
+            user_id=user.id,
+            token=self._hash_token(raw_token),
+            expires_at=datetime.now(UTC)
+            + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES),
+        )
+        self._db.add(reset)
+        self._db.flush()
+        logger.info("Password reset token created for user %s", user.email)
+        return raw_token
+
+    def _invalidate_pending_reset_tokens(self, user_id, exclude_id=None) -> None:
+        """Mark all unused reset tokens for a user as used."""
+        query = self._db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user_id,
+            PasswordResetToken.is_used.is_(False),
+        )
+        if exclude_id:
+            query = query.filter(PasswordResetToken.id != exclude_id)
+        query.update({"is_used": True}, synchronize_session="fetch")
+        self._db.flush()
+
+    def _send_password_reset_email(self, recipient: str, raw_token: str) -> None:
+        """Email the password-reset link. Log-only in dev without SES config."""
+        from urllib.parse import quote
+
+        reset_link = (
+            f"{settings.FRONTEND_BASE_URL.rstrip('/')}"
+            f"/reset-password?token={quote(raw_token, safe='')}"
+        )
+
+        if settings.ENVIRONMENT == "development" and not settings.AWS_ACCESS_KEY_ID:
+            logger.warning(
+                "DEV MODE - password reset link for %s: %s (email not sent, "
+                "SES not configured)",
+                recipient,
+                reset_link,
+            )
+            return
+
+        try:
+            email_service.send_password_reset(recipient, reset_link)
+        except Exception as exc:  # delivery failures must not leak account state
+            # Log, but do not surface a different response: the caller already
+            # returns the generic message, so a send failure cannot be used to
+            # probe which addresses exist.
+            logger.error(
+                "Failed to send password reset email",
+                exc_info=exc,
+                extra={"recipient": recipient},
+            )
 
     @staticmethod
     def _revoke_refresh_payload(payload: dict) -> bool:
