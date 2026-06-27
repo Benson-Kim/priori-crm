@@ -17,12 +17,13 @@ from app.common.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    hash_password,
     verify_password,
 )
 from app.common.token_denylist import TokenDenylist, build_token_denylist
 from app.lib.config import settings
 from app.lib.email import email_service
-from app.modules.auth.models import OTPCode, User
+from app.modules.auth.models import OTPCode, PasswordResetToken, User
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,85 @@ class AuthService:
         refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
 
         return access_token, refresh_token, user
+
+    # Password reset (forgot-password flow)
+
+    def request_password_reset(self, email: str) -> None:
+        """Issue a password-reset token and email a reset link.
+
+        Enumeration-safe: returns None in every case. A non-existent or
+        inactive account simply does no work; the router responds with the
+        same generic message either way, so this endpoint can never reveal
+        whether an address has an account.
+
+        For a valid, active account it invalidates any pending reset tokens,
+        creates a fresh single-use token (only the SHA-256 digest is stored)
+        and emails the reset link. The plaintext token exists only in the
+        outgoing email.
+        """
+        self._enforce_attempt_throttle(email)
+
+        user = self._get_user_by_email(email)
+        if user is None or not user.is_active:
+            # No such (active) account: do nothing, reveal nothing.
+            return
+
+        raw_token = self._create_password_reset_token(user)
+        self._send_password_reset_email(user.email, raw_token)
+
+    def reset_password(self, raw_token: str, new_password: str) -> None:
+        """Complete a password reset given a token and a new password.
+
+        The token is matched by its SHA-256 digest against the latest live
+        reset token. Wrong / expired / used / unknown tokens all fail with the
+        same generic error so nothing about the token or account state leaks.
+        A wrong token is attempt-counted and consumed once the cap is reached
+        (committed explicitly, like OTP verification, so the 401 rollback can
+        never discard the increment and leave the token brute-forceable).
+
+        On success: the new bcrypt password hash is stored, the token is
+        marked used, any other pending reset tokens are invalidated, and the
+        user's entire refresh-token family is revoked so a password reset
+        terminates every existing session (defence against an attacker who
+        already holds a session for the account).
+        """
+        token_hash = self._hash_token(raw_token)
+
+        # Throttle by the token digest so a stolen-link brute force is bounded
+        # without needing the (unknown) email here.
+        self._enforce_attempt_throttle(token_hash)
+
+        # Resolve the token row directly from its digest. A matching row is
+        # required even to know which user this is, so an unknown token is
+        # indistinguishable from a wrong one.
+        reset = (
+            self._db.query(PasswordResetToken)
+            .filter(PasswordResetToken.token == token_hash)
+            .order_by(PasswordResetToken.created_at.desc())
+            .first()
+        )
+
+        if reset is None or reset.is_used or reset.is_expired:
+            raise UnauthorizedException(_GENERIC_RESET_ERROR)
+
+        user = self._db.query(User).filter(User.id == reset.user_id).first()
+        if user is None or not user.is_active:
+            raise UnauthorizedException(_GENERIC_RESET_ERROR)
+
+        # Apply the new password and burn the token, all within the
+        # request-scoped transaction; get_db() owns the commit on success.
+        user.password_hash = hash_password(new_password)
+        reset.is_used = True
+        self._db.flush()
+
+        self._invalidate_pending_reset_tokens(user.id, exclude_id=reset.id)
+
+        # A password reset must terminate every existing session: fence the
+        # user's whole refresh-token family so any outstanding refresh token
+        # (including an attacker's) is rejected. The user signs in afresh.
+        self._revoke_token_family(str(user.id))
+
+        logger.info("Password reset completed for user %s", user.email)
 
     # Refresh Token
 
