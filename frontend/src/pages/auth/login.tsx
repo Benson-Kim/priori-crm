@@ -19,17 +19,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const redirectTarget =
-    (location.state as LocationState | null)?.from?.pathname ?? "/";
-
-  // Guard against the login-form "flash": an already-authenticated user who
-  // lands on /login (e.g. a transient bootstrap redirect or a StrictMode
-  // double-mount) is sent straight to their destination instead of briefly
-  // seeing the form. Must run before any form state is rendered.
-  if (isAuthenticated) {
-    return <Navigate to={redirectTarget} replace />;
-  }
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMeLocal] = useState(false);
@@ -38,6 +27,14 @@ export default function LoginPage() {
 
   const redirectTo =
     (location.state as LocationState | null)?.from?.pathname ?? "/";
+
+  // Guard against the login-form "flash": an already-authenticated user who
+  // lands on /login (e.g. a transient bootstrap redirect or a StrictMode
+  // double-mount) is sent straight to their destination instead of briefly
+  // seeing the form. Declared AFTER all hooks so the Rules of Hooks hold.
+  if (isAuthenticated) {
+    return <Navigate to={redirectTo} replace />;
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
