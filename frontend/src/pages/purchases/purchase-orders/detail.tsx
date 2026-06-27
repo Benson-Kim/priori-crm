@@ -223,7 +223,13 @@ export default function PurchaseOrderDetailPage() {
     const currency = po.currency ?? DEFAULT_CURRENCY;
     const total = Number(po.total);
     const amountPaid = Number(po.amount_paid ?? 0);
-    const balanceDue = Number(total - amountPaid);
+    // Use the server's signed balance_due as the source of truth (it may be
+    // negative for an overpayment). Fall back to the local computation only if
+    // the field is absent. Never clamp: a negative balance is the credit owed
+    // back to us by the vendor.
+    const balanceDue = Number(po.balance_due ?? total - amountPaid);
+    // A PAID PO with a negative balance has been settled beyond its total.
+    const isOverpaid = balanceDue < 0;
     const payments: PurchaseOrderPayment[] = po.payments ?? [];
     const documents = po.documents ?? [];
 
@@ -548,8 +554,10 @@ export default function PurchaseOrderDetailPage() {
                                 </p>
                             </Card>
                             <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
-                                <p className="text-gray-500 text-lg py-3">Balance</p>
-                                <p className="font-bold text-gray-800 text-2xl">
+                                <p className="text-gray-500 text-lg py-3 flex items-center gap-2">
+                                    {isOverpaid ? "Balance (Overpaid)" : "Balance"}
+                                </p>
+                                <p className={`font-bold text-2xl ${isOverpaid ? "text-priori-purple" : "text-gray-800"}`}>
                                     {formatCurrency(Number(balanceDue), currency ?? "")}
                                 </p>
                             </Card>
