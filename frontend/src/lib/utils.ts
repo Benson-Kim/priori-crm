@@ -116,6 +116,38 @@ export const money = (value: number | string | null | undefined): string =>
   value == null ? "—" : formatCurrency(Number(value), DEFAULT_CURRENCY);
 
 /**
+ * Account password policy — the single client-side source of truth, kept in
+ * lockstep with the backend `validate_password_strength`
+ * (api/app/common/validators.py). Tighten in one place if the rules change.
+ */
+export const PASSWORD_POLICY = {
+  MIN_LENGTH: 8,
+  MAX_LENGTH: 128,
+} as const;
+
+/**
+ * Validate a new password against the shared policy: 8-128 characters, at
+ * least one letter and at least one digit. Returns an error message string, or
+ * null when the password is acceptable. This is a UX pre-check only; the
+ * backend remains the authority and rejects anything non-conforming.
+ */
+export function validatePasswordStrength(password: string): string | null {
+  if (password.length < PASSWORD_POLICY.MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_POLICY.MIN_LENGTH} characters long.`;
+  }
+  if (password.length > PASSWORD_POLICY.MAX_LENGTH) {
+    return `Password must be at most ${PASSWORD_POLICY.MAX_LENGTH} characters long.`;
+  }
+  if (!/[A-Za-z]/.test(password)) {
+    return "Password must contain at least one letter.";
+  }
+  if (!/\d/.test(password)) {
+    return "Password must contain at least one number.";
+  }
+  return null;
+}
+
+/**
  * Mask an email address for display (e.g. "fra**********18@mail.com").
  */
 export function maskEmail(email: string): string {
