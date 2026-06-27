@@ -28,27 +28,41 @@ down_revision: Union[str, None] = "f5a6b7c8d9e0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# (table, constraint_name) for each balance_due >= 0 check being dropped.
-_BALANCE_CHECKS: tuple[tuple[str, str], ...] = (
-    ("invoices", "ck_invoices_balance_non_negative"),
-    ("expenses", "ck_expenses_balance_due_non_negative"),
-    ("purchase_orders", "ck_purchase_orders_balance_due_non_negative"),
+# (table, [constraint_names]) for each balance_due >= 0 check being dropped.
+# purchase_orders carries a doubled-prefix name because the check was created
+# via op.create_check_constraint, which applies Alembic's naming convention
+# (%(table_name)s_%(constraint_name)s) on top of the already-prefixed name.
+# Both spellings are dropped so every environment is covered.
+_BALANCE_CHECKS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("invoices", ("ck_invoices_balance_non_negative",)),
+    ("expenses", ("ck_expenses_balance_due_non_negative",)),
+    (
+        "purchase_orders",
+        (
+            "ck_purchase_orders_ck_purchase_orders_balance_due_non_negative",
+            "ck_purchase_orders_balance_due_non_negative",
+        ),
+    ),
 )
 
 
 def upgrade() -> None:
-    for table, constraint in _BALANCE_CHECKS:
-        # IF EXISTS keeps the migration idempotent across environments where
-        # the test schema (create_all) may already omit the constraint.
-        op.execute(f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{constraint}"')
+    for table, constraints in _BALANCE_CHECKS:
+        for constraint in constraints:
+            # IF EXISTS keeps the migration idempotent across environments where
+            # the test schema (create_all) may already omit the constraint.
+            op.execute(
+                f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{constraint}"'
+            )
 
 
 def downgrade() -> None:
-    for table, constraint in _BALANCE_CHECKS:
+    for table, constraints in _BALANCE_CHECKS:
         # Clamp any overpaid (negative) balances created while the check was
         # absent, otherwise re-adding the constraint would fail.
         op.execute(f"UPDATE {table} SET balance_due = 0 WHERE balance_due < 0")
+        # Re-add under the canonical (first-listed) name for the table.
         op.execute(
-            f'ALTER TABLE {table} ADD CONSTRAINT "{constraint}" '
+            f'ALTER TABLE {table} ADD CONSTRAINT "{constraints[0]}" '
             "CHECK (balance_due >= 0)"
         )
