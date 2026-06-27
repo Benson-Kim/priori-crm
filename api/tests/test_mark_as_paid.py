@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.common.exceptions import BadRequestException, NotFoundException
+from app.common.exceptions import NotFoundException
 from app.constants.enums import ExpenseStatus
 
 
@@ -89,18 +89,23 @@ class TestMarkAsPaidSetsFinancialFields:
 
 
 class TestMarkAsPaidAlreadyPaid:
-    """Cannot mark a PAID expense as paid again."""
+    """Marking a PAID expense as paid again is accepted (idempotent settle)."""
 
-    def test_raises_on_already_paid(self):
+    def test_already_paid_is_accepted(self):
         from app.modules.expenses.service import ExpenseService
 
         db = MagicMock()
-        expense = _FakeExpense(status=ExpenseStatus.PAID)
+        expense = _FakeExpense(
+            status=ExpenseStatus.PAID,
+            amount_paid=Decimal("1000.00"),
+            balance_due=Decimal("0.00"),
+        )
         db.query.return_value.options.return_value.filter.return_value.with_for_update.return_value.first.return_value = expense
 
         svc = ExpenseService(db)
-        with pytest.raises(BadRequestException):
-            svc.mark_as_paid(expense.id)
+        result = svc.mark_as_paid(expense.id)
+
+        assert result.status == ExpenseStatus.PAID
 
 
 class TestMarkAsPaidNotFound:
