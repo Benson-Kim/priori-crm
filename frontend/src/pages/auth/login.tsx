@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useAuth } from "@/hooks/auth-context";
 import { ApiError } from "@/lib/api";
+import { setRememberMe } from "@/lib/auth-storage";
 
 interface LocationState {
   from?: { pathname?: string };
@@ -20,6 +21,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMeLocal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,6 +40,9 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(email.trim(), password);
+      // Persist the remember-me preference before navigating so
+      // verifyOtp → setTokens writes to the correct storage.
+      setRememberMe(rememberMe);
       // Carry the email + intended destination to the OTP step.
       navigate("/verify-otp", {
         state: { email: email.trim(), redirectTo },
@@ -125,7 +130,14 @@ export default function LoginPage() {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <input type="checkbox" name="remember_me" id="remember_me" className="h-6 w-6 border border-gray-500 accent-priori-purple cursor-pointer" />
+              <input
+                type="checkbox"
+                name="remember_me"
+                id="remember_me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMeLocal(e.target.checked)}
+                className="h-6 w-6 border border-gray-500 accent-priori-purple cursor-pointer"
+              />
               <Label htmlFor="remember_me" className="text-gray-700 text-[16px] leading-6">Remember me</Label>
             </div>
             <Link

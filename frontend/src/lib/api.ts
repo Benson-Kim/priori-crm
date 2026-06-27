@@ -127,12 +127,16 @@ function redirectToLogin(): void {
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Perform a fetch with bearer auth and a one-time 401 -> refresh -> retry.
  *
- * Idempotent requests (GET / download) additionally get a single backoff
- * retry on a transient transport failure or a 502/503/504 — never for
- * mutating methods, which are unsafe to replay.
+ * Idempotent requests (GET / HEAD) additionally get a single backoff retry
+ * on a transient transport failure or a 502/503/504 — never for mutating
+ * methods, which are unsafe to replay.
  */
 async function authedFetch(
   url: string,
@@ -173,10 +177,6 @@ async function authedFetch(
   }
 
   return response;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -228,6 +228,25 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   return handleResponse<T>(response);
+}
+
+export async function apiPostPublic<T>(path: string, body: unknown): Promise<T> {
+  try {
+    const response = await fetch(buildUrl(path), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return await handleResponse<T>(response);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new ApiError(
+        "Network error: Unable to reach the server. Please check your connection or try again.",
+        0
+      );
+    }
+    throw error;
+  }
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {

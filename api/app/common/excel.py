@@ -249,47 +249,136 @@ class ExcelExporter:
         purchase_order,
         payments: list,
     ) -> bytes:
-        """Export a single purchase order's recorded payments to .xlsx bytes.
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Border, Font, Side
 
-        One row per payment ordered as supplied by the caller (payment_date
-        ascending). The PO number/reference and currency are repeated on each
-        row so the sheet is self-describing when detached from the PO. Money
-        is rendered with the shared #,##0.00 format; no float is persisted in
-        the DB, this is display formatting only.
-        """
-        po_number = getattr(purchase_order, "po_number", "")
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Payments"
+
         po_reference = getattr(purchase_order, "po_reference", "")
-        currency = getattr(purchase_order, "currency", "")
+        vendor_name = getattr(purchase_order, "vendor_name", None)
+        if not vendor_name and hasattr(purchase_order, "vendor"):
+            vendor_name = getattr(
+                purchase_order.vendor, "vendor_name", str(purchase_order.vendor_id)
+            )
 
+        title_text = f"{vendor_name}_{po_reference}" if vendor_name else po_reference
+
+        # Determine currency formatting (fallback to standard $ if unknown, though frontend formats as needed)
+        # Using a simple formatting string to show symbol + amount.
+        currency = getattr(purchase_order, "currency", "USD")
+        curr_map = {"USD": "$", "KES": "KES", "EUR": "€", "GBP": "£"}
+        sym = curr_map.get(currency, currency)
+        money_fmt = f'"{sym}" #,##0.00'
+
+        thin_border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+
+        # Row 1: Title
+        ws.merge_cells("A1:F1")
+        title_cell = ws.cell(row=1, column=1, value=title_text)
+        title_cell.font = Font(name="Calibri", bold=True, size=16, color="2C1A54")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Row 2: Headers
         headers = [
-            "PO #",
+            "Date",
             "Reference",
-            "Payment Date",
-            "Currency",
             "Amount",
             "Payment Reference",
+            "Amount",
             "Notes",
         ]
+        header_font = Font(name="Calibri", bold=True, color="912B90")
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=2, column=col_idx, value=header)
+            cell.font = header_font
+            cell.border = thin_border
 
-        def row_fn(payment):
-            return [
-                po_number,
-                po_reference,
-                payment.payment_date,
-                currency,
-                payment.amount,
-                payment.reference or "",
-                payment.notes or "",
-            ]
+        row_idx = 3
 
-        wb = self._build_workbook(
-            sheet_name="Payments",
-            headers=headers,
-            records=payments,
-            row_fn=row_fn,
-            money_cols=[5],  # Amount
-            date_cols=[3],  # Payment Date
-        )
+        # Row 3: PO Row
+        po_date = purchase_order.order_date
+        po_total = purchase_order.total or Decimal("0.00")
+
+        c_po_date = ws.cell(row=row_idx, column=1, value=po_date)
+        c_po_date.number_format = _DATE_FORMAT
+        ws.cell(row=row_idx, column=2, value=po_reference)
+        c_po_amt = ws.cell(row=row_idx, column=3, value=po_total)
+        c_po_amt.number_format = money_fmt
+
+        for col_i in range(1, 7):
+            ws.cell(row=row_idx, column=col_i).border = thin_border
+
+        row_idx += 1
+
+        # Payment Rows
+        total_payments = Decimal("0.00")
+        for p in payments:
+            c_p_date = ws.cell(row=row_idx, column=1, value=p.payment_date)
+            c_p_date.number_format = _DATE_FORMAT
+            ws.cell(row=row_idx, column=4, value=p.reference or "")
+            c_p_amt = ws.cell(row=row_idx, column=5, value=p.amount)
+            c_p_amt.number_format = money_fmt
+            ws.cell(row=row_idx, column=6, value=p.notes or "")
+
+            for col_i in range(1, 7):
+                ws.cell(row=row_idx, column=col_i).border = thin_border
+
+            total_payments += p.amount
+            row_idx += 1
+
+        # Add 2 empty spacer rows
+        for _ in range(2):
+            for col_i in range(1, 7):
+                ws.cell(row=row_idx, column=col_i).border = thin_border
+            row_idx += 1
+
+        # Totals block
+        # PO Amount row
+        c_po_label = ws.cell(row=row_idx, column=1, value="PO Amount")
+        c_po_label.font = Font(name="Calibri", size=10)
+        c_po_val = ws.cell(row=row_idx, column=3, value=po_total)
+        c_po_val.number_format = money_fmt
+        for col_i in range(1, 7):
+            ws.cell(row=row_idx, column=col_i).border = thin_border
+        row_idx += 1
+
+        # Total Payments row
+        c_tp_label = ws.cell(row=row_idx, column=1, value="Total Payments")
+        c_tp_label.font = Font(name="Calibri", size=10)
+        c_tp_val = ws.cell(row=row_idx, column=5, value=total_payments)
+        c_tp_val.number_format = money_fmt
+        for col_i in range(1, 7):
+            ws.cell(row=row_idx, column=col_i).border = thin_border
+        row_idx += 1
+
+        # Balance row
+        balance = po_total - total_payments
+        color = "EF4444" if balance < 0 else "000000"
+
+        c_bal_lbl = ws.cell(row=row_idx, column=1, value="Bal")
+        c_bal_lbl.font = Font(name="Calibri", size=10, color=color)
+        c_bal_val = ws.cell(row=row_idx, column=5, value=balance)
+        c_bal_val.number_format = money_fmt
+        c_bal_val.font = Font(name="Calibri", size=10, color=color)
+
+        for col_i in range(1, 7):
+            ws.cell(row=row_idx, column=col_i).border = thin_border
+
+        # Set column widths
+        ws.column_dimensions["A"].width = 15
+        ws.column_dimensions["B"].width = 18
+        ws.column_dimensions["C"].width = 15
+        ws.column_dimensions["D"].width = 20
+        ws.column_dimensions["E"].width = 15
+        ws.column_dimensions["F"].width = 25
+
         return self._to_bytes(wb)
 
     # private implementation

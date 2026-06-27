@@ -70,6 +70,8 @@ export default function PurchaseOrderDetailPage() {
     // Current page (1-based) of the payments table.
     const [paymentsPage, setPaymentsPage] = useState(1);
 
+    console.log(po)
+
     useHeaderOverride(po?.po_reference, "");
 
     const fetchPurchaseOrder = useCallback(async () => {
@@ -221,7 +223,7 @@ export default function PurchaseOrderDetailPage() {
     const currency = po.currency ?? DEFAULT_CURRENCY;
     const total = Number(po.total);
     const amountPaid = Number(po.amount_paid ?? 0);
-    const balanceDue = Number(po.balance_due ?? total - amountPaid);
+    const balanceDue = Number(total - amountPaid);
     const payments: PurchaseOrderPayment[] = po.payments ?? [];
     const documents = po.documents ?? [];
 
@@ -293,14 +295,14 @@ export default function PurchaseOrderDetailPage() {
         // Balance-aware statement PDF (payments applied + running balance).
         actions.push({
             key: "download-statement",
-            label: "Download statement",
+            label: "Download PO",
             icon: <FileClock size={16} />,
             onClick: handleDownloadStatement,
         });
         // Export this PO's payments to Excel.
         actions.push({
             key: "export-po-payments-excel",
-            label: "Export payments",
+            label: "Download Excel",
             icon: <ExcelSvg className="w-4 h-4" />,
             onClick: handlePaymentsExport,
         });
@@ -414,7 +416,7 @@ export default function PurchaseOrderDetailPage() {
                     >
                         <Trash size={18} />
                     </button>
-                </div> 
+                </div>
         }
     ];
 
@@ -480,7 +482,7 @@ export default function PurchaseOrderDetailPage() {
             {/* Overview tab: descriptive header + totals. */}
             {activeTab === "overview" && (
                 <PurchaseOrderViewer
-                    editableOwner
+                    editableOwner={false}
                     data={{
                         poReference: po.po_reference,
                         vendorId: po.vendor_id,
@@ -639,6 +641,7 @@ export default function PurchaseOrderDetailPage() {
                 currency={currency}
                 reference={po.po_reference}
                 editPayment={editingPayment}
+                existingDocuments={documents}
                 onSuccess={() => {
                     setEditingPayment(null);
                     fetchPurchaseOrder();

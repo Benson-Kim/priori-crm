@@ -134,7 +134,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
         <div className="pb-4">
           <table className="w-full text-[16px] min-w-[800px]">
             <thead>
-              <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-7 rounded-t-lg">
+              <tr className="bg-priori-purple text-white px-3 py-3.5 grid grid-cols-7 rounded-t-lg">
                 <th className="text-left px-3 font-bold leading-8 col-span-4">
                   Item
                 </th>
@@ -186,10 +186,10 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
           }
           vatLabel={vatLabel}
           restrictedMode={true}
-          onDiscountTypeChange={() => {}}
-          onDiscountValueChange={() => {}}
-          onDiscountRemove={() => {}}
-          onAddDiscount={() => {}}
+          onDiscountTypeChange={() => { }}
+          onDiscountValueChange={() => { }}
+          onDiscountRemove={() => { }}
+          onAddDiscount={() => { }}
           amountPaid={data.amountPaid}
           balanceDue={data.balanceDue}
         />
