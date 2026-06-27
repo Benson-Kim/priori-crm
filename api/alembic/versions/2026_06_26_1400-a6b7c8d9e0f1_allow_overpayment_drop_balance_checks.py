@@ -67,9 +67,7 @@ def upgrade() -> None:
         for constraint in constraints:
             # IF EXISTS keeps the migration idempotent across environments where
             # the test schema (create_all) may already omit the constraint.
-            op.execute(
-                f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{constraint}"'
-            )
+            op.execute(f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{constraint}"')
 
 
 def downgrade() -> None:
