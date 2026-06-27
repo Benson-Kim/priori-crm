@@ -145,9 +145,13 @@ export default function OTPPage() {
                     <span className="font-bold">Code expires in {formatCountdown(secondsLeft)}{" • "}</span>
                     Didn&apos;t receive OTP?
                   </p>
-                  <button type="button" disabled={submitting}
-                    onClick={() => void handleResend()}
-                    className="text-sky-blue disabled:opacity-50 cursor-pointer"
+                  {/* Resend is only available once the current code has
+                      expired (it stays valid for the full 5 minutes), so it is
+                      shown disabled while the countdown is running. */}
+                  <button type="button" disabled
+                    aria-disabled="true"
+                    title="You can request a new code once this one expires"
+                    className="text-gray-400 opacity-50 cursor-not-allowed"
                   >
                     Resend OTP
                   </button>
