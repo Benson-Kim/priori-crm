@@ -160,14 +160,17 @@ class TestLifecycleE2E:
         assert po.balance_due == Decimal("0.00")
         assert po.paid_at is not None
 
-        # A PAID PO rejects further payment (immutability of the settled doc).
-        with pytest.raises(BadRequestException):
-            service.record_payment(
-                po.id,
-                PurchaseOrderPaymentCreate(
-                    amount=Decimal("1.00"), paymentDate=date.today()
-                ),
-            )
+        # A PAID PO accepts a further payment: this app records payments, so
+        # an extra payment drives balance_due negative (credit owed back).
+        service.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("1.00"), paymentDate=date.today()
+            ),
+        )
+        db.flush()
+        assert po.status == PurchaseOrderStatus.PAID
+        assert po.balance_due == Decimal("-1.00")
 
     def test_payment_before_send_is_rejected(self, db) -> None:
         vendor = _vendor(db)

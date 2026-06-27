@@ -105,12 +105,16 @@ class TestRecordPaymentLocking:
         assert invoice.paid_at is not None
         assert invoice.version == 2
 
-    def test_overpayment_is_rejected(self):
+    def test_overpayment_is_accepted(self):
         invoice = _FakeInvoice(total_due="100.00")
         svc, _ = _service_locking(invoice)
 
-        with pytest.raises(BadRequestException):
-            svc.record_payment(invoice.id, _FakePayment("150.00"))
+        svc.record_payment(invoice.id, _FakePayment("150.00"))
+
+        # Overpayment surfaces as a negative balance and settles to PAID.
+        assert invoice.status == InvoiceStatus.PAID
+        assert invoice.balance_due == Decimal("-50.00")
+        assert invoice.paid_at is not None
 
     def test_payment_on_draft_is_rejected(self):
         invoice = _FakeInvoice(status=InvoiceStatus.DRAFT)

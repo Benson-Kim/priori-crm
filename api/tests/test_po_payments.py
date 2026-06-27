@@ -120,21 +120,20 @@ def test_full_payment_settles_to_paid(monkeypatch) -> None:
     assert po.version == 2  # state-machine bump only, exactly once
 
 
-def test_overpayment_rejected(monkeypatch) -> None:
+def test_overpayment_accepted(monkeypatch) -> None:
     _patch_side_effects(monkeypatch)
     po = _FakePO("1000.00")
     service = _service_with(po)
 
-    with pytest.raises(BadRequestException):
-        service.record_payment(
-            po.id,
-            PurchaseOrderPaymentCreate(
-                amount=Decimal("1000.01"), paymentDate=date.today()
-            ),
-        )
-    # Unchanged after rejection.
-    assert po.amount_paid == Decimal("0.00")
-    assert po.status == PurchaseOrderStatus.SENT
+    service.record_payment(
+        po.id,
+        PurchaseOrderPaymentCreate(amount=Decimal("1000.01"), paymentDate=date.today()),
+    )
+    # Overpayment is recorded: balance_due goes negative (credit owed back)
+    # and the document settles to PAID.
+    assert po.amount_paid == Decimal("1000.01")
+    assert po.balance_due == Decimal("-0.01")
+    assert po.status == PurchaseOrderStatus.PAID
 
 
 def test_payment_on_draft_rejected(monkeypatch) -> None:
@@ -151,20 +150,22 @@ def test_payment_on_draft_rejected(monkeypatch) -> None:
         )
 
 
-def test_payment_on_already_paid_rejected(monkeypatch) -> None:
+def test_payment_on_already_paid_accepted(monkeypatch) -> None:
     _patch_side_effects(monkeypatch)
     po = _FakePO("1000.00", status=PurchaseOrderStatus.PAID)
     po.balance_due = Decimal("0.00")
     po.amount_paid = Decimal("1000.00")
     service = _service_with(po)
 
-    with pytest.raises(BadRequestException):
-        service.record_payment(
-            po.id,
-            PurchaseOrderPaymentCreate(
-                amount=Decimal("1.00"), paymentDate=date.today()
-            ),
-        )
+    # This app records payments; a further payment on a settled document is
+    # accepted and drives balance_due negative (credit owed back).
+    service.record_payment(
+        po.id,
+        PurchaseOrderPaymentCreate(amount=Decimal("1.00"), paymentDate=date.today()),
+    )
+    assert po.amount_paid == Decimal("1001.00")
+    assert po.balance_due == Decimal("-1.00")
+    assert po.status == PurchaseOrderStatus.PAID
 
 
 # IS_PAID FALSE-POSITIVE FIX (Finding 1)

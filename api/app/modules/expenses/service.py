@@ -520,11 +520,17 @@ class ExpenseService(BaseDocumentService):
         expense.balance_due = expense.total_due - expense.amount_paid
 
         if expense.balance_due <= Decimal("0.00"):
-            # Full settlement. Set status directly (not via _transition) so the
-            # single version bump below is the only increment for this op.
+            # Settlement (exact or overpaid). Set status directly (not via
+            # _transition) so the single version bump below is the only
+            # increment for this op. balance_due is NOT clamped: an
+            # overpayment leaves it negative to represent the credit owed back.
+            #
+            # Idempotent for the reconciliation case: a further payment on an
+            # already-PAID expense keeps it PAID and preserves the original
+            # paid_at (only the first settlement stamps the timestamp).
             expense.status = ExpenseStatus.PAID
-            expense.balance_due = Decimal("0.00")
-            expense.paid_at = paid_at or datetime.now(UTC)
+            if expense.paid_at is None:
+                expense.paid_at = paid_at or datetime.now(UTC)
 
         expense.version += 1
         self._db.flush()
@@ -577,14 +583,37 @@ class ExpenseService(BaseDocumentService):
                 resource="expense",
             )
 
-        if expense.status == ExpenseStatus.PAID:
+        # A CANCELED (voided) expense can never be marked paid.
+        if expense.status == ExpenseStatus.CANCELED:
             raise BadRequestException(
-                detail="Expense is already paid",
+                detail="Cannot mark a canceled expense as paid",
                 field="status",
             )
 
         now = paid_at or datetime.now(UTC)
         settlement_amount = expense.balance_due
+
+        # Idempotent reconciliation: an already-settled expense (balance
+        # cleared or overpaid) is a no-op rather than a rejection — the user
+        # may re-run mark-as-paid on something already paid. A non-positive
+        # settlement amount would also violate the amount > 0 CHECK on the
+        # payment row, so never create one here.
+        if settlement_amount <= Decimal("0.00"):
+            # Ensure the status reflects PAID even if it was left PENDING/
+            # OVERDUE with a zero balance for some reason, without recording a
+            # spurious payment.
+            if expense.status != ExpenseStatus.PAID:
+                expense.status = ExpenseStatus.PAID
+                if expense.paid_at is None:
+                    expense.paid_at = now
+                expense.version += 1
+                self._db.flush()
+            logger.info(
+                "mark_as_paid no-op: expense %s already settled",
+                expense.expense_reference,
+                extra={"expense_id": str(expense.id)},
+            )
+            return expense
 
         self._apply_payment(
             expense,
@@ -637,20 +666,18 @@ class ExpenseService(BaseDocumentService):
                 resource="expense",
             )
 
-        if expense.status == ExpenseStatus.PAID:
+        # An extra payment may be recorded against an already-PAID / overpaid
+        # expense (reconciliation use case), so there is no PAID rejection
+        # here. A CANCELED expense is the only non-recordable terminal state.
+        if expense.status == ExpenseStatus.CANCELED:
             raise BadRequestException(
-                detail="Cannot record payment for an already-paid expense",
+                detail="Cannot record payment for a canceled expense",
                 field="status",
             )
 
-        if data.amount > expense.balance_due:
-            raise BadRequestException(
-                detail=(
-                    f"Payment amount ({data.amount}) exceeds balance due "
-                    f"({expense.balance_due}). Cannot overpay an expense."
-                ),
-                field="amount",
-            )
+        # Overpayment is allowed: this app records payments rather than taking
+        # them. An amount exceeding the balance drives balance_due negative (a
+        # credit owed back) and is no longer rejected.
 
         payment = self._apply_payment(
             expense,
