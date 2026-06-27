@@ -85,9 +85,7 @@ def _seed_owner(db) -> None:
 
 
 def _seed_customer(db) -> Customer:
-    existing = (
-        db.query(Customer).filter(Customer.email == DEMO_CUSTOMER_EMAIL).first()
-    )
+    existing = db.query(Customer).filter(Customer.email == DEMO_CUSTOMER_EMAIL).first()
     if existing is not None:
         logger.info("Customer already exists: %s", existing.display_name)
         return existing
@@ -129,9 +127,7 @@ def _seed_vendor(db) -> Vendor:
 
 
 def _seed_quote(db, customer: Customer) -> Quote:
-    existing = (
-        db.query(Quote).filter(Quote.customer_id == customer.id).first()
-    )
+    existing = db.query(Quote).filter(Quote.customer_id == customer.id).first()
     if existing is not None:
         logger.info("Quote already exists: %s", existing.quote_reference)
         return existing
