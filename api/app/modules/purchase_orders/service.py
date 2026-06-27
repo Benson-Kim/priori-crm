@@ -1081,12 +1081,20 @@ Best regards,
         purchase_order.balance_due = purchase_order.total - purchase_order.amount_paid
 
         if purchase_order.balance_due <= Decimal("0.00"):
-            # Full settlement: route SENT->PAID through the state machine
-            # (it owns the single version bump for this op) and clamp the
-            # balance so a rounding residue never leaves a negative.
-            self._transition(purchase_order, PurchaseOrderStatus.PAID)
-            purchase_order.balance_due = Decimal("0.00")
-            purchase_order.paid_at = datetime.now(UTC)
+            # Settlement (exact or overpaid). balance_due is NOT clamped: an
+            # overpayment leaves it negative to represent the credit owed back.
+            #
+            # The transition is idempotent for the reconciliation case: a
+            # further payment on an already-PAID PO must NOT call
+            # _transition(PAID -> PAID), which the state machine rejects
+            # (ALLOWED_TRANSITIONS[PAID] = []). Only a SENT PO transitions; an
+            # already-PAID PO bumps the version directly and keeps its
+            # original paid_at.
+            if purchase_order.status == PurchaseOrderStatus.SENT:
+                self._transition(purchase_order, PurchaseOrderStatus.PAID)
+                purchase_order.paid_at = datetime.now(UTC)
+            else:
+                purchase_order.version += 1
         else:
             # Partial payment: no status edge, so bump the version here so
             # the optimistic-lock counter still advances exactly once.
@@ -1118,9 +1126,11 @@ Best regards,
         """Record an auditable payment against a purchase order.
 
         A payment is only meaningful once the PO has been sent: a DRAFT PO
-        must be sent first, and an already-PAID PO rejects further payment.
-        Overpayment (amount > balance_due) is rejected with a typed 400.
-        On full settlement the PO transitions SENT->PAID (see _apply_payment).
+        must be sent first. A SENT or already-PAID / overpaid PO both accept
+        payment (this app records and reconciles payments rather than taking
+        them, so further and over payments are legitimate). On the first full
+        settlement the PO transitions SENT->PAID (see _apply_payment); later
+        payments keep it PAID and drive balance_due further negative.
 
         If ``data.document_id`` is supplied, the referenced document must
         exist and belong to this purchase order (scoped lookup). A document
@@ -1136,15 +1146,13 @@ Best regards,
         """
         purchase_order = self._get_locked(po_id)
 
-        if purchase_order.status == PurchaseOrderStatus.PAID:
-            raise BadRequestException(
-                detail="Cannot record payment for an already-paid purchase order.",
-                field="status",
-            )
-        if purchase_order.status != PurchaseOrderStatus.SENT:
+        # A payment is only meaningful once the PO has been sent: a DRAFT PO
+        # must be sent first. A SENT or already-PAID / overpaid PO both accept
+        # payment (reconciliation use case) — there is no PAID rejection.
+        if purchase_order.status == PurchaseOrderStatus.DRAFT:
             raise BadRequestException(
                 detail=(
-                    "Payments can only be recorded against a SENT purchase "
+                    "Payments can only be recorded against a sent purchase "
                     "order. Send the purchase order first."
                 ),
                 field="status",

@@ -652,15 +652,10 @@ class InvoiceService(BaseDocumentService):
                 detail="Cannot record payment for canceled invoice", field="status"
             )
 
-        # Validate payment amount
-        if data.amount > invoice.balance_due:
-            raise BadRequestException(
-                detail=(
-                    f"Payment amount ({data.amount}) exceeds balance due ({invoice.balance_due}). "
-                    f"Cannot overpay invoice."
-                ),
-                field="amount",
-            )
+        # Overpayment is allowed: this app records payments, it does not take
+        # them, so an amount exceeding the balance is a legitimate event. It
+        # drives balance_due negative (a credit owed back), which is no longer
+        # constrained at the DB level.
 
         # Create payment record
         payment = Payment(
@@ -679,14 +674,27 @@ class InvoiceService(BaseDocumentService):
         invoice.amount_paid += data.amount
         invoice.balance_due = invoice.total_due - invoice.amount_paid
 
-        # Update status based on new balance, routed through the state machine
-        # so ALLOWED_TRANSITIONS is enforced and the version bump is owned in
-        # one place. _transition increments invoice.version.
+        # Update status based on the new balance. The transition is
+        # idempotent: an extra payment recorded against an already-PAID /
+        # overpaid invoice (reconciliation use case) must NOT call
+        # _transition(PAID -> PAID), which the state machine rejects
+        # (ALLOWED_TRANSITIONS[PAID] = [CANCELED]). When the status does not
+        # change we bump the version directly so the optimistic-lock counter
+        # still advances exactly once. balance_due keeps its real signed
+        # value, so each further payment drives it further negative.
         if invoice.balance_due <= 0:
-            self._transition(invoice, InvoiceStatus.PAID)
-            invoice.paid_at = datetime.now(UTC)
+            # Exact or overpaid -> settled.
+            if invoice.status != InvoiceStatus.PAID:
+                self._transition(invoice, InvoiceStatus.PAID)
+                invoice.paid_at = datetime.now(UTC)
+            else:
+                invoice.version += 1
         elif invoice.amount_paid > 0:
-            self._transition(invoice, InvoiceStatus.PARTIAL)
+            # Re-opened / partial balance remaining.
+            if invoice.status != InvoiceStatus.PARTIAL:
+                self._transition(invoice, InvoiceStatus.PARTIAL)
+            else:
+                invoice.version += 1
         else:
             invoice.version += 1
 
@@ -868,6 +876,13 @@ class InvoiceService(BaseDocumentService):
             )
             .scalar()
         ) or Decimal("0.00")
+
+        # Per-invoice balance_due may now be negative (overpaid), but the
+        # denormalized customer rollup is constrained to be non-negative
+        # (ck_customers_balance_non_negative). A credit from one overpaid
+        # invoice is represented on that invoice's signed balance_due, not as
+        # a negative account-level balance, so clamp the aggregate at zero.
+        outstanding = max(outstanding, Decimal("0.00"))
 
         customer = self._db.query(Customer).filter(Customer.id == customer_id).first()
         if customer:

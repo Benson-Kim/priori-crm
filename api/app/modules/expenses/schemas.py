@@ -141,7 +141,10 @@ class ExpensePaymentCreate(BaseModel):
         ...,
         gt=0,
         decimal_places=2,
-        description="Payment amount — must be > 0 and ≤ current balance_due",
+        description=(
+            "Payment amount — must be > 0. May exceed the current balance_due "
+            "(overpayment is recorded and drives balance_due negative)."
+        ),
     )
     payment_date: date = Field(
         ...,

@@ -39,8 +39,9 @@ class PurchaseOrderPaymentCreate(BaseModel):
     """Payload for recording a payment against a purchase order.
 
     Mirrors ExpensePaymentCreate: no payment_method field. amount must be
-    > 0 and is additionally validated server-side against the current
-    balance_due (overpayment is rejected with a 400).
+    > 0. Overpayment is allowed: this app records and reconciles payments
+    rather than taking them, so an amount exceeding the current balance_due
+    is recorded and drives balance_due negative (a credit owed back).
 
     ``document_id`` optionally links a proof-of-payment document that was
     previously uploaded to this purchase order (source: payment_modal).
@@ -52,7 +53,10 @@ class PurchaseOrderPaymentCreate(BaseModel):
         ...,
         gt=0,
         decimal_places=2,
-        description="Payment amount — must be > 0 and <= current balance_due",
+        description=(
+            "Payment amount — must be > 0. May exceed the current balance_due "
+            "(overpayment is recorded and drives balance_due negative)."
+        ),
     )
     payment_date: date = Field(
         ...,
@@ -105,15 +109,18 @@ class PurchaseOrderPaymentUpdate(BaseModel):
     supplied fields are applied. Changing ``amount`` re-derives the PO's
     amount_paid / balance_due and may re-open a PAID PO back to SENT (or
     settle a SENT PO to PAID) — handled atomically in the service under a
-    row lock. The new amount is validated against the balance freed by
-    removing this payment's previous amount, so an edit can never overpay.
+    row lock. Overpayment is allowed: the new amount may exceed the PO total,
+    leaving balance_due negative to represent the credit owed back.
     """
 
     amount: Decimal | None = Field(
         None,
         gt=0,
         decimal_places=2,
-        description="New payment amount — must be > 0 and not overpay the PO",
+        description=(
+            "New payment amount — must be > 0. May overpay the PO (balance_due "
+            "goes negative to represent the credit owed back)."
+        ),
     )
     payment_date: date | None = Field(
         None,

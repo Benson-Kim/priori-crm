@@ -250,22 +250,24 @@ class TestExpensePaymentSettlement:
         assert expense.balance_due == Decimal("0.00")
         assert expense.version == v0 + 1
 
-    def test_overpay_rejected(self, db):
+    def test_overpay_accepted(self, db):
         from app.modules.expenses.schemas import ExpensePaymentCreate
         from app.modules.expenses.service import ExpenseService
 
         expense = self._make_expense(db, total="100.00")
         service = ExpenseService(db)
 
-        with pytest.raises(BadRequestException):
-            service.record_payment(
-                expense.id,
-                ExpensePaymentCreate(
-                    amount=Decimal("150.00"), paymentDate=date.today()
-                ),
-            )
+        service.record_payment(
+            expense.id,
+            ExpensePaymentCreate(amount=Decimal("150.00"), paymentDate=date.today()),
+        )
 
-    def test_payment_on_paid_expense_rejected(self, db):
+        db.refresh(expense)
+        assert expense.status == ExpenseStatus.PAID
+        assert expense.amount_paid == Decimal("150.00")
+        assert expense.balance_due == Decimal("-50.00")
+
+    def test_payment_on_paid_expense_accepted(self, db):
         from app.modules.expenses.schemas import ExpensePaymentCreate
         from app.modules.expenses.service import ExpenseService
 
@@ -276,11 +278,17 @@ class TestExpensePaymentSettlement:
             ExpensePaymentCreate(amount=Decimal("100.00"), paymentDate=date.today()),
         )
 
-        with pytest.raises(BadRequestException):
-            service.record_payment(
-                expense.id,
-                ExpensePaymentCreate(amount=Decimal("10.00"), paymentDate=date.today()),
-            )
+        # A further payment on a settled expense is accepted and drives the
+        # balance negative (credit owed back).
+        service.record_payment(
+            expense.id,
+            ExpensePaymentCreate(amount=Decimal("10.00"), paymentDate=date.today()),
+        )
+
+        db.refresh(expense)
+        assert expense.status == ExpenseStatus.PAID
+        assert expense.amount_paid == Decimal("110.00")
+        assert expense.balance_due == Decimal("-10.00")
 
 
 class TestExpenseCanceledFirstClass:

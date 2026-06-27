@@ -64,6 +64,7 @@ export function RecordPaymentModal({
     onSuccess
 }: RecordPaymentModalProps) {
     const isEditing = !!editPayment;
+
     const [amount, setAmount] = useState(String(prefillAmount ?? balanceDue));
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
     const [paymentMethod, setPaymentMethod] = useState("bank_transfer");

@@ -78,10 +78,9 @@ class Expense(Base):
             "amount_paid >= 0",
             name="ck_expenses_amount_paid_non_negative",
         ),
-        CheckConstraint(
-            "balance_due >= 0",
-            name="ck_expenses_balance_due_non_negative",
-        ),
+        # NOTE: no ``balance_due >= 0`` CHECK on purpose. Overpayment is
+        # recordable and balance_due (= total_due - amount_paid) may go
+        # negative to represent a credit owed back. See migration a6b7c8d9e0f1.
         CheckConstraint(
             "currency IN ('KES', 'USD', 'EUR', 'GBP')",
             name="ck_expenses_valid_currency",
