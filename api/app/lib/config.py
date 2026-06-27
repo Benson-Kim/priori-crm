@@ -54,8 +54,15 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
     AUTH_MAX_OTP_ATTEMPTS: int = Field(default=5, ge=1, le=20)
+    AUTH_MAX_RESET_ATTEMPTS: int = Field(default=5, ge=1, le=20)
     AUTH_LOGIN_MAX_ATTEMPTS: int = Field(default=10, ge=3, le=100)
     AUTH_LOGIN_WINDOW_SECONDS: int = Field(default=300, ge=30, le=3600)
+
+    # Password reset (forgot-password flow)
+    PASSWORD_RESET_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=120)
+    # Base URL of the frontend, used to build the password-reset link in the
+    # email (e.g. https://app.example.com -> <base>/reset-password?token=...).
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
     RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
     TOKEN_DENYLIST_BACKEND: Literal["memory", "redis"] = "memory"

@@ -50,6 +50,36 @@ class LogoutRequest(BaseModel):
     refresh_token: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request a password-reset link.
+
+    Carries only the email. The endpoint always responds generically so it
+    cannot be used to discover which addresses have accounts.
+    """
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Complete a password reset with the emailed token and a new password."""
+
+    token: str = Field(..., min_length=1, max_length=512)
+    new_password: str = Field(
+        ...,
+        min_length=PASSWORD_MIN_LENGTH,
+        max_length=PASSWORD_MAX_LENGTH,
+        alias="newPassword",
+    )
+
+    model_config = {"populate_by_name": True}
+
+    @field_validator("new_password")
+    @classmethod
+    def _check_password_policy(cls, v: str) -> str:
+        """Enforce the shared password policy on the new password."""
+        return validate_password_strength(v)
+
+
 # Response Schemas
 class MessageResponse(BaseModel):
     """Generic message response."""
