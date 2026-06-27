@@ -59,7 +59,11 @@
     <link rel="modulepreload" href="/src/main.tsx" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- First-frame placeholder shown until React mounts; replaced on render.
+           Uses the app background so startup never flashes stark white. -->
+      <div style="position:fixed;inset:0;background:#f3f4f6"></div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
