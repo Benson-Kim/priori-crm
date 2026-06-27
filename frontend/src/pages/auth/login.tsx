@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/Label";
 import { useAuth } from "@/hooks/auth-context";
 import { ApiError } from "@/lib/api";
 import { setRememberMe } from "@/lib/auth-storage";
+import { Eye, EyeOff } from "lucide-react";
 
 interface LocationState {
   from?: { pathname?: string };
@@ -21,6 +22,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMeLocal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -121,12 +123,27 @@ export default function LoginPage() {
             <Input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={submitting}
+              suffix={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="text-gray-500 hover:text-gray-700 cursor-pointer"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-5" />
+                  ) : (
+                    <Eye className="size-5" />
+                  )}
+                </button>
+              }
             />
           </div>
 
@@ -149,7 +166,7 @@ export default function LoginPage() {
               <Label htmlFor="remember_me" className="text-gray-700 text-[16px] leading-6">Remember me</Label>
             </div>
             <Link
-              to="#"
+              to="/forgot-password"
               className="text-[16px] text-priori-purple hover:underline"
             >
               Forgot Password?

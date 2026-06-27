@@ -57,6 +57,24 @@ class EmailService:
             body_text=body_text,
         )
 
+    def send_password_reset(self, recipient: str, reset_link: str) -> dict[str, Any]:
+        """Send a password-reset link to the given email address."""
+        subject = f"{settings.APP_NAME} \u2014 Reset your password"
+        body_html = self._build_password_reset_html(reset_link)
+        body_text = (
+            "We received a request to reset your password.\n\n"
+            f"Open this link to choose a new password:\n{reset_link}\n\n"
+            f"This link expires in {settings.PASSWORD_RESET_EXPIRE_MINUTES} "
+            "minutes. If you did not request a password reset, you can safely "
+            "ignore this email \u2014 your password will not change."
+        )
+        return self._send(
+            recipient=recipient,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+        )
+
     def send_document_email(
         self,
         recipient: str,
@@ -217,6 +235,47 @@ class EmailService:
             msg.attach(part)
 
         return msg.as_string()
+
+    @staticmethod
+    def _build_password_reset_html(reset_link: str) -> str:
+        """Build the HTML template for password-reset emails."""
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin:0;padding:0;font-family:Inter,system-ui,sans-serif;">
+            <div style="max-width:480px;margin:0 auto;padding:32px;">
+                <h2 style="color:#1A1A2E;margin-bottom:8px;font-size:24px;">
+                    Reset your password
+                </h2>
+                <p style="color:#6B7280;margin-bottom:24px;font-size:14px;">
+                    We received a request to reset your {settings.APP_NAME}
+                    password. Click the button below to choose a new one.
+                </p>
+                <div style="text-align:center;margin:24px 0;">
+                    <a href="{reset_link}"
+                       style="display:inline-block;padding:12px 28px;background:#3a1078;
+                              color:#fff;text-decoration:none;border-radius:8px;
+                              font-size:15px;font-weight:600;">
+                        Reset password
+                    </a>
+                </div>
+                <p style="color:#6B7280;font-size:13px;margin-top:24px;">
+                    This link expires in {settings.PASSWORD_RESET_EXPIRE_MINUTES}
+                    minutes. If you didn't request this, you can safely ignore
+                    this email &mdash; your password will not change.
+                </p>
+                <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
+                <p style="color:#9CA3AF;font-size:12px;text-align:center;">
+                    {settings.APP_NAME} &copy; {datetime.now().year}
+                </p>
+            </div>
+        </body>
+        </html>
+        """
 
     @staticmethod
     def _build_otp_html(otp_code: str) -> str:

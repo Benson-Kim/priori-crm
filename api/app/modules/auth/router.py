@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends
 
 from app.common.dependencies import DbSession, verify_internal_secret
 from app.modules.auth.schemas import (
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     MessageResponse,
     RefreshResponse,
     RefreshTokenRequest,
     ResendOTPRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserResponse,
     VerifyOTPRequest,
@@ -51,6 +53,35 @@ def resend_otp(body: ResendOTPRequest, db: DbSession):
     return MessageResponse(
         message="If the account exists, a new verification code has been sent."
     )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(body: ForgotPasswordRequest, db: DbSession):
+    """Request a password-reset link.
+
+    Always returns the same generic confirmation regardless of whether the
+    account exists, so the endpoint cannot be used to enumerate users.
+    """
+    auth_service = AuthService(db)
+    auth_service.request_password_reset(body.email)
+    return MessageResponse(
+        message=(
+            "If an account exists for that email, a password reset link has been sent."
+        )
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(body: ResetPasswordRequest, db: DbSession):
+    """Complete a password reset with the emailed token and a new password.
+
+    An invalid / expired / used token surfaces a single generic 401. On
+    success the password is changed and all existing sessions are revoked;
+    the user signs in again normally (this endpoint does not issue tokens).
+    """
+    auth_service = AuthService(db)
+    auth_service.reset_password(body.token, body.new_password)
+    return MessageResponse(message="Your password has been reset. You can now sign in.")
 
 
 @router.post("/refresh", response_model=RefreshResponse)
