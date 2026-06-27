@@ -91,8 +91,32 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
+/**
+ * Optional auth-failure handler, registered by the React layer (AuthProvider).
+ *
+ * The API client is a plain module and cannot call react-router directly. When
+ * a 401 cannot be recovered, it invokes this handler so the app can clear auth
+ * state and navigate to /login WITHOUT a full-page reload. A hard reload wipes
+ * in-memory state and re-runs the whole bootstrap, which is exactly the race
+ * that caused the blank screen / login flash.
+ */
+type AuthFailureHandler = () => void;
+let authFailureHandler: AuthFailureHandler | null = null;
+
+export function setAuthFailureHandler(handler: AuthFailureHandler | null): void {
+  authFailureHandler = handler;
+}
+
 function redirectToLogin(): void {
   clearTokens();
+
+  // Preferred path: let the React layer navigate via react-router (no reload).
+  if (authFailureHandler) {
+    authFailureHandler();
+    return;
+  }
+
+  // Fallback for non-React / early-boot contexts where no handler is set yet.
   if (typeof window !== "undefined" && window.location.pathname !== "/login") {
     window.location.assign("/login");
   }
