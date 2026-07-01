@@ -84,7 +84,14 @@ export interface PurchaseOrderSendPayload {
 export interface PurchaseOrderPaymentPayload {
   amount: number;
   paymentDate: string;
-  reference?: string | null;
+  /** Required on create (must be non-empty). */
+  reference: string;
+  /** Free-text reference of the invoice/bill(s) paid against (optional). */
+  invoiceNumber?: string | null;
+  /** ISO 4217 currency the payment was made in (may differ from the PO). */
+  currency: string;
+  /** Rate converting payment currency -> PO currency (> 0; 1 when same). */
+  exchangeRate: number;
   notes?: string | null;
   /** Optional proof-of-payment document UUID (must belong to the same PO). */
   documentId?: string | null;
@@ -94,6 +101,9 @@ export interface PurchaseOrderPaymentUpdatePayload {
   amount?: number;
   paymentDate?: string;
   reference?: string | null;
+  invoiceNumber?: string | null;
+  currency?: string;
+  exchangeRate?: number;
   notes?: string | null;
 }
 
@@ -241,7 +251,8 @@ export async function uploadPurchaseOrderDocument(
   id: string,
   file: File,
   source: "form" | "view" | "payment_modal" = "view",
-  paymentId?: string
+  paymentId?: string,
+  documentType: "invoice" | "pop" | "other" = "other"
 ): Promise<PurchaseOrderDocument> {
   const formData = new FormData();
   formData.append("file", file);
@@ -249,6 +260,9 @@ export async function uploadPurchaseOrderDocument(
   // Group proof-of-payment documents under their payment so a payment can
   // carry several; omitted for PO-level (form / view) attachments.
   if (paymentId) formData.append("paymentId", paymentId);
+  // Classify payment-modal uploads as the invoice being paid or the proof of
+  // payment (POP). PO-level attachments stay 'other'.
+  formData.append("documentType", documentType);
   return apiUpload<PurchaseOrderDocument>(
     `purchase-orders/${id}/documents`,
     formData
