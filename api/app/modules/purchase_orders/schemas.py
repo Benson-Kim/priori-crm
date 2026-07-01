@@ -375,7 +375,9 @@ class PurchaseOrderCreate(BaseModel):
         ),
     )
 
-    @field_validator("notes", "terms_and_conditions", "vat_compliance_ref", mode="before")
+    @field_validator(
+        "notes", "terms_and_conditions", "vat_compliance_ref", mode="before"
+    )
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -459,7 +461,9 @@ class PurchaseOrderUpdate(BaseModel):
         alias="vatComplianceRef",
     )
 
-    @field_validator("notes", "terms_and_conditions", "vat_compliance_ref", mode="before")
+    @field_validator(
+        "notes", "terms_and_conditions", "vat_compliance_ref", mode="before"
+    )
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
