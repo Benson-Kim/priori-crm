@@ -7,6 +7,7 @@ import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
+import { VAT_RATE_OPTIONS } from "@/lib/constants";
 import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
   deletePurchaseOrder,
@@ -20,6 +21,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
+import { Select } from "../ui/Select";
+import { roundMoney } from "./utils";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
@@ -132,6 +135,23 @@ export function PurchaseOrderEditor({
 
   const [notes, setNotes] = useState(initialData?.notes ?? "");
 
+  // PO-level VAT (PO-27): a single charge on the subtotal, not per line.
+  const [vatEnabled, setVatEnabled] = useState<boolean>(
+    initialData?.vatEnabled ?? false
+  );
+  // Rate held as a whole-number percent string for the selector (e.g. "16").
+  const [vatRatePct, setVatRatePct] = useState<string>(() => {
+    const fraction = initialData?.vatRate;
+    return fraction != null ? String(Math.round(fraction * 100)) : "16";
+  });
+  // VAT compliance ref defaults from the owner profile's tax PIN on a new PO
+  // (editable). On an existing PO the persisted value wins.
+  const isEditingDoc = !!initialData?.poReference;
+  const [vatComplianceRef, setVatComplianceRef] = useState<string>(
+    initialData?.vatComplianceRef ??
+    (isEditingDoc ? "" : (profile?.taxPin ?? ""))
+  );
+
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
     initialData?.termsAndConditions ?? (isEditing ? "" : orgDefaultTerms)
@@ -158,15 +178,24 @@ export function PurchaseOrderEditor({
   const [isActionRunning, setIsActionRunning] = useState(false);
 
 
-  // Derived totals (client-side preview; server is the source of truth on save).
-  const totals = useMemo(
-    () => calculateTotals(lineItems, null, ""),
-    [lineItems]
-  );
+  // VAT rate as a fraction for computation (e.g. 0.16).
+  const vatRateFraction = useMemo(() => {
+    const pct = Number.parseFloat(vatRatePct);
+    return Number.isFinite(pct) ? pct / 100 : 0;
+  }, [vatRatePct]);
+
+  // Derived totals (client-side preview; server is the source of truth on
+  // save). PO-27: VAT is charged on the subtotal, not per line, so line tax is
+  // ignored here and tax is subtotal * rate when enabled.
+  const totals = useMemo(() => {
+    const base = calculateTotals(lineItems, null, "");
+    const taxTotal = vatEnabled ? roundMoney(base.subtotal * vatRateFraction) : 0;
+    return { subtotal: base.subtotal, taxTotal };
+  }, [lineItems, vatEnabled, vatRateFraction]);
 
   const vatLabel = useMemo(
-    () => buildVatLabel(lineItems.map((item) => item.taxType)),
-    [lineItems]
+    () => (vatEnabled ? `VAT (${vatRatePct}%)` : "VAT"),
+    [vatEnabled, vatRatePct]
   );
 
   // Line item handlers
@@ -226,12 +255,14 @@ export function PurchaseOrderEditor({
       (r) => r.description.trim() || r.itemName.trim()
     );
 
+    // PO-27: per-line tax is retired for POs — always send no_tax; VAT is
+    // carried at the PO level below.
     const items: PurchaseOrderLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
       description: r.description.trim(),
       quantity: Number.parseFloat(r.quantity),
       unitPrice: Number.parseFloat(r.unitPrice),
-      taxType: r.taxType || "no_tax",
+      taxType: "no_tax",
     }));
 
     return {
@@ -241,6 +272,9 @@ export function PurchaseOrderEditor({
       notes: notes.trim() || undefined,
       termsAndConditions: termsAndConditions.trim() || null,
       lineItems: items,
+      vatEnabled,
+      vatRate: vatEnabled ? vatRateFraction : null,
+      vatComplianceRef: vatComplianceRef.trim() || null,
     };
   };
 
