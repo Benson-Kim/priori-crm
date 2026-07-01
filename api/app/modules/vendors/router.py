@@ -19,7 +19,10 @@ from app.modules.vendors.schemas import (
     VendorDeleteResponse,
     VendorDuplicateCheckResponse,
     VendorFilterParams,
+    VendorInvoicesCard,
     VendorPayablesSummary,
+    VendorPaymentsCard,
+    VendorPurchaseOrdersCard,
     VendorResponse,
     VendorStatement,
     VendorStatusCounts,
@@ -491,4 +494,191 @@ def get_vendor_statement(
         vendor_id=vendor_id,
         period_start=period_start,
         period_end=period_end,
+    )
+
+
+# SUPPLIER STATEMENTS CARDS (PO-33)
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders",
+    response_model=VendorPurchaseOrdersCard,
+    summary="Vendor 'Total POs' card",
+    description=(
+        "Non-DRAFT purchase orders for the vendor (PO Ref, Date, Amount) plus "
+        "a paid / pending / overpaid summary. Filter by order_date via "
+        "dateFrom / dateTo. Independent of the other cards."
+    ),
+    responses={
+        200: {"description": "Purchase-orders card data"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_purchase_orders_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> VendorPurchaseOrdersCard:
+    return service.get_purchase_orders_card(vendor_id, date_from, date_to)
+
+
+@router.get(
+    "/{vendor_id}/cards/payments",
+    response_model=VendorPaymentsCard,
+    summary="Vendor 'Total Payments' card",
+    description=(
+        "The vendor's purchase-order payments (Date, Invoice #, Payment Ref #, "
+        "Amount, Document). Filter by payment_date via dateFrom / dateTo."
+    ),
+    responses={
+        200: {"description": "Payments card data"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_payments_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> VendorPaymentsCard:
+    return service.get_payments_card(vendor_id, date_from, date_to)
+
+
+@router.get(
+    "/{vendor_id}/cards/invoices",
+    response_model=VendorInvoicesCard,
+    summary="Vendor 'Total Invoices' card",
+    description=(
+        "The vendor's invoices/bills (from the expenses ledger). Filter by "
+        "invoice date via dateFrom / dateTo."
+    ),
+    responses={
+        200: {"description": "Invoices card data"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_invoices_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> VendorInvoicesCard:
+    return service.get_invoices_card(vendor_id, date_from, date_to)
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders/export/excel",
+    summary="Export the vendor 'Total POs' card to Excel",
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_purchase_orders_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_purchase_orders_card(vendor_id, date_from, date_to)
+    exporter = ExcelExporter()
+    xlsx = await run_export(exporter.export_vendor_purchase_orders, card.rows)
+    filename = f"Vendor_{vendor_id}_PurchaseOrders_{date.today():%Y%m%d}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{vendor_id}/cards/payments/export/excel",
+    summary="Export the vendor 'Total Payments' card to Excel",
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_payments_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_payments_card(vendor_id, date_from, date_to)
+    exporter = ExcelExporter()
+    xlsx = await run_export(exporter.export_vendor_payments, card.rows)
+    filename = f"Vendor_{vendor_id}_Payments_{date.today():%Y%m%d}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{vendor_id}/cards/invoices/export/excel",
+    summary="Export the vendor 'Total Invoices' card to Excel",
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_invoices_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from app.common.excel import ExcelExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_invoices_card(vendor_id, date_from, date_to)
+    exporter = ExcelExporter()
+    xlsx = await run_export(exporter.export_vendor_invoices, card.rows)
+    filename = f"Vendor_{vendor_id}_Invoices_{date.today():%Y%m%d}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
