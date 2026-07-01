@@ -190,6 +190,33 @@ class PurchaseOrderService(BaseDocumentService):
         """Delegate to the shared sum_line_totals helper (no local calc)."""
         return sum_line_totals(line_items_data)
 
+    @staticmethod
+    def _strip_line_tax(line_items_data: list[dict]) -> list[dict]:
+        """Force per-line tax to no_tax/0 for purchase orders (PO-27).
+
+        PO VAT is charged once on the subtotal (PO-level), so a line item must
+        never carry per-line tax. Mutating the built dicts here keeps the
+        persisted rows consistent (tax_type='no_tax', tax_amount=0) and the
+        subtotal derivation unaffected (line_total is untouched).
+        """
+        for item in line_items_data:
+            item["tax_type"] = TaxType.NO_TAX.value
+            item["tax_amount"] = Decimal("0.00")
+        return line_items_data
+
+    def _owner_vat_compliance_ref(self) -> str | None:
+        """Default VAT compliance reference from the owner profile's tax_pin.
+
+        Option A (PO-27): the PO's ``vat_compliance_ref`` defaults from the
+        organisation's own tax PIN, editable per PO. Resolved via OwnerService
+        (lazy import to avoid the module-level cycle) and tolerant of a
+        missing profile / tax_pin (returns None).
+        """
+        from app.modules.owner.service import OwnerService
+
+        owner = OwnerService(self._db).get_or_create()
+        return getattr(owner, "tax_pin", None)
+
     # CREATE
 
     def create(
