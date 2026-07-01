@@ -340,7 +340,9 @@ def calculate_purchase_order_totals(
         ),
     ] = None,
 ) -> PurchaseOrderCalculationResponse:
-    return service.calculate_totals(line_items, vat_enabled=vat_enabled, vat_rate=vat_rate)
+    return service.calculate_totals(
+        line_items, vat_enabled=vat_enabled, vat_rate=vat_rate
+    )
 
 
 @router.post(
