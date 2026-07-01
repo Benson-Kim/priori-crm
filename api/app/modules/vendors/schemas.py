@@ -399,6 +399,92 @@ class VendorStatement(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Supplier Statements cards (PO-33)
+
+
+class VendorPurchaseOrderRow(BaseModel):
+    """One PO row in the vendor 'Total POs' card.
+
+    ``derived_status`` is a display bucket computed from the PO's ledger
+    (paid / pending / overpaid). DRAFT POs are excluded upstream and there is
+    no 'overdue' bucket for POs (they carry no payment due date).
+    """
+
+    id: UUID
+    po_reference: str
+    order_date: date
+    amount: Decimal
+    currency: str
+    derived_status: Literal["paid", "pending", "overpaid"]
+
+    model_config = {"from_attributes": True}
+
+
+class VendorPurchaseOrdersCard(BaseModel):
+    """'Total POs' card payload: the row list plus the summary counts."""
+
+    rows: list[VendorPurchaseOrderRow] = Field(default_factory=list)
+    paid: int = 0
+    pending: int = 0
+    overpaid: int = 0
+
+
+class VendorPaymentRow(BaseModel):
+    """One payment row in the vendor 'Total Payments' card.
+
+    Mirrors the PO payments table columns minus Actions:
+    #, Date, Invoice #, Payment Ref #, Amount, Document(presence).
+    """
+
+    id: UUID
+    po_reference: str
+    payment_date: date
+    invoice_number: str | None = None
+    reference: str | None = None
+    amount: Decimal
+    currency: str
+    has_document: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class VendorPaymentsCard(BaseModel):
+    """'Total Payments' card payload."""
+
+    rows: list[VendorPaymentRow] = Field(default_factory=list)
+    total_amount: Decimal = Field(default=Decimal("0.00"))
+
+
+class VendorInvoiceRow(BaseModel):
+    """One invoice/bill row in the vendor 'Total Invoices' card (from expenses)."""
+
+    id: UUID
+    ref_no: str
+    invoice_date: date
+    amount: Decimal
+    balance: Decimal
+    status: str
+    currency: str
+
+    model_config = {"from_attributes": True}
+
+
+class VendorInvoicesCard(BaseModel):
+    """'Total Invoices' card payload."""
+
+    rows: list[VendorInvoiceRow] = Field(default_factory=list)
+    total_amount: Decimal = Field(default=Decimal("0.00"))
+
+
+class VendorCardDateFilter(BaseModel):
+    """Independent date-range filter for a single Supplier Statements card."""
+
+    date_from: date | None = Field(None, alias="dateFrom")
+    date_to: date | None = Field(None, alias="dateTo")
+
+    model_config = {"populate_by_name": True}
+
+
 class VendorFilterParams(BaseModel):
     """Query parameters for the vendor list endpoint."""
 
