@@ -1621,6 +1621,9 @@ Best regards,
                     subtotal=original.subtotal,
                     tax_total=original.tax_total,
                     total=original.total,
+                    vat_enabled=original.vat_enabled,
+                    vat_rate=original.vat_rate,
+                    vat_compliance_ref=None,  # cleared — specific to the original
                     compliance_ref=None,  # cleared — specific to the original
                     notes=original.notes,
                     terms_and_conditions=original.terms_and_conditions,
