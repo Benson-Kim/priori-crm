@@ -682,3 +682,93 @@ async def export_vendor_invoices_card(
         ),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# Per-card PDF exports (PO-33). Each renders a branded PDF of the card for its
+# own dateFrom/dateTo, off the event loop via the shared run_export limiter.
+
+
+def _pdf_response(pdf_bytes: bytes, filename: str):
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders/pdf",
+    summary="Download the vendor 'Total POs' card as PDF",
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_purchase_orders_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.card_pdf import CardPdfExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_purchase_orders_card(vendor_id, date_from, date_to)
+    exporter = CardPdfExporter(service._db)
+    pdf = await run_export(
+        exporter.export_purchase_orders, card, date_from, date_to
+    )
+    filename = f"Vendor_{vendor_id}_PurchaseOrders_{date.today():%Y%m%d}.pdf"
+    return _pdf_response(pdf, filename)
+
+
+@router.get(
+    "/{vendor_id}/cards/payments/pdf",
+    summary="Download the vendor 'Total Payments' card as PDF",
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_payments_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.card_pdf import CardPdfExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_payments_card(vendor_id, date_from, date_to)
+    exporter = CardPdfExporter(service._db)
+    pdf = await run_export(exporter.export_payments, card, date_from, date_to)
+    filename = f"Vendor_{vendor_id}_Payments_{date.today():%Y%m%d}.pdf"
+    return _pdf_response(pdf, filename)
+
+
+@router.get(
+    "/{vendor_id}/cards/invoices/pdf",
+    summary="Download the vendor 'Total Invoices' card as PDF",
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_invoices_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.card_pdf import CardPdfExporter
+    from app.common.export_limiter import run_export
+
+    card = service.get_invoices_card(vendor_id, date_from, date_to)
+    exporter = CardPdfExporter(service._db)
+    pdf = await run_export(exporter.export_invoices, card, date_from, date_to)
+    filename = f"Vendor_{vendor_id}_Invoices_{date.today():%Y%m%d}.pdf"
+    return _pdf_response(pdf, filename)
