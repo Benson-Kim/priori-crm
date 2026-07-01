@@ -228,6 +228,144 @@ class DocumentPDFGenerator:
             include_balance=include_balance,
         )
 
+    def generate_card_pdf(
+        self,
+        *,
+        title: str,
+        headers: list[str],
+        rows: list[list[str]],
+        column_aligns: list[str] | None = None,
+        subtitle: str | None = None,
+        owner=None,
+        logo_bytes: bytes | None = None,
+    ) -> bytes:
+        """Return PDF bytes for a generic branded, tabular list export.
+
+        A deliberately small, reusable renderer for "list of rows" exports
+        (e.g. the vendor Supplier Statements cards) that do NOT map to a
+        single branded document. It shares the owner-branding header (logo +
+        company block) and the table styling with the document PDFs so the
+        look never drifts, but takes fully pre-formatted string cells so the
+        caller owns the column shape (parity with the matching Excel export).
+
+        - ``headers``: the column header labels.
+        - ``rows``: pre-stringified cell values, one list per row.
+        - ``column_aligns``: optional per-column alignment ('LEFT'|'CENTER'|
+          'RIGHT'); defaults to LEFT. Length must match ``headers``.
+        - ``subtitle``: an optional line under the title (e.g. a date range).
+        """
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        content_width = doc.width
+        elements: list = []
+
+        # Owner-branding header (logo + company block), mirroring the document
+        # PDFs; falls back to the app name when no owner is supplied.
+        logo_flowable = self._build_logo(logo_bytes)
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+        left_cell: list = []
+        if logo_flowable is not None:
+            left_cell.append(logo_flowable)
+            left_cell.append(Spacer(1, 4 * mm))
+        left_cell.append(Paragraph(owner_name, _HEADER_STYLE))
+        if owner is not None:
+            for field in (
+                getattr(owner, "address", None),
+                getattr(owner, "email", None),
+                getattr(owner, "phone", None),
+            ):
+                for line in _split_lines(field):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
+
+        header_table = Table(
+            [[left_cell, Paragraph(title, _TITLE_STYLE)]],
+            colWidths=[content_width - 85 * mm, 85 * mm],
+        )
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(header_table)
+        if subtitle:
+            elements.append(Spacer(1, 3 * mm))
+            elements.append(Paragraph(subtitle, _SECTION_LABEL_STYLE))
+        elements.append(Spacer(1, 8 * mm))
+
+        aligns = column_aligns or ["LEFT"] * len(headers)
+
+        def _cell_style(align: str, *, header: bool = False) -> ParagraphStyle:
+            if header:
+                return {
+                    "CENTER": _ITEM_HEADER_CENTER_STYLE,
+                    "RIGHT": _ITEM_HEADER_RIGHT_STYLE,
+                }.get(align, _ITEM_HEADER_STYLE)
+            return {
+                "CENTER": _IQ_STYLE,
+                "RIGHT": _ITEM_NUM_STYLE,
+            }.get(align, _ITEM_STYLE)
+
+        table_rows: list = [
+            [
+                Paragraph(str(h), _cell_style(aligns[i], header=True))
+                for i, h in enumerate(headers)
+            ]
+        ]
+        for row in rows:
+            table_rows.append(
+                [
+                    Paragraph("" if v is None else str(v), _cell_style(aligns[i]))
+                    for i, v in enumerate(row)
+                ]
+            )
+
+        # Empty-state row spanning all columns.
+        if not rows:
+            table_rows.append(
+                [Paragraph("No records for this period.", _ITEM_STYLE)]
+                + [Paragraph("", _ITEM_STYLE) for _ in headers[1:]]
+            )
+
+        col_width = content_width / len(headers)
+        table = Table(
+            table_rows,
+            colWidths=[col_width] * len(headers),
+            repeatRows=1,
+        )
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        elements.append(table)
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        logger.info("Built card PDF '%s' with %d rows", title, len(rows))
+        return pdf_bytes
+
     # private implementation
 
     def _build_purchase_order_pdf(
