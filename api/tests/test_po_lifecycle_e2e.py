@@ -143,7 +143,13 @@ class TestLifecycleE2E:
         half = (total / 2).quantize(Decimal("0.01"))
         service.record_payment(
             po.id,
-            PurchaseOrderPaymentCreate(amount=half, paymentDate=date.today()),
+            PurchaseOrderPaymentCreate(
+                amount=half,
+                paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
+            ),
         )
         db.flush()
         assert po.status == PurchaseOrderStatus.SENT
@@ -153,7 +159,13 @@ class TestLifecycleE2E:
         # FINAL payment clears the balance -> auto-settle to PAID.
         service.record_payment(
             po.id,
-            PurchaseOrderPaymentCreate(amount=total - half, paymentDate=date.today()),
+            PurchaseOrderPaymentCreate(
+                amount=total - half,
+                paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
+            ),
         )
         db.flush()
         assert po.status == PurchaseOrderStatus.PAID
@@ -165,7 +177,11 @@ class TestLifecycleE2E:
         service.record_payment(
             po.id,
             PurchaseOrderPaymentCreate(
-                amount=Decimal("1.00"), paymentDate=date.today()
+                amount=Decimal("1.00"),
+                paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
         db.flush()
@@ -188,7 +204,11 @@ class TestLifecycleE2E:
             service.record_payment(
                 po.id,
                 PurchaseOrderPaymentCreate(
-                    amount=Decimal("10.00"), paymentDate=date.today()
+                    amount=Decimal("10.00"),
+                    paymentDate=date.today(),
+                    reference="TXN-TEST",
+                    currency="KES",
+                    exchangeRate=Decimal("1"),
                 ),
             )
 
