@@ -8,12 +8,15 @@ Mirrors the Expense models (vendor-facing, document attachments) rather
 than the Quote/Invoice (customer-facing) models. Purchase Orders are
 raised against a Vendor.
 
-Financial formula:
+Financial formula (PO-27 — PO-level VAT):
     line_total = quantity x unit_price
-    tax_amount = line_total x tax_rate   (derived from tax_type via get_tax_rate)
     subtotal   = Σ line_total
-    tax_total  = Σ tax_amount
+    tax_total  = round(subtotal x vat_rate) when vat_enabled, else 0
     total      = subtotal + tax_total    ← no discount in v1
+
+VAT is a single PO-level charge on the subtotal, NOT a per-line tax: line
+items always persist tax_type=no_tax / tax_amount=0. The VAT computation
+lives in a single place — common.financial.calculate_subtotal_vat.
 
 NOTE on converted_bill_id: the Bills module/table does not exist yet, so
 this is a nullable plain UUID column WITHOUT a database foreign-key
@@ -202,8 +205,9 @@ class PurchaseOrder(Base):
         nullable=True,
         comment=(
             "Applied VAT rate as a fraction (e.g. 0.1600 for 16%). Required "
-            "when vat_enabled is true; NULL otherwise. Sourced from the shared "
-            "TAX_RATES table via the selected tax type."
+            "when vat_enabled is true; NULL otherwise. A free rate chosen by "
+            "the user (range enforced 0..1 by CHECK), NOT looked up from the "
+            "per-line TAX_RATES table."
         ),
     )
 
