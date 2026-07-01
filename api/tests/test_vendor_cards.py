@@ -281,3 +281,33 @@ class TestServiceAndExport:
         xlsx = ExcelExporter().export_vendor_purchase_orders(card.rows)
         assert isinstance(xlsx, bytes)
         assert len(xlsx) > 0
+
+    def test_pdf_export_renders_for_each_card(self, db):
+        from app.common.card_pdf import CardPdfExporter
+
+        vendor = _vendor(db)
+        po = _make_po(db, vendor)
+        _send(db, po)
+        _pay(db, po, Decimal("10.00"))
+        _make_expense(db, vendor)
+
+        svc = VendorService(db)
+        exporter = CardPdfExporter(db)
+
+        po_pdf = exporter.export_purchase_orders(svc.get_purchase_orders_card(vendor.id))
+        pay_pdf = exporter.export_payments(svc.get_payments_card(vendor.id))
+        inv_pdf = exporter.export_invoices(svc.get_invoices_card(vendor.id))
+
+        for pdf in (po_pdf, pay_pdf, inv_pdf):
+            assert isinstance(pdf, bytes)
+            # A real PDF stream starts with the %PDF magic bytes.
+            assert pdf[:4] == b"%PDF"
+
+    def test_pdf_export_handles_empty_card(self, db):
+        # An empty card must still render a valid (headers-only) PDF, not error.
+        from app.common.card_pdf import CardPdfExporter
+
+        vendor = _vendor(db)
+        card = VendorService(db).get_purchase_orders_card(vendor.id)
+        pdf = CardPdfExporter(db).export_purchase_orders(card)
+        assert pdf[:4] == b"%PDF"
