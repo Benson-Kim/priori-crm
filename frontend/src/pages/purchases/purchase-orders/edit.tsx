@@ -31,6 +31,12 @@ export default function EditPurchaseOrderPage() {
                 deliveryDate: initialData.delivery_date,
                 notes: initialData.notes || undefined,
                 termsAndConditions: initialData.terms_and_conditions,
+                // VAT fields (PO-27). Read via a narrow cast until the OpenAPI
+                // type includes them; falls back cleanly when absent.
+                vatEnabled: (initialData as { vat_enabled?: boolean }).vat_enabled ?? false,
+                vatRate: (initialData as { vat_rate?: number | null }).vat_rate ?? null,
+                vatComplianceRef:
+                    (initialData as { vat_compliance_ref?: string | null }).vat_compliance_ref ?? null,
                 lineItems: (initialData.line_items ?? []).map((li: PurchaseOrderLineItem) => ({
                     id: li.id,
                     itemName: li.item_name,
