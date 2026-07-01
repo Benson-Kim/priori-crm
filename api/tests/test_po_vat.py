@@ -19,6 +19,7 @@ DB-backed cases are PostgreSQL-only; the pure schema/preview cases run
 everywhere.
 """
 
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -73,7 +74,13 @@ def _line(**kw) -> PurchaseOrderLineItemCreate:
 
 
 def _create_payload(**kw) -> PurchaseOrderCreate:
-    base = {"order_date": date.today(), "line_items": [_line()]}
+    # vendor_id is required by the schema. DB-backed tests pass a real vendor's
+    # id (overriding this default); the pure-schema tests only need any UUID.
+    base = {
+        "vendor_id": uuid.uuid4(),
+        "order_date": date.today(),
+        "line_items": [_line()],
+    }
     base.update(kw)
     return PurchaseOrderCreate(**base)
 
@@ -134,7 +141,7 @@ class TestVatComplianceRefDefault:
         # must default from it when the client omits it.
         owner = OwnerService(db)
         owner.get_or_create()
-        owner.update(OwnerProfileUpdate(taxPin="OWNER-PIN-999"))
+        owner.update(OwnerProfileUpdate(fullName="Acme Ltd", taxPin="OWNER-PIN-999"))
         db.flush()
 
         vendor = _vendor(db)
@@ -147,7 +154,7 @@ class TestVatComplianceRefDefault:
     def test_explicit_ref_overrides_owner_default(self, db):
         owner = OwnerService(db)
         owner.get_or_create()
-        owner.update(OwnerProfileUpdate(taxPin="OWNER-PIN-999"))
+        owner.update(OwnerProfileUpdate(fullName="Acme Ltd", taxPin="OWNER-PIN-999"))
         db.flush()
 
         vendor = _vendor(db)
@@ -167,7 +174,7 @@ class TestVatComplianceRefDefault:
         # new owner-derived vat_compliance_ref.
         owner = OwnerService(db)
         owner.get_or_create()
-        owner.update(OwnerProfileUpdate(taxPin="OWNER-PIN-999"))
+        owner.update(OwnerProfileUpdate(fullName="Acme Ltd", taxPin="OWNER-PIN-999"))
         db.flush()
 
         vendor = _vendor(db, tax_id_pin="VENDOR-PIN-777")
