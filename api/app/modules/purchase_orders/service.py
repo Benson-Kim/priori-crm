@@ -850,11 +850,12 @@ Best regards,
         # PO-level VAT (PO-27): totals must be recomputed when the line items
         # change OR the VAT toggle / rate changes. Resolve the effective VAT
         # inputs from the payload (override) or the persisted values.
+        vat_changed = (
+            "vat_enabled" in data.model_fields_set
+            or "vat_rate" in data.model_fields_set
+        )
         vat_enabled = update_data.get("vat_enabled", purchase_order.vat_enabled)
-        if "vat_rate" in update_data:
-            vat_rate = update_data["vat_rate"]
-        else:
-            vat_rate = purchase_order.vat_rate
+        vat_rate = update_data.get("vat_rate", purchase_order.vat_rate)
         # A disabled VAT must clear the stored rate so the CHECK
         # (enabled => rate present) and the compute stay consistent.
         if not vat_enabled:
@@ -864,12 +865,11 @@ Best regards,
                 detail="vat_rate is required when vat_enabled is true",
                 field="vat_rate",
             )
-        update_data["vat_enabled"] = vat_enabled
-        update_data["vat_rate"] = vat_rate
-
-        vat_changed = "vat_enabled" in data.model_fields_set or (
-            "vat_rate" in data.model_fields_set
-        )
+        # Only stage the VAT columns when they actually change; a neutral
+        # update (e.g. notes-only) must not dirty vat_enabled/vat_rate.
+        if vat_changed:
+            update_data["vat_enabled"] = vat_enabled
+            update_data["vat_rate"] = vat_rate
 
         # Replace line items (full set) when supplied; recompute totals when
         # either the lines or the VAT inputs changed.
@@ -900,6 +900,9 @@ Best regards,
             # The new total can never drop below what has already been paid
             # against the PO — applies to both line-item changes AND VAT
             # changes (gate E: floor guard must run whenever total changes).
+            # Report the field that actually drove the reduction so the client
+            # can surface the error against the right control.
+            offending_field = "line_items" if lines_changed else "vat_enabled"
             if balance_due < Decimal("0.00"):
                 raise BadRequestException(
                     detail=(
@@ -908,7 +911,7 @@ Best regards,
                         f"{purchase_order.amount_paid}). Remove or reduce "
                         "payments first."
                     ),
-                    field="line_items",
+                    field=offending_field,
                 )
 
             update_data["subtotal"] = subtotal
