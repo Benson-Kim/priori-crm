@@ -62,6 +62,11 @@ def _po_line(**kw) -> PurchaseOrderLineItemCreate:
 
 def _make_po(db, vendor, **kw):
     svc = PurchaseOrderService(db)
+    # PO-27: tax is a PO-level charge on the subtotal. Default the helper to
+    # VAT-on at 16% so the row amount includes tax (200 + 16% = 232), unless a
+    # caller overrides the VAT inputs explicitly.
+    kw.setdefault("vat_enabled", True)
+    kw.setdefault("vat_rate", Decimal("0.16"))
     payload = PurchaseOrderCreate(
         vendor_id=vendor.id,
         order_date=kw.pop("order_date", date.today()),
