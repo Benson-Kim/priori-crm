@@ -111,7 +111,9 @@ def downgrade() -> None:
     op.drop_constraint("ck_po_documents_valid_document_type", _DOCUMENTS, type_="check")
     op.drop_column(_DOCUMENTS, "document_type")
 
-    op.drop_constraint("ck_po_payments_exchange_rate_positive", _PAYMENTS, type_="check")
+    op.drop_constraint(
+        "ck_po_payments_exchange_rate_positive", _PAYMENTS, type_="check"
+    )
     op.drop_constraint("ck_po_payments_valid_currency", _PAYMENTS, type_="check")
     op.drop_column(_PAYMENTS, "exchange_rate")
     op.drop_column(_PAYMENTS, "currency")
