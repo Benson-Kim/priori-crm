@@ -75,7 +75,7 @@ def upgrade() -> None:
         "SET currency = po.currency "
         "FROM purchase_orders AS po "
         "WHERE p.po_id = po.id"
-    )
+    )  # noqa: E501
 
     op.create_check_constraint(
         "ck_po_payments_valid_currency",
