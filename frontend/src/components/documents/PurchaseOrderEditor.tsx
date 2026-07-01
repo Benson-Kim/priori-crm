@@ -17,7 +17,7 @@ import {
   type PurchaseOrderResponse,
 } from "@/services/purchaseOrderApi";
 import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
@@ -25,9 +25,10 @@ import { Select } from "../ui/Select";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
+  buildPoVatLabel,
+  calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
-  roundMoney,
   type LineItemRow,
 } from "./utils";
 
@@ -147,9 +148,18 @@ export function PurchaseOrderEditor({
   // (editable). On an existing PO the persisted value wins.
   const isEditingDoc = !!initialData?.poReference;
   const [vatComplianceRef, setVatComplianceRef] = useState<string>(
-    initialData?.vatComplianceRef ??
-    (isEditingDoc ? "" : (profile?.taxPin ?? ""))
+    initialData?.vatComplianceRef ?? ""
   );
+  // The owner profile loads asynchronously, so the tax PIN is usually absent
+  // on first render. Seed the compliance ref from it once it arrives, but
+  // only for a NEW PO and only while the field is still untouched, so we
+  // never clobber a persisted value or something the user has typed.
+  const vatRefTouched = useRef(false);
+  useEffect(() => {
+    if (isEditingDoc || vatRefTouched.current) return;
+    if (initialData?.vatComplianceRef != null) return;
+    if (profile?.taxPin) setVatComplianceRef(profile.taxPin);
+  }, [isEditingDoc, initialData?.vatComplianceRef, profile?.taxPin]);
 
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
@@ -185,16 +195,17 @@ export function PurchaseOrderEditor({
 
   // Derived totals (client-side preview; server is the source of truth on
   // save). PO-27: VAT is charged on the subtotal, not per line, so line tax is
-  // ignored here and tax is subtotal * rate when enabled.
+  // ignored here and the tax is computed via the shared helper (identical
+  // rounding to the backend) when enabled.
   const totals = useMemo(() => {
     const base = calculateTotals(lineItems, null, "");
-    const taxTotal = vatEnabled ? roundMoney(base.subtotal * vatRateFraction) : 0;
+    const taxTotal = calcSubtotalVat(base.subtotal, vatEnabled, vatRateFraction);
     return { subtotal: base.subtotal, taxTotal };
   }, [lineItems, vatEnabled, vatRateFraction]);
 
   const vatLabel = useMemo(
-    () => (vatEnabled ? `VAT (${vatRatePct}%)` : "VAT"),
-    [vatEnabled, vatRatePct]
+    () => (vatEnabled ? buildPoVatLabel(vatRateFraction) : "VAT"),
+    [vatEnabled, vatRateFraction]
   );
 
   // Line item handlers
@@ -563,7 +574,10 @@ export function PurchaseOrderEditor({
                         <Input
                           id="vat-compliance-ref"
                           value={vatComplianceRef}
-                          onChange={(e) => setVatComplianceRef(e.target.value)}
+                          onChange={(e) => {
+                            vatRefTouched.current = true;
+                            setVatComplianceRef(e.target.value);
+                          }}
                           disabled={restrictedMode}
                           placeholder="VAT / compliance reference"
                         />
