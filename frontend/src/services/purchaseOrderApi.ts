@@ -146,6 +146,34 @@ export function getPurchaseOrder(id: string) {
   return apiGet<PurchaseOrderResponse>(`purchase-orders/${id}`);
 }
 
+/**
+ * PO-level VAT fields (PO-27) read off a PO response.
+ *
+ * TEMPORARY: the generated OpenAPI `PurchaseOrderResponse` does not yet carry
+ * vat_enabled/vat_rate/vat_compliance_ref (pending `npm run gen:api`). This is
+ * the single narrow-cast accessor so every consumer reads the fields the same
+ * way; delete it and read the typed properties directly once the type is
+ * regenerated.
+ */
+export interface PurchaseOrderVat {
+  vatEnabled: boolean;
+  vatRate: number | null;
+  vatComplianceRef: string | null;
+}
+
+export function readPoVat(po: PurchaseOrderResponse): PurchaseOrderVat {
+  const source = po as {
+    vat_enabled?: boolean;
+    vat_rate?: number | null;
+    vat_compliance_ref?: string | null;
+  };
+  return {
+    vatEnabled: source.vat_enabled ?? false,
+    vatRate: source.vat_rate ?? null,
+    vatComplianceRef: source.vat_compliance_ref ?? null,
+  };
+}
+
 export function getPurchaseOrderByNumber(poNumber: string) {
   return apiGet<PurchaseOrderResponse>(
     `purchase-orders/number/${encodeURIComponent(poNumber)}`
