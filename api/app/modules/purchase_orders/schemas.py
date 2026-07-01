@@ -26,7 +26,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.common.validators import empty_str_to_none as normalize_empty_str
-from app.constants.enums import PurchaseOrderStatus, TaxType
+from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
 
 # TERMS & CONDITIONS length cap.
 MAX_TERMS_AND_CONDITIONS_LENGTH = 2000
@@ -63,10 +63,38 @@ class PurchaseOrderPaymentCreate(BaseModel):
         alias="paymentDate",
         description="Date the payment was made — required",
     )
-    reference: str | None = Field(
+    reference: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description=(
+            "Transaction ID, cheque number, or remittance reference — required."
+        ),
+    )
+    invoice_number: str | None = Field(
         None,
         max_length=200,
-        description="Transaction ID, cheque number, or remittance reference",
+        alias="invoiceNumber",
+        description=(
+            "Free-text reference of the invoice/bill(s) this payment is paid "
+            "against. Optional; one payment may cover several invoices."
+        ),
+    )
+    currency: Currency = Field(
+        ...,
+        description=(
+            "ISO 4217 currency the payment was made in. May differ from the PO "
+            "currency; the applied (PO-currency) amount is amount * exchangeRate."
+        ),
+    )
+    exchange_rate: Decimal = Field(
+        ...,
+        gt=0,
+        alias="exchangeRate",
+        description=(
+            "Rate converting payment currency -> PO currency. Must be 1 when "
+            "the payment currency equals the PO currency. User-overridable."
+        ),
     )
     notes: str | None = Field(
         None,
@@ -83,7 +111,7 @@ class PurchaseOrderPaymentCreate(BaseModel):
         ),
     )
 
-    @field_validator("reference", "notes", mode="before")
+    @field_validator("invoice_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -95,6 +123,9 @@ class PurchaseOrderPaymentCreate(BaseModel):
                 "amount": 5000.00,
                 "paymentDate": "2026-06-18",
                 "reference": "TXN-9981234",
+                "invoiceNumber": "INV-4471, INV-4472",
+                "currency": "USD",
+                "exchangeRate": 129.50000000,
                 "notes": "Paid via bank transfer",
                 "documentId": "123e4567-e89b-12d3-a456-426614174000",
             }
@@ -129,8 +160,29 @@ class PurchaseOrderPaymentUpdate(BaseModel):
     )
     reference: str | None = Field(
         None,
+        min_length=1,
         max_length=200,
-        description="Transaction ID, cheque number, or remittance reference",
+        description=(
+            "Transaction ID, cheque number, or remittance reference. When "
+            "supplied it must be non-empty (reference is required and cannot "
+            "be cleared)."
+        ),
+    )
+    invoice_number: str | None = Field(
+        None,
+        max_length=200,
+        alias="invoiceNumber",
+        description="Free-text reference of the invoice/bill(s) paid against",
+    )
+    currency: Currency | None = Field(
+        None,
+        description="ISO 4217 currency the payment was made in",
+    )
+    exchange_rate: Decimal | None = Field(
+        None,
+        gt=0,
+        alias="exchangeRate",
+        description="Rate converting payment currency -> PO currency (> 0)",
     )
     notes: str | None = Field(
         None,
@@ -138,7 +190,7 @@ class PurchaseOrderPaymentUpdate(BaseModel):
         description="Internal notes for this payment entry",
     )
 
-    @field_validator("reference", "notes", mode="before")
+    @field_validator("invoice_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -150,6 +202,9 @@ class PurchaseOrderPaymentUpdate(BaseModel):
                 "amount": 4500.00,
                 "paymentDate": "2026-06-19",
                 "reference": "TXN-9981234",
+                "invoiceNumber": "INV-4471",
+                "currency": "USD",
+                "exchangeRate": 129.50000000,
                 "notes": "Corrected amount",
             }
         },
@@ -168,6 +223,9 @@ class PurchaseOrderPaymentResponse(BaseModel):
     amount: Decimal
     payment_date: date
     reference: str | None = None
+    invoice_number: str | None = None
+    currency: str
+    exchange_rate: Decimal
     notes: str | None = None
     document_id: UUID | None = None
     created_at: datetime
@@ -196,6 +254,7 @@ class PurchaseOrderDocumentResponse(BaseModel):
     file_size_kb: float  # @property on the model — readable via from_attributes
     mime_type: str
     source: str
+    document_type: str
     uploaded_at: datetime
     uploaded_by: UUID | None = None
 
