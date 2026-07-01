@@ -357,7 +357,7 @@ export default function PurchaseOrdersPage() {
                         <Button
                             variant="primary"
                             onClick={() => navigate('/purchase-orders/new')}>
-                            <Plus size={16} /> Create PO
+                            <Plus size={16} /> Create Purchase Order
                         </Button>
                     </div>
                 </div>
