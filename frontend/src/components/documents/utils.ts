@@ -201,3 +201,53 @@ export function buildVatLabel(taxTypes: (string | undefined)[]): string {
   }
   return "VAT (Mixed)";
 }
+
+/*
+ * PO-level VAT (PO-27).
+ *
+ * Purchase-order VAT is a single charge on the subtotal, not a per-line tax.
+ * These helpers are the single frontend source of truth for the computation
+ * and the label so the editor preview, the Overview viewer and (conceptually)
+ * the PDF all agree. The computation mirrors the backend
+ * common.financial.calculate_subtotal_vat exactly (roundMoney implements the
+ * same ROUND_HALF_UP money policy as the backend quantize_money), so the
+ * client preview equals the persisted/PDF total for the same input.
+ */
+
+/**
+ * Compute PO-level VAT on the subtotal. Returns 0 when VAT is disabled or the
+ * rate is missing/non-positive.
+ *
+ * @param subtotal Document subtotal.
+ * @param enabled  Whether PO-level VAT is on.
+ * @param rate     VAT rate as a fraction (e.g. 0.16 for 16%).
+ */
+export function calcSubtotalVat(
+  subtotal: number,
+  enabled: boolean,
+  rate: number | null | undefined
+): number {
+  if (!enabled || rate == null || rate <= 0) return 0;
+  return roundMoney(subtotal * rate);
+}
+
+/**
+ * Build the PO-level VAT label from the PO's own fields.
+ *
+ * Mirrors the PDF: "VAT {rate}% ({ref})", with the percent trimmed of trailing
+ * zeros (0.16 -> "16", 0.075 -> "7.5") and the compliance ref appended when
+ * present. Falls back to a bare "VAT" when the rate is missing/non-positive.
+ *
+ * @param rate          VAT rate as a fraction (e.g. 0.16 for 16%).
+ * @param complianceRef Optional VAT / compliance reference.
+ */
+export function buildPoVatLabel(
+  rate: number | null | undefined,
+  complianceRef?: string | null
+): string {
+  if (rate == null || rate <= 0) return "VAT";
+  // Fraction -> percent, trimming trailing zeros via Number round-trip.
+  const pct = Number((rate * 100).toFixed(4)).toString();
+  const ref = complianceRef?.trim();
+  return ref ? `VAT ${pct}% (${ref})` : `VAT ${pct}%`;
+}
