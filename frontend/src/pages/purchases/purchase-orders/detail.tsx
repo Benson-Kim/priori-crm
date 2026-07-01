@@ -301,14 +301,14 @@ export default function PurchaseOrderDetailPage() {
         // Balance-aware statement PDF (payments applied + running balance).
         actions.push({
             key: "download-statement",
-            label: "Download PO",
+            label: "Download statement",
             icon: <FileClock size={16} />,
             onClick: handleDownloadStatement,
         });
         // Export this PO's payments to Excel.
         actions.push({
             key: "export-po-payments-excel",
-            label: "Download Excel",
+            label: "Export Excel",
             icon: <ExcelSvg className="w-4 h-4" />,
             onClick: handlePaymentsExport,
         });

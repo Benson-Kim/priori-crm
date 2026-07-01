@@ -634,7 +634,7 @@ class DocumentPDFGenerator:
             logo_bytes=logo_bytes,
             po=po,
             content_width=content_width,
-            doc_type_label="STATEMENT",
+            doc_type_label="PURCHASE ORDER STATEMENT",
         )
 
         currency = po.currency
