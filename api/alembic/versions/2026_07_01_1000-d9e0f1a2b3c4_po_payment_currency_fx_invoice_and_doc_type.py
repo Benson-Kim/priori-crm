@@ -75,7 +75,7 @@ def upgrade() -> None:
         "SET currency = po.currency "
         "FROM purchase_orders AS po "
         "WHERE p.po_id = po.id"
-    )  # noqa: E501
+    )
 
     op.create_check_constraint(
         "ck_po_payments_valid_currency",
@@ -113,17 +113,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_po_documents_valid_document_type", _DOCUMENTS, type_="check"
-    )
+    op.drop_constraint("ck_po_documents_valid_document_type", _DOCUMENTS, type_="check")
     op.drop_column(_DOCUMENTS, "document_type")
 
-    op.drop_constraint(
-        "ck_po_payments_exchange_rate_positive", _PAYMENTS, type_="check"
-    )
-    op.drop_constraint(
-        "ck_po_payments_valid_currency", _PAYMENTS, type_="check"
-    )
+    op.drop_constraint("ck_po_payments_exchange_rate_positive", _PAYMENTS, type_="check")
+    op.drop_constraint("ck_po_payments_valid_currency", _PAYMENTS, type_="check")
     op.drop_column(_PAYMENTS, "exchange_rate")
     op.drop_column(_PAYMENTS, "currency")
     op.drop_column(_PAYMENTS, "invoice_number")
