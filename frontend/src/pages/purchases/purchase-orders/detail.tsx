@@ -529,6 +529,13 @@ export default function PurchaseOrderDetailPage() {
                         subtotal: Number(po.subtotal),
                         taxTotal: Number(po.tax_total),
                         total: Number(po.total),
+                        // PO-level VAT (PO-27). Read via a narrow cast until
+                        // the OpenAPI type includes these fields; the viewer
+                        // falls back to a bare "VAT" label when absent.
+                        vatEnabled: (po as { vat_enabled?: boolean }).vat_enabled ?? false,
+                        vatRate: (po as { vat_rate?: number | null }).vat_rate ?? null,
+                        vatComplianceRef:
+                            (po as { vat_compliance_ref?: string | null }).vat_compliance_ref ?? null,
                         lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
                             id: item.id ?? `line-${index}`,
                             itemName: item.item_name,
