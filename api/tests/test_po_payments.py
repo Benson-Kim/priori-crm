@@ -94,7 +94,13 @@ def test_partial_payment_reduces_balance_and_bumps_version(monkeypatch) -> None:
 
     payment = service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(amount=Decimal("400.00"), paymentDate=date.today()),
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("400.00"),
+            paymentDate=date.today(),
+            reference="TXN-TEST",
+            currency="KES",
+            exchangeRate=Decimal("1"),
+        ),
     )
 
     assert po.amount_paid == Decimal("400.00")
@@ -112,7 +118,13 @@ def test_full_payment_settles_to_paid(monkeypatch) -> None:
 
     service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(amount=Decimal("1000.00"), paymentDate=date.today()),
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("1000.00"),
+            paymentDate=date.today(),
+            reference="TXN-TEST",
+            currency="KES",
+            exchangeRate=Decimal("1"),
+        ),
     )
 
     assert po.balance_due == Decimal("0.00")
@@ -128,7 +140,13 @@ def test_overpayment_accepted(monkeypatch) -> None:
 
     service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(amount=Decimal("1000.01"), paymentDate=date.today()),
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("1000.01"),
+            paymentDate=date.today(),
+            reference="TXN-TEST",
+            currency="KES",
+            exchangeRate=Decimal("1"),
+        ),
     )
     # Overpayment is recorded: balance_due goes negative (credit owed back)
     # and the document settles to PAID.
@@ -146,7 +164,11 @@ def test_payment_on_draft_rejected(monkeypatch) -> None:
         service.record_payment(
             po.id,
             PurchaseOrderPaymentCreate(
-                amount=Decimal("100.00"), paymentDate=date.today()
+                amount=Decimal("100.00"),
+                paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
 
@@ -162,7 +184,13 @@ def test_payment_on_already_paid_accepted(monkeypatch) -> None:
     # accepted and drives balance_due negative (credit owed back).
     service.record_payment(
         po.id,
-        PurchaseOrderPaymentCreate(amount=Decimal("1.00"), paymentDate=date.today()),
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("1.00"),
+            paymentDate=date.today(),
+            reference="TXN-TEST",
+            currency="KES",
+            exchangeRate=Decimal("1"),
+        ),
     )
     assert po.amount_paid == Decimal("1001.00")
     assert po.balance_due == Decimal("-1.00")
