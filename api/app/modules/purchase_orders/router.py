@@ -10,6 +10,7 @@ and per-PO document attachments (upload / list / download / delete).
 import logging
 import secrets
 from datetime import date
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
