@@ -1190,11 +1190,31 @@ Best regards,
         if document_id is not None:
             self.get_document(po_id, document_id)
 
+        # Same-currency guard: when the payment is made in the PO currency the
+        # rate must be exactly 1, so a stray rate can never silently distort
+        # the balance. A different currency requires a positive rate (schema
+        # already enforces > 0).
+        payment_currency = str(data.currency)
+        if (
+            payment_currency == purchase_order.currency
+            and data.exchange_rate != Decimal("1")
+        ):
+            raise BadRequestException(
+                detail=(
+                    "Exchange rate must be 1 when the payment currency matches "
+                    "the purchase order currency."
+                ),
+                field="exchange_rate",
+            )
+
         payment = self._apply_payment(
             purchase_order,
             amount=data.amount,
             payment_date=data.payment_date,
             reference=data.reference,
+            invoice_number=data.invoice_number,
+            currency=payment_currency,
+            exchange_rate=data.exchange_rate,
             notes=data.notes,
             document_id=document_id,
             user_id=user_id,
@@ -1239,11 +1259,23 @@ Best regards,
 
         total_paid = (
             self._db.query(PurchaseOrderPayment)
-            .with_entities(PurchaseOrderPayment.amount)
+            .with_entities(
+                PurchaseOrderPayment.amount,
+                PurchaseOrderPayment.exchange_rate,
+            )
             .filter(PurchaseOrderPayment.po_id == purchase_order.id)
             .all()
         )
-        amount_paid = sum((row.amount for row in total_paid), Decimal("0.00"))
+        # Each payment is stored in its own currency; sum the CONVERTED
+        # (PO-currency) amounts so the recomputed balance matches how
+        # _apply_payment advanced it (single conversion source of truth).
+        amount_paid = sum(
+            (
+                self._converted_amount(row.amount, row.exchange_rate)
+                for row in total_paid
+            ),
+            Decimal("0.00"),
+        )
 
         purchase_order.amount_paid = amount_paid
         balance_due = purchase_order.total - amount_paid
