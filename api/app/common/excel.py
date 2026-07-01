@@ -381,6 +381,95 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    # Vendor Supplier Statements cards (PO-33)
+
+    def export_vendor_purchase_orders(self, rows: list) -> bytes:
+        """Export a vendor's non-DRAFT POs (PO Ref, Date, Amount, Status)."""
+        headers = ["PO Ref", "Date", "Amount", "Currency", "Status"]
+
+        def row_fn(r):
+            return [
+                r.po_reference,
+                r.order_date,
+                r.amount,
+                r.currency,
+                r.derived_status.capitalize(),
+            ]
+
+        wb = self._build_workbook(
+            sheet_name="Purchase Orders",
+            headers=headers,
+            records=rows,
+            row_fn=row_fn,
+            money_cols=[3],
+            date_cols=[2],
+        )
+        return self._to_bytes(wb)
+
+    def export_vendor_payments(self, rows: list) -> bytes:
+        """Export a vendor's PO payments (Date, Invoice #, Ref #, Amount, PO)."""
+        headers = [
+            "Date",
+            "Invoice #",
+            "Payment Ref #",
+            "Amount",
+            "Currency",
+            "PO Ref",
+            "Document",
+        ]
+
+        def row_fn(r):
+            return [
+                r.payment_date,
+                r.invoice_number or "",
+                r.reference or "",
+                r.amount,
+                r.currency,
+                r.po_reference,
+                "Yes" if r.has_document else "No",
+            ]
+
+        wb = self._build_workbook(
+            sheet_name="Payments",
+            headers=headers,
+            records=rows,
+            row_fn=row_fn,
+            money_cols=[4],
+            date_cols=[1],
+        )
+        return self._to_bytes(wb)
+
+    def export_vendor_invoices(self, rows: list) -> bytes:
+        """Export a vendor's invoices/bills (Ref, Date, Amount, Balance, Status)."""
+        headers = [
+            "Reference",
+            "Date",
+            "Amount",
+            "Balance",
+            "Currency",
+            "Status",
+        ]
+
+        def row_fn(r):
+            return [
+                r.ref_no,
+                r.invoice_date,
+                r.amount,
+                r.balance,
+                r.currency,
+                r.status.capitalize(),
+            ]
+
+        wb = self._build_workbook(
+            sheet_name="Invoices",
+            headers=headers,
+            records=rows,
+            row_fn=row_fn,
+            money_cols=[3, 4],
+            date_cols=[2],
+        )
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(
