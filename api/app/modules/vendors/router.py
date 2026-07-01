@@ -2,14 +2,17 @@
 Vendor API endpoints.
 """
 
+import io
 import logging
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
-from app.common.dependencies import VendorServiceDep, require_role
+from app.common.dependencies import VendorServiceDep, require_privileged, require_role
+from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
@@ -35,6 +38,29 @@ from app.modules.vendors.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Shared streaming helpers (DRY — gate A/G)
+# ---------------------------------------------------------------------------
+
+
+def _stream_excel(xlsx: bytes, filename: str) -> StreamingResponse:
+    """Wrap Excel bytes in a StreamingResponse with the correct content-type."""
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _stream_pdf(pdf_bytes: bytes, filename: str) -> StreamingResponse:
+    """Wrap PDF bytes in a StreamingResponse with the correct content-type."""
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # CREATE
@@ -498,6 +524,11 @@ def get_vendor_statement(
 
 
 # SUPPLIER STATEMENTS CARDS (PO-33)
+#
+# All nine card endpoints require authentication (VendorServiceDep already
+# injects get_current_user via the shared dependency). The six export
+# endpoints (Excel + PDF) additionally require a privileged role
+# (ADMIN / MANAGER) because they stream financial data (gate F).
 
 
 @router.get(
@@ -511,6 +542,7 @@ def get_vendor_statement(
     ),
     responses={
         200: {"description": "Purchase-orders card data"},
+        401: {"description": "Not authenticated"},
         404: {"description": "Vendor not found"},
     },
 )
@@ -533,6 +565,7 @@ def get_vendor_purchase_orders_card(
     ),
     responses={
         200: {"description": "Payments card data"},
+        401: {"description": "Not authenticated"},
         404: {"description": "Vendor not found"},
     },
 )
@@ -555,6 +588,7 @@ def get_vendor_payments_card(
     ),
     responses={
         200: {"description": "Invoices card data"},
+        401: {"description": "Not authenticated"},
         404: {"description": "Vendor not found"},
     },
 )
@@ -565,6 +599,166 @@ def get_vendor_invoices_card(
     date_to: Annotated[date | None, Query(alias="dateTo")] = None,
 ) -> VendorInvoicesCard:
     return service.get_invoices_card(vendor_id, date_from, date_to)
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders/export/excel",
+    summary="Export the vendor 'Total POs' card to Excel",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_purchase_orders_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.excel import ExcelExporter
+
+    card = service.get_purchase_orders_card(vendor_id, date_from, date_to)
+    xlsx = await run_export(ExcelExporter().export_vendor_purchase_orders, card.rows)
+    return _stream_excel(xlsx, f"Vendor_{vendor_id}_PurchaseOrders_{date.today():%Y%m%d}.xlsx")
+
+
+@router.get(
+    "/{vendor_id}/cards/payments/export/excel",
+    summary="Export the vendor 'Total Payments' card to Excel",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_payments_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.excel import ExcelExporter
+
+    card = service.get_payments_card(vendor_id, date_from, date_to)
+    xlsx = await run_export(ExcelExporter().export_vendor_payments, card.rows)
+    return _stream_excel(xlsx, f"Vendor_{vendor_id}_Payments_{date.today():%Y%m%d}.xlsx")
+
+
+@router.get(
+    "/{vendor_id}/cards/invoices/export/excel",
+    summary="Export the vendor 'Total Invoices' card to Excel",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_invoices_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    from app.common.excel import ExcelExporter
+
+    card = service.get_invoices_card(vendor_id, date_from, date_to)
+    xlsx = await run_export(ExcelExporter().export_vendor_invoices, card.rows)
+    return _stream_excel(xlsx, f"Vendor_{vendor_id}_Invoices_{date.today():%Y%m%d}.xlsx")
+
+
+# Per-card PDF exports (PO-33). Each renders a branded PDF of the card for its
+# own dateFrom/dateTo, off the event loop via the shared run_export limiter.
+# PDF exports are privileged (financial data — gate F).
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders/pdf",
+    summary="Download the vendor 'Total POs' card as PDF",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_purchase_orders_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    card = service.get_purchase_orders_card(vendor_id, date_from, date_to)
+    pdf = await run_export(
+        service.export_purchase_orders_card_pdf, card, date_from, date_to
+    )
+    return _stream_pdf(pdf, f"Vendor_{vendor_id}_PurchaseOrders_{date.today():%Y%m%d}.pdf")
+
+
+@router.get(
+    "/{vendor_id}/cards/payments/pdf",
+    summary="Download the vendor 'Total Payments' card as PDF",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_payments_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    card = service.get_payments_card(vendor_id, date_from, date_to)
+    pdf = await run_export(service.export_payments_card_pdf, card, date_from, date_to)
+    return _stream_pdf(pdf, f"Vendor_{vendor_id}_Payments_{date.today():%Y%m%d}.pdf")
+
+
+@router.get(
+    "/{vendor_id}/cards/invoices/pdf",
+    summary="Download the vendor 'Total Invoices' card as PDF",
+    dependencies=[Depends(require_privileged())],
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient role (ADMIN or MANAGER required)"},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def download_vendor_invoices_card_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+):
+    card = service.get_invoices_card(vendor_id, date_from, date_to)
+    pdf = await run_export(service.export_invoices_card_pdf, card, date_from, date_to)
+    return _stream_pdf(pdf, f"Vendor_{vendor_id}_Invoices_{date.today():%Y%m%d}.pdf")
 
 
 @router.get(

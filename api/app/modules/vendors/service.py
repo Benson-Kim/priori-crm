@@ -566,6 +566,42 @@ class VendorService(StateMachineMixin, ServiceBase):
 
         return VendorCardsRepository(self._db).invoices(vendor_id, date_from, date_to)
 
+    # PDF export helpers — expose CardPdfExporter via the service so the router
+    # never touches service._db directly (gate G / service-boundary contract).
+
+    def export_purchase_orders_card_pdf(
+        self,
+        card,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> bytes:
+        """Render the 'Total POs' card as a branded PDF."""
+        from app.common.card_pdf import CardPdfExporter
+
+        return CardPdfExporter(self._db).export_purchase_orders(card, date_from, date_to)
+
+    def export_payments_card_pdf(
+        self,
+        card,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> bytes:
+        """Render the 'Total Payments' card as a branded PDF."""
+        from app.common.card_pdf import CardPdfExporter
+
+        return CardPdfExporter(self._db).export_payments(card, date_from, date_to)
+
+    def export_invoices_card_pdf(
+        self,
+        card,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> bytes:
+        """Render the 'Total Invoices' card as a branded PDF."""
+        from app.common.card_pdf import CardPdfExporter
+
+        return CardPdfExporter(self._db).export_invoices(card, date_from, date_to)
+
     def get_payables_summary(self, vendor_id: uuid.UUID) -> VendorPayablesSummary:
         """
         Return the payables summary

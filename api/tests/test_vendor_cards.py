@@ -257,6 +257,46 @@ class TestInvoicesCard:
         assert len(card.rows) == 1
 
 
+# AUTHENTICATION GUARD
+
+
+class TestCardsRequireAuthentication:
+    """All nine card endpoints must reject unauthenticated requests (gate F).
+
+    These tests hit the FastAPI router layer (via TestClient) rather than
+    the service/repository directly, so they prove the auth dependency is
+    wired — not just that the service logic works.
+    """
+
+    def _client(self):
+        """Return a TestClient with no Authorization header."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        return TestClient(app, raise_server_exceptions=False)
+
+    _CARD_PATHS = [
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/purchase-orders",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/payments",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/invoices",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/purchase-orders/export/excel",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/payments/export/excel",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/invoices/export/excel",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/purchase-orders/pdf",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/payments/pdf",
+        "/api/v1/vendors/00000000-0000-0000-0000-000000000001/cards/invoices/pdf",
+    ]
+
+    def test_unauthenticated_request_returns_401(self):
+        client = self._client()
+        for path in self._CARD_PATHS:
+            resp = client.get(path)
+            assert resp.status_code == 401, (
+                f"Expected 401 for unauthenticated GET {path}, got {resp.status_code}"
+            )
+
+
 # SERVICE GUARD + EXPORT PARITY
 
 
