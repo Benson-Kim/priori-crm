@@ -512,6 +512,66 @@ export function PurchaseOrderEditor({
                   error={errors.deliveryDate}
                 />
 
+                {/* PO-level VAT (PO-27) — shown once a vendor is selected. */}
+                {vendorId && (
+                  <>
+                    <label
+                      htmlFor="vat-enabled"
+                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                    >
+                      Add VAT
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        id="vat-enabled"
+                        type="checkbox"
+                        checked={vatEnabled}
+                        onChange={(e) => setVatEnabled(e.target.checked)}
+                        disabled={restrictedMode}
+                        className="h-4 w-4 accent-priori-purple"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {vatEnabled ? "On" : "Off"}
+                      </span>
+                    </label>
+
+                    {vatEnabled && (
+                      <>
+                        <label
+                          htmlFor="vat-rate"
+                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                        >
+                          VAT Rate
+                        </label>
+                        <Select
+                          id="vat-rate"
+                          value={vatRatePct}
+                          onChange={(e) => setVatRatePct(e.target.value)}
+                          disabled={restrictedMode}
+                          options={VAT_RATE_OPTIONS.map((o) => ({
+                            value: o.value,
+                            label: o.label,
+                          }))}
+                        />
+
+                        <label
+                          htmlFor="vat-compliance-ref"
+                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                        >
+                          Compliance Ref
+                        </label>
+                        <Input
+                          id="vat-compliance-ref"
+                          value={vatComplianceRef}
+                          onChange={(e) => setVatComplianceRef(e.target.value)}
+                          disabled={restrictedMode}
+                          placeholder="VAT / compliance reference"
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
               </div>
             </div>
           </div>
