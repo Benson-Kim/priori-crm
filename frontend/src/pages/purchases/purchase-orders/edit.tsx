@@ -1,7 +1,7 @@
 import { PurchaseOrderEditor } from "@/components/documents/PurchaseOrderEditor";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { usePurchaseOrderForm } from "@/hooks/use-purchase-order-form";
-import type { PurchaseOrderLineItem } from "@/services/purchaseOrderApi";
+import { readPoVat, type PurchaseOrderLineItem } from "@/services/purchaseOrderApi";
 import { useParams } from "react-router-dom";
 
 export default function EditPurchaseOrderPage() {
