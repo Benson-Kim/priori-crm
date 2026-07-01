@@ -24,6 +24,7 @@ import {
 import { ChevronLeft, ChevronRight, Eye, Pencil, Printer } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { SupplierStatements } from "./supplierStatements";
 
 export default function VendorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -509,6 +510,11 @@ export default function VendorDetailPage() {
                 onPerPageChange={setPerPage}
               />
             </div>
+
+            {/* Supplier Statements (#33): three cards below the transactions
+                table — Total POs / Total Payments / Total Invoices, each with
+                its own date filter + export. */}
+            <SupplierStatements vendorId={vendor.id} currency={vendor.currency} />
           </div>
         </div>
       )}
