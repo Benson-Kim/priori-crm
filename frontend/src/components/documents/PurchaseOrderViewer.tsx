@@ -1,6 +1,7 @@
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
+import { buildPoVatLabel } from "./utils";
 
 export interface PurchaseOrderViewerData {
   poReference?: string;
@@ -42,27 +43,6 @@ export interface PurchaseOrderViewerData {
 interface PurchaseOrderViewerProps {
   data: PurchaseOrderViewerData;
   editableOwner?: boolean;
-}
-
-/**
- * Build the PO-level VAT label from the PO's own fields (PO-27).
- *
- * Purchase-order VAT is a single charge on the subtotal, so lines persist as
- * no_tax and the label must come from the PO's vat_rate / vat_compliance_ref
- * rather than the per-line tax type. Mirrors the PDF: "VAT {rate}% ({ref})",
- * with the rate normalised (no trailing zeros, e.g. 16) and the compliance
- * ref appended when present. Falls back to a bare "VAT" when the rate is
- * missing.
- */
-function buildPoVatLabel(
-  rate?: number | null,
-  complianceRef?: string | null
-): string {
-  if (rate == null || rate <= 0) return "VAT";
-  // Fraction -> percent, trimming trailing zeros (0.16 -> "16", 0.075 -> "7.5").
-  const pct = Number((rate * 100).toFixed(4)).toString();
-  const ref = complianceRef?.trim();
-  return ref ? `VAT ${pct}% (${ref})` : `VAT ${pct}%`;
 }
 
 export function PurchaseOrderViewer({
