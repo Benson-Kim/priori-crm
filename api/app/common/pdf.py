@@ -415,8 +415,16 @@ class DocumentPDFGenerator:
         elements.append(items_table)
         elements.append(Spacer(1, 5 * mm))
 
-        tax_rate = getattr(po, "tax_rate", None)
-        vat_label = f"VAT ({tax_rate}%)" if tax_rate else "VAT"
+        # PO-level VAT (PO-27): render "VAT {rate}% ({compliance ref})" from the
+        # PO's own fields. vat_rate is a fraction (e.g. 0.16 -> "16"); the
+        # compliance ref (defaulted from the owner's tax PIN) is appended when
+        # present. Falls back to a bare "VAT" label when VAT is disabled.
+        if getattr(po, "vat_enabled", False) and getattr(po, "vat_rate", None):
+            pct = (po.vat_rate * 100).normalize()
+            ref = f" ({po.vat_compliance_ref})" if po.vat_compliance_ref else ""
+            vat_label = f"VAT {pct}%{ref}"
+        else:
+            vat_label = "VAT"
 
         totals_rows = [
             [
