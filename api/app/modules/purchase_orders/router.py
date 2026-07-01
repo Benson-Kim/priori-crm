@@ -325,8 +325,21 @@ async def export_purchase_order_payments_to_excel(
 def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
     service: PurchaseOrderServiceDep,
+    vat_enabled: Annotated[
+        bool,
+        Query(alias="vatEnabled", description="Enable PO-level VAT on the subtotal"),
+    ] = False,
+    vat_rate: Annotated[
+        Decimal | None,
+        Query(
+            alias="vatRate",
+            ge=0,
+            le=1,
+            description="VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+        ),
+    ] = None,
 ) -> PurchaseOrderCalculationResponse:
-    return service.calculate_totals(line_items)
+    return service.calculate_totals(line_items, vat_enabled=vat_enabled, vat_rate=vat_rate)
 
 
 @router.post(
