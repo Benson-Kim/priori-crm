@@ -524,6 +524,48 @@ class VendorService(StateMachineMixin, ServiceBase):
             )
             raise DatabaseException("Failed to retrieve vendor transactions") from e
 
+    # SUPPLIER STATEMENTS CARDS (PO-33)
+
+    def get_purchase_orders_card(
+        self,
+        vendor_id: uuid.UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ):
+        """'Total POs' card: non-DRAFT POs + paid/pending/overpaid summary."""
+        self._get_vendor_or_404(vendor_id)
+        from app.modules.vendors.queries import VendorCardsRepository
+
+        return VendorCardsRepository(self._db).purchase_orders(
+            vendor_id, date_from, date_to
+        )
+
+    def get_payments_card(
+        self,
+        vendor_id: uuid.UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ):
+        """'Total Payments' card: the vendor's PO payments, date-filtered."""
+        self._get_vendor_or_404(vendor_id)
+        from app.modules.vendors.queries import VendorCardsRepository
+
+        return VendorCardsRepository(self._db).po_payments(
+            vendor_id, date_from, date_to
+        )
+
+    def get_invoices_card(
+        self,
+        vendor_id: uuid.UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ):
+        """'Total Invoices' card: the vendor's bills (expenses), date-filtered."""
+        self._get_vendor_or_404(vendor_id)
+        from app.modules.vendors.queries import VendorCardsRepository
+
+        return VendorCardsRepository(self._db).invoices(vendor_id, date_from, date_to)
+
     def get_payables_summary(self, vendor_id: uuid.UUID) -> VendorPayablesSummary:
         """
         Return the payables summary
