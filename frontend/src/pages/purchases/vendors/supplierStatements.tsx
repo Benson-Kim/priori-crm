@@ -5,6 +5,9 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Table } from "@/components/ui/Table";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
+    downloadVendorInvoicesPdf,
+    downloadVendorPaymentsPdf,
+    downloadVendorPurchaseOrdersPdf,
     exportVendorInvoicesExcel,
     exportVendorPaymentsExcel,
     exportVendorPurchaseOrdersExcel,
@@ -62,6 +65,7 @@ function StatementCard({
     range,
     onRangeChange,
     onExportExcel,
+    onDownloadPdf,
     summary,
     children,
 }: {
@@ -69,18 +73,16 @@ function StatementCard({
     range: VendorCardDateRange;
     onRangeChange: (next: VendorCardDateRange) => void;
     onExportExcel: () => void;
+    onDownloadPdf: () => void;
     summary?: React.ReactNode;
     children: React.ReactNode;
 }) {
-    // Download PDF is a planned per-card export; disabled until the backend
-    // per-card PDF endpoint lands (tracked as a #33 follow-up).
     const actions: DropdownItem[] = [
         {
             key: "pdf",
             label: "Download PDF",
             icon: <Download size={16} />,
-            disabled: true,
-            onClick: () => { },
+            onClick: onDownloadPdf,
         },
         {
             key: "excel",
@@ -298,6 +300,12 @@ export function SupplierStatements({ vendorId, currency }: Readonly<SupplierStat
                                 `Vendor_PurchaseOrders_${new Date().toISOString().split("T")[0]}.xlsx`
                             )
                         }
+                        onDownloadPdf={() =>
+                            handleExport(
+                                () => downloadVendorPurchaseOrdersPdf(vendorId, poRange),
+                                `Vendor_PurchaseOrders_${new Date().toISOString().split("T")[0]}.pdf`
+                            )
+                        }
                         summary={
                             poCard && (
                                 <div className="flex flex-wrap items-center gap-3">
@@ -327,6 +335,12 @@ export function SupplierStatements({ vendorId, currency }: Readonly<SupplierStat
                                 `Vendor_Payments_${new Date().toISOString().split("T")[0]}.xlsx`
                             )
                         }
+                        onDownloadPdf={() =>
+                            handleExport(
+                                () => downloadVendorPaymentsPdf(vendorId, payRange),
+                                `Vendor_Payments_${new Date().toISOString().split("T")[0]}.pdf`
+                            )
+                        }
                     >
                         <Table
                             columns={payColumns}
@@ -345,6 +359,12 @@ export function SupplierStatements({ vendorId, currency }: Readonly<SupplierStat
                             handleExport(
                                 () => exportVendorInvoicesExcel(vendorId, invRange),
                                 `Vendor_Invoices_${new Date().toISOString().split("T")[0]}.xlsx`
+                            )
+                        }
+                        onDownloadPdf={() =>
+                            handleExport(
+                                () => downloadVendorInvoicesPdf(vendorId, invRange),
+                                `Vendor_Invoices_${new Date().toISOString().split("T")[0]}.pdf`
                             )
                         }
                     >
