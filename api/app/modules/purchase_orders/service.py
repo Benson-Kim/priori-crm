@@ -1076,7 +1076,7 @@ Best regards,
         currency the rate is 1, so this is an identity (modulo rounding).
 
         Rounding policy: ROUND_HALF_UP applied **per payment** (not once at
-        the end). This means ``amount_paid = Σ quantize(amountᵢ × rateᵢ)``
+        the end). This means ``amount_paid = Σ quantize(amountᵢ x rateᵢ)``
         which is reproducible from the stored (amount, exchange_rate) pairs
         on each payment row. Sub-cent drift across many fractional-rate
         payments is possible but bounded to ±0.005 per payment — acceptable
