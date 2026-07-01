@@ -27,13 +27,12 @@ add succeeds on existing data; the CHECK constraints are created only after
 the backfill has populated vat_rate for enabled rows. Forward/backward-safe
 on PostgreSQL 16.
 
-NOTE: linearised behind the PO-payments migration d9e0f1a2b3c4 (MR !56) to
-avoid a multiple-heads Alembic branch. The two migrations touch disjoint
-tables (this one: purchase_orders; !56: purchase_order_payments /
-purchase_order_documents), so applying them in series is order-safe. A copy of
-d9e0f1a2b3c4 is carried on this branch purely so `alembic upgrade head`
-resolves a single linear chain c8d9e0f1a2b3 -> d9e0f1a2b3c4 -> e0f1a2b3c4d5
-here and after !56 merges.
+NOTE: linearised behind the PO-payments migration d9e0f1a2b3c4 (MR !56), which
+has merged into develop. This migration's down_revision points at it, giving a
+single linear chain c8d9e0f1a2b3 -> d9e0f1a2b3c4 -> e0f1a2b3c4d5 (no
+multiple-heads branch). The two migrations touch disjoint tables (this one:
+purchase_orders; !56: purchase_order_payments / purchase_order_documents), so
+applying them in series is order-safe.
 """
 
 from typing import Sequence, Union
