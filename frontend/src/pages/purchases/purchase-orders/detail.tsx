@@ -600,6 +600,20 @@ export default function PurchaseOrderDetailPage() {
                                     onRowClick={(payment) => setSelectedPayment(payment)}
                                     emptyMessage="No payments recorded yet."
                                 />
+
+                                {/* Totals row: sum of the Amount column for the
+                                    rows currently displayed (respects the active
+                                    pagination window). */}
+                                {pagedPayments.length > 0 && (
+                                    <div className="flex items-center justify-between border-t border-gray-200 px-3 py-3">
+                                        <span className="text-sm font-semibold text-gray-700">
+                                            Total (this page)
+                                        </span>
+                                        <span className="text-sm font-bold text-gray-800">
+                                            {formatCurrency(pagedPaymentsTotal, currency)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Pagination controls — shown only when there is more
