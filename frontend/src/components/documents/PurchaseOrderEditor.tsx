@@ -46,6 +46,12 @@ export interface PurchaseOrderPayload {
   notes?: string;
   termsAndConditions?: string | null;
   lineItems: PurchaseOrderLineItemPayload[];
+  /** PO-level VAT toggle (tax charged on the subtotal). */
+  vatEnabled: boolean;
+  /** VAT rate as a fraction (e.g. 0.16). Null when disabled. */
+  vatRate: number | null;
+  /** VAT/compliance ref printed on the VAT line (defaults from owner PIN). */
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderInitialData {
@@ -63,6 +69,9 @@ export interface PurchaseOrderInitialData {
   deliveryDate?: string | null;
   notes?: string;
   termsAndConditions?: string | null;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems?: {
     id?: string;
     itemName?: string;
