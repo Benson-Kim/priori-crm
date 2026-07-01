@@ -92,8 +92,6 @@ export function RecordPaymentModal({
     const [popFiles, setPopFiles] = useState<File[]>([]);
     // IDs of existing documents the user marked for deletion.
     const [deletedDocIds, setDeletedDocIds] = useState<Set<string>>(new Set());
-    const invoiceInputRef = useRef<HTMLInputElement>(null);
-    const popInputRef = useRef<HTMLInputElement>(null);
 
     // Only the purchase-order payment API supports linking proof-of-payment
     // documents and multi-currency, so the extra controls are PO-only.
@@ -157,19 +155,6 @@ export function RecordPaymentModal({
             setExchangeRate("1");
         }
     }, [isPurchaseOrder, paymentCurrency, poCurrency]);
-
-    const handleFilesPicked =
-        (setter: React.Dispatch<React.SetStateAction<File[]>>, ref: React.RefObject<HTMLInputElement | null>) =>
-            (e: React.ChangeEvent<HTMLInputElement>) => {
-                const picked = Array.from(e.target.files ?? []);
-                if (picked.length) setter((prev) => [...prev, ...picked]);
-                if (ref.current) ref.current.value = "";
-            };
-
-    const removeFile = (
-        setter: React.Dispatch<React.SetStateAction<File[]>>,
-        index: number
-    ) => setter((prev) => prev.filter((_, i) => i !== index));
 
     const markExistingForDeletion = (docId: string) => {
         setDeletedDocIds((prev) => new Set(prev).add(docId));
@@ -281,85 +266,6 @@ export function RecordPaymentModal({
             setIsSubmitting(false);
         }
     };
-
-    const renderUploader = (
-        title: string,
-        docType: "invoice" | "pop",
-        files: File[],
-        setter: React.Dispatch<React.SetStateAction<File[]>>,
-        ref: React.RefObject<HTMLInputElement | null>,
-        existing: PurchaseOrderDocument[],
-    ) => (
-        <div className="space-y-2">
-            <Label className="font-bold text-base">{title}</Label>
-
-            {/* Existing documents (edit mode) with a delete button. */}
-            {existing.length > 0 && (
-                <ul className="flex flex-col gap-2">
-                    {existing.map((doc) => (
-                        <li
-                            key={doc.id}
-                            className="flex items-center justify-between gap-3 px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg"
-                        >
-                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
-                                <Paperclip size={16} className="shrink-0 text-gray-500" />
-                                <span className="truncate" title={doc.filename}>{doc.filename}</span>
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => markExistingForDeletion(doc.id)}
-                                className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors"
-                                aria-label={`Remove ${doc.filename}`}
-                            >
-                                <Trash2 size={16} /> Remove
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-
-            <Button
-                type="button"
-                variant="outline"
-                onClick={() => ref.current?.click()}
-                className="flex items-center gap-2 w-full border-dashed h-20 text-[16px]"
-            >
-                <Plus size={18} /> {title}
-            </Button>
-            <input
-                ref={ref}
-                type="file"
-                multiple
-                className="hidden"
-                accept={ACCEPTED_UPLOAD_TYPES}
-                onChange={handleFilesPicked(setter, ref)}
-                aria-label={title}
-            />
-            {files.length > 0 && (
-                <ul className="mt-2 flex flex-col gap-2">
-                    {files.map((file, index) => (
-                        <li
-                            key={`${docType}-${file.name}-${index}`}
-                            className="flex items-center justify-between gap-3 px-3 py-3 bg-white border border-gray-200 rounded-lg"
-                        >
-                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
-                                <Paperclip size={16} className="shrink-0 text-gray-500" />
-                                <span className="truncate" title={file.name}>{file.name}</span>
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => removeFile(setter, index)}
-                                className="text-gray-400 hover:text-red-500 transition-colors"
-                                aria-label={`Remove ${file.name}`}
-                            >
-                                <X size={18} />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
 
     return (
         <Dialog
@@ -488,8 +394,22 @@ export function RecordPaymentModal({
                 {/* Two independent uploaders (purchase orders only). */}
                 {supportsAttachments && (
                     <div className="space-y-4">
-                        {renderUploader("Upload Invoice", "invoice", invoiceFiles, setInvoiceFiles, invoiceInputRef, relatedInvoiceDocs)}
-                        {renderUploader("Upload POP", "pop", popFiles, setPopFiles, popInputRef, relatedPopDocs)}
+                        <PaymentUploader
+                            title="Upload Invoice"
+                            docType="invoice"
+                            files={invoiceFiles}
+                            setFiles={setInvoiceFiles}
+                            existing={relatedInvoiceDocs}
+                            onRemoveExisting={markExistingForDeletion}
+                        />
+                        <PaymentUploader
+                            title="Upload POP"
+                            docType="pop"
+                            files={popFiles}
+                            setFiles={setPopFiles}
+                            existing={relatedPopDocs}
+                            onRemoveExisting={markExistingForDeletion}
+                        />
                     </div>
                 )}
             </div>
