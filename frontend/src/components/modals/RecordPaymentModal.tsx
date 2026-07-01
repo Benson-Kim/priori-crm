@@ -59,6 +59,114 @@ function docTypeOf(doc: PurchaseOrderDocument): string {
     return (doc as { document_type?: string | null }).document_type ?? "other";
 }
 
+interface PaymentUploaderProps {
+    title: string;
+    docType: "invoice" | "pop";
+    files: File[];
+    setFiles: React.Dispatch<React.SetStateAction<File[]>>;
+    existing: PurchaseOrderDocument[];
+    onRemoveExisting: (docId: string) => void;
+}
+
+/**
+ * A single labelled uploader (Upload Invoice / Upload POP).
+ *
+ * Owns its own hidden file-input ref so the parent never accesses a ref
+ * during render (react-hooks/refs). The ref's `current` is only touched inside
+ * the button's onClick event handler, which is allowed.
+ */
+function PaymentUploader({
+    title,
+    docType,
+    files,
+    setFiles,
+    existing,
+    onRemoveExisting,
+}: Readonly<PaymentUploaderProps>) {
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const picked = Array.from(e.target.files ?? []);
+        if (picked.length) setFiles((prev) => [...prev, ...picked]);
+        if (inputRef.current) inputRef.current.value = "";
+    };
+
+    const removeFile = (index: number) =>
+        setFiles((prev) => prev.filter((_, i) => i !== index));
+
+    return (
+        <div className="space-y-2">
+            <Label className="font-bold text-base">{title}</Label>
+
+            {/* Existing documents (edit mode) with a delete button. */}
+            {existing.length > 0 && (
+                <ul className="flex flex-col gap-2">
+                    {existing.map((doc) => (
+                        <li
+                            key={doc.id}
+                            className="flex items-center justify-between gap-3 px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg"
+                        >
+                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                <span className="truncate" title={doc.filename}>{doc.filename}</span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onRemoveExisting(doc.id)}
+                                className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors"
+                                aria-label={`Remove ${doc.filename}`}
+                            >
+                                <Trash2 size={16} /> Remove
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <Button
+                type="button"
+                variant="outline"
+                onClick={() => inputRef.current?.click()}
+                className="flex items-center gap-2 w-full border-dashed h-20 text-[16px]"
+            >
+                <Plus size={18} /> {title}
+            </Button>
+            <input
+                ref={inputRef}
+                type="file"
+                multiple
+                className="hidden"
+                accept={ACCEPTED_UPLOAD_TYPES}
+                onChange={handleFilesPicked}
+                aria-label={title}
+            />
+            {files.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-2">
+                    {files.map((file, index) => (
+                        <li
+                            key={`${docType}-${file.name}-${index}`}
+                            className="flex items-center justify-between gap-3 px-3 py-3 bg-white border border-gray-200 rounded-lg"
+                        >
+                            <span className="flex items-center gap-2 min-w-0 text-sm text-gray-700">
+                                <Paperclip size={16} className="shrink-0 text-gray-500" />
+                                <span className="truncate" title={file.name}>{file.name}</span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => removeFile(index)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                aria-label={`Remove ${file.name}`}
+                            >
+                                <X size={18} />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 export function RecordPaymentModal({
     isOpen,
     onClose,
