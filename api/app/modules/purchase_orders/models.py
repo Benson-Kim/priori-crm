@@ -50,6 +50,7 @@ from app.common.financial import get_tax_rate
 from app.constants.enums import (
     Currency,
     DocumentSource,
+    DocumentType,
     PurchaseOrderStatus,
     TaxType,
 )
@@ -498,7 +499,7 @@ class PurchaseOrderDocument(Base):
             name="ck_po_documents_valid_source",
         ),
         CheckConstraint(
-            "document_type IN ('invoice', 'pop', 'other')",
+            f"document_type IN {DocumentType.db_check_values()}",
             name="ck_po_documents_valid_document_type",
         ),
         CheckConstraint(
@@ -646,7 +647,7 @@ class PurchaseOrderPayment(Base):
             name="ck_po_payments_exchange_rate_positive",
         ),
         CheckConstraint(
-            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            "currency IN (" + ", ".join(f"'{c.value}'" for c in Currency) + ")",
             name="ck_po_payments_valid_currency",
         ),
         Index("ix_purchase_order_payments_po_id", "po_id"),
