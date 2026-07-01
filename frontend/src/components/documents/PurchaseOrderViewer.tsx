@@ -1,7 +1,6 @@
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
-import { buildVatLabel } from "./utils";
 
 export interface PurchaseOrderViewerData {
   poReference?: string;
@@ -23,6 +22,12 @@ export interface PurchaseOrderViewerData {
   subtotal: number;
   taxTotal: number;
   total: number;
+  /** PO-level VAT (PO-27): the tax is a single charge on the subtotal. */
+  vatEnabled?: boolean;
+  /** VAT rate as a fraction (e.g. 0.16 for 16%). */
+  vatRate?: number | null;
+  /** VAT/compliance reference printed on the VAT line. */
+  vatComplianceRef?: string | null;
   lineItems: {
     id: string;
     itemName?: string;
@@ -39,12 +44,35 @@ interface PurchaseOrderViewerProps {
   editableOwner?: boolean;
 }
 
+/**
+ * Build the PO-level VAT label from the PO's own fields (PO-27).
+ *
+ * Purchase-order VAT is a single charge on the subtotal, so lines persist as
+ * no_tax and the label must come from the PO's vat_rate / vat_compliance_ref
+ * rather than the per-line tax type. Mirrors the PDF: "VAT {rate}% ({ref})",
+ * with the rate normalised (no trailing zeros, e.g. 16) and the compliance
+ * ref appended when present. Falls back to a bare "VAT" when the rate is
+ * missing.
+ */
+function buildPoVatLabel(
+  rate?: number | null,
+  complianceRef?: string | null
+): string {
+  if (rate == null || rate <= 0) return "VAT";
+  // Fraction -> percent, trimming trailing zeros (0.16 -> "16", 0.075 -> "7.5").
+  const pct = Number((rate * 100).toFixed(4)).toString();
+  const ref = complianceRef?.trim();
+  return ref ? `VAT ${pct}% (${ref})` : `VAT ${pct}%`;
+}
+
 export function PurchaseOrderViewer({
   data,
   editableOwner = false,
 }: Readonly<PurchaseOrderViewerProps>) {
-  // Build VAT label from line items (shared helper used by the other viewers).
-  const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
+  // PO-27: VAT is a PO-level charge on the subtotal, so read the rate and
+  // compliance ref from the PO's own fields (lines are no_tax) instead of
+  // deriving a per-line label.
+  const vatLabel = buildPoVatLabel(data.vatRate, data.vatComplianceRef);
 
   return (
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">
