@@ -8,9 +8,17 @@
  * camelCase transport shape the API maps onto its snake_case fields.
  */
 
-import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import {
+  apiDelete,
+  apiDownload,
+  apiGet,
+  apiPost,
+  apiPut,
+  flattenPaginated,
+} from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse } from "@/lib/types";
+import { createSearchParams } from "@/lib/utils";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
 export type VendorStatement = Schema<"VendorStatement">;
@@ -119,4 +127,129 @@ export async function getVendorStatement(
   if (periodEnd) params.period_end = periodEnd;
 
   return apiGet<VendorStatement>(`vendors/${vendorId}/statement`, params);
+}
+
+// Supplier Statements cards (PO-33)
+//
+// Local shapes until the OpenAPI types regenerate; they mirror the backend
+// VendorPurchaseOrdersCard / VendorPaymentsCard / VendorInvoicesCard schemas.
+
+export interface VendorPurchaseOrderRow {
+  id: string;
+  po_reference: string;
+  order_date: string;
+  amount: string | number;
+  currency: string;
+  derived_status: "paid" | "pending" | "overpaid";
+}
+
+export interface VendorPurchaseOrdersCard {
+  rows: VendorPurchaseOrderRow[];
+  paid: number;
+  pending: number;
+  overpaid: number;
+}
+
+export interface VendorPaymentRow {
+  id: string;
+  po_reference: string;
+  payment_date: string;
+  invoice_number: string | null;
+  reference: string | null;
+  amount: string | number;
+  currency: string;
+  has_document: boolean;
+}
+
+export interface VendorPaymentsCard {
+  rows: VendorPaymentRow[];
+  total_amount: string | number;
+}
+
+export interface VendorInvoiceRow {
+  id: string;
+  ref_no: string;
+  invoice_date: string;
+  amount: string | number;
+  balance: string | number;
+  status: string;
+  currency: string;
+}
+
+export interface VendorInvoicesCard {
+  rows: VendorInvoiceRow[];
+  total_amount: string | number;
+}
+
+export interface VendorCardDateRange {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+function cardParams(range?: VendorCardDateRange): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (range?.dateFrom) params.dateFrom = range.dateFrom;
+  if (range?.dateTo) params.dateTo = range.dateTo;
+  return params;
+}
+
+export function getVendorPurchaseOrdersCard(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<VendorPurchaseOrdersCard> {
+  return apiGet<VendorPurchaseOrdersCard>(
+    `vendors/${vendorId}/cards/purchase-orders`,
+    cardParams(range)
+  );
+}
+
+export function getVendorPaymentsCard(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<VendorPaymentsCard> {
+  return apiGet<VendorPaymentsCard>(
+    `vendors/${vendorId}/cards/payments`,
+    cardParams(range)
+  );
+}
+
+export function getVendorInvoicesCard(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<VendorInvoicesCard> {
+  return apiGet<VendorInvoicesCard>(
+    `vendors/${vendorId}/cards/invoices`,
+    cardParams(range)
+  );
+}
+
+function cardExportPath(
+  vendorId: string,
+  resource: "purchase-orders" | "payments" | "invoices",
+  range?: VendorCardDateRange
+): string {
+  const query = createSearchParams(cardParams(range));
+  const base = `vendors/${vendorId}/cards/${resource}/export/excel`;
+  return query ? `${base}?${query}` : base;
+}
+
+export function exportVendorPurchaseOrdersExcel(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "purchase-orders", range));
+}
+
+export function exportVendorPaymentsExcel(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "payments", range));
+}
+
+export function exportVendorInvoicesExcel(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "invoices", range));
 }
