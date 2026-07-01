@@ -226,10 +226,13 @@ export function getVendorInvoicesCard(
 function cardExportPath(
   vendorId: string,
   resource: "purchase-orders" | "payments" | "invoices",
+  kind: "excel" | "pdf",
   range?: VendorCardDateRange
 ): string {
   const query = createSearchParams(cardParams(range));
-  const base = `vendors/${vendorId}/cards/${resource}/export/excel`;
+  // Excel lives under /export/excel; PDF under /pdf (matches the router).
+  const suffix = kind === "excel" ? "export/excel" : "pdf";
+  const base = `vendors/${vendorId}/cards/${resource}/${suffix}`;
   return query ? `${base}?${query}` : base;
 }
 
@@ -237,19 +240,40 @@ export function exportVendorPurchaseOrdersExcel(
   vendorId: string,
   range?: VendorCardDateRange
 ): Promise<Blob> {
-  return apiDownload(cardExportPath(vendorId, "purchase-orders", range));
+  return apiDownload(cardExportPath(vendorId, "purchase-orders", "excel", range));
 }
 
 export function exportVendorPaymentsExcel(
   vendorId: string,
   range?: VendorCardDateRange
 ): Promise<Blob> {
-  return apiDownload(cardExportPath(vendorId, "payments", range));
+  return apiDownload(cardExportPath(vendorId, "payments", "excel", range));
 }
 
 export function exportVendorInvoicesExcel(
   vendorId: string,
   range?: VendorCardDateRange
 ): Promise<Blob> {
-  return apiDownload(cardExportPath(vendorId, "invoices", range));
+  return apiDownload(cardExportPath(vendorId, "invoices", "excel", range));
+}
+
+export function downloadVendorPurchaseOrdersPdf(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "purchase-orders", "pdf", range));
+}
+
+export function downloadVendorPaymentsPdf(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "payments", "pdf", range));
+}
+
+export function downloadVendorInvoicesPdf(
+  vendorId: string,
+  range?: VendorCardDateRange
+): Promise<Blob> {
+  return apiDownload(cardExportPath(vendorId, "invoices", "pdf", range));
 }
