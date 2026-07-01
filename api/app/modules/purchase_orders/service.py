@@ -232,9 +232,20 @@ class PurchaseOrderService(BaseDocumentService):
         po_currency = vendor.currency or Currency.KES
         compliance_ref = vendor.tax_id_pin
 
+        # PO-level VAT (PO-27): tax is charged once on the subtotal, not per
+        # line. Per-line tax fields are forced to no_tax/0 so they can never
+        # contribute to PO totals. The VAT compliance ref defaults from the
+        # owner profile's tax_pin (editable per PO) when the client omits it.
+        vat_enabled = bool(data.vat_enabled)
+        vat_rate = data.vat_rate if vat_enabled else None
+        vat_compliance_ref = data.vat_compliance_ref
+        if vat_compliance_ref is None:
+            vat_compliance_ref = self._owner_vat_compliance_ref()
+
         # Deterministic, no DB writes — computed once outside the retry loop.
-        line_items_data = self._build_line_items(data.line_items)
-        subtotal, tax_total = self._sum_line_totals(line_items_data)
+        line_items_data = self._strip_line_tax(self._build_line_items(data.line_items))
+        subtotal, _line_tax = self._sum_line_totals(line_items_data)
+        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
         total = subtotal + tax_total
 
         terms_and_conditions = data.terms_and_conditions
@@ -256,6 +267,9 @@ class PurchaseOrderService(BaseDocumentService):
                 total=total,
                 amount_paid=Decimal("0.00"),
                 balance_due=total,
+                vat_enabled=vat_enabled,
+                vat_rate=vat_rate,
+                vat_compliance_ref=vat_compliance_ref,
                 compliance_ref=compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
