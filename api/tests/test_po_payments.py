@@ -42,6 +42,7 @@ class _FakePO:
     def __init__(self, total: str, status=PurchaseOrderStatus.SENT) -> None:
         self.id = "00000000-0000-0000-0000-000000000001"
         self.po_reference = "PO-000001"
+        self.currency = "KES"
         self.total = Decimal(total)
         self.amount_paid = Decimal("0.00")
         self.balance_due = Decimal(total)
