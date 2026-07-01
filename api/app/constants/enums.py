@@ -149,34 +149,3 @@ class PurchaseOrderStatus(StrEnum):
     DRAFT = "draft"  # Created but not yet sent
     SENT = "sent"  # Sent to the vendor (emailed or marked sent)
     PAID = "paid"  # Fully settled via recorded payments
-
-
-class DocumentType(StrEnum):
-    """Classification for purchase-order payment-modal attachments.
-
-    Single source of truth consumed by the ORM model CHECK constraint,
-    the Alembic migration, and the router validation — no raw string
-    literals anywhere else.
-
-    INVOICE : the bill/invoice being paid against.
-    POP     : proof of payment (remittance advice, bank slip, etc.).
-    OTHER   : PO-level attachments not linked to a specific payment.
-    """
-
-    INVOICE = "invoice"
-    POP = "pop"
-    OTHER = "other"
-
-    @classmethod
-    def db_check_values(cls) -> str:
-        """Return the SQL IN-list literal for CHECK constraints.
-
-        Usage in a CheckConstraint::
-
-            CheckConstraint(
-                f"document_type IN {DocumentType.db_check_values()}",
-                name="ck_po_documents_valid_document_type",
-            )
-        """
-        values = ", ".join(f"'{m.value}'" for m in cls)
-        return f"({values})"

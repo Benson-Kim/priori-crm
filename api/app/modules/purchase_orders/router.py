@@ -792,11 +792,10 @@ def upload_purchase_order_document(
 
     # Classify the attachment: 'invoice' (the bill paid) or 'pop' (proof of
     # payment) for payment-modal uploads; 'other' for PO-level attachments.
-    from app.constants.enums import DocumentType
-
-    if document_type not in {m.value for m in DocumentType}:
+    _VALID_DOCUMENT_TYPES = {"invoice", "pop", "other"}
+    if document_type not in _VALID_DOCUMENT_TYPES:
         raise BadRequestException(
-            detail=f"documentType must be one of: {', '.join(m.value for m in DocumentType)}.",
+            detail="documentType must be 'invoice', 'pop' or 'other'.",
             field="documentType",
         )
 
