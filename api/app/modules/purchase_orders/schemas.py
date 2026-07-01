@@ -350,8 +350,32 @@ class PurchaseOrderCreate(BaseModel):
         alias="termsAndConditions",
         description="Terms & conditions — max 2000 characters",
     )
+    vat_enabled: bool = Field(
+        default=False,
+        alias="vatEnabled",
+        description="Enable PO-level VAT computed on the subtotal",
+    )
+    vat_rate: Decimal | None = Field(
+        None,
+        ge=0,
+        le=1,
+        alias="vatRate",
+        description=(
+            "VAT rate as a fraction (e.g. 0.16 for 16%). Required when "
+            "vatEnabled is true; sourced from the shared tax-rate table."
+        ),
+    )
+    vat_compliance_ref: str | None = Field(
+        None,
+        max_length=255,
+        alias="vatComplianceRef",
+        description=(
+            "VAT/compliance reference printed on the VAT line. Defaults from "
+            "the owner profile's tax_pin when omitted; editable per PO."
+        ),
+    )
 
-    @field_validator("notes", "terms_and_conditions", mode="before")
+    @field_validator("notes", "terms_and_conditions", "vat_compliance_ref", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -361,6 +385,13 @@ class PurchaseOrderCreate(BaseModel):
         """delivery_date, when supplied, must be on or after order_date."""
         if self.delivery_date is not None and self.delivery_date < self.order_date:
             raise ValueError("delivery_date must be on or after order_date")
+        return self
+
+    @model_validator(mode="after")
+    def validate_vat(self) -> "PurchaseOrderCreate":
+        """A VAT rate is required when VAT is enabled."""
+        if self.vat_enabled and self.vat_rate is None:
+            raise ValueError("vat_rate is required when vat_enabled is true")
         return self
 
     model_config = {
@@ -420,8 +451,15 @@ class PurchaseOrderUpdate(BaseModel):
         max_length=MAX_TERMS_AND_CONDITIONS_LENGTH,
         alias="termsAndConditions",
     )
+    vat_enabled: bool | None = Field(None, alias="vatEnabled")
+    vat_rate: Decimal | None = Field(None, ge=0, le=1, alias="vatRate")
+    vat_compliance_ref: str | None = Field(
+        None,
+        max_length=255,
+        alias="vatComplianceRef",
+    )
 
-    @field_validator("notes", "terms_and_conditions", mode="before")
+    @field_validator("notes", "terms_and_conditions", "vat_compliance_ref", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
         return normalize_empty_str(v)
@@ -470,6 +508,10 @@ class PurchaseOrderResponse(BaseModel):
     total: Decimal
     amount_paid: Decimal
     balance_due: Decimal
+
+    vat_enabled: bool = False
+    vat_rate: Decimal | None = None
+    vat_compliance_ref: str | None = None
 
     compliance_ref: str | None = None
     notes: str | None = None
@@ -686,6 +728,8 @@ class PurchaseOrderCalculationResponse(BaseModel):
     subtotal: Decimal
     tax_total: Decimal
     total: Decimal
+    vat_enabled: bool = False
+    vat_rate: Decimal | None = None
     line_items: list[dict] = Field(
         default_factory=list,
         description="Line items with calculated totals",
