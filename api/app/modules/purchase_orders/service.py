@@ -862,6 +862,7 @@ Best regards,
         source: DocumentSource = DocumentSource.FORM,
         user_id: uuid.UUID | None = None,
         payment_id: uuid.UUID | None = None,
+        document_type: str = "other",
         storage: Any | None = None,
     ) -> PurchaseOrderDocument:
         """Persist document metadata after the file has been written to storage.
@@ -899,6 +900,7 @@ Best regards,
             mime_type=mime_type,
             storage_key=storage_key,
             source=source.value,
+            document_type=document_type,
             uploaded_by=user_id,
         )
         self._db.add(document)
