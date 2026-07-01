@@ -847,7 +847,32 @@ Best regards,
                 field="delivery_date",
             )
 
-        # Replace line items (full set) and recompute totals.
+        # PO-level VAT (PO-27): totals must be recomputed when the line items
+        # change OR the VAT toggle / rate changes. Resolve the effective VAT
+        # inputs from the payload (override) or the persisted values.
+        vat_enabled = update_data.get("vat_enabled", purchase_order.vat_enabled)
+        if "vat_rate" in update_data:
+            vat_rate = update_data["vat_rate"]
+        else:
+            vat_rate = purchase_order.vat_rate
+        # A disabled VAT must clear the stored rate so the CHECK
+        # (enabled => rate present) and the compute stay consistent.
+        if not vat_enabled:
+            vat_rate = None
+        elif vat_rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+        update_data["vat_enabled"] = vat_enabled
+        update_data["vat_rate"] = vat_rate
+
+        vat_changed = "vat_enabled" in data.model_fields_set or (
+            "vat_rate" in data.model_fields_set
+        )
+
+        # Replace line items (full set) when supplied; recompute totals when
+        # either the lines or the VAT inputs changed.
         if "line_items" in update_data:
             self._db.query(PurchaseOrderLineItem).filter(
                 PurchaseOrderLineItem.po_id == po_id
@@ -855,9 +880,17 @@ Best regards,
 
             raw_items: list[dict] = update_data.pop("line_items")
             typed_items = [PurchaseOrderLineItemCreate(**item) for item in raw_items]
-            line_items_data = self._build_line_items(typed_items)
+            line_items_data = self._strip_line_tax(self._build_line_items(typed_items))
 
-            subtotal, tax_total = self._sum_line_totals(line_items_data)
+            for item in line_items_data:
+                self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
+
+            subtotal, _line_tax = self._sum_line_totals(line_items_data)
+        else:
+            subtotal = purchase_order.subtotal
+
+        if "line_items" in data.model_fields_set or vat_changed:
+            tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
             total = subtotal + tax_total
             balance_due = total - purchase_order.amount_paid
 
@@ -873,9 +906,6 @@ Best regards,
                     ),
                     field="line_items",
                 )
-
-            for item in line_items_data:
-                self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
