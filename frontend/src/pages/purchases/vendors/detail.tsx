@@ -332,6 +332,7 @@ export default function VendorDetailPage() {
               }`}
           >
             Statements
+            Statement
             {mainTab === "statements" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-priori-purple" />
             )}
