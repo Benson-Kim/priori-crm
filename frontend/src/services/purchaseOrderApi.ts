@@ -63,6 +63,12 @@ export interface PurchaseOrderCreatePayload {
   lineItems: PurchaseOrderLineItemPayload[];
   notes?: string | null;
   termsAndConditions?: string | null;
+  /** Enable PO-level VAT computed on the subtotal. */
+  vatEnabled?: boolean;
+  /** VAT rate as a fraction (e.g. 0.16). Required when vatEnabled is true. */
+  vatRate?: number | null;
+  /** VAT/compliance ref; defaults from the owner tax PIN server-side. */
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderUpdatePayload {
@@ -72,6 +78,9 @@ export interface PurchaseOrderUpdatePayload {
   lineItems?: PurchaseOrderLineItemPayload[];
   notes?: string | null;
   termsAndConditions?: string | null;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderSendPayload {
@@ -276,9 +285,19 @@ export function downloadPurchaseOrderDocument(
  * /purchase-orders/calculate contract), not snake_case keys relying on the
  * backend's populate_by_name fallback.
  */
-export function calculateTotals(data: PurchaseOrderLineItemPayload[]) {
+export function calculateTotals(
+  data: PurchaseOrderLineItemPayload[],
+  vat?: { vatEnabled?: boolean; vatRate?: number | null }
+) {
+  const query =
+    vat && (vat.vatEnabled || vat.vatRate != null)
+      ? `?${createSearchParams({
+          vatEnabled: vat.vatEnabled ? "true" : "false",
+          vatRate: vat.vatRate ?? undefined,
+        })}`
+      : "";
   return apiPost<PurchaseOrderCalculationResponse>(
-    "purchase-orders/calculate",
+    `purchase-orders/calculate${query}`,
     data
   );
 }
