@@ -159,6 +159,31 @@ def sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
     return subtotal, tax_total
 
 
+# Document-level (subtotal) VAT
+
+
+def calculate_subtotal_vat(
+    subtotal: Decimal,
+    vat_enabled: bool,
+    vat_rate: Decimal | None,
+) -> Decimal:
+    """
+    Compute document-level VAT on the subtotal.
+
+    Used by purchase orders, whose VAT is a single PO-level charge on the
+    subtotal rather than a per-line tax. Returns 0.00 when VAT is disabled or
+    the rate is missing. The result is quantized to 2 dp with the shared money
+    policy so it matches persisted/PDF totals exactly.
+
+    The ``vat_rate`` is a fraction (e.g. Decimal('0.16') for 16%) and is
+    expected to come from the shared ``TAX_RATES`` mapping via the selected
+    tax type, so there is a single source of truth for the rate.
+    """
+    if not vat_enabled or not vat_rate:
+        return Decimal("0.00")
+    return quantize_money(subtotal * vat_rate)
+
+
 # Discount Calculation
 
 
