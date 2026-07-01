@@ -1047,26 +1047,6 @@ Best regards,
     # PAYMENT RECORDING
 
     @staticmethod
-    def _assert_same_currency_rate_is_one(
-        payment_currency: str,
-        po_currency: str,
-        exchange_rate: Decimal,
-    ) -> None:
-        """Raise BadRequestException when a same-currency payment has rate != 1.
-
-        Shared by record_payment and update_payment so the invariant is
-        enforced identically on both paths (gate D / gate E).
-        """
-        if payment_currency == po_currency and exchange_rate != Decimal("1"):
-            raise BadRequestException(
-                detail=(
-                    "Exchange rate must be 1 when the payment currency matches "
-                    "the purchase order currency."
-                ),
-                field="exchange_rate",
-            )
-
-    @staticmethod
     def _converted_amount(amount: Decimal, exchange_rate: Decimal) -> Decimal:
         """Convert a payment amount into the PO currency.
 
@@ -1074,14 +1054,7 @@ Best regards,
         PO balance is ``amount * exchange_rate`` quantized to the shared money
         policy (2dp, ROUND_HALF_UP). When the payment currency equals the PO
         currency the rate is 1, so this is an identity (modulo rounding).
-
-        Rounding policy: ROUND_HALF_UP applied **per payment** (not once at
-        the end). This means ``amount_paid = Σ quantize(amountᵢ × rateᵢ)``
-        which is reproducible from the stored (amount, exchange_rate) pairs
-        on each payment row. Sub-cent drift across many fractional-rate
-        payments is possible but bounded to ±0.005 per payment — acceptable
-        for the reconciliation use case. ``_resync_after_payment_change``
-        uses the same helper so record and resync always agree.
+        Single source of truth for the conversion so record / resync agree.
         """
         return quantize_money(amount * exchange_rate)
 
@@ -1224,9 +1197,17 @@ Best regards,
         # the balance. A different currency requires a positive rate (schema
         # already enforces > 0).
         payment_currency = str(data.currency)
-        self._assert_same_currency_rate_is_one(
-            payment_currency, purchase_order.currency, data.exchange_rate
-        )
+        if (
+            payment_currency == purchase_order.currency
+            and data.exchange_rate != Decimal("1")
+        ):
+            raise BadRequestException(
+                detail=(
+                    "Exchange rate must be 1 when the payment currency matches "
+                    "the purchase order currency."
+                ),
+                field="exchange_rate",
+            )
 
         payment = self._apply_payment(
             purchase_order,
@@ -1345,16 +1326,6 @@ Best regards,
             return payment  # no-op
 
         previous_amount = payment.amount
-
-        # Same-currency guard on edit: if the caller is changing currency or
-        # exchange_rate, the resulting (currency, rate) pair must still satisfy
-        # the same-currency-rate-must-be-1 invariant that record_payment
-        # enforces. Resolve the effective values after the update.
-        effective_currency = str(update_data.get("currency", payment.currency))
-        effective_rate = update_data.get("exchange_rate", payment.exchange_rate)
-        self._assert_same_currency_rate_is_one(
-            effective_currency, purchase_order.currency, effective_rate
-        )
 
         for field, value in update_data.items():
             setattr(payment, field, value)
