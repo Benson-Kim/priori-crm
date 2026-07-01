@@ -311,6 +311,9 @@ class TestRecordPaymentDocumentId:
             PurchaseOrderPaymentCreate(
                 amount=Decimal("400.00"),
                 paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
 
