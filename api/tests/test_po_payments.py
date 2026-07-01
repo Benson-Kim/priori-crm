@@ -339,6 +339,9 @@ class TestRecordPaymentDocumentId:
                 PurchaseOrderPaymentCreate(
                     amount=Decimal("400.00"),
                     paymentDate=date.today(),
+                    reference="TXN-TEST",
+                    currency="KES",
+                    exchangeRate=Decimal("1"),
                     documentId=foreign_doc_id,
                 ),
             )
@@ -355,6 +358,9 @@ class TestRecordPaymentDocumentId:
                 PurchaseOrderPaymentCreate(
                     amount=Decimal("400.00"),
                     paymentDate=date.today(),
+                    reference="TXN-TEST",
+                    currency="KES",
+                    exchangeRate=Decimal("1"),
                     documentId=uuid.uuid4(),
                 ),
             )
