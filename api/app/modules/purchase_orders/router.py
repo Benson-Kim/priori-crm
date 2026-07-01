@@ -783,11 +783,21 @@ def upload_purchase_order_document(
     file: UploadFile = File(...),
     source: str = Form("form"),
     payment_id: UUID | None = Form(None, alias="paymentId"),
+    document_type: str = Form("other", alias="documentType"),
 ) -> PurchaseOrderDocumentResponse:
     from app.common.exceptions import BadRequestException
     from app.constants.enums import DocumentSource
 
     user_id = service.actor_id
+
+    # Classify the attachment: 'invoice' (the bill paid) or 'pop' (proof of
+    # payment) for payment-modal uploads; 'other' for PO-level attachments.
+    _VALID_DOCUMENT_TYPES = {"invoice", "pop", "other"}
+    if document_type not in _VALID_DOCUMENT_TYPES:
+        raise BadRequestException(
+            detail="documentType must be 'invoice', 'pop' or 'other'.",
+            field="documentType",
+        )
 
     # PO documents support form | view | payment_modal (proof-of-payment
     # uploaded in the Record Payment modal): reject any other value with a
@@ -844,6 +854,7 @@ def upload_purchase_order_document(
         source=doc_source,
         user_id=user_id,
         payment_id=payment_id,
+        document_type=document_type,
     )
     return PurchaseOrderDocumentResponse.model_validate(document)
 
