@@ -294,6 +294,81 @@ class TestOverpaidWithVat:
         assert po.status == PurchaseOrderStatus.PAID
 
 
+# NEUTRAL-FIELD UPDATE MUST NOT ALTER TOTALS
+
+
+@pg_only
+class TestVatNeutralUpdate:
+    def test_vat_only_update_preserves_totals_on_neutral_field(self, db):
+        """A notes-only update must not alter tax_total, total, or vat_rate.
+
+        Regression guard for the update() recompute logic: the effective-VAT
+        block must be a no-op for totals when neither line_items nor VAT
+        fields are in model_fields_set (gate E).
+        """
+        vendor = _vendor(db)
+        svc = PurchaseOrderService(db)
+        po = svc.create(
+            _create_payload(vendor_id=vendor.id, vat_enabled=True, vat_rate=VAT_16)
+        )
+        original_tax_total = po.tax_total
+        original_total = po.total
+        original_vat_rate = po.vat_rate
+
+        # Update only notes — no line_items, no VAT fields.
+        svc.update(
+            po.id,
+            PurchaseOrderUpdate(notes="Just a note"),
+            expected_version=1,
+        )
+
+        assert po.tax_total == original_tax_total, "tax_total must not change on notes-only update"
+        assert po.total == original_total, "total must not change on notes-only update"
+        assert po.vat_rate == original_vat_rate, "vat_rate must not change on notes-only update"
+        assert po.version == 2
+
+    def test_vat_toggle_off_below_amount_paid_no_line_items(self, db):
+        """VAT-only toggle-off that drops total below amount_paid must 400.
+
+        Regression guard: the floor guard was previously only reachable via
+        the line_items branch. This test exercises the VAT-only path (no
+        line_items key in the payload) to confirm the guard runs whenever
+        total is recomputed (gate E).
+        """
+        vendor = _vendor(db)
+        svc = PurchaseOrderService(db)
+        # Create with VAT on: total = 232.00 (subtotal 200 + 16% VAT 32).
+        po = svc.create(
+            _create_payload(vendor_id=vendor.id, vat_enabled=True, vat_rate=VAT_16)
+        )
+        po.status = PurchaseOrderStatus.SENT
+        db.flush()
+        # Record a payment of 220 — more than the no-VAT total (200) but less
+        # than the VAT-inclusive total (232), so toggling VAT off would drop
+        # total to 200 < 220 paid.
+        svc.record_payment(
+            po.id,
+            PurchaseOrderPaymentCreate(
+                amount=Decimal("220.00"),
+                paymentDate=date.today(),
+                reference="TXN-FLOOR",
+                currency="KES",
+                exchangeRate=Decimal("1"),
+            ),
+        )
+        db.flush()
+        po.status = PurchaseOrderStatus.DRAFT  # re-open to allow edit
+        db.flush()
+
+        # Toggle VAT off with NO line_items in the payload — must still 400.
+        with pytest.raises(BadRequestException):
+            svc.update(
+                po.id,
+                PurchaseOrderUpdate(vat_enabled=False),
+                expected_version=po.version,
+            )
+
+
 # PREVIEW / PERSIST PARITY
 
 

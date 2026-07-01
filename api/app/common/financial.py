@@ -175,9 +175,11 @@ def calculate_subtotal_vat(
     the rate is missing. The result is quantized to 2 dp with the shared money
     policy so it matches persisted/PDF totals exactly.
 
-    The ``vat_rate`` is a fraction (e.g. Decimal('0.16') for 16%) and is
-    expected to come from the shared ``TAX_RATES`` mapping via the selected
-    tax type, so there is a single source of truth for the rate.
+    ``vat_rate`` is a client-supplied fraction in [0, 1] (e.g.
+    Decimal('0.16') for 16%). It is NOT looked up from the shared
+    TAX_RATES table — PO-level VAT is a free rate chosen by the user,
+    not a per-line tax type. The schema enforces the 0..1 range; the
+    service enforces that the rate is present when VAT is enabled.
     """
     if not vat_enabled or not vat_rate:
         return Decimal("0.00")
