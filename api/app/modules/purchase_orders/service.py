@@ -1681,17 +1681,22 @@ Best regards,
     def calculate_totals(
         cls,
         line_items: list[PurchaseOrderLineItemCreate],
+        vat_enabled: bool = False,
+        vat_rate: Decimal | None = None,
     ) -> PurchaseOrderCalculationResponse:
         """
         Calculate PO totals without persisting — live preview endpoint.
 
-        No discount in v1: total = subtotal + tax_total. Every monetary
-        value is produced by ``app.common.financial`` so the result is, by
-        construction, identical to the Expenses/Quotes engine for the same
-        inputs (parity is asserted in tests).
+        PO-27: VAT is a PO-level charge on the subtotal, not a per-line tax, so
+        per-line tax is stripped to no_tax/0 and ``tax_total`` is computed via
+        the shared ``calculate_subtotal_vat``. This is, by construction,
+        identical to what create()/update() persist for the same inputs
+        (parity is asserted in tests). No discount in v1:
+        total = subtotal + tax_total.
         """
-        calculated_items = cls._build_line_items(line_items)
-        subtotal, tax_total = cls._sum_line_totals(calculated_items)
+        calculated_items = cls._strip_line_tax(cls._build_line_items(line_items))
+        subtotal, _line_tax = cls._sum_line_totals(calculated_items)
+        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
 
         formatted_items = [
             {
@@ -1710,6 +1715,8 @@ Best regards,
             subtotal=subtotal,
             tax_total=tax_total,
             total=subtotal + tax_total,
+            vat_enabled=vat_enabled,
+            vat_rate=vat_rate,
             line_items=formatted_items,
         )
 
