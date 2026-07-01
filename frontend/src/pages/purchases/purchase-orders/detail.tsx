@@ -330,6 +330,20 @@ export default function PurchaseOrderDetailPage() {
     // Payments table columns — mirrors the invoices/PO list table format. The
     // row number is offset by the current page so it reflects the absolute
     // position across all payments, not the position within the page.
+    // Invoice number lives on the payment as `invoice_number` once PO-28 ships
+    // the backend field + regenerated OpenAPI type. Read it via a narrow cast
+    // so this renders "—" today and lights up automatically once the field
+    // exists — no further change needed here.
+    const invoiceNumberOf = (payment: PurchaseOrderPayment): string | null =>
+        (payment as { invoice_number?: string | null }).invoice_number ?? null;
+
+    // Sum of the Amount column for the rows currently displayed (respects the
+    // active pagination window), shown in the totals row beneath the table.
+    const pagedPaymentsTotal = pagedPayments.reduce(
+        (sum, payment) => sum + Number(payment.amount ?? 0),
+        0,
+    );
+
     const paymentColumns = [
         {
             key: "number",
@@ -351,19 +365,31 @@ export default function PurchaseOrderDetailPage() {
             ),
         },
         {
-            key: "amount",
-            header: "Amount",
-            render: (payment: PurchaseOrderPayment) => (
-                <span className="text-gray-500">{formatCurrency(Number(payment.amount), currency)}</span>
-            ),
+            key: "invoice",
+            header: "Invoice #",
+            render: (payment: PurchaseOrderPayment) => {
+                const invoiceNumber = invoiceNumberOf(payment);
+                return (
+                    <span className="text-gray-500 truncate" title={invoiceNumber ?? undefined}>
+                        {invoiceNumber ?? "—"}
+                    </span>
+                );
+            },
         },
         {
             key: "reference",
-            header: "Reference",
+            header: "Payment Ref #",
             render: (payment: PurchaseOrderPayment) => (
                 <span className="text-gray-500 truncate" title={payment.reference ?? undefined}>
                     {payment.reference ?? "-"}
                 </span>
+            ),
+        },
+        {
+            key: "amount",
+            header: "Amount",
+            render: (payment: PurchaseOrderPayment) => (
+                <span className="text-gray-500">{formatCurrency(Number(payment.amount), currency)}</span>
             ),
         },
         {
@@ -574,6 +600,20 @@ export default function PurchaseOrderDetailPage() {
                                     onRowClick={(payment) => setSelectedPayment(payment)}
                                     emptyMessage="No payments recorded yet."
                                 />
+
+                                {/* Totals row: sum of the Amount column for the
+                                    rows currently displayed (respects the active
+                                    pagination window). */}
+                                {pagedPayments.length > 0 && (
+                                    <div className="flex items-center justify-between border-t border-gray-200 px-3 py-3">
+                                        <span className="text-sm font-semibold text-gray-700">
+                                            Total (this page)
+                                        </span>
+                                        <span className="text-sm font-bold text-gray-800">
+                                            {formatCurrency(pagedPaymentsTotal, currency)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Pagination controls — shown only when there is more
