@@ -71,10 +71,7 @@ def upgrade() -> None:
     # Backfill existing payments' currency from their parent PO. Historical
     # payments were recorded in the PO currency, so exchange_rate stays 1.
     op.execute(
-        f"UPDATE {_PAYMENTS} AS p "
-        "SET currency = po.currency "
-        "FROM purchase_orders AS po "
-        "WHERE p.po_id = po.id"
+        f"UPDATE {_PAYMENTS} AS p SET currency = po.currency FROM purchase_orders AS po WHERE p.po_id = po.id"
     )
 
     op.create_check_constraint(
@@ -101,9 +98,7 @@ def upgrade() -> None:
     # Existing proof-of-payment uploads (payment-modal, grouped under a
     # payment) become 'pop'; everything else stays 'other'.
     op.execute(
-        f"UPDATE {_DOCUMENTS} "
-        "SET document_type = 'pop' "
-        "WHERE source = 'payment_modal' AND payment_id IS NOT NULL"
+        f"UPDATE {_DOCUMENTS} SET document_type = 'pop' WHERE source = 'payment_modal' AND payment_id IS NOT NULL"
     )
     op.create_check_constraint(
         "ck_po_documents_valid_document_type",
