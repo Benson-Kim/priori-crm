@@ -1136,6 +1136,8 @@ Best regards,
         currency the rate is 1, so this is an identity (modulo rounding).
         Single source of truth for the conversion so record / resync agree.
         """
+        from app.common.financial import quantize_money
+
         return quantize_money(amount * exchange_rate)
 
     def _apply_payment(
