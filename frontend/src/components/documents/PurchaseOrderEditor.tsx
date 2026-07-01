@@ -22,13 +22,12 @@ import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
 import { Select } from "../ui/Select";
-import { roundMoney } from "./utils";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
-  buildVatLabel,
   calculateTotals,
   createEmptyRow,
+  roundMoney,
   type LineItemRow,
 } from "./utils";
 
