@@ -396,6 +396,9 @@ class TestPaymentDocumentGrouping:
             PurchaseOrderPaymentCreate(
                 amount=Decimal("10.00"),
                 paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
 
@@ -428,6 +431,9 @@ class TestPaymentDocumentGrouping:
             PurchaseOrderPaymentCreate(
                 amount=Decimal("10.00"),
                 paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
 
@@ -464,6 +470,9 @@ class TestPaymentDocumentGrouping:
             PurchaseOrderPaymentCreate(
                 amount=Decimal("10.00"),
                 paymentDate=date.today(),
+                reference="TXN-TEST",
+                currency="KES",
+                exchangeRate=Decimal("1"),
             ),
         )
 

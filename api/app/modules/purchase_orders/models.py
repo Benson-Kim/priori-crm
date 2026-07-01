@@ -536,6 +536,10 @@ class PurchaseOrderDocument(Base):
             name="ck_po_documents_valid_source",
         ),
         CheckConstraint(
+            "document_type IN ('invoice', 'pop', 'other')",
+            name="ck_po_documents_valid_document_type",
+        ),
+        CheckConstraint(
             "file_size_bytes > 0",
             name="ck_po_documents_size_positive",
         ),
@@ -610,6 +614,18 @@ class PurchaseOrderDocument(Base):
         comment="Upload context: form | view | payment_modal",
     )
 
+    document_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="other",
+        server_default=text("'other'"),
+        comment=(
+            "Classifies a payment-modal attachment: 'invoice' (the bill being "
+            "paid) or 'pop' (proof of payment). 'other' for PO-level "
+            "(form / view) attachments that carry no payment classification."
+        ),
+    )
+
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -663,6 +679,14 @@ class PurchaseOrderPayment(Base):
             "amount > 0",
             name="ck_po_payments_amount_positive",
         ),
+        CheckConstraint(
+            "exchange_rate > 0",
+            name="ck_po_payments_exchange_rate_positive",
+        ),
+        CheckConstraint(
+            "currency IN ('KES', 'USD', 'EUR', 'GBP')",
+            name="ck_po_payments_valid_currency",
+        ),
         Index("ix_purchase_order_payments_po_id", "po_id"),
         Index("ix_purchase_order_payments_payment_date", "payment_date"),
     )
@@ -696,6 +720,39 @@ class PurchaseOrderPayment(Base):
         String(200),
         nullable=True,
         comment="Transaction ID, cheque number, or remittance reference",
+    )
+
+    invoice_number: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+        comment=(
+            "Free-text reference of the invoice/bill(s) this payment is paid "
+            "against. Optional; one payment may cover several invoices (entered "
+            "as a single free-text value)."
+        ),
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=Currency.KES,
+        server_default=text("'KES'"),
+        comment=(
+            "ISO 4217 currency the payment was made in. May differ from the "
+            "PO currency; the applied (PO-currency) amount is "
+            "amount * exchange_rate."
+        ),
+    )
+
+    exchange_rate: Mapped[Decimal] = mapped_column(
+        Numeric(18, 8),
+        nullable=False,
+        default=Decimal("1"),
+        server_default=text("1"),
+        comment=(
+            "Rate converting payment currency -> PO currency. 1 when the "
+            "payment currency equals the PO currency. User-overridable."
+        ),
     )
 
     notes: Mapped[str | None] = mapped_column(
