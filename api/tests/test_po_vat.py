@@ -322,9 +322,13 @@ class TestVatNeutralUpdate:
             expected_version=1,
         )
 
-        assert po.tax_total == original_tax_total, "tax_total must not change on notes-only update"
+        assert po.tax_total == original_tax_total, (
+            "tax_total must not change on notes-only update"
+        )
         assert po.total == original_total, "total must not change on notes-only update"
-        assert po.vat_rate == original_vat_rate, "vat_rate must not change on notes-only update"
+        assert po.vat_rate == original_vat_rate, (
+            "vat_rate must not change on notes-only update"
+        )
         assert po.version == 2
 
     def test_vat_toggle_off_below_amount_paid_no_line_items(self, db):
