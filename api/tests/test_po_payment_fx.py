@@ -7,7 +7,7 @@ Covers the two issues identified in the !56 post-merge review:
    with rate != 1 must raise BadRequestException (the guard existed only
    in record_payment; update_payment now applies the same check).
 
-2. FX rounding policy: amount_paid == Σ quantize(amountᵢ × rateᵢ).
+2. FX rounding policy: amount_paid == Σ quantize(amountᵢ x rateᵢ).
    Proves the documented rounding contract and that removing a middle
    payment resyncs exactly.
 
@@ -28,7 +28,6 @@ from app.modules.purchase_orders.schemas import (
     PurchaseOrderPaymentUpdate,
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
-
 
 # ---------------------------------------------------------------------------
 # Minimal fake PO + service wiring (mirrors test_po_payments.py)
@@ -122,7 +121,7 @@ class TestUpdatePaymentSameCurrencyGuard:
                 exchangeRate=Decimal("130"),
             ),
         )
-        payment_id = list(payments.keys())[0]
+        payment_id = next(iter(payments.keys()))
 
         with pytest.raises(BadRequestException, match="Exchange rate must be 1"):
             service.update_payment(
@@ -149,7 +148,7 @@ class TestUpdatePaymentSameCurrencyGuard:
                 exchangeRate=Decimal("130"),
             ),
         )
-        payment_id = list(payments.keys())[0]
+        payment_id = next(iter(payments.keys()))
 
         service.update_payment(
             po.id,
@@ -169,14 +168,14 @@ class TestUpdatePaymentSameCurrencyGuard:
 
 
 class TestFxResyncMultiPayment:
-    """FX rounding policy: amount_paid == Σ quantize(amountᵢ × rateᵢ).
+    """FX rounding policy: amount_paid == Σ quantize(amountᵢ x rateᵢ).
 
     Proves the documented rounding contract and that removing a middle
     payment resyncs exactly (gate E).
     """
 
     def test_fx_resync_multi_payment_exact(self, monkeypatch):
-        """Three fractional-rate payments: amount_paid == Σ quantize(aᵢ × rᵢ)."""
+        """Three fractional-rate payments: amount_paid == Σ quantize(aᵢ x rᵢ)."""
         po = _FakePO("10000.00")
         service, payments = _make_service(monkeypatch, po)
 
