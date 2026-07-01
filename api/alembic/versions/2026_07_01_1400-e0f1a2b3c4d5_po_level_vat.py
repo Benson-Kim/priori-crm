@@ -27,9 +27,13 @@ add succeeds on existing data; the CHECK constraints are created only after
 the backfill has populated vat_rate for enabled rows. Forward/backward-safe
 on PostgreSQL 16.
 
-NOTE: shares parent c8d9e0f1a2b3 with the PO-payments migration d9e0f1a2b3c4
-(MR !56), forming a temporary Alembic branch. Whichever lands second must
-re-parent onto the other or a merge revision must be added.
+NOTE: linearised behind the PO-payments migration d9e0f1a2b3c4 (MR !56) to
+avoid a multiple-heads Alembic branch. The two migrations touch disjoint
+tables (this one: purchase_orders; !56: purchase_order_payments /
+purchase_order_documents), so applying them in series is order-safe. A copy of
+d9e0f1a2b3c4 is carried on this branch purely so `alembic upgrade head`
+resolves a single linear chain c8d9e0f1a2b3 -> d9e0f1a2b3c4 -> e0f1a2b3c4d5
+here and after !56 merges.
 """
 
 from typing import Sequence, Union
@@ -39,7 +43,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e0f1a2b3c4d5"
-down_revision: Union[str, None] = "c8d9e0f1a2b3"
+down_revision: Union[str, None] = "d9e0f1a2b3c4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
