@@ -873,7 +873,10 @@ Best regards,
 
         # Replace line items (full set) when supplied; recompute totals when
         # either the lines or the VAT inputs changed.
-        if "line_items" in update_data:
+        lines_changed = "line_items" in data.model_fields_set
+        totals_need_recompute = lines_changed or vat_changed
+
+        if lines_changed:
             self._db.query(PurchaseOrderLineItem).filter(
                 PurchaseOrderLineItem.po_id == po_id
             ).delete()
@@ -889,13 +892,14 @@ Best regards,
         else:
             subtotal = purchase_order.subtotal
 
-        if "line_items" in data.model_fields_set or vat_changed:
+        if totals_need_recompute:
             tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
             total = subtotal + tax_total
             balance_due = total - purchase_order.amount_paid
 
-            # Mirror Expenses: the new total can never drop below what has
-            # already been paid against the PO.
+            # The new total can never drop below what has already been paid
+            # against the PO — applies to both line-item changes AND VAT
+            # changes (gate E: floor guard must run whenever total changes).
             if balance_due < Decimal("0.00"):
                 raise BadRequestException(
                     detail=(
