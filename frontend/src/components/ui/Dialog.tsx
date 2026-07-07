@@ -52,7 +52,7 @@ export function Dialog({
       />
       <div
         className={cn(
-          "relative w-full max-w-2xl mx-4 rounded-2xl bg-gray-100 p-6 shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto",
+          "relative w-full max-w-2xl mx-4 rounded-2xl bg-gray-100 p-6 shadow-xl overflow-hidden max-h-[calc(100vh-8rem)] overflow-y-auto",
           "animate-in fade-in zoom-in-95 duration-200"
         )}
       >

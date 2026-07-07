@@ -32,7 +32,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         )}
         <div
           className={cn(
-            "flex items-center w-full py-3.5 px-3 gap-3 rounded-lg border bg-gray-50 transition-all",
+            "flex items-center w-full py-3 px-4 gap-3 rounded-lg border bg-gray-50 transition-all",
             error
               ? "border-red-300 focus-within:border-red-500 focus-within:ring-red-100"
               : "border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10",

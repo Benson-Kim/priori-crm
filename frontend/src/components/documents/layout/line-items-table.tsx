@@ -22,6 +22,7 @@ interface LineItemsTableProps {
     lineItems: LineItemRow[];
     errors: Record<string, string>;
     restrictedMode: boolean;
+    enableInlineTax?: boolean;
     onAddRow: () => void;
     onRemoveRow: (key: string) => void;
     onUpdateRow: (key: string, field: keyof LineItemRow, value: string) => void;
@@ -31,6 +32,7 @@ export function LineItemsTable({
     lineItems,
     errors,
     restrictedMode,
+    enableInlineTax = false,
     onAddRow,
     onRemoveRow,
     onUpdateRow,
@@ -53,6 +55,7 @@ export function LineItemsTable({
                             key={row.key}
                             row={row}
                             errors={errors}
+                            enableInlineTax={enableInlineTax}
                             restrictedMode={restrictedMode}
                             onRemoveRow={onRemoveRow}
                             onUpdateRow={onUpdateRow}
@@ -76,6 +79,7 @@ interface LineItemRowsProps {
     row: LineItemRow;
     errors: Record<string, string>;
     restrictedMode: boolean;
+    enableInlineTax: boolean;
     onRemoveRow: (key: string) => void;
     onUpdateRow: (key: string, field: keyof LineItemRow, value: string) => void;
 }
@@ -84,13 +88,14 @@ function LineItemRows({
     row,
     errors,
     restrictedMode,
+    enableInlineTax,
     onRemoveRow,
     onUpdateRow,
 }: LineItemRowsProps) {
     const lineTotal = calcLineTotal(row.quantity, row.unitPrice);
     const taxAmount = calcTaxAmount(lineTotal, row.taxType);
     const { category: taxCategory, rate: taxRate, isVat: hasTax } = parseTaxType(row.taxType);
-    const showTaxRow = row.taxType !== "no_tax";
+    const hasInlineTax = row.taxType !== "no_tax";
 
     const handleCategoryChange = (val: string) => {
         if (val === "no_tax" || val === "exempt") {
@@ -176,7 +181,7 @@ function LineItemRows({
             </tr>
 
             {/* Tax Row */}
-            {showTaxRow ? (
+            {enableInlineTax && hasInlineTax ? (
                 <tr className="group relative mb-3 grid grid-cols-7 gap-4 items-center">
                     <td className="col-span-4 flex justify-end items-center pr-4 font-bold text-gray-800">
                         Tax
@@ -220,7 +225,7 @@ function LineItemRows({
                         />
                     )}
                 </tr>
-            ) : !restrictedMode ? (
+            ) : enableInlineTax && !restrictedMode ? (
                 <tr className="mb-3 grid grid-cols-7 gap-4">
                     <td className="col-span-7 flex justify-end">
                         <button
