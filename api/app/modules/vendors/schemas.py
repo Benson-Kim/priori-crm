@@ -365,6 +365,19 @@ class VendorCardItem(BaseModel):
         description="'paid' | 'pending' — POs/bills derive it; payments are 'paid'"
     )
 
+    # Payment-only columns (null on PO/bill rows). invoice_number exists only on
+    # PO payments; payment_ref is the payment's own reference; parent_id is the
+    # source document so the row can link back to it.
+    invoice_number: str | None = Field(
+        None, description="Invoice/bill number a payment settles (PO payments only)"
+    )
+    payment_ref: str | None = Field(
+        None, description="Payment reference (cheque / transaction id)"
+    )
+    parent_id: UUID | None = Field(
+        None, description="Source document id (PO/Expense) for a payment row"
+    )
+
     model_config = {"populate_by_name": True, "from_attributes": True}
 
 
