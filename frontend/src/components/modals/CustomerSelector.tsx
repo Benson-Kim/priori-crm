@@ -207,7 +207,7 @@ export function CustomerSelector({
                 <div className="relative">
                     <button
                         type="button"
-                        className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left"
+                                className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left cursor-pointer"
                         onClick={() => setShowDropdown(!showDropdown)}
                     >
                         Add / Select Customer <SquarePen size={18} />

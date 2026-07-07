@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { customerTypeOptions } from "@/lib/enums";
 import { customerSchema, type CustomerFormData } from "@/validations/customerSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronLeft, Save } from "lucide-react";
@@ -15,10 +16,11 @@ interface CustomerDetailsFormProps {
     isLoading?: boolean;
 }
 
-const customerTypeOptions = [
-    { value: "individual", label: "Individual" },
-    { value: "business", label: "Business" },
-];
+// const customerTypeOptions = [
+//     { value: "individual", label: "Individual" },
+//     { value: "business", label: "Business" },
+// ];
+
 
 const currencyOptions = [
     { value: "KES", label: "Kenyan Shilling (KES)" },
@@ -149,60 +151,58 @@ export function CustomerDetailsForm({
                 </div>
 
                 {/* First Name & Last Name */}
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label
-                            htmlFor="firstName"
-                            className="block text-sm font-semibold text-gray-900 mb-2"
-                        >
-                            First Name
-                        </label>
+                <div>
+                    <label
+                        htmlFor="firstName"
+                        className="block text-sm font-semibold text-gray-900 mb-2"
+                    >
+                        First Name
+                    </label>
 
-                        <Controller
-                            name="firstName"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="firstName"
-                                        type="text"
-                                        {...field}
-                                        placeholder="First name"
-                                        error={errors.firstName?.message}
-                                    />
+                    <Controller
+                        name="firstName"
+                        control={control}
+                        render={({ field }) => (
+                            <>
+                                <Input
+                                    id="firstName"
+                                    type="text"
+                                    {...field}
+                                    placeholder="First name"
+                                    error={errors.firstName?.message}
+                                />
 
-                                    {renderFieldError(errors.firstName)}
-                                </>
-                            )}
-                        />
-                    </div>
+                                {renderFieldError(errors.firstName)}
+                            </>
+                        )}
+                    />
+                </div>
 
-                    <div>
-                        <label
-                            htmlFor="lastName"
-                            className="block text-sm font-semibold text-gray-900 mb-2"
-                        >
-                            Last Name
-                        </label>
+                <div>
+                    <label
+                        htmlFor="lastName"
+                        className="block text-sm font-semibold text-gray-900 mb-2"
+                    >
+                        Last Name
+                    </label>
 
-                        <Controller
-                            name="lastName"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="lastName"
-                                        type="text"
-                                        {...field}
-                                        placeholder="Last name"
-                                        error={errors.lastName?.message}
-                                    />
+                    <Controller
+                        name="lastName"
+                        control={control}
+                        render={({ field }) => (
+                            <>
+                                <Input
+                                    id="lastName"
+                                    type="text"
+                                    {...field}
+                                    placeholder="Last name"
+                                    error={errors.lastName?.message}
+                                />
 
-                                    {renderFieldError(errors.lastName)}
-                                </>
-                            )}
-                        />
-                    </div>
+                                {renderFieldError(errors.lastName)}
+                            </>
+                        )}
+                    />
                 </div>
 
                 {/* Email & Phone */}

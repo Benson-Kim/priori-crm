@@ -6,8 +6,8 @@ import { useConfirm } from "@/hooks/useConfirm";
 import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
-import { getTodayString } from "@/lib/dateUtils";
 import { VAT_RATE_OPTIONS } from "@/lib/constants";
+import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
   deletePurchaseOrder,
@@ -130,8 +130,13 @@ export function PurchaseOrderEditor({
     initialData?.deliveryDate ?? ""
   );
 
-  // Currency is derived from the selected vendor server-side
-  const currency = initialData?.vendor?.currency ?? "Ksh";
+  // Currency follows the selected vendor. Seeded from the initial vendor (edit
+  // flow) and updated instantly when a vendor is picked in the selector, so the
+  // totals preview shows the right currency before the server round-trip. The
+  // server remains the source of truth on save (currency is vendor-derived).
+  const [currency, setCurrency] = useState<string>(
+    initialData?.vendor?.currency ?? "Ksh"
+  );
 
   const [notes, setNotes] = useState(initialData?.notes ?? "");
 
@@ -144,6 +149,12 @@ export function PurchaseOrderEditor({
     const fraction = initialData?.vatRate;
     return fraction != null ? String(Math.round(fraction * 100)) : "16";
   });
+  // True once the user picks a different rate from the dropdown. On an
+  // existing PO whose persisted rate is a non-integer percent (e.g. the
+  // backfilled blended rate 0.1067), a notes-only save must NOT re-persist
+  // the rounded selector value. When the ref stays false the payload omits
+  // vatRate entirely so the backend keeps the original fraction.
+  const vatRateDirty = useRef(false);
   // VAT compliance ref defaults from the owner profile's tax PIN on a new PO
   // (editable). On an existing PO the persisted value wins.
   const isEditingDoc = !!initialData?.poReference;
@@ -283,7 +294,13 @@ export function PurchaseOrderEditor({
       termsAndConditions: termsAndConditions.trim() || null,
       lineItems: items,
       vatEnabled,
-      vatRate: vatEnabled ? vatRateFraction : null,
+      // On an existing PO, only send the rate when the user actually changed
+      // it, so a non-integer persisted fraction (e.g. 0.1067 from the
+      // migration backfill) is never silently rounded to the nearest integer
+      // percent on a notes-only save.
+      vatRate: vatEnabled
+        ? (!isEditing || vatRateDirty.current ? vatRateFraction : undefined)
+        : null,
       vatComplianceRef: vatComplianceRef.trim() || null,
     };
   };
@@ -471,7 +488,10 @@ export function PurchaseOrderEditor({
                   }
                   : null
               }
-              onChange={setVendorId}
+              onChange={(id, cur) => {
+                setVendorId(id);
+                if (cur) setCurrency(cur);
+              }}
               restrictedMode={restrictedMode}
               error={errors.vendor}
             />
@@ -557,7 +577,10 @@ export function PurchaseOrderEditor({
                         <Select
                           id="vat-rate"
                           value={vatRatePct}
-                          onChange={(e) => setVatRatePct(e.target.value)}
+                          onChange={(e) => {
+                            vatRateDirty.current = true;
+                            setVatRatePct(e.target.value);
+                          }}
                           disabled={restrictedMode}
                           options={VAT_RATE_OPTIONS.map((o) => ({
                             value: o.value,
@@ -609,6 +632,7 @@ export function PurchaseOrderEditor({
             onAddRow={addRow}
             onRemoveRow={removeRow}
             onUpdateRow={updateRow}
+            enableInlineTax={false}
           />
 
           {/* Purchase Order Totals (no Amount Paid / Balance Due). */}

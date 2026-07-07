@@ -1,12 +1,20 @@
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { COUNTRY_OPTIONS } from "@/lib/constants";
+import { customerStatusOptions, customerTypeOptions, type Currency, type CustomerStatus, type CustomerType } from "@/lib/enums";
 import { createCustomer } from "@/services/customerApi";
+import { checkEmailDuplicate } from "@/services/vendorApi";
 import { Check, X } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { Card } from "../ui/Card";
+import { Select } from "../ui/Select";
 
 interface QuickCustomerForm {
+    customerType: CustomerType;
+    status: CustomerStatus;
+    companyName?: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -26,29 +34,33 @@ interface AddCustomerModalProps {
     onCustomerAdded: (customerId: string, customerName: string) => void;
 }
 
-const countryOptions = [
-    { value: "KE", label: "Kenya" },
-    { value: "UG", label: "Uganda" },
-    { value: "TZ", label: "Tanzania" },
-];
 
 export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustomerModalProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Duplicate email state
+    const [emailWarning, setEmailWarning] = useState<string | null>(null);
+    const [checkingEmail, setCheckingEmail] = useState(false);
+
+
     const {
         register,
         handleSubmit,
         reset,
+        control,
         formState: { errors },
     } = useForm<QuickCustomerForm>({
         defaultValues: {
+            customerType: "individual" satisfies CustomerType,
+            status: "active" satisfies CustomerStatus,
+            companyName: "",
             firstName: "",
             lastName: "",
             email: "",
             phone: "",
             address: "",
-            country: "KE",
+            country: COUNTRY_OPTIONS[0].value,
             city: "",
             province: "",
             postalCode: "",
@@ -57,6 +69,9 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
         },
     });
 
+    const emailValue = useWatch({ name: "email", control });
+
+
     const onSubmit = async (data: QuickCustomerForm) => {
         try {
             setIsLoading(true);
@@ -64,7 +79,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
 
             // Transform to match backend API
             const customerData = {
-                customerType: "individual",
+                customerType: data.customerType,
+                status: data.status,
                 firstName: data.firstName,
                 lastName: data.lastName,
                 email: data.email,
@@ -74,7 +90,7 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                 city: data.city,
                 province: data.province,
                 postalCode: data.postalCode,
-                currency: "KES",
+                currency: "KES" satisfies Currency,
                 website: data.website || undefined,
                 vatNumber: data.vatNumber || undefined,
             };
@@ -98,195 +114,255 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
         onClose();
     };
 
+    // Handle Duplicate Email Check
+    useEffect(() => {
+        const checkEmail = async () => {
+            if (!emailValue || !emailValue.includes('@')) {
+                setEmailWarning(null);
+                return;
+            }
+            setCheckingEmail(true);
+            try {
+                const res = await checkEmailDuplicate(emailValue);
+                if (res.exists) {
+                    setEmailWarning(res.message ?? null);
+                } else {
+                    setEmailWarning(null);
+                }
+            } catch (err) {
+                console.error("Email check failed", err);
+            } finally {
+                setCheckingEmail(false);
+            }
+        };
+
+        const timeoutId = setTimeout(checkEmail, 500);
+        return () => clearTimeout(timeoutId);
+    }, [emailValue]);
+
     return (
         <Dialog isOpen={isOpen} onClose={handleClose} title="Customer">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                {error && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-red-800 text-sm">{error}</p>
-                    </div>
-                )}
-
-                {/* Add New Customer Button */}
-                <div className="p-4 border-2 border-priori-purple rounded-lg text-center">
-                    <button
-                        type="button"
-                        className="text-priori-purple font-semibold text-base flex items-center justify-center gap-2 w-full"
-                    >
-                        <span className="text-2xl">+</span> Add New Customer
-                    </button>
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-800 text-sm">{error}</p>
                 </div>
+            )}
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] px-2 pb-4">
+                <Card className="rounded-xl bg-white border border-gray-300 flex flex-col gap-6 p-6">
 
-                {/* Full Name */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Full Name <span className="text-red-500">*</span>
-                    </label>
+                    {/* Add New Customer Button */}
+                    <div className="p-4 border-2 border-priori-purple rounded-lg text-center">
+                        <button
+                            type="button"
+                            className="text-priori-purple font-semibold text-base flex items-center justify-center gap-2 w-full"
+                        >
+                            <span className="text-2xl">+</span> Add New Customer
+                        </button>
+                    </div>
+
+                    {/* Business Type */}
                     <div className="grid grid-cols-2 gap-3">
-                        <Input
-                            {...register("firstName", { required: "First name is required" })}
-                            placeholder="First name"
-                            error={errors.firstName?.message}
-                        />
-                        <Input
-                            {...register("lastName", { required: "Last name is required" })}
-                            placeholder="Last name"
-                            error={errors.lastName?.message}
-                        />
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Customer Type <span className="text-red-500">*</span>
+                            </label>
+                            <Select id="customerType" options={customerTypeOptions}
+                                {...register("customerType", { required: "Customer type is required" })}
+                                placeholder="Select customer type"
+                                error={errors.customerType?.message}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Status <span className="text-red-500">*</span>
+                            </label>
+                            <Select id="status" options={customerStatusOptions}
+                                {...register("status", { required: "Customer status is required" })}
+                                placeholder="Select status"
+                                error={errors.status?.message}
+                            />
+
+                        </div>
                     </div>
-                </div>
 
-                {/* Email */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Email <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                        {...register("email", {
-                            required: "Email is required",
-                            pattern: {
-                                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                message: "Invalid email address"
-                            }
-                        })}
-                        type="email"
-                        placeholder="email@example.com"
-                        error={errors.email?.message}
-                    />
-                </div>
-
-                {/* Phone */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Phone <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                        {...register("phone", { required: "Phone is required" })}
-                        prefix="+254"
-                        type="tel"
-                        placeholder="700 000 000"
-                        error={errors.phone?.message}
-                    />
-                </div>
-
-                {/* Address */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Address <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                        {...register("address", {
-                            required: "Address is required",
-                            minLength: { value: 5, message: "Address must be at least 5 characters" }
-                        })}
-                        placeholder="Street address"
-                        error={errors.address?.message}
-                    />
-                </div>
-
-                {/* City, Province, Postal Code */}
-                <div className="grid grid-cols-3 gap-3">
+                    {/* Full Name */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            City <span className="text-red-500">*</span>
+                            Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input
+                                {...register("firstName", { required: "First name is required" })}
+                                placeholder="First name"
+                                error={errors.firstName?.message}
+                            />
+                            <Input
+                                {...register("lastName", { required: "Last name is required" })}
+                                placeholder="Last name"
+                                error={errors.lastName?.message}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">
+                            Email <span className="text-red-500">*</span>
+                        </label>
+                        <>
+                            <Input
+                                {...register("email", {
+                                    required: "Email is required",
+                                    pattern: {
+                                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                        message: "Invalid email address"
+                                    }
+                                })}
+                                type="email"
+                                placeholder="email@example.com"
+                                error={errors.email?.message}
+                            />
+                            {checkingEmail && <p className="text-xs text-gray-400 mt-1">Checking email...</p>}
+                            {emailWarning && <p className="text-xs text-orange-500 mt-1">{emailWarning}</p>}
+                        </>
+                    </div>
+
+                    {/* Phone */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">
+                            Phone <span className="text-red-500">*</span>
                         </label>
                         <Input
-                            {...register("city", {
-                                required: "City is required",
-                                minLength: { value: 2, message: "City must be at least 2 characters" }
+                            {...register("phone", { required: "Phone is required" })}
+                            prefix="+254"
+                            type="tel"
+                            placeholder="700 000 000"
+                            error={errors.phone?.message}
+                        />
+                    </div>
+
+                    {/* Address */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">
+                            Address <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                            {...register("address", {
+                                required: "Address is required",
+                                minLength: { value: 5, message: "Address must be at least 5 characters" }
                             })}
-                            placeholder="City"
-                            error={errors.city?.message}
+                            placeholder="Street address"
+                            error={errors.address?.message}
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Province <span className="text-red-500">*</span>
-                        </label>
-                        <Input
-                            {...register("province", {
-                                required: "Province is required",
-                                minLength: { value: 2, message: "Province must be at least 2 characters" }
-                            })}
-                            placeholder="Province"
-                            error={errors.province?.message}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Postal Code <span className="text-red-500">*</span>
-                        </label>
-                        <Input
-                            {...register("postalCode", {
-                                required: "Postal code is required",
-                                minLength: { value: 3, message: "Postal code must be at least 3 characters" }
-                            })}
-                            placeholder="00100"
-                            error={errors.postalCode?.message}
-                        />
-                    </div>
-                </div>
 
-                {/* Country */}
-                <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Country <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                        {...register("country", { required: "Country is required" })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
-                    >
-                        {countryOptions.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                    {errors.country && <p className="text-red-500 text-xs mt-1">{errors.country.message}</p>}
-                </div>
+                    {/* City, Province, Postal Code */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                City <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                                {...register("city", {
+                                    required: "City is required",
+                                    minLength: { value: 2, message: "City must be at least 2 characters" }
+                                })}
+                                placeholder="City"
+                                error={errors.city?.message}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Province <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                                {...register("province", {
+                                    required: "Province is required",
+                                    minLength: { value: 2, message: "Province must be at least 2 characters" }
+                                })}
+                                placeholder="Province"
+                                error={errors.province?.message}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Postal Code <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                                {...register("postalCode", {
+                                    required: "Postal code is required",
+                                    minLength: { value: 3, message: "Postal code must be at least 3 characters" }
+                                })}
+                                placeholder="00100"
+                                error={errors.postalCode?.message}
+                            />
+                        </div>
+                    </div>
 
-                {/* Website and VAT Number */}
-                <div className="grid grid-cols-2 gap-3">
+                    {/* Country */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Website
+                            Country <span className="text-red-500">*</span>
                         </label>
-                        <Input
-                            {...register("website")}
-                            type="url"
-                            placeholder="https://example.com"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            VAT Number
-                        </label>
-                        <Input
-                            {...register("vatNumber")}
-                            placeholder="AOE0387233N"
-                        />
-                    </div>
-                </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
-                    <Button
-                        type="button"
-                        onClick={handleClose}
-                        disabled={isLoading}
-                        variant="outline"
-                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <X size={20} /> Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        disabled={isLoading}
-                        className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Check size={20} /> {isLoading ? "Saving..." : "Save Customer"}
-                    </Button>
-                </div>
+                        <select
+                            {...register("country", { required: "Country is required" })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
+                        >
+                            {COUNTRY_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+
+                        {errors.country && <p className="text-red-500 text-xs mt-1">{errors.country.message}</p>}
+                    </div>
+
+                    {/* Website and VAT Number */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Website
+                            </label>
+                            <Input
+                                {...register("website")}
+                                type="url"
+                                placeholder="https://example.com"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                VAT Number
+                            </label>
+                            <Input
+                                {...register("vatNumber")}
+                                placeholder="AOE0387233N"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4">
+                        <Button
+                            type="button"
+                            onClick={handleClose}
+                            disabled={isLoading}
+                            variant="outline"
+                            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <X size={20} /> Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={isLoading}
+                            className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Check size={20} /> {isLoading ? "Saving..." : "Save Customer"}
+                        </Button>
+                    </div>
+                </Card>
             </form>
-        </Dialog>
+        </Dialog >
     );
 }
 
