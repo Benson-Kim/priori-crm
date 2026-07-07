@@ -228,6 +228,168 @@ class DocumentPDFGenerator:
             include_balance=include_balance,
         )
 
+    def generate_list_pdf(
+        self,
+        *,
+        title: str,
+        vendor,
+        period_start: date | None,
+        period_end: date | None,
+        items: list,
+        totals: dict,
+        currency: str,
+        owner=None,
+        logo_bytes: bytes | None = None,
+    ) -> bytes:
+        """Return PDF bytes for a tabular vendor card (POs / Payments / Bills).
+
+        Generic list document: branded owner header, a "For: {vendor}" block,
+        the applied period, a Reference | Date | Amount | Status table, and a
+        totals footer (Total / Paid / Pending / Count). Shared by all three
+        vendor-card PDF exports so their layout cannot drift.
+        """
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        content_width = doc.width
+        elements: list = []
+
+        # Header: logo + owner identity (left), document title (right).
+        logo_flowable = self._build_logo(logo_bytes)
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+        left_cell: list = []
+        if logo_flowable is not None:
+            left_cell.append(logo_flowable)
+            left_cell.append(Spacer(1, 4 * mm))
+        left_cell.append(Paragraph(owner_name, _HEADER_STYLE))
+
+        header_table = Table(
+            [[left_cell, Paragraph(title.upper(), _TITLE_STYLE)]],
+            colWidths=[content_width - 85 * mm, 85 * mm],
+        )
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(header_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        vendor_name = getattr(vendor, "vendor_name", str(getattr(vendor, "id", "")))
+        elements.append(Paragraph("For:", _SECTION_LABEL_STYLE))
+        elements.append(Paragraph(str(vendor_name), _LABEL_STYLE))
+        if period_start and period_end:
+            period = (
+                f"{period_start.strftime('%b %d, %Y')} — "
+                f"{period_end.strftime('%b %d, %Y')}"
+            )
+            elements.append(Spacer(1, 1.5 * mm))
+            elements.append(Paragraph(period, _SUB_STYLE))
+        elements.append(Spacer(1, 6 * mm))
+
+        header_row = [
+            Paragraph("Reference", _ITEM_HEADER_STYLE),
+            Paragraph("Date", _ITEM_HEADER_STYLE),
+            Paragraph("Amount", _ITEM_HEADER_RIGHT_STYLE),
+            Paragraph("Status", _ITEM_HEADER_RIGHT_STYLE),
+        ]
+        rows = [header_row]
+        for it in items:
+            row_date = getattr(it, "transaction_date", None)
+            date_str = row_date.strftime("%b %d, %Y") if row_date else "—"
+            amount = getattr(it, "amount", Decimal("0.00"))
+            state = str(getattr(it, "payment_state", "")).capitalize()
+            rows.append(
+                [
+                    Paragraph(str(getattr(it, "ref_no", "")), _ITEM_STYLE),
+                    Paragraph(date_str, _ITEM_STYLE),
+                    Paragraph(f"{amount:,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(state, _STMT_NUM_STYLE),
+                ]
+            )
+
+        list_table = Table(
+            rows,
+            colWidths=[
+                content_width - 100 * mm,
+                35 * mm,
+                35 * mm,
+                30 * mm,
+            ],
+            repeatRows=1,
+        )
+        list_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        elements.append(list_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        def _money(key: str) -> str:
+            return f"{currency} {totals.get(key, Decimal('0.00')):,.2f}"
+
+        totals_rows = [
+            [
+                Paragraph("Total", _TOTAL_LBL_STYLE),
+                Paragraph(_money("total"), _VAL_BOLD_STYLE),
+            ],
+            [
+                Paragraph("Paid", _TOTAL_LBL_STYLE),
+                Paragraph(_money("paid_total"), _VAL_BOLD_STYLE),
+            ],
+            [
+                Paragraph("Pending", _TOTAL_LBL_STYLE),
+                Paragraph(_money("pending_total"), _VAL_BOLD_STYLE),
+            ],
+            [
+                Paragraph("Count", _TOTAL_LBL_STYLE),
+                Paragraph(str(totals.get("count", 0)), _VAL_BOLD_STYLE),
+            ],
+        ]
+        totals_wrapper = Table(
+            [[Spacer(1, 1), Table(totals_rows, colWidths=[32.5 * mm, 32.5 * mm])]],
+            colWidths=[content_width - 65 * mm, 65 * mm],
+        )
+        totals_wrapper.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(totals_wrapper)
+
+        elements.append(Spacer(1, 12 * mm))
+        footer_text = f"Generated by {owner_name} • {date.today().strftime('%d %b %Y')}"
+        elements.append(Paragraph(footer_text, _SUB_STYLE))
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        logger.info("Generated vendor card PDF: %s (%d bytes)", title, len(pdf_bytes))
+        return pdf_bytes
+
     # private implementation
 
     def _build_purchase_order_pdf(

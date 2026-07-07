@@ -2,19 +2,24 @@
 Vendor API endpoints.
 """
 
+import io
 import logging
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import VendorServiceDep, require_role
+from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
+from app.lib.config import settings
 from app.modules.vendors.schemas import (
     ContactSearchResponse,
+    VendorCardSummary,
     VendorCreate,
     VendorDeleteResponse,
     VendorDuplicateCheckResponse,
@@ -28,6 +33,8 @@ from app.modules.vendors.schemas import (
     VendorTransactionSummary,
     VendorUpdate,
 )
+
+_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 logger = logging.getLogger(__name__)
 
@@ -448,6 +455,175 @@ def get_vendor_payables(
     Get the payables summary cards
     """
     return service.get_payables_summary(vendor_id)
+
+
+# DETAIL CARDS (Total POs / Total Payments / Total Bills)
+#
+# Three cards on the vendor detail Overview tab. Each returns an aggregate
+# block (total / paid / pending / count) plus a paginated, paid/pending-tagged
+# row list, filtered by an independent date range (defaults to last 12 months,
+# mirroring the statement endpoint). Excel + PDF exports honour the same range.
+
+
+def _card_period(
+    period_start: date | None, period_end: date | None
+) -> tuple[date, date]:
+    """Resolve the card date filter, defaulting to the last 12 months."""
+    return default_statement_period(period_start, period_end)
+
+
+@router.get(
+    "/{vendor_id}/cards/purchase-orders",
+    response_model=VendorCardSummary,
+    summary="Total POs card",
+    description=(
+        "Aggregate + paginated list of the vendor's purchase orders in the "
+        "period (DRAFT excluded), each row tagged paid/pending."
+    ),
+    responses={
+        200: {"description": "PO card"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_po_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[date | None, Query(alias="period_start")] = None,
+    period_end: Annotated[date | None, Query(alias="period_end")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> VendorCardSummary:
+    start, end = _card_period(period_start, period_end)
+    return service.get_purchase_orders_card(vendor_id, start, end, page, per_page)
+
+
+@router.get(
+    "/{vendor_id}/cards/payments",
+    response_model=VendorCardSummary,
+    summary="Total Payments card",
+    description=(
+        "Aggregate + paginated list of all payments made to the vendor in the "
+        "period — PO payments and expense payments combined. Every row is paid."
+    ),
+    responses={
+        200: {"description": "Payments card"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_payments_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[date | None, Query(alias="period_start")] = None,
+    period_end: Annotated[date | None, Query(alias="period_end")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> VendorCardSummary:
+    start, end = _card_period(period_start, period_end)
+    return service.get_payments_card(vendor_id, start, end, page, per_page)
+
+
+@router.get(
+    "/{vendor_id}/cards/bills",
+    response_model=VendorCardSummary,
+    summary="Total Bills/Invoices card",
+    description=(
+        "Aggregate + paginated list of the vendor's bills (expenses) in the "
+        "period (CANCELED excluded), each row tagged paid/pending."
+    ),
+    responses={
+        200: {"description": "Bills card"},
+        404: {"description": "Vendor not found"},
+    },
+)
+def get_vendor_bills_card(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[date | None, Query(alias="period_start")] = None,
+    period_end: Annotated[date | None, Query(alias="period_end")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> VendorCardSummary:
+    start, end = _card_period(period_start, period_end)
+    return service.get_bills_card(vendor_id, start, end, page, per_page)
+
+
+# CARD EXPORTS — Excel + PDF, one pair per card, sharing the same date filter.
+
+_CARD_KEYS = {
+    "purchase-orders": "purchase_orders",
+    "payments": "payments",
+    "bills": "bills",
+}
+
+
+async def _card_excel(
+    service, vendor_id: UUID, card: str, start: date, end: date
+) -> StreamingResponse:
+    xlsx, stem = await run_export(
+        service.build_card_excel, vendor_id, card, start, end, settings.BATCH_SIZE
+    )
+    filename = f"{stem}_{date.today().strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+async def _card_pdf(
+    service, vendor_id: UUID, card: str, start: date, end: date
+) -> StreamingResponse:
+    pdf, stem = await run_export(
+        service.build_card_pdf, vendor_id, card, start, end, settings.BATCH_SIZE
+    )
+    filename = f"{stem}_{date.today().strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{vendor_id}/cards/{card}/export/excel",
+    summary="Export a vendor card to Excel",
+    description="Export a detail card (purchase-orders | payments | bills) as .xlsx.",
+    responses={
+        200: {"description": "Excel file", "content": {_XLSX_MEDIA_TYPE: {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_card_excel(
+    vendor_id: UUID,
+    card: str,
+    service: VendorServiceDep,
+    period_start: Annotated[date | None, Query(alias="period_start")] = None,
+    period_end: Annotated[date | None, Query(alias="period_end")] = None,
+) -> StreamingResponse:
+    card_key = _CARD_KEYS.get(card, card)
+    start, end = _card_period(period_start, period_end)
+    return await _card_excel(service, vendor_id, card_key, start, end)
+
+
+@router.get(
+    "/{vendor_id}/cards/{card}/export/pdf",
+    summary="Download a vendor card as PDF",
+    description="Download a detail card (purchase-orders | payments | bills) as PDF.",
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_card_pdf(
+    vendor_id: UUID,
+    card: str,
+    service: VendorServiceDep,
+    period_start: Annotated[date | None, Query(alias="period_start")] = None,
+    period_end: Annotated[date | None, Query(alias="period_end")] = None,
+) -> StreamingResponse:
+    card_key = _CARD_KEYS.get(card, card)
+    start, end = _card_period(period_start, period_end)
+    return await _card_pdf(service, vendor_id, card_key, start, end)
 
 
 # STATEMENT

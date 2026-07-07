@@ -337,6 +337,69 @@ class VendorTransactionSummary(BaseModel):
     model_config = {"populate_by_name": True, "from_attributes": True}
 
 
+# Vendor Detail Card Schemas (Total POs / Total Payments / Total Bills)
+
+# Each detail card renders a total plus a list of the underlying transactions,
+# every row tagged paid/pending. POs / bills carry both states; a Payment is a
+# settled event, so it is always "paid".
+CardPaymentState = Literal["paid", "pending"]
+
+# Source tag on a card row — lets the frontend route a row to its document.
+CardItemSource = Literal[
+    "purchase_order",
+    "bill",
+    "po_payment",
+    "expense_payment",
+]
+
+
+class VendorCardItem(BaseModel):
+    """A single transaction row inside a vendor detail card."""
+
+    id: UUID = Field(description="Source document (or payment) UUID")
+    source: CardItemSource = Field(description="Row source type")
+    ref_no: str = Field(description="Reference number, e.g. PO-0042 / EXP-0042")
+    transaction_date: date = Field(description="Row date", alias="date")
+    amount: Decimal = Field(description="Row amount (document total or payment)")
+    payment_state: CardPaymentState = Field(
+        description="'paid' | 'pending' — POs/bills derive it; payments are 'paid'"
+    )
+
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+
+class VendorCardSummary(BaseModel):
+    """A vendor detail card: aggregate totals + a paginated, tagged row list.
+
+    Backs the three cards on the vendor detail Overview tab (Total POs,
+    Total Payments, Total Bills/Invoices). Aggregates are computed fresh in
+    SQL over the whole date-filtered set (never cached, never row-by-row in
+    Python); `items` is only the current page.
+    """
+
+    total: Decimal = Field(
+        default=Decimal("0.00"), description="Sum of document totals in range"
+    )
+    paid_total: Decimal = Field(
+        default=Decimal("0.00"), description="Sum of the paid portion in range"
+    )
+    pending_total: Decimal = Field(
+        default=Decimal("0.00"), description="Sum of the outstanding portion in range"
+    )
+    count: int = Field(default=0, description="Number of rows in the whole set")
+    currency: str = Field(default="KES", description="Display currency (from vendor)")
+
+    period_start: date | None = Field(None, description="Applied filter start")
+    period_end: date | None = Field(None, description="Applied filter end")
+
+    # Pagination of `items`
+    page: int = Field(default=1)
+    per_page: int = Field(default=10)
+    total_pages: int = Field(default=1)
+
+    items: list[VendorCardItem] = Field(default_factory=list)
+
+
 class VendorPayablesSummary(BaseModel):
     """
     Payables summary .

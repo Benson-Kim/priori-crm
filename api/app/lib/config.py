@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
     RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
-    TOKEN_DENYLIST_BACKEND: Literal["memory", "redis"] = "memory"
+    TOKEN_DENYLIST_BACKEND: Literal["memory", "redis"] = "memory"  # noqa: S105 — backend name, not a secret
     REDIS_URL: str = ""
 
     # Monitoring
@@ -163,7 +163,7 @@ class Settings(BaseSettings):
         # The refresh-token denylist must be shared in a multi-worker /
         # horizontally-scaled deployment, otherwise a token revoked on one
         # worker is still accepted by another.
-        if self.TOKEN_DENYLIST_BACKEND == "redis" and not self.REDIS_URL:
+        if self.TOKEN_DENYLIST_BACKEND == "redis" and not self.REDIS_URL:  # noqa: S105 — backend name, not a secret
             errors.append("REDIS_URL is required when TOKEN_DENYLIST_BACKEND='redis'")
 
         if errors:

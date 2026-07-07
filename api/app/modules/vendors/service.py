@@ -5,6 +5,7 @@ Vendor business logic.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -27,11 +28,18 @@ from app.common.search import build_search_clause
 from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
 from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
 from app.common.statistics import status_counts
-from app.constants.enums import Currency, ExpenseStatus, VendorStatus
+from app.constants.enums import (
+    Currency,
+    ExpenseStatus,
+    PurchaseOrderStatus,
+    VendorStatus,
+)
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.schemas import (
     ContactSearchResponse,
     ContactSearchResult,
+    VendorCardItem,
+    VendorCardSummary,
     VendorCreate,
     VendorFilterParams,
     VendorPayablesSummary,
@@ -59,6 +67,20 @@ OVERDUE_PAYABLE_STATUS: str = ExpenseStatus.OVERDUE
 CLOSED_PAYABLE_STATUSES: tuple[str, ...] = (
     ExpenseStatus.PAID,
     ExpenseStatus.CANCELED,
+)
+
+# Detail-card status filters. Each card collapses lifecycle statuses into a
+# paid/pending split, so we exclude the statuses that are neither: a PO card
+# omits DRAFT (not yet a commitment — "no draft/sent" surfaced separately),
+# and a bill card omits CANCELED (voided).
+CARD_PO_STATUSES: tuple[str, ...] = (
+    PurchaseOrderStatus.SENT,
+    PurchaseOrderStatus.PAID,
+)
+CARD_BILL_STATUSES: tuple[str, ...] = (
+    ExpenseStatus.PENDING,
+    ExpenseStatus.OVERDUE,
+    ExpenseStatus.PAID,
 )
 
 
@@ -535,6 +557,367 @@ class VendorService(StateMachineMixin, ServiceBase):
             overdue_total=payables["overdue_total"],
             currency=vendor.currency,
         )
+
+    # DETAIL CARDS (Total POs / Total Payments / Total Bills)
+
+    @staticmethod
+    def _paginate(page: int, per_page: int, count: int) -> tuple[int, int]:
+        """Return (offset, total_pages) for a 1-indexed page."""
+        total_pages = max(1, -(-count // per_page)) if per_page else 1
+        return (page - 1) * per_page, total_pages
+
+    def get_purchase_orders_card(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+        page: int = 1,
+        per_page: int = 10,
+    ) -> VendorCardSummary:
+        """Total POs card: POs for the vendor in the period, paid/pending split.
+
+        DRAFT POs are excluded (a draft is not yet a commitment). Aggregates
+        are computed in SQL over the whole filtered set; only the requested
+        page of rows is materialised.
+        """
+        from app.modules.purchase_orders.models import PurchaseOrder
+
+        vendor = self._get_vendor_or_404(vendor_id)
+        try:
+            base = self._db.query(PurchaseOrder).filter(
+                PurchaseOrder.vendor_id == vendor_id,
+                PurchaseOrder.status.in_(CARD_PO_STATUSES),
+                PurchaseOrder.order_date >= period_start,
+                PurchaseOrder.order_date <= period_end,
+            )
+
+            agg = base.with_entities(
+                func.coalesce(func.sum(PurchaseOrder.total), Decimal("0.00")),
+                func.coalesce(func.sum(PurchaseOrder.amount_paid), Decimal("0.00")),
+                func.coalesce(func.sum(PurchaseOrder.balance_due), Decimal("0.00")),
+                func.count(),
+            ).one()
+            total, paid_total, pending_total, count = agg
+
+            offset, total_pages = self._paginate(page, per_page, count)
+            rows = (
+                base.order_by(PurchaseOrder.order_date.desc())
+                .offset(offset)
+                .limit(per_page)
+                .all()
+            )
+            items = [
+                VendorCardItem(
+                    id=po.id,
+                    source="purchase_order",
+                    ref_no=po.po_reference,
+                    date=po.order_date,
+                    amount=Decimal(str(po.total)),
+                    payment_state="paid" if po.is_paid else "pending",
+                )
+                for po in rows
+            ]
+        except SQLAlchemyError as e:
+            logger.exception("Error building PO card for vendor %s", vendor_id)
+            raise DatabaseException("Failed to build purchase-orders card") from e
+
+        return VendorCardSummary(
+            total=Decimal(str(total)),
+            paid_total=Decimal(str(paid_total)),
+            pending_total=Decimal(str(pending_total)),
+            count=count,
+            currency=vendor.currency,
+            period_start=period_start,
+            period_end=period_end,
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            items=items,
+        )
+
+    def get_bills_card(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+        page: int = 1,
+        per_page: int = 10,
+    ) -> VendorCardSummary:
+        """Total Bills/Invoices card: the vendor's expenses in the period.
+
+        In this system a vendor "bill/invoice" is an Expense. CANCELED
+        expenses are excluded (voided). Paid vs pending is derived from the
+        expense status/balance.
+        """
+        from app.modules.expenses.models import Expense
+
+        vendor = self._get_vendor_or_404(vendor_id)
+        try:
+            base = self._db.query(Expense).filter(
+                Expense.vendor_id == vendor_id,
+                Expense.status.in_(CARD_BILL_STATUSES),
+                Expense.expense_date >= period_start,
+                Expense.expense_date <= period_end,
+            )
+
+            agg = base.with_entities(
+                func.coalesce(func.sum(Expense.total_due), Decimal("0.00")),
+                func.coalesce(func.sum(Expense.amount_paid), Decimal("0.00")),
+                func.coalesce(func.sum(Expense.balance_due), Decimal("0.00")),
+                func.count(),
+            ).one()
+            total, paid_total, pending_total, count = agg
+
+            offset, total_pages = self._paginate(page, per_page, count)
+            rows = (
+                base.order_by(Expense.expense_date.desc())
+                .offset(offset)
+                .limit(per_page)
+                .all()
+            )
+            items = [
+                VendorCardItem(
+                    id=exp.id,
+                    source="bill",
+                    ref_no=exp.expense_reference,
+                    date=exp.expense_date,
+                    amount=Decimal(str(exp.total_due)),
+                    payment_state="paid" if exp.is_paid else "pending",
+                )
+                for exp in rows
+            ]
+        except SQLAlchemyError as e:
+            logger.exception("Error building bills card for vendor %s", vendor_id)
+            raise DatabaseException("Failed to build bills card") from e
+
+        return VendorCardSummary(
+            total=Decimal(str(total)),
+            paid_total=Decimal(str(paid_total)),
+            pending_total=Decimal(str(pending_total)),
+            count=count,
+            currency=vendor.currency,
+            period_start=period_start,
+            period_end=period_end,
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            items=items,
+        )
+
+    def get_payments_card(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+        page: int = 1,
+        per_page: int = 10,
+    ) -> VendorCardSummary:
+        """Total Payments card: everything paid to the vendor in the period.
+
+        Unions PO payments (via PO -> vendor) and expense payments (via
+        Expense -> vendor) into one source-tagged list. A payment is a settled
+        event, so every row is 'paid' and pending_total is always 0.
+        """
+        from app.modules.expenses.models import Expense, ExpensePayment
+        from app.modules.purchase_orders.models import (
+            PurchaseOrder,
+            PurchaseOrderPayment,
+        )
+
+        vendor = self._get_vendor_or_404(vendor_id)
+        try:
+            po_leg = (
+                self._db.query(
+                    PurchaseOrderPayment.id.label("id"),
+                    literal_column("'po_payment'").label("source"),
+                    PurchaseOrder.po_reference.label("ref_no"),
+                    PurchaseOrderPayment.payment_date.label("date"),
+                    PurchaseOrderPayment.amount.label("amount"),
+                )
+                .join(PurchaseOrder, PurchaseOrderPayment.po_id == PurchaseOrder.id)
+                .filter(
+                    PurchaseOrder.vendor_id == vendor_id,
+                    PurchaseOrderPayment.payment_date >= period_start,
+                    PurchaseOrderPayment.payment_date <= period_end,
+                )
+            )
+            expense_leg = (
+                self._db.query(
+                    ExpensePayment.id.label("id"),
+                    literal_column("'expense_payment'").label("source"),
+                    Expense.expense_reference.label("ref_no"),
+                    ExpensePayment.payment_date.label("date"),
+                    ExpensePayment.amount.label("amount"),
+                )
+                .join(Expense, ExpensePayment.expense_id == Expense.id)
+                .filter(
+                    Expense.vendor_id == vendor_id,
+                    ExpensePayment.payment_date >= period_start,
+                    ExpensePayment.payment_date <= period_end,
+                )
+            )
+
+            union_q = po_leg.union_all(expense_leg).subquery()
+
+            total, count = (
+                self._db.query(
+                    func.coalesce(func.sum(union_q.c.amount), Decimal("0.00")),
+                    func.count(),
+                )
+                .select_from(union_q)
+                .one()
+            )
+
+            offset, total_pages = self._paginate(page, per_page, count)
+            rows = (
+                self._db.query(union_q)
+                .order_by(union_q.c.date.desc())
+                .offset(offset)
+                .limit(per_page)
+                .all()
+            )
+            items = [
+                VendorCardItem(
+                    id=row.id,
+                    source=row.source,
+                    ref_no=row.ref_no,
+                    date=row.date,
+                    amount=Decimal(str(row.amount)),
+                    payment_state="paid",
+                )
+                for row in rows
+            ]
+        except SQLAlchemyError as e:
+            logger.exception("Error building payments card for vendor %s", vendor_id)
+            raise DatabaseException("Failed to build payments card") from e
+
+        return VendorCardSummary(
+            total=Decimal(str(total)),
+            paid_total=Decimal(str(total)),
+            pending_total=Decimal("0.00"),
+            count=count,
+            currency=vendor.currency,
+            period_start=period_start,
+            period_end=period_end,
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            items=items,
+        )
+
+    # CARD EXPORT LOADERS — full (uncapped-by-page) rows for Excel/PDF.
+
+    def card_export_rows(
+        self,
+        vendor_id: uuid.UUID,
+        card: str,
+        period_start: date,
+        period_end: date,
+        limit: int,
+    ) -> tuple[Vendor, list[VendorCardItem], VendorCardSummary]:
+        """Return (vendor, rows, summary) for a card export.
+
+        `card` is one of 'purchase_orders' | 'payments' | 'bills'. Rows are the
+        tagged card items (up to `limit`, ordered newest-first); the summary
+        carries the aggregate totals for the export footer.
+        """
+        builder = {
+            "purchase_orders": self.get_purchase_orders_card,
+            "payments": self.get_payments_card,
+            "bills": self.get_bills_card,
+        }.get(card)
+        if builder is None:
+            raise BadRequestException(detail=f"Unknown card '{card}'", field="card")
+
+        # Reuse the card builder with a single large page so aggregates and
+        # rows come from the identical query the UI shows.
+        summary = builder(vendor_id, period_start, period_end, page=1, per_page=limit)
+        vendor = self._get_vendor_or_404(vendor_id)
+        return vendor, summary.items, summary
+
+    # Card titles for export headers / filenames.
+    _CARD_TITLES: ClassVar[dict[str, str]] = {
+        "purchase_orders": "Total Purchase Orders",
+        "payments": "Total Payments",
+        "bills": "Total Bills",
+    }
+
+    def build_card_excel(
+        self,
+        vendor_id: uuid.UUID,
+        card: str,
+        period_start: date,
+        period_end: date,
+        limit: int,
+    ) -> tuple[bytes, str]:
+        """Build the .xlsx bytes for a card export and a safe filename stem."""
+        from app.common.excel import ExcelExporter
+
+        vendor, items, summary = self.card_export_rows(
+            vendor_id, card, period_start, period_end, limit
+        )
+        title = self._CARD_TITLES.get(card, "Vendor Card")
+        xlsx = ExcelExporter().export_vendor_card(
+            title=title,
+            vendor_name=vendor.vendor_name,
+            currency=vendor.currency,
+            items=items,
+            totals={
+                "total": summary.total,
+                "paid_total": summary.paid_total,
+                "pending_total": summary.pending_total,
+                "count": summary.count,
+            },
+        )
+        return xlsx, self._card_filename_stem(vendor.vendor_name, card)
+
+    def build_card_pdf(
+        self,
+        vendor_id: uuid.UUID,
+        card: str,
+        period_start: date,
+        period_end: date,
+        limit: int,
+    ) -> tuple[bytes, str]:
+        """Build the PDF bytes for a card export and a safe filename stem."""
+        from app.common.pdf import DocumentPDFGenerator
+        from app.modules.owner.service import OwnerService
+
+        vendor, items, summary = self.card_export_rows(
+            vendor_id, card, period_start, period_end, limit
+        )
+        title = self._CARD_TITLES.get(card, "Vendor Card")
+
+        # Live owner branding (a card is a fresh report, not an issued doc).
+        owner_service = OwnerService(self._db)
+        source = owner_service.get_or_create()
+        owner_info = owner_service.to_owner_info(source)
+        logo_bytes = owner_service.load_logo_bytes(source)
+
+        pdf = DocumentPDFGenerator().generate_list_pdf(
+            title=title,
+            vendor=vendor,
+            period_start=period_start,
+            period_end=period_end,
+            items=items,
+            totals={
+                "total": summary.total,
+                "paid_total": summary.paid_total,
+                "pending_total": summary.pending_total,
+                "count": summary.count,
+            },
+            currency=vendor.currency,
+            owner=owner_info,
+            logo_bytes=logo_bytes,
+        )
+        return pdf, self._card_filename_stem(vendor.vendor_name, card)
+
+    @staticmethod
+    def _card_filename_stem(vendor_name: str, card: str) -> str:
+        """A filesystem-safe stem, e.g. 'AcmeLtd_Total_Payments'."""
+        safe_vendor = re.sub(r"[^A-Za-z0-9]+", "", vendor_name or "Vendor") or "Vendor"
+        safe_card = card.replace("_", "-")
+        return f"{safe_vendor}_{safe_card}"
 
     # UPDATE
 
