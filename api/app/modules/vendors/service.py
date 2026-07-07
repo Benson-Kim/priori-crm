@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, ClassVar
 
-from sqlalchemy import case, func, literal_column
+from sqlalchemy import case, func, literal_column, null
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.common.audit import record_audit_event
@@ -274,8 +274,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                 raise ConflictException(
                     detail=(
                         f"A vendor with this email already exists: "
-                        f"'{existing.vendor_name}' (ID: {existing.id}). "
-                        f"Would you like to view the existing record?"
+                        f"'{existing.vendor_name}'."
                     ),
                 )
 
@@ -593,8 +592,16 @@ class VendorService(StateMachineMixin, ServiceBase):
 
             agg = base.with_entities(
                 func.coalesce(func.sum(PurchaseOrder.total), Decimal("0.00")),
-                func.coalesce(func.sum(PurchaseOrder.amount_paid), Decimal("0.00")),
-                func.coalesce(func.sum(PurchaseOrder.balance_due), Decimal("0.00")),
+                func.coalesce(
+                    func.sum(
+                        func.least(PurchaseOrder.amount_paid, PurchaseOrder.total)
+                    ),
+                    Decimal("0.00"),
+                ),
+                func.coalesce(
+                    func.sum(func.greatest(PurchaseOrder.balance_due, 0)),
+                    Decimal("0.00"),
+                ),
                 func.count(),
             ).one()
             total, paid_total, pending_total, count = agg
@@ -662,8 +669,14 @@ class VendorService(StateMachineMixin, ServiceBase):
 
             agg = base.with_entities(
                 func.coalesce(func.sum(Expense.total_due), Decimal("0.00")),
-                func.coalesce(func.sum(Expense.amount_paid), Decimal("0.00")),
-                func.coalesce(func.sum(Expense.balance_due), Decimal("0.00")),
+                func.coalesce(
+                    func.sum(func.least(Expense.amount_paid, Expense.total_due)),
+                    Decimal("0.00"),
+                ),
+                func.coalesce(
+                    func.sum(func.greatest(Expense.balance_due, 0)),
+                    Decimal("0.00"),
+                ),
                 func.count(),
             ).one()
             total, paid_total, pending_total, count = agg
@@ -726,13 +739,22 @@ class VendorService(StateMachineMixin, ServiceBase):
 
         vendor = self._get_vendor_or_404(vendor_id)
         try:
+            # invoice_number only exists on PO payments; expense payments carry
+            # NULL. parent_id is the source document (PO / Expense) so the row's
+            # "View" action can route to it. payment_ref is the payment's own
+            # reference (cheque / txn id).
             po_leg = (
                 self._db.query(
                     PurchaseOrderPayment.id.label("id"),
                     literal_column("'po_payment'").label("source"),
                     PurchaseOrder.po_reference.label("ref_no"),
                     PurchaseOrderPayment.payment_date.label("date"),
-                    PurchaseOrderPayment.amount.label("amount"),
+                    (
+                        PurchaseOrderPayment.amount * PurchaseOrderPayment.exchange_rate
+                    ).label("amount"),
+                    PurchaseOrderPayment.invoice_number.label("invoice_number"),
+                    PurchaseOrderPayment.reference.label("payment_ref"),
+                    PurchaseOrder.id.label("parent_id"),
                 )
                 .join(PurchaseOrder, PurchaseOrderPayment.po_id == PurchaseOrder.id)
                 .filter(
@@ -748,6 +770,9 @@ class VendorService(StateMachineMixin, ServiceBase):
                     Expense.expense_reference.label("ref_no"),
                     ExpensePayment.payment_date.label("date"),
                     ExpensePayment.amount.label("amount"),
+                    null().label("invoice_number"),
+                    ExpensePayment.reference.label("payment_ref"),
+                    Expense.id.label("parent_id"),
                 )
                 .join(Expense, ExpensePayment.expense_id == Expense.id)
                 .filter(
@@ -784,6 +809,9 @@ class VendorService(StateMachineMixin, ServiceBase):
                     date=row.date,
                     amount=Decimal(str(row.amount)),
                     payment_state="paid",
+                    invoice_number=row.invoice_number,
+                    payment_ref=row.payment_ref,
+                    parent_id=row.parent_id,
                 )
                 for row in rows
             ]
