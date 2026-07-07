@@ -112,7 +112,7 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth token_type label, not a secret
     user: UserResponse
 
 
@@ -126,4 +126,4 @@ class RefreshResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth token_type label, not a secret

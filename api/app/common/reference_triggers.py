@@ -31,6 +31,8 @@ from app.common.reference import DATE_SCOPED_REGEX, GLOBAL_REGEX
 # A reusable PL/pgSQL function per (number kind). Each trigger passes the
 # scope-key prefix (the generator's lock_key) and whether the column is
 # date-scoped (PREFIX-YYYYMMDD-NNN) or global (PREFIX-NNNN) via TG_ARGV.
+# S608 is a false positive: the only interpolations are module-level regex
+# constants (DATE_SCOPED_REGEX / GLOBAL_REGEX), never user input — static DDL.
 _FUNCTION_SQL = f"""
 CREATE OR REPLACE FUNCTION bump_reference_sequence()
 RETURNS trigger AS $$
@@ -80,7 +82,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-"""
+"""  # noqa: S608 — static DDL; interpolations are internal regex constants only
 
 # (trigger name, table, lock_key, date_scoped, column)
 _TRIGGERS = (
