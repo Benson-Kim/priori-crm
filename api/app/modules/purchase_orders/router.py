@@ -345,8 +345,16 @@ def calculate_purchase_order_totals(
     # enabled a rate must be supplied. This keeps preview/persist parity for
     # malformed requests.
     if vat_enabled and vat_rate is None:
-        raise BadRequestException(
-            detail="vatRate is required when vatEnabled is true", field="vatRate"
+        from fastapi.exceptions import RequestValidationError
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("query", "vatRate"),
+                    "msg": "Value error, vat_rate is required when vat_enabled is true",
+                    "input": None,
+                }
+            ]
         )
 
     return service.calculate_totals(
