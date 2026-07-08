@@ -559,28 +559,36 @@ _CARD_KEYS = {
 async def _card_excel(
     service, vendor_id: UUID, card: str, start: date, end: date
 ) -> StreamingResponse:
-    xlsx, stem = await run_export(
+    xlsx, stem, truncated = await run_export(
         service.build_card_excel, vendor_id, card, start, end, settings.BATCH_SIZE
     )
     filename = f"{stem}_{date.today().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx),
         media_type=_XLSX_MEDIA_TYPE,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
     )
 
 
 async def _card_pdf(
     service, vendor_id: UUID, card: str, start: date, end: date
 ) -> StreamingResponse:
-    pdf, stem = await run_export(
+    pdf, stem, truncated = await run_export(
         service.build_card_pdf, vendor_id, card, start, end, settings.BATCH_SIZE
     )
     filename = f"{stem}_{date.today().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Truncated": "true" if truncated else "false",
+            "X-Export-Limit": str(settings.BATCH_SIZE),
+        },
     )
 
 

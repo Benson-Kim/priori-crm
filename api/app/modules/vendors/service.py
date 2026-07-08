@@ -842,7 +842,7 @@ class VendorService(StateMachineMixin, ServiceBase):
         period_start: date,
         period_end: date,
         limit: int,
-    ) -> tuple[Vendor, list[VendorCardItem], VendorCardSummary]:
+    ) -> tuple[Vendor, list[VendorCardItem], VendorCardSummary, bool]:
         """Return (vendor, rows, summary) for a card export.
 
         `card` is one of 'purchase_orders' | 'payments' | 'bills'. Rows are the
@@ -858,10 +858,16 @@ class VendorService(StateMachineMixin, ServiceBase):
             raise BadRequestException(detail=f"Unknown card '{card}'", field="card")
 
         # Reuse the card builder with a single large page so aggregates and
-        # rows come from the identical query the UI shows.
-        summary = builder(vendor_id, period_start, period_end, page=1, per_page=limit)
+        # rows come from the identical query the UI shows. Fetch one row
+        # beyond the export cap so truncation is detectable (consistent with
+        # other list export endpoints which request BATCH_SIZE + 1).
+        summary = builder(
+            vendor_id, period_start, period_end, page=1, per_page=(limit + 1)
+        )
         vendor = self._get_vendor_or_404(vendor_id)
-        return vendor, summary.items, summary
+        truncated = len(summary.items) > limit
+        items = summary.items[:limit] if truncated else summary.items
+        return vendor, items, summary, truncated
 
     # Card titles for export headers / filenames.
     _CARD_TITLES: ClassVar[dict[str, str]] = {
@@ -877,11 +883,11 @@ class VendorService(StateMachineMixin, ServiceBase):
         period_start: date,
         period_end: date,
         limit: int,
-    ) -> tuple[bytes, str]:
+    ) -> tuple[bytes, str, bool]:
         """Build the .xlsx bytes for a card export and a safe filename stem."""
         from app.common.excel import ExcelExporter
 
-        vendor, items, summary = self.card_export_rows(
+        vendor, items, summary, truncated = self.card_export_rows(
             vendor_id, card, period_start, period_end, limit
         )
         title = self._CARD_TITLES.get(card, "Vendor Card")
@@ -897,7 +903,8 @@ class VendorService(StateMachineMixin, ServiceBase):
                 "count": summary.count,
             },
         )
-        return xlsx, self._card_filename_stem(vendor.vendor_name, card)
+        # Return truncated flag so callers (router) can set response headers.
+        return xlsx, self._card_filename_stem(vendor.vendor_name, card), truncated
 
     def build_card_pdf(
         self,
@@ -906,12 +913,12 @@ class VendorService(StateMachineMixin, ServiceBase):
         period_start: date,
         period_end: date,
         limit: int,
-    ) -> tuple[bytes, str]:
+    ) -> tuple[bytes, str, bool]:
         """Build the PDF bytes for a card export and a safe filename stem."""
         from app.common.pdf import DocumentPDFGenerator
         from app.modules.owner.service import OwnerService
 
-        vendor, items, summary = self.card_export_rows(
+        vendor, items, summary, truncated = self.card_export_rows(
             vendor_id, card, period_start, period_end, limit
         )
         title = self._CARD_TITLES.get(card, "Vendor Card")
@@ -938,7 +945,8 @@ class VendorService(StateMachineMixin, ServiceBase):
             owner=owner_info,
             logo_bytes=logo_bytes,
         )
-        return pdf, self._card_filename_stem(vendor.vendor_name, card)
+        # Return truncated flag so callers (router) can set response headers.
+        return pdf, self._card_filename_stem(vendor.vendor_name, card), truncated
 
     @staticmethod
     def _card_filename_stem(vendor_name: str, card: str) -> str:

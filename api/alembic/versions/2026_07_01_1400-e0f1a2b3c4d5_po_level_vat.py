@@ -70,10 +70,11 @@ def upgrade() -> None:
 
     # Backfill from the historical per-line tax totals. A row that carried any
     # tax becomes VAT-enabled; its rate is the blended effective rate
-    # (tax_total / subtotal) rounded to 4 dp. Rows with no tax stay disabled
-    # with a NULL rate.
+    # (tax_total / subtotal) rounded to 4 dp. Preserve historical zero-rated
+    # VAT: if any line item on the PO used `vat_0` mark the PO as VAT-enabled
+    # with a rate of 0.0 rather than treating tax_total = 0 as "no tax".
     op.execute(
-        "UPDATE purchase_orders SET vat_enabled = (tax_total > 0), vat_rate = CASE WHEN subtotal > 0 AND tax_total > 0 THEN round(tax_total / subtotal, 4) ELSE NULL END"
+        "UPDATE purchase_orders SET vat_enabled = (tax_total > 0 OR EXISTS (SELECT 1 FROM purchase_order_line_items li WHERE li.po_id = purchase_orders.id AND li.tax_type = 'vat_0')), vat_rate = CASE WHEN subtotal > 0 AND tax_total > 0 THEN round(tax_total / subtotal, 4) WHEN EXISTS (SELECT 1 FROM purchase_order_line_items li WHERE li.po_id = purchase_orders.id AND li.tax_type = 'vat_0') THEN 0.0 ELSE NULL END"
     )
 
     op.create_check_constraint(
