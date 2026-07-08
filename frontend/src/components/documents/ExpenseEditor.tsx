@@ -240,7 +240,7 @@ export function ExpenseEditor({
                   }
                   : null
               }
-              onChange={setVendorId}
+              onChange={(id: string) => setVendorId(id)}
               restrictedMode={restrictedMode}
               error={errors.vendor}
             />
