@@ -4438,6 +4438,23 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total",
             "type": "string"
+          },
+          "vat_enabled": {
+            "default": false,
+            "title": "Vat Enabled",
+            "type": "boolean"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
           }
         },
         "required": [
@@ -4520,6 +4537,43 @@
             ],
             "description": "Terms & conditions \u2014 max 2000 characters",
             "title": "Termsandconditions"
+          },
+          "vatComplianceRef": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "VAT/compliance reference printed on the VAT line. Defaults from the owner profile's tax_pin when omitted; editable per PO.",
+            "title": "Vatcomplianceref"
+          },
+          "vatEnabled": {
+            "default": false,
+            "description": "Enable PO-level VAT computed on the subtotal",
+            "title": "Vatenabled",
+            "type": "boolean"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "VAT rate as a fraction (e.g. 0.16 for 16%). Required when vatEnabled is true; sourced from the shared tax-rate table.",
+            "title": "Vatrate"
           },
           "vendorId": {
             "description": "Vendor this purchase order is raised against \u2014 required",
@@ -5308,6 +5362,34 @@
             "title": "Updated At",
             "type": "string"
           },
+          "vat_compliance_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Compliance Ref"
+          },
+          "vat_enabled": {
+            "default": false,
+            "title": "Vat Enabled",
+            "type": "boolean"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
           "vendor": {
             "$ref": "#/components/schemas/app__modules__purchase_orders__schemas__VendorSummary"
           },
@@ -5624,6 +5706,46 @@
               }
             ],
             "title": "Termsandconditions"
+          },
+          "vatComplianceRef": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatcomplianceref"
+          },
+          "vatEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatenabled"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatrate"
           },
           "vendorId": {
             "anyOf": [
@@ -7193,6 +7315,189 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VendorCardItem": {
+        "description": "A single transaction row inside a vendor detail card.",
+        "properties": {
+          "amount": {
+            "description": "Row amount (document total or payment)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "date": {
+            "description": "Row date",
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "description": "Source document (or payment) UUID",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoice_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Invoice/bill number a payment settles (PO payments only)",
+            "title": "Invoice Number"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source document id (PO/Expense) for a payment row",
+            "title": "Parent Id"
+          },
+          "payment_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payment reference (cheque / transaction id)",
+            "title": "Payment Ref"
+          },
+          "payment_state": {
+            "description": "'paid' | 'pending' \u2014 POs/bills derive it; payments are 'paid'",
+            "enum": [
+              "paid",
+              "pending"
+            ],
+            "title": "Payment State",
+            "type": "string"
+          },
+          "ref_no": {
+            "description": "Reference number, e.g. PO-0042 / EXP-0042",
+            "title": "Ref No",
+            "type": "string"
+          },
+          "source": {
+            "description": "Row source type",
+            "enum": [
+              "purchase_order",
+              "bill",
+              "po_payment",
+              "expense_payment"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "ref_no",
+          "date",
+          "amount",
+          "payment_state"
+        ],
+        "title": "VendorCardItem",
+        "type": "object"
+      },
+      "VendorCardSummary": {
+        "description": "A vendor detail card: aggregate totals + a paginated, tagged row list.\n\nBacks the three cards on the vendor detail Overview tab (Total POs,\nTotal Payments, Total Bills/Invoices). Aggregates are computed fresh in\nSQL over the whole date-filtered set (never cached, never row-by-row in\nPython); `items` is only the current page.",
+        "properties": {
+          "count": {
+            "default": 0,
+            "description": "Number of rows in the whole set",
+            "title": "Count",
+            "type": "integer"
+          },
+          "currency": {
+            "default": "KES",
+            "description": "Display currency (from vendor)",
+            "title": "Currency",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VendorCardItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "paid_total": {
+            "default": "0.00",
+            "description": "Sum of the paid portion in range",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Paid Total",
+            "type": "string"
+          },
+          "pending_total": {
+            "default": "0.00",
+            "description": "Sum of the outstanding portion in range",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pending Total",
+            "type": "string"
+          },
+          "per_page": {
+            "default": 10,
+            "title": "Per Page",
+            "type": "integer"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Applied filter end",
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Applied filter start",
+            "title": "Period Start"
+          },
+          "total": {
+            "default": "0.00",
+            "description": "Sum of document totals in range",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "total_pages": {
+            "default": 1,
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "title": "VendorCardSummary",
         "type": "object"
       },
       "VendorCreate": {
@@ -12755,6 +13060,44 @@
       "post": {
         "description": "Calculate subtotal, tax_total and total from line items without persisting. Used for real-time frontend recalculation. No discount in v1.",
         "operationId": "calculate_purchase_order_totals_api_v1_purchase_orders_calculate_post",
+        "parameters": [
+          {
+            "description": "Enable PO-level VAT on the subtotal",
+            "in": "query",
+            "name": "vatEnabled",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Enable PO-level VAT on the subtotal",
+              "title": "Vatenabled",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+            "in": "query",
+            "name": "vatRate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+              "title": "Vatrate"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -16361,6 +16704,521 @@
           }
         ],
         "summary": "Activate vendor",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/cards/bills": {
+      "get": {
+        "description": "Aggregate + paginated list of the vendor's bills (expenses) in the period (CANCELED excluded), each row tagged paid/pending.",
+        "operationId": "get_vendor_bills_card_api_v1_vendors__vendor_id__cards_bills_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorCardSummary"
+                }
+              }
+            },
+            "description": "Bills card"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Total Bills/Invoices card",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/cards/payments": {
+      "get": {
+        "description": "Aggregate + paginated list of all payments made to the vendor in the period \u2014 PO payments and expense payments combined. Every row is paid.",
+        "operationId": "get_vendor_payments_card_api_v1_vendors__vendor_id__cards_payments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorCardSummary"
+                }
+              }
+            },
+            "description": "Payments card"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Total Payments card",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/cards/purchase-orders": {
+      "get": {
+        "description": "Aggregate + paginated list of the vendor's purchase orders in the period (DRAFT excluded), each row tagged paid/pending.",
+        "operationId": "get_vendor_po_card_api_v1_vendors__vendor_id__cards_purchase_orders_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorCardSummary"
+                }
+              }
+            },
+            "description": "PO card"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Total POs card",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/cards/{card}/export/excel": {
+      "get": {
+        "description": "Export a detail card (purchase-orders | payments | bills) as .xlsx.",
+        "operationId": "export_vendor_card_excel_api_v1_vendors__vendor_id__cards__card__export_excel_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "card",
+            "required": true,
+            "schema": {
+              "title": "Card",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel file"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export a vendor card to Excel",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/cards/{card}/export/pdf": {
+      "get": {
+        "description": "Download a detail card (purchase-orders | payments | bills) as PDF.",
+        "operationId": "export_vendor_card_pdf_api_v1_vendors__vendor_id__cards__card__export_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "card",
+            "required": true,
+            "schema": {
+              "title": "Card",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/pdf": {}
+            },
+            "description": "PDF file"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download a vendor card as PDF",
         "tags": [
           "Vendors"
         ]
