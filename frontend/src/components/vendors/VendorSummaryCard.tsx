@@ -40,7 +40,7 @@ const PER_PAGE = 5;
  * Mirrors the RANGE_PRESETS set; `undefined` means "no filter" so the backend
  * applies its own default (last 12 months).
  */
-export function resolvePeriod(
+function resolvePeriod(
   period: PeriodFilter
 ): { start?: string; end?: string } {
   const now = new Date();

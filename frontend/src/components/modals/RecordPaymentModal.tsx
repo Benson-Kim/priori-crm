@@ -56,9 +56,6 @@ const PAYMENT_METHODS = [
 
 type ExchangeDirection = "paymentToPo" | "poToPayment";
 
-function roundMoney(value: number): number {
-    return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 function formatRate(value: number): string {
     if (!Number.isFinite(value)) return "";
@@ -307,16 +304,6 @@ export function RecordPaymentModal({
         : `1 ${poCurrency} → ${paymentCurrency}`;
 
     // Amount is still the actual payment amount, in the selected payment currency.
-    const convertedAmount = (() => {
-        if (isNaN(parsedAmount) || isNaN(paymentToPoRate)) return null;
-        return roundMoney(parsedAmount * paymentToPoRate);
-    })();
-
-    const paymentNeededForBalance = (() => {
-        if (!currencyDiffers || isNaN(paymentToPoRate) || paymentToPoRate <= 0) return null;
-        return roundMoney(balanceDue / paymentToPoRate);
-    })();
-
     const handleSwapExchangeDirection = () => {
         if (!currencyDiffers) return;
         const currentRate = parseFloat(exchangeRate);

@@ -29,7 +29,10 @@ services:
     plan: starter
     dockerfilePath: ./api/Dockerfile
     dockerContext: ./api
-    healthCheckPath: /health
+    # Health route is mounted under the API prefix (see app/main.py:
+    # include_router(health_router, prefix=API_V1_PREFIX)), so the probe path
+    # must be the fully-qualified /api/v1/health — a bare /health 404s.
+    healthCheckPath: /api/v1/health
     envVars:
       # Application
       - key: ENVIRONMENT
@@ -149,6 +152,7 @@ services:
       H="-H \"X-Internal-Secret: $INTERNAL_API_SECRET\"";
       curl -fsS -X POST $H "$API_BASE_URL/api/v1/invoices/internal/transition-overdue";
       curl -fsS -X POST $H "$API_BASE_URL/api/v1/quotes/internal/transition-expired";
+      curl -fsS -X POST $H "$API_BASE_URL/api/v1/expenses/internal/transition-overdue";
       curl -fsS -X POST $H "$API_BASE_URL/api/v1/auth/internal/purge-otps"'
     envVars:
       - key: API_BASE_URL

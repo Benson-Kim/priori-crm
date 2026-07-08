@@ -147,7 +147,14 @@ export function PurchaseOrderEditor({
   // Rate held as a whole-number percent string for the selector (e.g. "16").
   const [vatRatePct, setVatRatePct] = useState<string>(() => {
     const fraction = initialData?.vatRate;
-    return fraction != null ? String(Math.round(fraction * 100)) : "16";
+    if (fraction != null) {
+      // Preserve existing fractional rates (e.g. 0.1067 -> "10.67").
+      // Round to 4 decimal places to match migration backfill precision
+      // but keep the fractional value so a notes-only save does not
+      // silently re-persist a rounded integer percent.
+      return String(Number((fraction * 100).toFixed(4)));
+    }
+    return "16";
   });
   // True once the user picks a different rate from the dropdown. On an
   // existing PO whose persisted rate is a non-integer percent (e.g. the
@@ -276,14 +283,15 @@ export function PurchaseOrderEditor({
       (r) => r.description.trim() || r.itemName.trim()
     );
 
-    // PO-27: per-line tax is retired for POs — always send no_tax; VAT is
-    // carried at the PO level below.
+    // Preserve per-line tax type when present. Some historical POs or
+    // user-edited line items may include inline tax rows; if present,
+    // preserve them rather than silently discarding on save.
     const items: PurchaseOrderLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
       description: r.description.trim(),
       quantity: Number.parseFloat(r.quantity),
       unitPrice: Number.parseFloat(r.unitPrice),
-      taxType: "no_tax",
+      taxType: r.taxType || "no_tax",
     }));
 
     return {

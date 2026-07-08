@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 
 from app.common.analytics import PurchaseOrderEvent, emit_event
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
+from app.common.exceptions import BadRequestException
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
@@ -340,6 +341,14 @@ def calculate_purchase_order_totals(
         ),
     ] = None,
 ) -> PurchaseOrderCalculationResponse:
+    # Enforce the same validation as the create/update schemas: when VAT is
+    # enabled a rate must be supplied. This keeps preview/persist parity for
+    # malformed requests.
+    if vat_enabled and vat_rate is None:
+        raise BadRequestException(
+            detail="vatRate is required when vatEnabled is true", field="vatRate"
+        )
+
     return service.calculate_totals(
         line_items, vat_enabled=vat_enabled, vat_rate=vat_rate
     )
