@@ -346,6 +346,7 @@ def calculate_purchase_order_totals(
     # malformed requests.
     if vat_enabled and vat_rate is None:
         from fastapi.exceptions import RequestValidationError
+
         raise RequestValidationError(
             [
                 {
@@ -818,7 +819,6 @@ def upload_purchase_order_document(
     payment_id: UUID | None = Form(None, alias="paymentId"),
     document_type: str = Form("other", alias="documentType"),
 ) -> PurchaseOrderDocumentResponse:
-    from app.common.exceptions import BadRequestException
     from app.constants.enums import DocumentSource
 
     user_id = service.actor_id
