@@ -170,6 +170,8 @@ class TestPaymentsCard:
                 amount=Decimal("120.00"),
                 payment_date=date.today(),
                 reference="CHQ-001",
+                currency="KES",
+                exchange_rate=Decimal("1.0"),
             ),
         )
 
