@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
-import { formatCurrency } from "@/lib/utils";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
 import {
@@ -16,7 +15,7 @@ import {
     type PurchaseOrderPayment,
     type PurchaseOrderPaymentPayload,
 } from "@/services/purchaseOrderApi";
-import { CreditCard, Paperclip, Plus, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CreditCard, Paperclip, Plus, Trash2, X } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 
 interface RecordPaymentModalProps {
@@ -53,6 +52,15 @@ const PAYMENT_METHODS = [
     { value: "mobile_money", label: "Mobile Money" },
     { value: "other", label: "Other" },
 ];
+
+
+type ExchangeDirection = "paymentToPo" | "poToPayment";
+
+
+function formatRate(value: number): string {
+    if (!Number.isFinite(value)) return "";
+    return Number(value.toPrecision(10)).toString();
+}
 
 /** Read a document's classification, tolerating older rows without the field. */
 function docTypeOf(doc: PurchaseOrderDocument): string {
@@ -191,7 +199,11 @@ export function RecordPaymentModal({
     const [reference, setReference] = useState("");
     const [invoiceNumber, setInvoiceNumber] = useState("");
     const [paymentCurrency, setPaymentCurrency] = useState(poCurrency);
+    // User-visible rate for the currently selected direction.
+    // When exchangeDirection is "paymentToPo", this is 1 payment currency -> PO currency.
+    // When exchangeDirection is "poToPayment", this is 1 PO currency -> payment currency.
     const [exchangeRate, setExchangeRate] = useState("1");
+    const [exchangeDirection, setExchangeDirection] = useState<ExchangeDirection>("paymentToPo");
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -237,6 +249,7 @@ export function RecordPaymentModal({
                     setExchangeRate(
                         String((editPayment as { exchange_rate?: number | string | null }).exchange_rate ?? "1")
                     );
+                    setExchangeDirection("paymentToPo");
                     setNotes(editPayment.notes ?? "");
                 } else {
                     setAmount(String(prefillAmount ?? balanceDue));
@@ -245,6 +258,7 @@ export function RecordPaymentModal({
                     setInvoiceNumber("");
                     setPaymentCurrency(poCurrency);
                     setExchangeRate("1");
+                    setExchangeDirection("paymentToPo");
                     setNotes("");
                 }
                 setPaymentMethod("bank_transfer");
@@ -261,6 +275,7 @@ export function RecordPaymentModal({
     useEffect(() => {
         if (isPurchaseOrder && paymentCurrency === poCurrency) {
             setExchangeRate("1");
+            setExchangeDirection("paymentToPo");
         }
     }, [isPurchaseOrder, paymentCurrency, poCurrency]);
 
@@ -268,17 +283,40 @@ export function RecordPaymentModal({
         setDeletedDocIds((prev) => new Set(prev).add(docId));
     };
 
-    // Converted PO-currency amount preview (for a cross-currency payment).
-    const convertedAmount = (() => {
-        const a = parseFloat(amount);
-        const r = parseFloat(exchangeRate);
-        if (isNaN(a) || isNaN(r)) return null;
-        return Math.round((a * r + Number.EPSILON) * 100) / 100;
+    const parsedAmount = parseFloat(amount);
+    const parsedDisplayRate = parseFloat(exchangeRate);
+
+    // Normalize the displayed rate into the single rate expected by the API:
+    // 1 payment currency -> PO currency. Example: if the user displays
+    // 1 USD = 121 KES while paying in KES for a USD PO, submit 1 / 121.
+    const paymentToPoRate = (() => {
+        if (paymentCurrency === poCurrency) return 1;
+        if (isNaN(parsedDisplayRate) || parsedDisplayRate <= 0) return NaN;
+        return exchangeDirection === "paymentToPo"
+            ? parsedDisplayRate
+            : 1 / parsedDisplayRate;
     })();
+
+    const displayedFromCurrency = exchangeDirection === "paymentToPo" ? paymentCurrency : poCurrency;
+    const displayedToCurrency = exchangeDirection === "paymentToPo" ? poCurrency : paymentCurrency;
+    const displayedRateHelper = exchangeDirection === "paymentToPo"
+        ? `1 ${paymentCurrency} → ${poCurrency}`
+        : `1 ${poCurrency} → ${paymentCurrency}`;
+
+    // Amount is still the actual payment amount, in the selected payment currency.
+    const handleSwapExchangeDirection = () => {
+        if (!currencyDiffers) return;
+        const currentRate = parseFloat(exchangeRate);
+        setExchangeDirection((current) =>
+            current === "paymentToPo" ? "poToPayment" : "paymentToPo"
+        );
+        if (!isNaN(currentRate) && currentRate > 0) {
+            setExchangeRate(formatRate(1 / currentRate));
+        }
+    };
 
     const handleRecord = async () => {
         setError(null);
-        const parsedAmount = parseFloat(amount);
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             setError("Amount must be greater than 0");
             return;
@@ -290,7 +328,7 @@ export function RecordPaymentModal({
             return;
         }
 
-        const parsedRate = parseFloat(exchangeRate);
+        const parsedRate = paymentToPoRate;
         if (isPurchaseOrder) {
             if (isNaN(parsedRate) || parsedRate <= 0) {
                 setError("Exchange rate must be greater than 0");
@@ -391,15 +429,89 @@ export function RecordPaymentModal({
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
                 )}
 
+                {/* Payment currency + exchange rate (purchase orders only). */}
+                {isPurchaseOrder && (
+                    <div className="space-y-4">
+                        <div className={`grid gap-3 items-end transition-all duration-700 ease-in-out ${currencyDiffers ? "grid-cols-[1fr_auto_1fr]" : "grid-cols-1"}`}>
+                            <div className={`space-y-2 transition-all duration-700 ease-in-out ${exchangeDirection === "poToPayment" ? "order-3" : "order-1"}`}>
+                                <Label htmlFor="payment-currency" className="font-bold text-base">Payment Currency</Label>
+                                <Select
+                                    id="payment-currency"
+                                    value={paymentCurrency}
+                                    onChange={(e) => setPaymentCurrency(e.target.value)}
+                                    options={CURRENCY_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
+                                />
+                            </div>
+
+                            {currencyDiffers && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handleSwapExchangeDirection}
+                                    className="order-2 mb-1 h-10 w-10 rounded-full bg-white transition-all duration-700 ease-in-out hover:rotate-180"
+                                    aria-label="Swap exchange rate direction"
+                                    title={`Show ${displayedToCurrency} to ${displayedFromCurrency}`}
+                                >
+                                    <ArrowRightLeft className="h-4 w-4" />
+                                </Button>
+                            )}
+
+                            {currencyDiffers && (
+                                <div className={`space-y-2 transition-all duration-700 ease-in-out ${exchangeDirection === "poToPayment" ? "order-1" : "order-3"}`}>
+                                    <Label htmlFor="poCurrency" className="font-bold text-base">PO Currency</Label>
+                                    <Input
+                                        value={poCurrency}
+                                        disabled
+                                        suffix={
+                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">locked</span>
+                                        } />
+
+                                </div>
+                            )}
+                        </div>
+
+                        <div
+                            className={`overflow-hidden transition-all duration-700 ease-in-out ${currencyDiffers ? "max-h-80 opacity-100 translate-y-0" : "max-h-0 opacity-0 -translate-y-2"
+                                }`}
+                        >
+                            <div className="space-y-4 pt-1">
+                                <div className="space-y-2">
+                                    <Label htmlFor="exchange-rate" className="font-bold text-base">
+                                        Exchange Rate ({displayedRateHelper})
+                                    </Label>
+                                    <Input
+                                        id="exchange-rate"
+                                        type="number"
+                                        step="0.00000001"
+                                        value={exchangeRate}
+                                        onChange={(e) => setExchangeRate(e.target.value)}
+                                        placeholder={exchangeDirection === "poToPayment" ? `e.g. 121` : `e.g. 0.00826446`}
+                                    />
+                                    <p className="text-xs text-gray-500">
+                                        {exchangeDirection === "poToPayment"
+                                            ? `Example: 1 ${poCurrency} = ${exchangeRate || "?"} ${paymentCurrency}. The saved rate will be inverted to ${paymentCurrency} → ${poCurrency}.`
+                                            : `Example: 1 ${paymentCurrency} = ${exchangeRate || "?"} ${poCurrency}. This is the rate saved with the payment.`}
+                                    </p>
+                                </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-2">
-                    <Label htmlFor="payment-amount" className="font-bold text-base">Amount</Label>
+                    <Label htmlFor="payment-amount" className="font-bold text-base">
+                        {isPurchaseOrder ? `Amount (${paymentCurrency})` : "Amount"}
+                    </Label>
                     <Input
                         id="payment-amount"
                         type="number"
                         step="0.01"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        placeholder="Enter amount"
+                        placeholder={isPurchaseOrder ? `Enter amount paid in ${paymentCurrency}` : "Enter amount"}
                     />
                 </div>
 
@@ -413,40 +525,7 @@ export function RecordPaymentModal({
                     />
                 </div>
 
-                {/* Payment currency + exchange rate (purchase orders only). */}
-                {isPurchaseOrder && (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="payment-currency" className="font-bold text-base">Payment Currency</Label>
-                            <Select
-                                id="payment-currency"
-                                value={paymentCurrency}
-                                onChange={(e) => setPaymentCurrency(e.target.value)}
-                                options={CURRENCY_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
-                            />
-                        </div>
-                        {currencyDiffers && (
-                            <div className="space-y-2">
-                                <Label htmlFor="exchange-rate" className="font-bold text-base">
-                                    Exchange Rate (1 {paymentCurrency} → {poCurrency})
-                                </Label>
-                                <Input
-                                    id="exchange-rate"
-                                    type="number"
-                                    step="0.00000001"
-                                    value={exchangeRate}
-                                    onChange={(e) => setExchangeRate(e.target.value)}
-                                    placeholder="e.g. 129.5"
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-                {currencyDiffers && convertedAmount !== null && (
-                    <p className="text-sm text-gray-500">
-                        Applied to balance: <span className="font-semibold text-gray-700">{formatCurrency(convertedAmount, poCurrency)}</span>
-                    </p>
-                )}
+
 
                 {/* payment_method: invoice payments only. */}
                 {entityType === "invoice" && (

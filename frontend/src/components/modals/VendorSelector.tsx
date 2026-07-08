@@ -82,7 +82,9 @@ export interface VendorSelectorProps {
         phone: string;
         email: string;
     } | null;
-    onChange: (vendorId: string) => void;
+    // Second optional parameter carries the vendor's currency when
+    // available so callers can update currency state inline.
+    onChange: (vendorId: string, currency?: string) => void;
     restrictedMode?: boolean;
     error?: string;
 }
@@ -125,7 +127,6 @@ export function VendorSelector({
         setVendorName(v.vendor_name);
         setShowDropdown(false);
         setSearchQuery("");
-        onChange(v.id);
 
         try {
             const vendorData = await getVendor(v.id);
@@ -134,12 +135,15 @@ export function VendorSelector({
                 phone: vendorData.phone_primary || "",
                 email: vendorData.email || "",
             });
+            onChange(v.id, vendorData.currency || undefined);
         } catch (err) {
             console.error("[VendorSelector] Failed to fetch vendor details:", err);
             setVendorDetails({
                 phone: v.phone_primary || "",
                 email: v.email || "",
             });
+            // Fallback: still notify caller of the selected id without currency
+            onChange(v.id);
         }
     };
 
@@ -148,8 +152,6 @@ export function VendorSelector({
         if (newVendorId && newVendorName) {
             setVendorId(newVendorId);
             setVendorName(newVendorName);
-            onChange(newVendorId);
-
             try {
                 const vendorData = await getVendor(newVendorId);
                 setVendorDetails({
@@ -157,8 +159,10 @@ export function VendorSelector({
                     phone: vendorData.phone_primary || "",
                     email: vendorData.email || "",
                 });
+                onChange(newVendorId, vendorData.currency || undefined);
             } catch (err) {
                 console.error("[VendorSelector] Failed to fetch new vendor details:", err);
+                onChange(newVendorId);
             }
         }
     };

@@ -10,6 +10,7 @@ and per-PO document attachments (upload / list / download / delete).
 import logging
 import secrets
 from datetime import date
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from fastapi.responses import StreamingResponse
 
 from app.common.analytics import PurchaseOrderEvent, emit_event
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
+from app.common.exceptions import BadRequestException
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
@@ -325,8 +327,40 @@ async def export_purchase_order_payments_to_excel(
 def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
     service: PurchaseOrderServiceDep,
+    vat_enabled: Annotated[
+        bool,
+        Query(alias="vatEnabled", description="Enable PO-level VAT on the subtotal"),
+    ] = False,
+    vat_rate: Annotated[
+        Decimal | None,
+        Query(
+            alias="vatRate",
+            ge=0,
+            le=1,
+            description="VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+        ),
+    ] = None,
 ) -> PurchaseOrderCalculationResponse:
-    return service.calculate_totals(line_items)
+    # Enforce the same validation as the create/update schemas: when VAT is
+    # enabled a rate must be supplied. This keeps preview/persist parity for
+    # malformed requests.
+    if vat_enabled and vat_rate is None:
+        from fastapi.exceptions import RequestValidationError
+
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("query", "vatRate"),
+                    "msg": "Value error, vat_rate is required when vat_enabled is true",
+                    "input": None,
+                }
+            ]
+        )
+
+    return service.calculate_totals(
+        line_items, vat_enabled=vat_enabled, vat_rate=vat_rate
+    )
 
 
 @router.post(
@@ -785,7 +819,6 @@ def upload_purchase_order_document(
     payment_id: UUID | None = Form(None, alias="paymentId"),
     document_type: str = Form("other", alias="documentType"),
 ) -> PurchaseOrderDocumentResponse:
-    from app.common.exceptions import BadRequestException
     from app.constants.enums import DocumentSource
 
     user_id = service.actor_id

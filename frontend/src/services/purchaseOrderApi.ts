@@ -63,6 +63,12 @@ export interface PurchaseOrderCreatePayload {
   lineItems: PurchaseOrderLineItemPayload[];
   notes?: string | null;
   termsAndConditions?: string | null;
+  /** Enable PO-level VAT computed on the subtotal. */
+  vatEnabled?: boolean;
+  /** VAT rate as a fraction (e.g. 0.16). Required when vatEnabled is true. */
+  vatRate?: number | null;
+  /** VAT/compliance ref; defaults from the owner tax PIN server-side. */
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderUpdatePayload {
@@ -72,6 +78,9 @@ export interface PurchaseOrderUpdatePayload {
   lineItems?: PurchaseOrderLineItemPayload[];
   notes?: string | null;
   termsAndConditions?: string | null;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderSendPayload {
@@ -135,6 +144,34 @@ export async function getPurchaseOrders(
 
 export function getPurchaseOrder(id: string) {
   return apiGet<PurchaseOrderResponse>(`purchase-orders/${id}`);
+}
+
+/**
+ * PO-level VAT fields (PO-27) read off a PO response.
+ *
+ * TEMPORARY: the generated OpenAPI `PurchaseOrderResponse` does not yet carry
+ * vat_enabled/vat_rate/vat_compliance_ref (pending `npm run gen:api`). This is
+ * the single narrow-cast accessor so every consumer reads the fields the same
+ * way; delete it and read the typed properties directly once the type is
+ * regenerated.
+ */
+export interface PurchaseOrderVat {
+  vatEnabled: boolean;
+  vatRate: number | null;
+  vatComplianceRef: string | null;
+}
+
+export function readPoVat(po: PurchaseOrderResponse): PurchaseOrderVat {
+  const source = po as {
+    vat_enabled?: boolean;
+    vat_rate?: number | null;
+    vat_compliance_ref?: string | null;
+  };
+  return {
+    vatEnabled: source.vat_enabled ?? false,
+    vatRate: source.vat_rate ?? null,
+    vatComplianceRef: source.vat_compliance_ref ?? null,
+  };
 }
 
 export function getPurchaseOrderByNumber(poNumber: string) {
@@ -290,9 +327,19 @@ export function downloadPurchaseOrderDocument(
  * /purchase-orders/calculate contract), not snake_case keys relying on the
  * backend's populate_by_name fallback.
  */
-export function calculateTotals(data: PurchaseOrderLineItemPayload[]) {
+export function calculateTotals(
+  data: PurchaseOrderLineItemPayload[],
+  vat?: { vatEnabled?: boolean; vatRate?: number | null }
+) {
+  const query =
+    vat && (vat.vatEnabled || vat.vatRate != null)
+      ? `?${createSearchParams({
+          vatEnabled: vat.vatEnabled ? "true" : "false",
+          vatRate: vat.vatRate ?? undefined,
+        })}`
+      : "";
   return apiPost<PurchaseOrderCalculationResponse>(
-    "purchase-orders/calculate",
+    `purchase-orders/calculate${query}`,
     data
   );
 }

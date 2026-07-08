@@ -34,9 +34,18 @@ from app.common.exceptions import (
     DatabaseException,
     NotFoundException,
 )
-from app.common.financial import build_line_items, quantize_money, sum_line_totals
+from app.common.financial import (
+    build_line_items,
+    calculate_subtotal_vat,
+    sum_line_totals,
+)
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import Currency, DocumentSource, PurchaseOrderStatus
+from app.constants.enums import (
+    Currency,
+    DocumentSource,
+    PurchaseOrderStatus,
+    TaxType,
+)
 from app.modules.purchase_orders.models import (
     PurchaseOrder,
     PurchaseOrderDocument,
@@ -190,6 +199,33 @@ class PurchaseOrderService(BaseDocumentService):
         """Delegate to the shared sum_line_totals helper (no local calc)."""
         return sum_line_totals(line_items_data)
 
+    @staticmethod
+    def _strip_line_tax(line_items_data: list[dict]) -> list[dict]:
+        """Force per-line tax to no_tax/0 for purchase orders (PO-27).
+
+        PO VAT is charged once on the subtotal (PO-level), so a line item must
+        never carry per-line tax. Mutating the built dicts here keeps the
+        persisted rows consistent (tax_type='no_tax', tax_amount=0) and the
+        subtotal derivation unaffected (line_total is untouched).
+        """
+        for item in line_items_data:
+            item["tax_type"] = TaxType.NO_TAX.value
+            item["tax_amount"] = Decimal("0.00")
+        return line_items_data
+
+    def _owner_vat_compliance_ref(self) -> str | None:
+        """Default VAT compliance reference from the owner profile's tax_pin.
+
+        Option A (PO-27): the PO's ``vat_compliance_ref`` defaults from the
+        organisation's own tax PIN, editable per PO. Resolved via OwnerService
+        (lazy import to avoid the module-level cycle) and tolerant of a
+        missing profile / tax_pin (returns None).
+        """
+        from app.modules.owner.service import OwnerService
+
+        owner = OwnerService(self._db).get_or_create()
+        return getattr(owner, "tax_pin", None)
+
     # CREATE
 
     def create(
@@ -232,9 +268,20 @@ class PurchaseOrderService(BaseDocumentService):
         po_currency = vendor.currency or Currency.KES
         compliance_ref = vendor.tax_id_pin
 
+        # PO-level VAT (PO-27): tax is charged once on the subtotal, not per
+        # line. Per-line tax fields are forced to no_tax/0 so they can never
+        # contribute to PO totals. The VAT compliance ref defaults from the
+        # owner profile's tax_pin (editable per PO) when the client omits it.
+        vat_enabled = bool(data.vat_enabled)
+        vat_rate = data.vat_rate if vat_enabled else None
+        vat_compliance_ref = data.vat_compliance_ref
+        if vat_compliance_ref is None:
+            vat_compliance_ref = self._owner_vat_compliance_ref()
+
         # Deterministic, no DB writes — computed once outside the retry loop.
-        line_items_data = self._build_line_items(data.line_items)
-        subtotal, tax_total = self._sum_line_totals(line_items_data)
+        line_items_data = self._strip_line_tax(self._build_line_items(data.line_items))
+        subtotal, _line_tax = self._sum_line_totals(line_items_data)
+        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
         total = subtotal + tax_total
 
         terms_and_conditions = data.terms_and_conditions
@@ -256,6 +303,9 @@ class PurchaseOrderService(BaseDocumentService):
                 total=total,
                 amount_paid=Decimal("0.00"),
                 balance_due=total,
+                vat_enabled=vat_enabled,
+                vat_rate=vat_rate,
+                vat_compliance_ref=vat_compliance_ref,
                 compliance_ref=compliance_ref,
                 notes=data.notes,
                 terms_and_conditions=terms_and_conditions,
@@ -797,22 +847,62 @@ Best regards,
                 field="delivery_date",
             )
 
-        # Replace line items (full set) and recompute totals.
-        if "line_items" in update_data:
+        # PO-level VAT (PO-27): totals must be recomputed when the line items
+        # change OR the VAT toggle / rate changes. Resolve the effective VAT
+        # inputs from the payload (override) or the persisted values.
+        vat_changed = (
+            "vat_enabled" in data.model_fields_set
+            or "vat_rate" in data.model_fields_set
+        )
+        vat_enabled = update_data.get("vat_enabled", purchase_order.vat_enabled)
+        vat_rate = update_data.get("vat_rate", purchase_order.vat_rate)
+        # A disabled VAT must clear the stored rate so the CHECK
+        # (enabled => rate present) and the compute stay consistent.
+        if not vat_enabled:
+            vat_rate = None
+        elif vat_rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+        # Only stage the VAT columns when they actually change; a neutral
+        # update (e.g. notes-only) must not dirty vat_enabled/vat_rate.
+        if vat_changed:
+            update_data["vat_enabled"] = vat_enabled
+            update_data["vat_rate"] = vat_rate
+
+        # Replace line items (full set) when supplied; recompute totals when
+        # either the lines or the VAT inputs changed.
+        lines_changed = "line_items" in data.model_fields_set
+        totals_need_recompute = lines_changed or vat_changed
+
+        if lines_changed:
             self._db.query(PurchaseOrderLineItem).filter(
                 PurchaseOrderLineItem.po_id == po_id
             ).delete()
 
             raw_items: list[dict] = update_data.pop("line_items")
             typed_items = [PurchaseOrderLineItemCreate(**item) for item in raw_items]
-            line_items_data = self._build_line_items(typed_items)
+            line_items_data = self._strip_line_tax(self._build_line_items(typed_items))
 
-            subtotal, tax_total = self._sum_line_totals(line_items_data)
+            for item in line_items_data:
+                self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
+
+            subtotal, _line_tax = self._sum_line_totals(line_items_data)
+        else:
+            subtotal = purchase_order.subtotal
+
+        if totals_need_recompute:
+            tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
             total = subtotal + tax_total
             balance_due = total - purchase_order.amount_paid
 
-            # Mirror Expenses: the new total can never drop below what has
-            # already been paid against the PO.
+            # The new total can never drop below what has already been paid
+            # against the PO — applies to both line-item changes AND VAT
+            # changes (gate E: floor guard must run whenever total changes).
+            # Report the field that actually drove the reduction so the client
+            # can surface the error against the right control.
+            offending_field = "line_items" if lines_changed else "vat_enabled"
             if balance_due < Decimal("0.00"):
                 raise BadRequestException(
                     detail=(
@@ -821,11 +911,8 @@ Best regards,
                         f"{purchase_order.amount_paid}). Remove or reduce "
                         "payments first."
                     ),
-                    field="line_items",
+                    field=offending_field,
                 )
-
-            for item in line_items_data:
-                self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
@@ -1083,6 +1170,8 @@ Best regards,
         for the reconciliation use case. ``_resync_after_payment_change``
         uses the same helper so record and resync always agree.
         """
+        from app.common.financial import quantize_money
+
         return quantize_money(amount * exchange_rate)
 
     def _apply_payment(
@@ -1629,6 +1718,9 @@ Best regards,
                     subtotal=original.subtotal,
                     tax_total=original.tax_total,
                     total=original.total,
+                    vat_enabled=original.vat_enabled,
+                    vat_rate=original.vat_rate,
+                    vat_compliance_ref=None,  # cleared — specific to the original
                     compliance_ref=None,  # cleared — specific to the original
                     notes=original.notes,
                     terms_and_conditions=original.terms_and_conditions,
@@ -1686,17 +1778,22 @@ Best regards,
     def calculate_totals(
         cls,
         line_items: list[PurchaseOrderLineItemCreate],
+        vat_enabled: bool = False,
+        vat_rate: Decimal | None = None,
     ) -> PurchaseOrderCalculationResponse:
         """
         Calculate PO totals without persisting — live preview endpoint.
 
-        No discount in v1: total = subtotal + tax_total. Every monetary
-        value is produced by ``app.common.financial`` so the result is, by
-        construction, identical to the Expenses/Quotes engine for the same
-        inputs (parity is asserted in tests).
+        PO-27: VAT is a PO-level charge on the subtotal, not a per-line tax, so
+        per-line tax is stripped to no_tax/0 and ``tax_total`` is computed via
+        the shared ``calculate_subtotal_vat``. This is, by construction,
+        identical to what create()/update() persist for the same inputs
+        (parity is asserted in tests). No discount in v1:
+        total = subtotal + tax_total.
         """
-        calculated_items = cls._build_line_items(line_items)
-        subtotal, tax_total = cls._sum_line_totals(calculated_items)
+        calculated_items = cls._strip_line_tax(cls._build_line_items(line_items))
+        subtotal, _line_tax = cls._sum_line_totals(calculated_items)
+        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
 
         formatted_items = [
             {
@@ -1715,6 +1812,8 @@ Best regards,
             subtotal=subtotal,
             tax_total=tax_total,
             total=subtotal + tax_total,
+            vat_enabled=vat_enabled,
+            vat_rate=vat_rate,
             line_items=formatted_items,
         )
 

@@ -12,11 +12,10 @@ src = ["app", "tests"]
 [tool.ruff.lint]
 # Correctness-focused, low-churn baseline that the existing code satisfies,
 # so `ruff check` is an enforceable CI gate from the first green pipeline.
-# ANN (annotation coverage) and S (bandit) were in the original aspirational
-# set but were never enforced (CI never ran) and flag the whole repo —
-# annotations are covered by mypy, and SAST belongs in a dedicated scanning
-# job. Re-introduce stricter rule groups incrementally once the baseline is
-# clean.
+# ANN (annotation coverage) stays deferred (covered by mypy). S (bandit) is
+# now enabled as a lightweight SAST gate (WI-04): app code is clean bar a
+# handful of documented false positives suppressed inline with `# noqa: S…`,
+# and tests exempt the assert/secret rules below.
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -26,6 +25,7 @@ select = [
     "B",      # flake8-bugbear
     "SIM",    # flake8-simplify
     "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (SAST: hardcoded secrets, weak crypto, SQL, etc.)
     "RUF",    # ruff-specific
 ]
 ignore = [
@@ -38,6 +38,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "alembic/versions/*.py" = ["ALL"]
+# Tests legitimately use `assert` (S101) and embed throwaway fixture
+# credentials/tokens (S105/S106); these are not production secrets.
+"tests/*.py" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

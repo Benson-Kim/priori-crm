@@ -2,20 +2,17 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
-import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
     checkEmailDuplicate,
     createVendor,
     getVendor,
-    searchContacts,
     updateVendor,
-    type ContactSearchResult
 } from "@/services/vendorApi";
 import { vendorSchema, type VendorFormData } from "@/validations/vendorSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Check, Search, UserPlus, X } from "lucide-react";
+import { Check } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { Select } from "../ui/Select";
@@ -28,17 +25,10 @@ interface VendorModalProps {
 }
 
 export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModalProps) {
-    // Mode can be: 'choice' (initial), 'new' (empty form), 'search' (searching contacts), 'edit' (editing existing vendor)
-    const [mode, setMode] = useState<'choice' | 'new' | 'search' | 'edit'>('choice');
+    // Mode can be: 'new' (empty form), 'edit' (editing existing vendor)
+    const [mode, setMode] = useState<'new' | 'edit'>('new');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // Search state
-    const [searchQuery, setSearchQuery] = useState("");
-    const debouncedSearch = useDebounce(searchQuery, 300);
-    const [searchResults, setSearchResults] = useState<ContactSearchResult[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
     // Duplicate email state
     const [emailWarning, setEmailWarning] = useState<string | null>(null);
@@ -95,10 +85,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                 if (vendorId) {
                     setMode('edit');
                 } else {
-                    setMode('choice');
                     reset();
-                    setSearchQuery("");
-                    setSelectedContactId(null);
                     setError(null);
                     setEmailWarning(null);
                 }
@@ -109,28 +96,6 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
         }
     }, [isOpen, vendorId, reset, loadVendorData]);
 
-    // Handle Contact Search
-    useEffect(() => {
-        const performSearch = async () => {
-            if (debouncedSearch.trim().length < 2) {
-                setSearchResults([]);
-                return;
-            }
-            setIsSearching(true);
-            try {
-                const res = await searchContacts(debouncedSearch);
-                setSearchResults(res.results);
-            } catch (err) {
-                console.error("Search failed", err);
-            } finally {
-                setIsSearching(false);
-            }
-        };
-
-        if (mode === 'search') {
-            performSearch();
-        }
-    }, [debouncedSearch, mode]);
 
     // Handle Duplicate Email Check
     useEffect(() => {
@@ -158,20 +123,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
         return () => clearTimeout(timeoutId);
     }, [emailValue, currentVendorId]);
 
-    const handleContactSelect = (contact: ContactSearchResult) => {
-        setSelectedContactId(contact.id);
-        reset({
-            vendor_name: contact.full_name,
-            email: contact.email ?? "",
-            phone_primary: contact.phone_primary ?? "",
-            address: contact.address ?? "",
-            country: contact.country ?? COUNTRY_OPTIONS[0].value,
-            website: contact.website ?? "",
-            vat_number: contact.vat_number ?? "",
-            currency: CURRENCY_OPTIONS[0].value,
-        });
-        setMode('new');
-    };
+
 
     const onSubmit = async (data: VendorFormData) => {
         try {
@@ -196,9 +148,6 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             if (mode === 'edit' && vendorId) {
                 savedVendor = await updateVendor(vendorId, payload);
             } else {
-                if (selectedContactId) {
-                    payload.contact_id = selectedContactId;
-                }
                 savedVendor = await createVendor(payload);
             }
 
@@ -223,349 +172,264 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
 
     return (
         <Dialog isOpen={isOpen} onClose={onClose} title={title}>
-            <div className="p-1">
-                {error && (
-                    <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-red-800 text-sm">{error}</p>
-                    </div>
-                )}
+            {error && (
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-800 text-sm">{error}</p>
+                </div>
+            )}
 
-                {mode === 'choice' && (
-                    <div className="flex flex-col gap-4 py-4">
-                        <button
-                            onClick={() => setMode('new')}
-                            className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-priori-purple hover:bg-purple-50 transition-all text-left"
-                        >
-                            <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
-                                <Building2 size={24} className="text-priori-purple" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 text-lg">Create New Vendor</h3>
-                                <p className="text-gray-500 text-sm">Add a vendor from scratch</p>
-                            </div>
-                        </button>
+            {(mode === 'new' || mode === 'edit') && (
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] overflow-y-auto px-2 pb-4">
+                    {/* Vendor Details Section */}
+                    <Card className="rounded-xl bg-white border-gray-300 flex flex-col gap-6 p-6">
 
-                        <button
-                            onClick={() => setMode('search')}
-                            className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-priori-purple hover:bg-purple-50 transition-all text-left"
-                        >
-                            <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
-                                <UserPlus size={24} className="text-priori-purple" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 text-lg">Search Existing Contact</h3>
-                                <p className="text-gray-500 text-sm">Convert a CRM contact into a vendor</p>
-                            </div>
-                        </button>
-                    </div>
-                )}
-
-                {mode === 'search' && (
-                    <div className="flex flex-col h-[400px]">
-                        <div className="relative mb-4">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                            <input
-                                type="text"
-                                placeholder="Search by name, email, or phone..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
-                                autoFocus
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Vendor Name
+                            </label>
+                            <Controller
+                                name="vendor_name"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            placeholder="Enter name"
+                                            error={errors.vendor_name?.message}
+                                        />
+                                        {renderFieldError(errors.vendor_name)}
+                                    </>
+                                )}
                             />
                         </div>
 
-                        <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50 p-2 space-y-2">
-                            {isSearching ? (
-                                <p className="text-center text-gray-500 py-4">Searching...</p>
-                            ) : searchResults.length > 0 ? (
-                                searchResults.map((contact) => (
-                                    <div
-                                        key={contact.id}
-                                        onClick={() => handleContactSelect(contact)}
-                                        className="bg-white p-3 rounded border border-gray-200 cursor-pointer hover:border-priori-purple hover:shadow-sm transition-all"
-                                    >
-                                        <p className="font-bold text-gray-900">{contact.full_name}</p>
-                                        <p className="text-sm text-gray-500">
-                                            {contact.email} {contact.email && contact.phone_primary && '•'} {contact.phone_primary}
-                                        </p>
-                                    </div>
-                                ))
-                            ) : searchQuery.length > 1 ? (
-                                <p className="text-center text-gray-500 py-4">No contacts found</p>
-                            ) : (
-                                <p className="text-center text-gray-500 py-4">Type to search existing contacts</p>
-                            )}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Address
+                            </label>
+                            <Controller
+                                name="address"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            placeholder="Street address"
+                                            error={errors.address?.message}
+                                        />
+                                        {renderFieldError(errors.address)}
+                                    </>
+                                )}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Email
+                            </label>
+                            <Controller
+                                name="email"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            type="email"
+                                            placeholder="email@example.com"
+                                            error={errors.email?.message}
+                                        />
+                                        {checkingEmail && <p className="text-xs text-gray-400 mt-1">Checking email...</p>}
+                                        {emailWarning && <p className="text-xs text-orange-500 mt-1">{emailWarning}</p>}
+                                        {renderFieldError(errors.email)}
+                                    </>
+                                )}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                    Country <span className="text-red-500">*</span>
+                                </label>
+                                <Controller
+                                    name="country"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <>
+                                            <Select
+                                                id="country"
+                                                {...field}
+                                                options={COUNTRY_OPTIONS}
+                                                placeholder="Country"
+                                            />
+                                            {renderFieldError(errors.country)}
+                                        </>
+                                    )}
+                                />
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                    Currency <span className="text-red-500">*</span>
+                                </label>
+                                <Controller
+                                    name="currency"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <>
+                                            <Select
+                                                id="currency"
+                                                {...field}
+                                                options={CURRENCY_OPTIONS}
+                                                placeholder="Select currency"
+                                            />
+                                            {renderFieldError(errors.currency)}
+                                        </>
+                                    )}
+                                />
+                            </div>
                         </div>
 
-                        <div className="mt-4 flex justify-start">
-                            <Button variant="outline" onClick={() => setMode('choice')}>
-                                Back
+                        {/* Phone Numbers */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Primary Phone
+                            </label>
+                            <Controller
+                                name="phone_primary"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            type="tel"
+                                            placeholder="+254 700 000 000"
+                                            error={errors.phone_primary?.message}
+                                        />
+                                        {renderFieldError(errors.phone_primary)}
+                                    </>
+                                )}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Secondary Phone
+                            </label>
+                            <Controller
+                                name="phone_secondary"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            type="tel"
+                                            placeholder="+254 700 000 000"
+                                            error={errors.phone_secondary?.message}
+                                        />
+                                        {renderFieldError(errors.phone_secondary)}
+                                    </>
+                                )}
+                            />
+                        </div>
+
+                        {/* Website & Notes */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Website
+                            </label>
+                            <Controller
+                                name="website"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <Input
+                                            {...field}
+                                            type="url"
+                                            placeholder="https://example.com"
+                                            error={errors.website?.message}
+                                        />
+                                        {renderFieldError(errors.website)}
+                                    </>
+                                )}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                    VAT Number
+                                </label>
+                                <Controller
+                                    name="vat_number"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <>
+                                            <Input
+                                                {...field}
+                                                placeholder="VAT Number"
+                                                error={errors.vat_number?.message}
+                                            />
+                                            {renderFieldError(errors.vat_number)}
+                                        </>
+                                    )}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                    Tax ID / PIN
+                                </label>
+                                <Controller
+                                    name="tax_id_pin"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <>
+                                            <Input
+                                                {...field}
+                                                placeholder="Tax PIN"
+                                                error={errors.tax_id_pin?.message}
+                                            />
+                                            {renderFieldError(errors.tax_id_pin)}
+                                        </>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Notes
+                            </label>
+                            <Controller
+                                name="notes"
+                                control={control}
+                                render={({ field }) => (
+                                    <>
+                                        <textarea
+                                            {...field}
+                                            rows={1}
+                                            className={cn(
+                                                `flex items-center w-full py-4 px-3 gap-3 rounded-lg border bg-gray-50 transition-all min-h-[42px]`,
+                                                error
+                                                    ? `border-red-300 focus-within:border-red-500 focus-within:ring-red-100`
+                                                    : `border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10`)}
+                                            placeholder="Internal notes..."
+                                        />
+                                        {renderFieldError(errors.notes)}
+                                    </>
+                                )}
+                            />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-4">
+
+                            <Button
+                                type="submit"
+                                disabled={isLoading}
+                                className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Check size={20} /> {isLoading ? "Saving..." : "Save Vendor"}
                             </Button>
                         </div>
-                    </div>
-                )}
-
-                {(mode === 'new' || mode === 'edit') && (
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] overflow-y-auto px-2 pb-4">
-                        {/* Vendor Details Section */}
-                        <Card className="rounded-xl bg-white border-gray-300 flex flex-col gap-6 p-6">
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Vendor Name
-                                </label>
-                                <Controller
-                                    name="vendor_name"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                placeholder="Enter name"
-                                                error={errors.vendor_name?.message}
-                                            />
-                                            {renderFieldError(errors.vendor_name)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Address
-                                </label>
-                                <Controller
-                                    name="address"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                placeholder="Street address"
-                                                error={errors.address?.message}
-                                            />
-                                            {renderFieldError(errors.address)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Email
-                                </label>
-                                <Controller
-                                    name="email"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                type="email"
-                                                placeholder="email@example.com"
-                                                error={errors.email?.message}
-                                            />
-                                            {checkingEmail && <p className="text-xs text-gray-400 mt-1">Checking email...</p>}
-                                            {emailWarning && <p className="text-xs text-orange-500 mt-1">{emailWarning}</p>}
-                                            {renderFieldError(errors.email)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Country <span className="text-red-500">*</span>
-                                    </label>
-                                    <Controller
-                                        name="country"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <>
-                                                <Select
-                                                    id="country"
-                                                    {...field}
-                                                    options={COUNTRY_OPTIONS}
-                                                    placeholder="Country"
-                                                />
-                                                {renderFieldError(errors.country)}
-                                            </>
-                                        )}
-                                    />
-                                </div>
-                                <div className="mb-6">
-                                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Currency <span className="text-red-500">*</span>
-                                    </label>
-                                    <Controller
-                                        name="currency"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <>
-                                                <Select
-                                                    id="currency"
-                                                    {...field}
-                                                    options={CURRENCY_OPTIONS}
-                                                    placeholder="Select currency"
-                                                />
-                                                {renderFieldError(errors.currency)}
-                                            </>
-                                        )}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Phone Numbers */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Primary Phone
-                                </label>
-                                <Controller
-                                    name="phone_primary"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                type="tel"
-                                                placeholder="+254 700 000 000"
-                                                error={errors.phone_primary?.message}
-                                            />
-                                            {renderFieldError(errors.phone_primary)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Secondary Phone
-                                </label>
-                                <Controller
-                                    name="phone_secondary"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                type="tel"
-                                                placeholder="+254 700 000 000"
-                                                error={errors.phone_secondary?.message}
-                                            />
-                                            {renderFieldError(errors.phone_secondary)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-
-                            {/* Website & Notes */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Website
-                                </label>
-                                <Controller
-                                    name="website"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <Input
-                                                {...field}
-                                                type="url"
-                                                placeholder="https://example.com"
-                                                error={errors.website?.message}
-                                            />
-                                            {renderFieldError(errors.website)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        VAT Number
-                                    </label>
-                                    <Controller
-                                        name="vat_number"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <>
-                                                <Input
-                                                    {...field}
-                                                    placeholder="VAT Number"
-                                                    error={errors.vat_number?.message}
-                                                />
-                                                {renderFieldError(errors.vat_number)}
-                                            </>
-                                        )}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                        Tax ID / PIN
-                                    </label>
-                                    <Controller
-                                        name="tax_id_pin"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <>
-                                                <Input
-                                                    {...field}
-                                                    placeholder="Tax PIN"
-                                                    error={errors.tax_id_pin?.message}
-                                                />
-                                                {renderFieldError(errors.tax_id_pin)}
-                                            </>
-                                        )}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Notes
-                                </label>
-                                <Controller
-                                    name="notes"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <>
-                                            <textarea
-                                                {...field}
-                                                rows={1}
-                                                className={cn(
-                                                    `flex items-center w-full py-4 px-3 gap-3 rounded-lg border bg-gray-50 transition-all min-h-[42px]`,
-                                                    error
-                                                        ? `border-red-300 focus-within:border-red-500 focus-within:ring-red-100`
-                                                        : `border-gray-300 focus-within:border-priori-purple focus-within:ring-priori-purple/10`)}
-                                                placeholder="Internal notes..."
-                                            />
-                                            {renderFieldError(errors.notes)}
-                                        </>
-                                    )}
-                                />
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex gap-3 pt-4">
-                                <Button
-                                    type="button"
-                                    onClick={() => setMode('choice')}
-                                    disabled={isLoading}
-                                    variant="outline"
-                                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <X size={20} /> Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Check size={20} /> {isLoading ? "Saving..." : "Save Vendor"}
-                                </Button>
-                            </div>
-                        </Card>
-                    </form>
-                )}
-            </div>
+                    </Card>
+                </form>
+            )}
         </Dialog>
     );
 }

@@ -381,6 +381,80 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    def export_vendor_card(
+        self,
+        *,
+        title: str,
+        vendor_name: str,
+        currency: str,
+        items: list,
+        totals: dict,
+    ) -> bytes:
+        """Export a vendor detail card (POs / Payments / Bills) to .xlsx bytes.
+
+        One row per transaction (ref, date, amount, paid/pending) with a
+        totals block below. `items` are VendorCardItem-shaped objects and
+        `totals` carries total/paid_total/pending_total/count. Shared by all
+        three card exports so their layout can never drift.
+        """
+        headers = ["Reference", "Date", "Amount", "Status"]
+
+        def row_fn(it):
+            return [
+                getattr(it, "ref_no", ""),
+                getattr(it, "transaction_date", None),
+                getattr(it, "amount", Decimal("0.00")),
+                str(getattr(it, "payment_state", "")).capitalize(),
+            ]
+
+        wb = self._build_workbook(
+            sheet_name=(title[:31] or "Card"),
+            headers=headers,
+            records=items,
+            row_fn=row_fn,
+            money_cols=[3],
+            date_cols=[2],
+        )
+        ws = wb.active
+
+        # Title banner above the frozen header.
+        ws.insert_rows(1)
+        ws.merge_cells("A1:D1")
+        banner = ws.cell(row=1, column=1, value=f"{vendor_name} — {title}")
+        banner.font = Font(name="Calibri", bold=True, size=14, color="2C1A54")
+        banner.alignment = Alignment(horizontal="left", vertical="center")
+        ws.freeze_panes = "A3"
+
+        # Totals block below the data.
+        start = ws.max_row + 2
+        summary_rows = [
+            ("Total", totals.get("total")),
+            ("Paid", totals.get("paid_total")),
+            ("Pending", totals.get("pending_total")),
+            ("Count", totals.get("count")),
+        ]
+        for offset, (label, value) in enumerate(summary_rows):
+            r = start + offset
+            lbl = ws.cell(row=r, column=1, value=label)
+            lbl.font = Font(name="Calibri", bold=True, size=10)
+            cell = ws.cell(row=r, column=3)
+            if isinstance(value, Decimal):
+                cell.value = float(value)
+                cell.number_format = _MONEY_FORMAT
+            else:
+                cell.value = value
+            cell.font = Font(name="Calibri", bold=True, size=10)
+            cell.alignment = Alignment(horizontal="right")
+
+        note = ws.cell(
+            row=start + len(summary_rows) + 1,
+            column=1,
+            value=f"Currency: {currency}",
+        )
+        note.font = Font(name="Calibri", italic=True, size=9, color="817D7D")
+
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(

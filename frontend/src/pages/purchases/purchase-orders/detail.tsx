@@ -24,6 +24,7 @@ import {
     exportPurchaseOrderPaymentsExcel,
     getPurchaseOrder,
     markAsSentPurchaseOrder,
+    readPoVat,
     sendPurchaseOrder,
 } from "@/services/purchaseOrderApi";
 import {
@@ -69,8 +70,6 @@ export default function PurchaseOrderDetailPage() {
     const [editingPayment, setEditingPayment] = useState<PurchaseOrderPayment | null>(null);
     // Current page (1-based) of the payments table.
     const [paymentsPage, setPaymentsPage] = useState(1);
-
-    console.log(po)
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -529,6 +528,9 @@ export default function PurchaseOrderDetailPage() {
                         subtotal: Number(po.subtotal),
                         taxTotal: Number(po.tax_total),
                         total: Number(po.total),
+                        // PO-level VAT (PO-27), via the shared accessor (falls
+                        // back cleanly until the OpenAPI type carries them).
+                        ...readPoVat(po),
                         lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
                             id: item.id ?? `line-${index}`,
                             itemName: item.item_name,
@@ -607,7 +609,7 @@ export default function PurchaseOrderDetailPage() {
                                 {pagedPayments.length > 0 && (
                                     <div className="flex items-center justify-between border-t border-gray-200 px-3 py-3">
                                         <span className="text-sm font-semibold text-gray-700">
-                                            Total (this page)
+                                            Total
                                         </span>
                                         <span className="text-sm font-bold text-gray-800">
                                             {formatCurrency(pagedPaymentsTotal, currency)}

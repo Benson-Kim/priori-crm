@@ -8,7 +8,14 @@
  * camelCase transport shape the API maps onto its snake_case fields.
  */
 
-import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import {
+  apiDelete,
+  apiDownload,
+  apiGet,
+  apiPost,
+  apiPut,
+  flattenPaginated,
+} from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import type { PaginatedApiResponse } from "@/lib/types";
 
@@ -119,4 +126,85 @@ export async function getVendorStatement(
   if (periodEnd) params.period_end = periodEnd;
 
   return apiGet<VendorStatement>(`vendors/${vendorId}/statement`, params);
+}
+
+// Vendor detail cards (Total POs / Total Payments / Total Bills)
+//
+// NOTE: hand-written until the OpenAPI schema is regenerated to include the
+// new VendorCardSummary/VendorCardItem models — same temporary convention as
+// the PO-VAT `readPoVat` cast. Regenerate the contract and switch these to
+// `Schema<"VendorCardSummary">` to drop the local copies.
+
+export type VendorCardKey = "purchase-orders" | "payments" | "bills";
+
+export interface VendorCardItem {
+  id: string;
+  source: "purchase_order" | "bill" | "po_payment" | "expense_payment";
+  ref_no: string;
+  date: string;
+  amount: string;
+  payment_state: "paid" | "pending";
+  /** Payment-only columns (null on PO/bill rows). */
+  invoice_number?: string | null;
+  payment_ref?: string | null;
+  parent_id?: string | null;
+}
+
+export interface VendorCardSummary {
+  total: string;
+  paid_total: string;
+  pending_total: string;
+  count: number;
+  currency: string;
+  period_start: string | null;
+  period_end: string | null;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  items: VendorCardItem[];
+}
+
+/** Endpoint segment for each card (kept in one place). */
+const CARD_PATH: Record<VendorCardKey, string> = {
+  "purchase-orders": "purchase-orders",
+  payments: "payments",
+  bills: "bills",
+};
+
+export function getVendorCard(
+  vendorId: string,
+  card: VendorCardKey,
+  params?: {
+    period_start?: string;
+    period_end?: string;
+    page?: number;
+    per_page?: number;
+  }
+): Promise<VendorCardSummary> {
+  return apiGet<VendorCardSummary>(
+    `vendors/${vendorId}/cards/${CARD_PATH[card]}`,
+    params
+  );
+}
+
+export function exportVendorCardExcel(
+  vendorId: string,
+  card: VendorCardKey,
+  params?: { period_start?: string; period_end?: string }
+): Promise<Blob> {
+  return apiDownload(
+    `vendors/${vendorId}/cards/${CARD_PATH[card]}/export/excel`,
+    params
+  );
+}
+
+export function exportVendorCardPdf(
+  vendorId: string,
+  card: VendorCardKey,
+  params?: { period_start?: string; period_end?: string }
+): Promise<Blob> {
+  return apiDownload(
+    `vendors/${vendorId}/cards/${CARD_PATH[card]}/export/pdf`,
+    params
+  );
 }

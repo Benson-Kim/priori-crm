@@ -8,12 +8,15 @@ Mirrors the Expense models (vendor-facing, document attachments) rather
 than the Quote/Invoice (customer-facing) models. Purchase Orders are
 raised against a Vendor.
 
-Financial formula:
+Financial formula (PO-27 — PO-level VAT):
     line_total = quantity x unit_price
-    tax_amount = line_total x tax_rate   (derived from tax_type via get_tax_rate)
     subtotal   = Σ line_total
-    tax_total  = Σ tax_amount
+    tax_total  = round(subtotal x vat_rate) when vat_enabled, else 0
     total      = subtotal + tax_total    ← no discount in v1
+
+VAT is a single PO-level charge on the subtotal, NOT a per-line tax: line
+items always persist tax_type=no_tax / tax_amount=0. The VAT computation
+lives in a single place — common.financial.calculate_subtotal_vat.
 
 NOTE on converted_bill_id: the Bills module/table does not exist yet, so
 this is a nullable plain UUID column WITHOUT a database foreign-key
@@ -93,6 +96,14 @@ class PurchaseOrder(Base):
         CheckConstraint(
             "amount_paid >= 0",
             name="ck_purchase_orders_amount_paid_non_negative",
+        ),
+        CheckConstraint(
+            "vat_rate IS NULL OR (vat_rate >= 0 AND vat_rate <= 1)",
+            name="ck_purchase_orders_vat_rate_range",
+        ),
+        CheckConstraint(
+            "vat_enabled = false OR vat_rate IS NOT NULL",
+            name="ck_purchase_orders_vat_rate_present_when_enabled",
         ),
         # NOTE: no ``balance_due >= 0`` CHECK on purpose. Overpayment is
         # recordable and balance_due (= total - amount_paid) may go negative
@@ -177,6 +188,37 @@ class PurchaseOrder(Base):
         default=False,
         server_default=text("false"),
         comment="Recurring-PO flag. Informational only in v1 — no auto-generation.",
+    )
+
+    vat_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment=(
+            "PO-level VAT toggle. When true, tax_total is computed on the "
+            "subtotal at vat_rate (not per line item)."
+        ),
+    )
+
+    vat_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4),
+        nullable=True,
+        comment=(
+            "Applied VAT rate as a fraction (e.g. 0.1600 for 16%). Required "
+            "when vat_enabled is true; NULL otherwise. A free rate chosen by "
+            "the user (range enforced 0..1 by CHECK), NOT looked up from the "
+            "per-line TAX_RATES table."
+        ),
+    )
+
+    vat_compliance_ref: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment=(
+            "VAT / compliance reference printed on the PO's VAT line. Defaults "
+            "from the owner profile's tax_pin at create time; editable per PO."
+        ),
     )
 
     subtotal: Mapped[Decimal] = mapped_column(
