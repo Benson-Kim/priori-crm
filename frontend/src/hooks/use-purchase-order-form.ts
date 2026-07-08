@@ -107,6 +107,9 @@ export function usePurchaseOrderForm(
           notes: payload.notes,
           termsAndConditions: payload.termsAndConditions,
           lineItems,
+          vatEnabled: payload.vatEnabled,
+          vatRate: payload.vatRate,
+          vatComplianceRef: payload.vatComplianceRef,
         };
         // Pass the loaded version for optimistic-lock (stale write -> 409).
         saved = await updatePurchaseOrder(
@@ -128,6 +131,9 @@ export function usePurchaseOrderForm(
           notes: payload.notes,
           termsAndConditions: payload.termsAndConditions,
           lineItems,
+          vatEnabled: payload.vatEnabled,
+          vatRate: payload.vatRate,
+          vatComplianceRef: payload.vatComplianceRef,
         };
         saved = await createPurchaseOrder(createPayload);
       }

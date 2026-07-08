@@ -34,8 +34,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Liveness probe. Uses only the stdlib (urllib) — `requests` is intentionally
+# NOT a dependency, so the previous `import requests` probe errored on every
+# run and reported the container unhealthy. Exit non-zero on any non-200.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/api/v1/health')"
+    CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5).status == 200 else 1)"
 
 # Expose port
 EXPOSE 8000

@@ -1,7 +1,7 @@
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
-import { buildVatLabel } from "./utils";
+import { buildPoVatLabel } from "./utils";
 
 export interface PurchaseOrderViewerData {
   poReference?: string;
@@ -23,6 +23,12 @@ export interface PurchaseOrderViewerData {
   subtotal: number;
   taxTotal: number;
   total: number;
+  /** PO-level VAT (PO-27): the tax is a single charge on the subtotal. */
+  vatEnabled?: boolean;
+  /** VAT rate as a fraction (e.g. 0.16 for 16%). */
+  vatRate?: number | null;
+  /** VAT/compliance reference printed on the VAT line. */
+  vatComplianceRef?: string | null;
   lineItems: {
     id: string;
     itemName?: string;
@@ -43,8 +49,10 @@ export function PurchaseOrderViewer({
   data,
   editableOwner = false,
 }: Readonly<PurchaseOrderViewerProps>) {
-  // Build VAT label from line items (shared helper used by the other viewers).
-  const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
+  // PO-27: VAT is a PO-level charge on the subtotal, so read the rate and
+  // compliance ref from the PO's own fields (lines are no_tax) instead of
+  // deriving a per-line label.
+  const vatLabel = buildPoVatLabel(data.vatRate, data.vatComplianceRef);
 
   return (
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">

@@ -12,6 +12,7 @@
 #   - POST /api/v1/internal/email-outbox/drain          (frequent: ~every 5 min)
 #   - POST /api/v1/invoices/internal/transition-overdue (nightly)
 #   - POST /api/v1/quotes/internal/transition-expired   (nightly)
+#   - POST /api/v1/expenses/internal/transition-overdue (nightly)
 #   - POST /api/v1/auth/internal/purge-otps             (nightly)
 #
 # Set up one GitLab pipeline schedule per task
@@ -94,5 +95,6 @@ scheduled:nightly-transitions:
     - *call-internal
     - call_internal "/api/v1/invoices/internal/transition-overdue"
     - call_internal "/api/v1/quotes/internal/transition-expired"
+    - call_internal "/api/v1/expenses/internal/transition-overdue"
     - call_internal "/api/v1/auth/internal/purge-otps"
     - call_internal "/api/v1/internal/email-outbox/drain?limit=200"

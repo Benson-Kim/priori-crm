@@ -202,7 +202,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     sub = payload.get("sub")
                     if sub:
                         return f"user:{sub}"
-                except Exception:
+                except Exception:  # noqa: S110 — deliberate fallthrough to IP identity on any bad token
                     # Invalid/expired token: fall through to IP-based identity.
                     pass
 

@@ -69,7 +69,7 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
       <button
         disabled={disabled}
         onClick={toggleDropdown}
-        className="inline-flex items-center gap-2 text-sm font-medium text-priori-purple transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-2 text-sm font-medium bg-gray-50 text-priori-purple transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {trigger || (
           <>

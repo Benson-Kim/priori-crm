@@ -1,7 +1,7 @@
 import { PurchaseOrderEditor } from "@/components/documents/PurchaseOrderEditor";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { usePurchaseOrderForm } from "@/hooks/use-purchase-order-form";
-import type { PurchaseOrderLineItem } from "@/services/purchaseOrderApi";
+import { readPoVat, type PurchaseOrderLineItem } from "@/services/purchaseOrderApi";
 import { useParams } from "react-router-dom";
 
 export default function EditPurchaseOrderPage() {
@@ -31,6 +31,9 @@ export default function EditPurchaseOrderPage() {
                 deliveryDate: initialData.delivery_date,
                 notes: initialData.notes || undefined,
                 termsAndConditions: initialData.terms_and_conditions,
+                // VAT fields (PO-27), via the shared accessor (falls back
+                // cleanly until the OpenAPI type carries them).
+                ...readPoVat(initialData),
                 lineItems: (initialData.line_items ?? []).map((li: PurchaseOrderLineItem) => ({
                     id: li.id,
                     itemName: li.item_name,

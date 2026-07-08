@@ -6,6 +6,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
+import { VAT_RATE_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
@@ -16,14 +17,16 @@ import {
   type PurchaseOrderResponse,
 } from "@/services/purchaseOrderApi";
 import { CheckCircle, Download, Save, Send, Trash } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
+import { Select } from "../ui/Select";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
-  buildVatLabel,
+  buildPoVatLabel,
+  calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
   type LineItemRow,
@@ -46,6 +49,12 @@ export interface PurchaseOrderPayload {
   notes?: string;
   termsAndConditions?: string | null;
   lineItems: PurchaseOrderLineItemPayload[];
+  /** PO-level VAT toggle (tax charged on the subtotal). */
+  vatEnabled: boolean;
+  /** VAT rate as a fraction (e.g. 0.16). Null when disabled. */
+  vatRate: number | null | undefined;
+  /** VAT/compliance ref printed on the VAT line (defaults from owner PIN). */
+  vatComplianceRef?: string | null;
 }
 
 export interface PurchaseOrderInitialData {
@@ -63,6 +72,9 @@ export interface PurchaseOrderInitialData {
   deliveryDate?: string | null;
   notes?: string;
   termsAndConditions?: string | null;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems?: {
     id?: string;
     itemName?: string;
@@ -118,10 +130,54 @@ export function PurchaseOrderEditor({
     initialData?.deliveryDate ?? ""
   );
 
-  // Currency is derived from the selected vendor server-side
-  const currency = initialData?.vendor?.currency ?? "Ksh";
+  // Currency follows the selected vendor. Seeded from the initial vendor (edit
+  // flow) and updated instantly when a vendor is picked in the selector, so the
+  // totals preview shows the right currency before the server round-trip. The
+  // server remains the source of truth on save (currency is vendor-derived).
+  const [currency, setCurrency] = useState<string>(
+    initialData?.vendor?.currency ?? "Ksh"
+  );
 
   const [notes, setNotes] = useState(initialData?.notes ?? "");
+
+  // PO-level VAT (PO-27): a single charge on the subtotal, not per line.
+  const [vatEnabled, setVatEnabled] = useState<boolean>(
+    initialData?.vatEnabled ?? false
+  );
+  // Rate held as a whole-number percent string for the selector (e.g. "16").
+  const [vatRatePct, setVatRatePct] = useState<string>(() => {
+    const fraction = initialData?.vatRate;
+    if (fraction != null) {
+      // Preserve existing fractional rates (e.g. 0.1067 -> "10.67").
+      // Round to 4 decimal places to match migration backfill precision
+      // but keep the fractional value so a notes-only save does not
+      // silently re-persist a rounded integer percent.
+      return String(Number((fraction * 100).toFixed(4)));
+    }
+    return "16";
+  });
+  // True once the user picks a different rate from the dropdown. On an
+  // existing PO whose persisted rate is a non-integer percent (e.g. the
+  // backfilled blended rate 0.1067), a notes-only save must NOT re-persist
+  // the rounded selector value. When the ref stays false the payload omits
+  // vatRate entirely so the backend keeps the original fraction.
+  const vatRateDirty = useRef(false);
+  // VAT compliance ref defaults from the owner profile's tax PIN on a new PO
+  // (editable). On an existing PO the persisted value wins.
+  const isEditingDoc = !!initialData?.poReference;
+  const [vatComplianceRef, setVatComplianceRef] = useState<string>(
+    initialData?.vatComplianceRef ?? ""
+  );
+  // The owner profile loads asynchronously, so the tax PIN is usually absent
+  // on first render. Seed the compliance ref from it once it arrives, but
+  // only for a NEW PO and only while the field is still untouched, so we
+  // never clobber a persisted value or something the user has typed.
+  const vatRefTouched = useRef(false);
+  useEffect(() => {
+    if (isEditingDoc || vatRefTouched.current) return;
+    if (initialData?.vatComplianceRef != null) return;
+    if (profile?.taxPin) setVatComplianceRef(profile.taxPin);
+  }, [isEditingDoc, initialData?.vatComplianceRef, profile?.taxPin]);
 
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(
@@ -149,15 +205,25 @@ export function PurchaseOrderEditor({
   const [isActionRunning, setIsActionRunning] = useState(false);
 
 
-  // Derived totals (client-side preview; server is the source of truth on save).
-  const totals = useMemo(
-    () => calculateTotals(lineItems, null, ""),
-    [lineItems]
-  );
+  // VAT rate as a fraction for computation (e.g. 0.16).
+  const vatRateFraction = useMemo(() => {
+    const pct = Number.parseFloat(vatRatePct);
+    return Number.isFinite(pct) ? pct / 100 : 0;
+  }, [vatRatePct]);
+
+  // Derived totals (client-side preview; server is the source of truth on
+  // save). PO-27: VAT is charged on the subtotal, not per line, so line tax is
+  // ignored here and the tax is computed via the shared helper (identical
+  // rounding to the backend) when enabled.
+  const totals = useMemo(() => {
+    const base = calculateTotals(lineItems, null, "");
+    const taxTotal = calcSubtotalVat(base.subtotal, vatEnabled, vatRateFraction);
+    return { subtotal: base.subtotal, taxTotal };
+  }, [lineItems, vatEnabled, vatRateFraction]);
 
   const vatLabel = useMemo(
-    () => buildVatLabel(lineItems.map((item) => item.taxType)),
-    [lineItems]
+    () => (vatEnabled ? buildPoVatLabel(vatRateFraction) : "VAT"),
+    [vatEnabled, vatRateFraction]
   );
 
   // Line item handlers
@@ -217,6 +283,9 @@ export function PurchaseOrderEditor({
       (r) => r.description.trim() || r.itemName.trim()
     );
 
+    // Preserve per-line tax type when present. Some historical POs or
+    // user-edited line items may include inline tax rows; if present,
+    // preserve them rather than silently discarding on save.
     const items: PurchaseOrderLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
       description: r.description.trim(),
@@ -232,6 +301,15 @@ export function PurchaseOrderEditor({
       notes: notes.trim() || undefined,
       termsAndConditions: termsAndConditions.trim() || null,
       lineItems: items,
+      vatEnabled,
+      // On an existing PO, only send the rate when the user actually changed
+      // it, so a non-integer persisted fraction (e.g. 0.1067 from the
+      // migration backfill) is never silently rounded to the nearest integer
+      // percent on a notes-only save.
+      vatRate: vatEnabled
+        ? (!isEditing || vatRateDirty.current ? vatRateFraction : undefined)
+        : null,
+      vatComplianceRef: vatComplianceRef.trim() || null,
     };
   };
 
@@ -418,7 +496,10 @@ export function PurchaseOrderEditor({
                   }
                   : null
               }
-              onChange={setVendorId}
+              onChange={(id: string, cur?: string) => {
+                setVendorId(id);
+                if (cur) setCurrency(cur);
+              }}
               restrictedMode={restrictedMode}
               error={errors.vendor}
             />
@@ -470,6 +551,72 @@ export function PurchaseOrderEditor({
                   error={errors.deliveryDate}
                 />
 
+                {/* PO-level VAT (PO-27) — shown once a vendor is selected. */}
+                {vendorId && (
+                  <>
+                    <label
+                      htmlFor="vat-enabled"
+                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                    >
+                      Add VAT
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        id="vat-enabled"
+                        type="checkbox"
+                        checked={vatEnabled}
+                        onChange={(e) => setVatEnabled(e.target.checked)}
+                        disabled={restrictedMode}
+                        className="h-4 w-4 accent-priori-purple"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {vatEnabled ? "On" : "Off"}
+                      </span>
+                    </label>
+
+                    {vatEnabled && (
+                      <>
+                        <label
+                          htmlFor="vat-rate"
+                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                        >
+                          VAT Rate
+                        </label>
+                        <Select
+                          id="vat-rate"
+                          value={vatRatePct}
+                          onChange={(e) => {
+                            vatRateDirty.current = true;
+                            setVatRatePct(e.target.value);
+                          }}
+                          disabled={restrictedMode}
+                          options={VAT_RATE_OPTIONS.map((o) => ({
+                            value: o.value,
+                            label: o.label,
+                          }))}
+                        />
+
+                        <label
+                          htmlFor="vat-compliance-ref"
+                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                        >
+                          Compliance Ref
+                        </label>
+                        <Input
+                          id="vat-compliance-ref"
+                          value={vatComplianceRef}
+                          onChange={(e) => {
+                            vatRefTouched.current = true;
+                            setVatComplianceRef(e.target.value);
+                          }}
+                          disabled={restrictedMode}
+                          placeholder="VAT / compliance reference"
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
               </div>
             </div>
           </div>
@@ -493,6 +640,7 @@ export function PurchaseOrderEditor({
             onAddRow={addRow}
             onRemoveRow={removeRow}
             onUpdateRow={updateRow}
+            enableInlineTax={false}
           />
 
           {/* Purchase Order Totals (no Amount Paid / Balance Due). */}

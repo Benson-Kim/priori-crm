@@ -93,11 +93,19 @@ class TestCreate:
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
 
-        po = svc.create(_create_payload(vendor_id=vendor.id))
+        # PO-27: VAT is a PO-level charge on the subtotal. Enable it at 16% so
+        # the total carries tax (per-line tax no longer contributes).
+        po = svc.create(
+            _create_payload(
+                vendor_id=vendor.id,
+                vat_enabled=True,
+                vat_rate=Decimal("0.16"),
+            )
+        )
 
         assert po.status == PurchaseOrderStatus.DRAFT
         assert po.version == 1
-        # 2 x 100 = 200 subtotal; tax 200 x 0.16 = 32; total 232.
+        # 2 x 100 = 200 subtotal; PO-level VAT 200 x 0.16 = 32; total 232.
         assert po.subtotal == Decimal("200.00")
         assert po.tax_total == Decimal("32.00")
         assert po.total == Decimal("232.00")
@@ -232,7 +240,15 @@ class TestUpdate:
     def test_line_item_replace_recomputes_totals(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
-        po = svc.create(_create_payload(vendor_id=vendor.id))
+        # Create with PO-level VAT enabled so the recompute after a line
+        # replacement still applies 16% to the new subtotal.
+        po = svc.create(
+            _create_payload(
+                vendor_id=vendor.id,
+                vat_enabled=True,
+                vat_rate=Decimal("0.16"),
+            )
+        )
 
         svc.update(
             po.id,
@@ -243,6 +259,7 @@ class TestUpdate:
             ),
             expected_version=1,
         )
+        # New subtotal 50.00; PO-level VAT 50 x 0.16 = 8.00; total 58.00.
         assert po.subtotal == Decimal("50.00")
         assert po.tax_total == Decimal("8.00")
         assert po.total == Decimal("58.00")
