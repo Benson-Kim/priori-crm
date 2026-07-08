@@ -148,9 +148,6 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             if (mode === 'edit' && vendorId) {
                 savedVendor = await updateVendor(vendorId, payload);
             } else {
-                if (selectedContactId) {
-                    payload.contact_id = selectedContactId;
-                }
                 savedVendor = await createVendor(payload);
             }
 

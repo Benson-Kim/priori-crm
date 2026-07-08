@@ -295,7 +295,7 @@ export default function VendorDetailPage() {
     key: "number",
     header: "#",
     className: "w-[60px]",
-    render: (_item: VendorTxnRow, index) => (
+    render: (_item: VendorTxnRow, index: number) => (
       <span className="text-gray-600">
         {(currentPage - 1) * perPage + index + 1}.
       </span>

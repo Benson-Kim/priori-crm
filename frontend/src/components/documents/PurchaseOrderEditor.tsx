@@ -52,7 +52,7 @@ export interface PurchaseOrderPayload {
   /** PO-level VAT toggle (tax charged on the subtotal). */
   vatEnabled: boolean;
   /** VAT rate as a fraction (e.g. 0.16). Null when disabled. */
-  vatRate: number | null;
+  vatRate: number | null | undefined;
   /** VAT/compliance ref printed on the VAT line (defaults from owner PIN). */
   vatComplianceRef?: string | null;
 }
@@ -496,7 +496,7 @@ export function PurchaseOrderEditor({
                   }
                   : null
               }
-              onChange={(id, cur) => {
+              onChange={(id: string, cur?: string) => {
                 setVendorId(id);
                 if (cur) setCurrency(cur);
               }}
