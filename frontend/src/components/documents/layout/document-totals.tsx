@@ -17,6 +17,7 @@ interface DocumentTotalsProps {
     onDiscountValueChange: (value: string) => void;
     onDiscountRemove: () => void;
     onAddDiscount: () => void;
+    vatEnabled?: boolean;
     vatLabel?: string;
     // Optional: for viewer mode with payment info
     amountPaid?: number;
@@ -33,6 +34,7 @@ export function DocumentTotalsPanel({
     onDiscountValueChange,
     onDiscountRemove,
     onAddDiscount,
+    vatEnabled = false,
     vatLabel,
     amountPaid,
     balanceDue,
@@ -44,7 +46,7 @@ export function DocumentTotalsPanel({
                 {/* Subtotal */}
                 <div className="flex justify-between items-center font-bold">
                     <span>Subtotal</span>
-                    <span>{formatCurrency(totals.subtotal, currency ?? "Ksh")}</span>
+                    <span>{formatCurrency(totals.subtotal, currency ?? "KES")}</span>
                 </div>
 
                 {/* Discount */}
@@ -67,7 +69,7 @@ export function DocumentTotalsPanel({
                                         Discount <span className="font-normal">({discountType === "percentage" ? `${discountValue}%` : "Fixed"})</span>
                                     </span>
                                     <span className="text-red-500 font-medium">
-                                        -{formatCurrency(totals.discountAmount, currency ?? "Ksh")}
+                                            -{formatCurrency(totals.discountAmount, currency ?? "KES")}
                                     </span>
                                 </>
                             ) : (
@@ -103,7 +105,7 @@ export function DocumentTotalsPanel({
                                         </button>
                                     </div>
                                     <span className="text-red-500 font-medium">
-                                        -{formatCurrency(totals.discountAmount, currency ?? "Ksh")}
+                                                -{formatCurrency(totals.discountAmount, currency ?? "KES")}
                                     </span>
                                 </>
                             )}
@@ -111,20 +113,24 @@ export function DocumentTotalsPanel({
                     )
                 ) : null}
 
-                <Divider />
 
                 {/* VAT */}
-                <div className="flex justify-between items-center text-gray-800">
-                    <span>{vatLabel ?? "VAT"}</span>
-                    <span>{formatCurrency(totals.taxTotal, currency ?? "Ksh")}</span>
-                </div>
+                {vatEnabled && (
+                    <>
+                        <div className="flex justify-between items-center text-gray-800">
+                            <span>{vatLabel ?? "VAT"}</span>
+                            <span>{formatCurrency(totals.taxTotal, currency ?? "KES")}</span>
+                        </div>
+
+                    </>
+                )}
 
                 <Divider />
 
                 {/* Total Due */}
                 <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
                     <span>Total Due</span>
-                    <span>{formatCurrency(totals.totalDue, currency ?? "Ksh")}</span>
+                    <span>{formatCurrency(totals.totalDue, currency ?? "KES")}</span>
                 </div>
 
                 {/* Payment Info (viewer mode only) */}
@@ -133,11 +139,11 @@ export function DocumentTotalsPanel({
                         <Divider />
                         <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
                             <span>Amount Paid</span>
-                            <span>{formatCurrency(amountPaid ?? 0, currency ?? "Ksh")}</span>
+                            <span>{formatCurrency(amountPaid ?? 0, currency ?? "KES")}</span>
                         </div>
                         <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
                             <span>Balance Due</span>
-                            <span>{formatCurrency(balanceDue ?? 0, currency ?? "Ksh")}</span>
+                            <span>{formatCurrency(balanceDue ?? 0, currency ?? "KES")}</span>
                         </div>
                     </>
                 )}

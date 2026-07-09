@@ -22,10 +22,11 @@ import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
 import { Select } from "../ui/Select";
+import { Toggle } from "../ui/Toggle";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
-  buildPoVatLabel,
+  buildVatLabel,
   calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
@@ -222,8 +223,11 @@ export function PurchaseOrderEditor({
   }, [lineItems, vatEnabled, vatRateFraction]);
 
   const vatLabel = useMemo(
-    () => (vatEnabled ? buildPoVatLabel(vatRateFraction) : "VAT"),
-    [vatEnabled, vatRateFraction]
+    () =>
+      vatEnabled
+        ? buildVatLabel(vatRateFraction, vatComplianceRef)
+        : "VAT",
+    [vatEnabled, vatRateFraction, vatComplianceRef]
   );
 
   // Line item handlers
@@ -560,19 +564,15 @@ export function PurchaseOrderEditor({
                     >
                       Add VAT
                     </label>
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        id="vat-enabled"
-                        type="checkbox"
-                        checked={vatEnabled}
-                        onChange={(e) => setVatEnabled(e.target.checked)}
-                        disabled={restrictedMode}
-                        className="h-4 w-4 accent-priori-purple"
-                      />
-                      <span className="text-sm text-gray-600">
-                        {vatEnabled ? "On" : "Off"}
-                      </span>
-                    </label>
+
+                    <Toggle
+                      id="vat-enabled"
+                      checked={vatEnabled}
+                      onChange={setVatEnabled}
+                      disabled={restrictedMode}
+                      error={errors.vatEnabled}
+                      aria-label="Add VAT"
+                    />
 
                     {vatEnabled && (
                       <>
@@ -653,14 +653,13 @@ export function PurchaseOrderEditor({
                 </span>
               </div>
 
-              {(restrictedMode || totals.taxTotal > 0) && (
+              {(vatEnabled || restrictedMode || totals.taxTotal > 0) && (
                 <>
                   <Divider />
+
                   <div className="flex justify-between items-center text-gray-800">
-                    <span>{vatLabel ?? "VAT"}</span>
-                    <span>
-                      {formatCurrency(totals.taxTotal, currency)}
-                    </span>
+                    <span>{vatLabel}</span>
+                    <span>{formatCurrency(totals.taxTotal, currency)}</span>
                   </div>
                 </>
               )}
