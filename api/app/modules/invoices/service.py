@@ -74,6 +74,10 @@ class InvoiceService(BaseDocumentService):
     _calculation_response_cls = InvoiceCalculationResponse
     MAX_REFERENCE_RETRIES = MAX_INVOICE_NUMBER_RETRIES
 
+    # Statuses from which an invoice may be deleted. Only DRAFT is deletable:
+    # once an invoice is SENT it is a durable financial record and cannot be deleted.
+    _DELETABLE_STATUSES = frozenset({InvoiceStatus.DRAFT})
+
     ALLOWED_TRANSITIONS: ClassVar[dict[InvoiceStatus, list[InvoiceStatus]]] = {
         InvoiceStatus.DRAFT: [InvoiceStatus.SENT, InvoiceStatus.CANCELED],
         InvoiceStatus.SENT: [
@@ -850,6 +854,119 @@ class InvoiceService(BaseDocumentService):
         )
 
         return invoice
+
+    def delete_invoice(self, invoice_id: uuid.UUID) -> None:
+        """
+        Delete an invoice (hard delete - only DRAFT invoices can be deleted).
+
+        A DRAFT invoice can be deleted because it was never finalized or sent.
+        Once an invoice is SENT, it becomes a permanent financial record and
+        cannot be deleted (only canceled if needed).
+        Args:
+            invoice_id: UUID of the invoice to delete
+
+        Returns:
+            False (always hard delete, no soft-delete support)
+
+        Raises:
+            NotFoundException: Invoice not found
+            BadRequestException: Invoice is not in DRAFT status
+            DatabaseException: Database operation failed
+        """
+        try:
+            # 1. Acquire row lock to prevent race conditions
+            invoice = self._get_locked(invoice_id)
+
+            # 2. Validate status
+            if invoice.status not in self._DELETABLE_STATUSES:
+                raise BadRequestException(
+                    f"Cannot delete an invoice in '{invoice.status.value}' status. "
+                    f"Only DRAFT invoices can be deleted; a sent invoice is a permanent record."
+                )
+
+            # 3. Capture storage keys BEFORE deletion (for document cleanup)
+            storage_keys = (
+                [doc.storage_key for doc in invoice.documents]
+                if hasattr(invoice, "documents")
+                else []
+            )
+
+            # 4. Write audit trail BEFORE deletion
+            before_image = {
+                "invoice_number": invoice.invoice_number,
+                "invoice_reference": invoice.invoice_reference
+                if hasattr(invoice, "invoice_reference")
+                else None,
+                "status": invoice.status.value,
+                "customer_id": str(invoice.customer_id),
+                "total_due": str(invoice.total_due),
+            }
+            record_audit_event(
+                self._db,
+                actor_id=self._actor_id,
+                entity_type="invoice",
+                entity_id=invoice.id,
+                action="hard_deleted",
+                before=before_image,
+            )
+
+            # 5. Hard delete from database (line items cascade via ORM)
+            self._db.delete(invoice)
+            self._db.commit()
+
+            # 6. Purge document storage (best-effort, after commit)
+            if storage_keys:
+                try:
+                    self._purge_storage_objects(storage_keys)
+                    logger.warning(
+                        f"Deleted invoice {invoice.invoice_number} (id={invoice_id}), "
+                        f"purged {len(storage_keys)} storage object(s)"
+                    )
+                except Exception as e:
+                    # Don't fail the operation if storage cleanup fails
+                    logger.error(
+                        f"Failed to purge storage for invoice {invoice_id}: {e}"
+                    )
+            else:
+                logger.warning(
+                    f"Deleted invoice {invoice.invoice_number} (id={invoice_id})"
+                )
+
+            # 7. Emit analytics event
+            from app.common.analytics import emit_event
+
+            emit_event("invoice_deleted", {"invoice_id": str(invoice_id)})
+
+            return False  # Hard delete (no soft-delete support)
+
+        except (NotFoundException, BadRequestException):
+            raise
+        except SQLAlchemyError as err:
+            self._db.rollback()
+            logger.exception(f"Database error deleting invoice {invoice_id}: {err}")
+            raise DatabaseException(f"Failed to delete invoice: {err!s}") from err
+
+    @staticmethod
+    def _purge_storage_objects(storage_keys: list[str]) -> None:
+        """Best-effort delete of stored objects after a hard delete.
+
+        Mirrors PurchaseOrderService._purge_storage_objects. Storage failures are
+        logged, not raised: the DB record is already gone, so a missed file is
+        a reconciliation concern, not a request failure.
+        """
+        from app.lib.storage import storage_service
+
+        for key in storage_keys:
+            if storage_service.delete_file(key):
+                logger.info(
+                    "Purged orphaned storage object",
+                    extra={"storage_key": key},
+                )
+            else:
+                logger.warning(
+                    "Failed to purge storage object — orphan may remain",
+                    extra={"storage_key": key},
+                )
 
     # CALCULATIONS & UTILITIES
     # calculate_totals is inherited from BaseDocumentService;

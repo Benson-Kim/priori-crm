@@ -162,6 +162,77 @@ export function maskEmail(email: string): string {
 }
 
 /**
+ * Format a Kenyan phone number input into a readable format.
+ * Example: "254712345678" => "712 345 678" or "0712345678" => "712 345 678"
+ */
+const PHONE_MASK = "7XX XXX XXX";
+
+const getKenyanPhoneDigits = (value: string) => {
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("254")) {
+    digits = digits.slice(3);
+  }
+
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  return digits.slice(0, 9);
+};
+
+export function formatKenyanPhoneInput(value: string) {
+  const digits = getKenyanPhoneDigits(value);
+
+  const part1 = digits.slice(0, 3);
+  const part2 = digits.slice(3, 6);
+  const part3 = digits.slice(6, 9);
+
+  return [part1, part2, part3].filter(Boolean).join(" ");
+};
+
+export function getKenyanPhoneGhostText(value: string) {
+  const digits = getKenyanPhoneDigits(value);
+
+  let digitCount = 0;
+
+  for (let index = 0; index < PHONE_MASK.length; index += 1) {
+    if (PHONE_MASK[index] !== " ") {
+      digitCount += 1;
+    }
+
+    if (digitCount === digits.length) {
+      return PHONE_MASK.slice(index + 1);
+    }
+  }
+
+  return "";
+};
+
+/**
+ * Returns the digits of a Kenyan phone number.
+ *
+ * @param value The phone number to extract digits from.
+ * @returns The digits of the phone number.
+ */
+
+export function normalizeKenyanPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  if (digits.startsWith("254")) {
+    return `+${digits.slice(0, 12)}`;
+  }
+
+  if (digits.startsWith("0")) {
+    return `+254${digits.slice(1, 10)}`;
+  }
+
+  return `+254${digits.slice(0, 9)}`;
+};
+
+/**
  * Build the delta badge for a metric. A null/undefined delta means the
  * previous period was zero — the API deliberately returns null instead of
  * a fake percentage, so we render a dash rather than 0%.

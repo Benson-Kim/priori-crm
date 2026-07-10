@@ -3,6 +3,7 @@ import {
     ShoppingCart,
 } from "lucide-react";
 
+import Invoice from "@/assets/icons/invoice-uxwing.svg?react";
 import Briefcase from "@/assets/icons/sell-svgrepo-com 1.svg?react";
 import Home from "@/assets/icons/send2.svg?react";
 
@@ -19,7 +20,7 @@ export const navItems = [
         children: [
             { label: "Customers", path: "/customers" },
             { label: "Quotes", path: "/quotes" },
-            { label: "Invoices", path: "/invoices" },
+            { label: "Invoices", path: "/invoices", icon: Invoice },
         ],
     },
 

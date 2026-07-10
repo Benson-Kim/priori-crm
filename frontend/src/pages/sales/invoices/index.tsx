@@ -1,3 +1,4 @@
+import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
@@ -6,15 +7,18 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
+    deleteInvoice,
     getInvoiceCounts,
     getInvoices,
     markAsSent,
+    sendInvoice,
     type InvoiceStatusCounts,
     type InvoiceSummary,
 } from "@/services/invoiceApi";
-import { CheckCircle, Eye, Plus } from "lucide-react";
+import { CheckCircle, CreditCard, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -30,6 +34,8 @@ export default function InvoicesPage() {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [paymentTarget, setPaymentTarget] = useState<InvoiceSummary | null>(null);
+    const { showConfirm, ConfirmDialog } = useConfirm();
 
     const navigate = useNavigate();
 
@@ -81,31 +87,117 @@ export default function InvoicesPage() {
     }, [activeTab, search]);
 
 
-    const handleApprove = async (invoice: InvoiceSummary) => {
-        try {
-            await markAsSent(invoice.id);
-            fetchInvoices();
-            fetchCounts();
-        } catch (err) {
-            console.error("[InvoicesPage] Approve failed:", err);
-            setError(err instanceof Error ? err.message : "Failed to load approve invoice");
-        }
+    const handleSend = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Send invoice?",
+            description: `Send ${invoice.invoice_number} to the customer by email? It will be marked as Sent.`,
+            confirmLabel: "Yes, send",
+            onConfirm: async () => {
+                try {
+                    await sendInvoice(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send invoice");
+                }
+            },
+        });
     };
 
-    const getActions = (invoice: InvoiceSummary): DropdownItem[] => [
-        {
-            key: "view",
-            label: "View",
-            icon: <Eye size={16} />,
-            onClick: () => navigate(`/invoices/${invoice.id}`),
-        },
-        {
-            key: "approve",
-            label: "Approve",
-            icon: <CheckCircle size={16} />,
-            onClick: () => handleApprove(invoice),
-        },
-    ];
+    const handleMarkAsSent = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Mark as sent?",
+            description: "Are you sure you want to mark this invoice as sent?",
+            confirmLabel: "Yes, mark as sent",
+            onConfirm: async () => {
+                try {
+                    await markAsSent(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to mark invoice as sent");
+                }
+            },
+        });
+    };
+
+    const handleDelete = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Delete invoice?",
+            description: "Are you sure you want to delete this invoice? This action cannot be undone.",
+            confirmLabel: "Yes, delete it",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    await deleteInvoice(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete invoice");
+                }
+            },
+        });
+    };
+
+    const getActions = (invoice: InvoiceSummary): DropdownItem[] => {
+        const actions: DropdownItem[] = [
+            {
+                key: "view",
+                label: "View",
+                icon: <Eye size={16} />,
+                onClick: () => navigate(`/invoices/${invoice.id}`),
+            },
+        ];
+
+        // Draft-only actions
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "edit",
+                label: "Edit",
+                icon: <Pencil size={16} />,
+                onClick: () => navigate(`/invoices/${invoice.id}/edit`),
+            });
+        }
+
+        // Send actions (draft only)
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "send",
+                label: "Send",
+                icon: <Send size={16} />,
+                onClick: () => handleSend(invoice),
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleMarkAsSent(invoice),
+            });
+        }
+
+        // Record payment: SENT/PARTIAL only, while there is still a balance
+        if ((invoice.status === "sent" || invoice.status === "partial") && Number(invoice.balance_due) > 0) {
+            actions.push({
+                key: "record-payment",
+                label: "Record payment",
+                icon: <CreditCard size={16} />,
+                onClick: () => setPaymentTarget(invoice),
+            });
+        }
+
+        // Delete is permitted only for DRAFT
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "delete",
+                label: "Delete",
+                icon: <Trash size={16} />,
+                danger: true,
+                onClick: () => handleDelete(invoice),
+            });
+        }
+
+        return actions;
+    };
 
     const getStatusBadge = (item: InvoiceSummary) => {
         if (item.is_overdue && item.days_overdue > 0) {
@@ -180,6 +272,15 @@ export default function InvoicesPage() {
             ),
         },
         {
+            key: "balance_due",
+            header: "Balance",
+            render: (item: InvoiceSummary) => (
+                <span className="text-gray-600">
+                    {formatCurrency(Number(item.balance_due), item.currency)}
+                </span>
+            ),
+        },
+        {
             key: "status",
             header: "Status",
             render: (item: InvoiceSummary) => getStatusBadge(item),
@@ -250,6 +351,27 @@ export default function InvoicesPage() {
                     onPerPageChange={setPerPage}
                 />
             </div>
+
+            {/* Record Payment Modal */}
+            {paymentTarget && (
+                <RecordPaymentModal
+                    isOpen={true}
+                    onClose={() => setPaymentTarget(null)}
+                    documentType="invoice"
+                    documentId={paymentTarget.id}
+                    documentNumber={paymentTarget.invoice_number}
+                    balance={Number(paymentTarget.balance_due)}
+                    currency={paymentTarget.currency}
+                    onPaymentRecorded={() => {
+                        setPaymentTarget(null);
+                        fetchInvoices();
+                        fetchCounts();
+                    }}
+                />
+            )}
+
+            {/* Confirm Dialog */}
+            {ConfirmDialog}
         </div>
     );
 }
