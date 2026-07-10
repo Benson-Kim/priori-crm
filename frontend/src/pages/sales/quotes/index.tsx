@@ -14,16 +14,16 @@ import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
-    approveQuote,
+    convertQuoteToInvoice,
     deleteQuote,
-    duplicateQuote,
+    downloadQuotePdf,
     exportQuotesExcel,
     getQuoteCounts,
     getQuotes,
     type QuoteStatusCounts,
-    type QuoteSummary,
+    type QuoteSummary
 } from "@/services/quoteApi";
-import { CheckCircle, Copy, Download, Eye, Plus, Trash } from "lucide-react";
+import { Download, Eye, FileText, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -102,32 +102,22 @@ export default function QuotesPage() {
         startTransition(() => { setCurrentPage(1); });
     }, [activeTab, search]);
 
-    // Row actions 
-    const handleApprove = (quote: QuoteSummary) => {
+    // Row actions
+    const handleConvertToInvoice = (quote: QuoteSummary) => {
         showConfirm({
-            title: "Approve Quote",
-            description: `Approve quote ${quote.quote_number}? This will mark it as approved.`,
-            confirmLabel: "Approve",
+            title: "Convert to Invoice",
+            description: `Convert quote ${quote.quote_number} to an invoice? This will create a new invoice with the same details.`,
+            confirmLabel: "Convert",
             onConfirm: async () => {
                 try {
-                    await approveQuote(quote.id);
-                    refreshAll();
+                    const result = await convertQuoteToInvoice(quote.id);
+                    // Navigate to the new invoice detail page
+                    navigate(`/invoices/${result.invoice_id}`);
                 } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to approve invoice");
+                    setError(err instanceof Error ? err.message : "Failed to convert quote to invoice");
                 }
             },
         });
-    };
-
-    const handleDuplicate = async (quote: QuoteSummary) => {
-        try {
-            const dup = await duplicateQuote(quote.id);
-            navigate(`/quotes/${dup.new_quote_id}/edit`);
-        } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to duplicate quote"
-            );
-        }
     };
 
     const handleDelete = (quote: QuoteSummary) => {
@@ -173,22 +163,42 @@ export default function QuotesPage() {
             },
         ];
 
+        // Send action - available for draft/sent quotes that aren't expired
         if (["draft", "sent"].includes(status) && !quote.is_expired) {
             actions.push({
-                key: "approve",
-                label: "Approve",
-                icon: <CheckCircle size={16} />,
-                onClick: () => handleApprove(quote),
+                key: "send",
+                label: "Send",
+                icon: <Send size={16} />,
+                onClick: () => navigate(`/quotes/${quote.id}`), // Navigate to detail page for sending
             });
         }
 
+        // Download PDF - available for all quotes
         actions.push({
-            key: "duplicate",
-            label: "Duplicate",
-            icon: <Copy size={16} />,
-            onClick: () => handleDuplicate(quote),
+            key: "download-pdf",
+            label: "Download PDF",
+            icon: <Download size={16} />,
+            onClick: async () => {
+                try {
+                    const blob = await downloadQuotePdf(quote.id);
+                    saveBlob(blob, `Quote_${quote.quote_number}.pdf`);
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to download PDF");
+                }
+            },
         });
 
+        // Convert to Invoice - available for non-expired, non-invoiced quotes
+        if (!quote.is_expired && status !== "invoiced") {
+            actions.push({
+                key: "convert-to-invoice",
+                label: "Convert to Invoice",
+                icon: <FileText size={16} />,
+                onClick: () => handleConvertToInvoice(quote),
+            });
+        }
+
+        // Delete - only for draft quotes
         if (status === "draft") {
             actions.push({
                 key: "delete",

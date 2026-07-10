@@ -38,10 +38,10 @@ export const customerTypeOptions = [
 ] satisfies Array<{ value: CustomerType; label: string }>;
 
 export const currencyOptions = [
-     { value: "KES", label: "KES - Kenyan Shilling" },
-     { value: "USD", label: "USD - US Dollar" },
-     { value: "EUR", label: "EUR - Euro" },
-     { value: "GBP", label: "GBP - British Pound" },
+     { value: "KES", label: "KES" },
+     { value: "USD", label: "USD" },
+     { value: "EUR", label: "EUR" },
+     { value: "GBP", label: "GBP" },
 ] satisfies Array<{ value: Currency; label: string }>;
 
 export const transactionTypeOptions = [
