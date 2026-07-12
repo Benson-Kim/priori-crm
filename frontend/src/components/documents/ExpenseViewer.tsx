@@ -1,7 +1,7 @@
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import { Divider } from "../ui/Divider";
-import { buildVatLabel } from "./utils";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
+import { buildVatLabel } from "./utils";
 
 export interface ExpenseViewerData {
   expenseReference?: string;
@@ -40,7 +40,7 @@ interface ExpenseViewerProps {
 
 export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
   // Build VAT label from line items
-  const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
+  const vatLabel = buildVatLabel(null);
 
   return (
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">
