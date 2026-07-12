@@ -357,10 +357,10 @@ export default function InvoicesPage() {
                 <RecordPaymentModal
                     isOpen={true}
                     onClose={() => setPaymentTarget(null)}
-                    documentType="invoice"
-                    documentId={paymentTarget.id}
-                    documentNumber={paymentTarget.invoice_number}
-                    balance={Number(paymentTarget.balance_due)}
+                    entityId={paymentTarget.id}
+                    entityType="invoice"
+                    reference={paymentTarget.invoice_number}
+                    balanceDue={Number(paymentTarget.balance_due)}
                     currency={paymentTarget.currency}
                     onPaymentRecorded={() => {
                         setPaymentTarget(null);
