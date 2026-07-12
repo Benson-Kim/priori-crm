@@ -12084,6 +12084,52 @@
       }
     },
     "/api/v1/invoices/{invoice_id}": {
+      "delete": {
+        "description": "Delete an invoice (only DRAFT invoices can be deleted).",
+        "operationId": "delete_invoice_api_v1_invoices__invoice_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Invoice deleted successfully"
+          },
+          "400": {
+            "description": "Invoice is not in DRAFT status"
+          },
+          "404": {
+            "description": "Invoice not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete invoice",
+        "tags": [
+          "Invoices"
+        ]
+      },
       "get": {
         "description": "Retrieve complete invoice information with line items and payments.",
         "operationId": "get_invoice_api_v1_invoices__invoice_id__get",
