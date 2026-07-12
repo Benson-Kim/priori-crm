@@ -1,3 +1,4 @@
+import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
@@ -6,16 +7,19 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
+    deleteInvoice,
     exportInvoicesExcel,
     getInvoiceCounts,
     getInvoices,
     markAsSent,
+    sendInvoice,
     type InvoiceStatusCounts,
     type InvoiceSummary,
 } from "@/services/invoiceApi";
-import { CheckCircle, Download, Eye, Plus } from "lucide-react";
+import { CheckCircle, CreditCard, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -31,6 +35,9 @@ export default function InvoicesPage() {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [paymentTarget, setPaymentTarget] = useState<InvoiceSummary | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
+    const { showConfirm, ConfirmDialog } = useConfirm();
 
     const navigate = useNavigate();
 
@@ -82,23 +89,70 @@ export default function InvoicesPage() {
     }, [activeTab, search]);
 
 
-    const handleApprove = async (invoice: InvoiceSummary) => {
-        try {
-            await markAsSent(invoice.id);
-            fetchInvoices();
-            fetchCounts();
-        } catch (err) {
-            console.error("[InvoicesPage] Approve failed:", err);
-            setError(err instanceof Error ? err.message : "Failed to load approve invoice");
-        }
+    const handleSend = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Send invoice?",
+            description: `Send ${invoice.invoice_number} to the customer by email? It will be marked as Sent.`,
+            confirmLabel: "Yes, send",
+            onConfirm: async () => {
+                try {
+                    await sendInvoice(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to send invoice");
+                }
+            },
+        });
     };
 
-    const [isExporting, setIsExporting] = useState(false);
+    const handleMarkAsSent = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Mark as sent?",
+            description: "Are you sure you want to mark this invoice as sent?",
+            confirmLabel: "Yes, mark as sent",
+            onConfirm: async () => {
+                try {
+                    await markAsSent(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to mark invoice as sent");
+                }
+            },
+        });
+    };
+
+    const handleDelete = (invoice: InvoiceSummary) => {
+        showConfirm({
+            title: "Delete invoice?",
+            description: "Are you sure you want to delete this invoice? This action cannot be undone.",
+            confirmLabel: "Yes, delete it",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    await deleteInvoice(invoice.id);
+                    fetchInvoices();
+                    fetchCounts();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete invoice");
+                }
+            },
+        });
+    };
+
     const handleExport = async () => {
+        const statusMap: Record<string, string | undefined> = {
+            all: undefined,
+            pending: "draft",
+            paid: "paid",
+            overdue: "overdue",
+        };
+
         setIsExporting(true);
         try {
             const blob = await exportInvoicesExcel({
-                status: activeTab !== "all" ? activeTab : undefined,
+                status: statusMap[activeTab],
             });
             saveBlob(blob, `Invoices_${new Date().toISOString().split("T")[0]}.xlsx`);
         } catch (err) {
@@ -108,20 +162,65 @@ export default function InvoicesPage() {
         }
     };
 
-    const getActions = (invoice: InvoiceSummary): DropdownItem[] => [
-        {
-            key: "view",
-            label: "View",
-            icon: <Eye size={16} />,
-            onClick: () => navigate(`/invoices/${invoice.id}`),
-        },
-        {
-            key: "approve",
-            label: "Approve",
-            icon: <CheckCircle size={16} />,
-            onClick: () => handleApprove(invoice),
-        },
-    ];
+    const getActions = (invoice: InvoiceSummary): DropdownItem[] => {
+        const actions: DropdownItem[] = [
+            {
+                key: "view",
+                label: "View",
+                icon: <Eye size={16} />,
+                onClick: () => navigate(`/invoices/${invoice.id}`),
+            },
+        ];
+
+        // Draft-only actions
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "edit",
+                label: "Edit",
+                icon: <Pencil size={16} />,
+                onClick: () => navigate(`/invoices/${invoice.id}/edit`),
+            });
+        }
+
+        // Send actions (draft only)
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "send",
+                label: "Send",
+                icon: <Send size={16} />,
+                onClick: () => handleSend(invoice),
+            });
+            actions.push({
+                key: "mark-as-sent",
+                label: "Mark as sent",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleMarkAsSent(invoice),
+            });
+        }
+
+        // Record payment: SENT/PARTIAL/OVERDUE only, while there is still a balance
+        if ((invoice.status === "sent" || invoice.status === "partial" || invoice.status === "overdue") && Number(invoice.balance_due) > 0) {
+            actions.push({
+                key: "record-payment",
+                label: "Record payment",
+                icon: <CreditCard size={16} />,
+                onClick: () => setPaymentTarget(invoice),
+            });
+        }
+
+        // Delete is permitted only for DRAFT
+        if (invoice.status === "draft") {
+            actions.push({
+                key: "delete",
+                label: "Delete",
+                icon: <Trash size={16} />,
+                danger: true,
+                onClick: () => handleDelete(invoice),
+            });
+        }
+
+        return actions;
+    };
 
     const getStatusBadge = (item: InvoiceSummary) => {
         if (item.is_overdue && item.days_overdue > 0) {
@@ -196,6 +295,15 @@ export default function InvoicesPage() {
             ),
         },
         {
+            key: "balance_due",
+            header: "Balance",
+            render: (item: InvoiceSummary) => (
+                <span className="text-gray-600">
+                    {formatCurrency(Number(item.balance_due), item.currency)}
+                </span>
+            ),
+        },
+        {
             key: "status",
             header: "Status",
             render: (item: InvoiceSummary) => getStatusBadge(item),
@@ -212,18 +320,6 @@ export default function InvoicesPage() {
 
     return (
         <div className="flex flex-col h-full space-y-6 font-sans">
-
-            {/* Top Action Bar */}
-            <div className="flex justify-end mt-4">
-                <Button
-                    variant="outline-secondary"
-                    onClick={handleExport}
-                    disabled={isExporting}
-                >
-                    <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
-                </Button>
-            </div>
-
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-danger">
                     {error}
@@ -247,8 +343,15 @@ export default function InvoicesPage() {
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
+                        <Button
+                            variant="outline-secondary"
+                            onClick={() => void handleExport()}
+                            disabled={isExporting}
+                        >
+                            <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
+                        </Button>
                         <Button variant="primary" onClick={() => navigate("/invoices/add")}>
-                            <Plus size={16} /> Add Invoice
+                            <Plus size={16} /> Create Invoice
                         </Button>
                     </div>
                 </div>
@@ -278,6 +381,27 @@ export default function InvoicesPage() {
                     onPerPageChange={setPerPage}
                 />
             </div>
+
+            {/* Record Payment Modal */}
+            {paymentTarget && (
+                <RecordPaymentModal
+                    isOpen={true}
+                    onClose={() => setPaymentTarget(null)}
+                    entityId={paymentTarget.id}
+                    entityType="invoice"
+                    reference={paymentTarget.invoice_number}
+                    balanceDue={Number(paymentTarget.balance_due)}
+                    currency={paymentTarget.currency}
+                    onSuccess={() => {
+                        setPaymentTarget(null);
+                        fetchInvoices();
+                        fetchCounts();
+                    }}
+                />
+            )}
+
+            {/* Confirm Dialog */}
+            {ConfirmDialog}
         </div>
     );
 }

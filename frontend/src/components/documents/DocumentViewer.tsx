@@ -31,6 +31,9 @@ export interface DocumentViewerData {
   totalDue: number;
   amountPaid?: number;
   balanceDue?: number;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems: {
     id: string;
     itemName?: string;
@@ -50,8 +53,12 @@ interface DocumentViewerProps {
 export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
   const label = type === "invoice" ? "INVOICE" : "QUOTE";
 
-  // Build VAT label from line items
-  const vatLabel = buildVatLabel(data.lineItems.map((i) => i.taxType));
+  // Build VAT label 
+  const vatEnabled = Boolean(data.vatEnabled || data.taxTotal > 0);
+
+  const vatLabel = vatEnabled
+    ? buildVatLabel(data.vatRate, data.vatComplianceRef)
+    : "VAT";
 
   // Calculate the actual discount amount
   const calculatedDiscount = data.subtotal - (data.totalDue - data.taxTotal);
@@ -69,20 +76,22 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
   return (
     <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden">
       {/*  Top Section  */}
+      {/* Owner identity (logo + company block) — single source of truth. */}
+      <div className="p-6 flex justify-between">
+        <DocumentOwnerHeader />
+        <h2 className="text-[22px] text-priori-purple  tracking-wide font-bold mb-1 uppercase">
+          {label}
+        </h2>
+      </div>
+
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Owner identity (logo + company block) — single source of truth. */}
-          <div className="md:col-span-2">
-            <DocumentOwnerHeader />
-          </div>
+        <div className="flex flex-col lg:flex-row lg:justify-between gap-12 items-start">
 
           {/* Document To */}
           <div className="flex flex-col gap-1">
-            <h2 className="text-[22px] font-black text-gray-800 tracking-wider mb-1 uppercase">
-              {label}
-            </h2>
+
             <p className="text-sm text-gray-500 mb-1">To</p>
-            <p className="text-[16px] font-bold text-priori-purple">
+            <p className="text-[16px] font-bold text-gray-800 truncate">
               {data.customer?.display_name ?? data.customerId}
             </p>
             {data.customer && (
@@ -97,32 +106,31 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
               </>
             )}
           </div>
+
+          {/*  Metadata Row  */}
+          <div className="flex flex-col gap-6 min-w-0 self-end">
+            <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
+              <MetaField label="Reference">
+                {data.documentReference ?? "—"}
+              </MetaField>
+              <MetaField label="Transaction Date">
+                {data.transactionDate
+                  ? formatDisplayDate(data.transactionDate)
+                  : "—"}
+              </MetaField>
+              <MetaField label="Due Date">
+                {data.dueDate ? formatDisplayDate(data.dueDate) : "—"}
+              </MetaField>
+              <MetaField label="RFQ/RFP Number">
+                {data.rfqNumber ?? "—"}
+              </MetaField>
+              <MetaField label="Currency">
+                {data.currency ?? "—"}
+              </MetaField>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/*  Metadata Row  */}
-      <div className="p-6">
-        <div className="grid grid-cols-2 md:grid-cols-10 gap-6">
-          <MetaField label="Reference" colSpan="md:col-span-2">
-            {data.documentReference ?? "—"}
-          </MetaField>
-          <MetaField label="Transaction Date" colSpan="md:col-span-2">
-            {data.transactionDate
-              ? formatDisplayDate(data.transactionDate)
-              : "—"}
-          </MetaField>
-          <MetaField label="Due Date" colSpan="md:col-span-2">
-            {data.dueDate ? formatDisplayDate(data.dueDate) : "—"}
-          </MetaField>
-          <MetaField label="RFQ/RFP Number" colSpan="md:col-span-3">
-            {data.rfqNumber ?? "—"}
-          </MetaField>
-          <MetaField label="Currency" colSpan="md:col-span-1">
-            {data.currency ?? "—"}
-          </MetaField>
-        </div>
-      </div>
-
       <Divider />
 
       {/*  Line Items  */}
@@ -132,7 +140,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
         </h3>
 
         <div className="pb-4">
-          <table className="w-full text-[16px] min-w-[800px]">
+          <table className="w-full text-[16px] min-w-200">
             <thead>
               <tr className="bg-priori-purple text-white px-4 py-3 grid grid-cols-7 rounded-t-lg">
                 <th className="text-left px-3 font-bold leading-8 col-span-4">
@@ -184,6 +192,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
               ? String(data.discountPercentage ?? 0)
               : String(data.discountAmount ?? 0)
           }
+          vatEnabled={vatEnabled}
           vatLabel={vatLabel}
           restrictedMode={true}
           onDiscountTypeChange={() => { }}
@@ -197,7 +206,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
 
       <div className="p-8 pt-6">
         <p className="text-[16px] font-bold text-gray-800 mb-3">Notes</p>
-        <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-[60px] whitespace-pre-wrap">
+        <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
           {data.notes ?? "No notes added."}
         </div>
       </div>
@@ -207,17 +216,25 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
 
 function MetaField({
   label,
-  colSpan,
   children,
+  tooltip,
 }: {
-  label: string;
-  colSpan?: string;
+    label: string;
   children: React.ReactNode;
+    tooltip?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-2 ${colSpan ?? ""}`}>
-      <span className="text-gray-500 font-medium">{label}</span>
-      <span className="font-bold text-gray-800 truncate">{children}</span>
-    </div>
+    <>
+      <span
+        title={tooltip}
+        className={`text-[16px] font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
+      >
+        {label}
+      </span>
+
+      <span className="text-[16px] text-gray-800 min-w-0 truncate">
+        {children}
+      </span>
+    </>
   );
 }

@@ -25,7 +25,7 @@ function CustomerDropdown({
     const [isFocused, setIsFocused] = useState(false);
 
     return (
-        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto right-0">
+        <div className="absolute z-20 top-full mt-2 w-143 p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
             <Button
                 variant="outline"
                 onClick={() => {
@@ -38,7 +38,7 @@ function CustomerDropdown({
             </Button>
             <div className="border-b border-gray-100 flex flex-col gap-2 mb-2">
                 <span className="capitalize font-bold text-gray-800 leading-8">Search Existing Customer</span>
-                <div className="[&>div>div]:focus-within:!bg-white transition-all duration-100">
+                <div className="[&>div>div]:focus-within:bg-white! transition-all duration-100">
                     <Input
                         type="text"
                         placeholder="Search"
@@ -81,7 +81,7 @@ export interface CustomerSelectorProps {
         phone: string;
         email: string;
     } | null;
-    onChange: (customerId: string) => void;
+    onChange: (customerId: string, currency?: string) => void;
     restrictedMode?: boolean;
     error?: string;
 }
@@ -123,7 +123,7 @@ export function CustomerSelector({
         setCustomerName(c.display_name);
         setShowDropdown(false);
         setSearchQuery("");
-        onChange(c.id);
+        onChange(c.id, c.currency ?? undefined);
 
         try {
             const customerData = await getCustomer(c.id);
@@ -132,6 +132,7 @@ export function CustomerSelector({
                 phone: customerData.customer.phone,
                 email: customerData.customer.email,
             });
+            onChange(c.id, customerData.customer.currency ?? undefined);
         } catch (err) {
             console.error("[CustomerSelector] Failed to fetch customer details:", err);
             setCustomerDetails({
@@ -153,6 +154,7 @@ export function CustomerSelector({
                 phone: customerData.customer.phone,
                 email: customerData.customer.email,
             });
+            onChange(newCustomerId, customerData.customer.currency ?? undefined);
         } catch (err) {
             console.error("[CustomerSelector] Failed to fetch new customer details:", err);
         }

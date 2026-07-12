@@ -40,6 +40,9 @@ export interface QuoteCreatePayload {
   transactionDate: string;
   dueDate: string;
   currency: string;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems: QuoteLineItemPayload[];
   rfqRfpNumber?: string;
   notes?: string;

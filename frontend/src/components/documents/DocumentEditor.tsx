@@ -10,12 +10,9 @@
 import { CustomerSelector } from "@/components/modals/CustomerSelector";
 import { Button } from "@/components/ui/Button";
 import {
-  CURRENCY_OPTIONS,
   DEFAULT_DUE_DATE_DAYS,
-  type CurrencyOption,
 } from "@/lib/constants";
-import { formatDisplayDate } from "@/lib/utils";
-import { Save, SquarePen } from "lucide-react";
+import { Save } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
@@ -25,14 +22,17 @@ import {
   buildVatLabel,
   calculateTotals,
   createEmptyRow,
+  roundMoney,
   validateDocument,
   type LineItemRow,
 } from "./utils";
 
 import { getDefaultDueDate, getTodayString } from "@/lib/dateUtils";
+import { currencyOptions, type Currency } from "@/lib/enums";
+import { Input } from "../ui/Input";
+import { Toggle } from "../ui/Toggle";
 
 // Types
-
 export interface DocumentLineItemPayload {
   itemName: string;
   description: string;
@@ -45,12 +45,15 @@ export interface DocumentPayload {
   customerId: string;
   transactionDate: string;
   dueDate: string;
-  currency: CurrencyOption;
+  currency: Currency;
   rfqNumber?: string;
   notes?: string;
   discountType?: "amount" | "percentage";
   discountAmount?: number;
   discountPercentage?: number;
+  vatEnabled: boolean;
+  vatRate: number | null | undefined;
+  vatComplianceRef?: string | null;
   lineItems: DocumentLineItemPayload[];
 }
 
@@ -62,12 +65,16 @@ export interface DocumentInitialData {
     email: string;
     phone: string;
     address?: string;
+    currency?: string | null;
   };
   transactionDate?: string;
   dueDate?: string;
-  currency?: CurrencyOption;
+  currency?: Currency;
   rfqNumber?: string;
   notes?: string;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   discountType?: "amount" | "percentage" | null;
   discountAmount?: number | null;
   discountPercentage?: number | null;
@@ -117,9 +124,29 @@ export function DocumentEditor({
     );
   });
 
-  const [currency, setCurrency] = useState(initialData?.currency ?? "KES");
+  const [currency, setCurrency] = useState<Currency>(
+    (initialData?.customer?.currency as Currency | undefined) ??
+    initialData?.currency ??
+    "KES"
+  );
   const [rfqNumber, setRfqNumber] = useState(initialData?.rfqNumber ?? "");
   const [notes, setNotes] = useState(initialData?.notes ?? "");
+
+  const [vatEnabled, setVatEnabled] = useState<boolean>(
+    initialData?.vatEnabled ?? false
+  );
+
+  const [vatRatePct, setVatRatePct] = useState<string>(() => {
+    const fraction = initialData?.vatRate;
+    if (fraction != null) {
+      return String(Number((fraction * 100).toFixed(4)));
+    }
+    return "16";
+  });
+
+  const [vatComplianceRef, setVatComplianceRef] = useState<string>(
+    initialData?.vatComplianceRef ?? ""
+  );
 
   const [discountType, setDiscountType] = useState<
     "amount" | "percentage" | null
@@ -146,19 +173,36 @@ export function DocumentEditor({
     return [createEmptyRow()];
   });
 
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Derived totals (memoized)
-  const totals = useMemo(
-    () => calculateTotals(lineItems, discountType, discountValue),
-    [lineItems, discountType, discountValue]
-  );
+  const vatRateFraction = useMemo(() => {
+    const pct = Number.parseFloat(vatRatePct);
+    return Number.isFinite(pct) ? pct / 100 : 0;
+  }, [vatRatePct]);
 
   const vatLabel = useMemo(
-    () => buildVatLabel(lineItems.map((item) => item.taxType)),
-    [lineItems]
+    () =>
+      vatEnabled
+        ? buildVatLabel(vatRateFraction, vatComplianceRef)
+        : "VAT",
+    [vatEnabled, vatRateFraction, vatComplianceRef]
   );
+
+  // Derived totals (memoized)
+  const totals = useMemo(() => {
+    const base = calculateTotals(lineItems, discountType, discountValue);
+    const taxTotal = base.taxTotal;
+
+    return {
+      subtotal: base.subtotal,
+      discountAmount: base.discountAmount,
+      taxTotal,
+      totalDue: roundMoney(base.subtotal - base.discountAmount + taxTotal),
+    };
+  }, [lineItems, discountType, discountValue]);
+
 
   // Line item handlers
   const addRow = () => setLineItems((prev) => [...prev, createEmptyRow()]);
@@ -203,6 +247,9 @@ export function DocumentEditor({
       transactionDate,
       dueDate,
       currency,
+      vatEnabled,
+      vatRate: vatEnabled ? vatRateFraction : null,
+      vatComplianceRef: vatComplianceRef.trim() || null,
       lineItems: items,
       rfqNumber: rfqNumber.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -230,129 +277,155 @@ export function DocumentEditor({
     <div className="flex flex-col gap-6 font-sans">
       <div className="bg-white rounded-[20px] border-2 border-purple-25 overflow-hidden shadow-sm">
         {/* Top Section */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Owner identity (logo + company block) — single source of
-                truth, wired "Update" controls. */}
-            <div className="md:col-span-2">
-              <DocumentOwnerHeader editable={!restrictedMode} />
-            </div>
-
-            {/* Document To (Customer Selector) */}
-            <div className="flex flex-col gap-1">
-              <h2 className="text-[22px] font-black text-gray-800 tracking-wider mb-1 uppercase">
-                {label}
-              </h2>
-              <CustomerSelector
-                label="To"
-                initialCustomerId={initialData?.customerId}
-                initialCustomerName={initialData?.customer?.display_name}
-                initialCustomerDetails={
-                  initialData?.customer
-                    ? {
-                      address: initialData.customer.address,
-                      phone: initialData.customer.phone,
-                      email: initialData.customer.email,
-                    }
-                    : null
-                }
-                onChange={setCustomerId}
-                restrictedMode={restrictedMode}
-                error={errors.customer}
-              />
-            </div>
-          </div>
+        <div className="p-6 flex justify-between">
+          <DocumentOwnerHeader editable={!restrictedMode} />
+          <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+            {label}
+          </h2>
         </div>
 
-        {/* Metadata Row */}
         <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-10 gap-6">
-            {/* Reference */}
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <span className="text-gray-500 font-medium">Reference</span>
-              <p className="font-bold text-gray-800">
-                {initialData?.documentReference ?? "Autogenerated"}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Document To (Customer Selector) */}
+            <CustomerSelector
+              label="To"
+              initialCustomerId={initialData?.customerId}
+              initialCustomerName={initialData?.customer?.display_name}
+              initialCustomerDetails={
+                initialData?.customer
+                  ? {
+                    address: initialData.customer.address,
+                    phone: initialData.customer.phone,
+                    email: initialData.customer.email,
+                  }
+                  : null
+              }
+              onChange={(id: string, cur?: string) => {
+                setCustomerId(id);
 
-            {/* Transaction Date */}
-            <DateField
-              label="Transaction Date"
-              value={transactionDate}
-              onChange={setTransactionDate}
-              error={errors.transactionDate}
+                if (cur && currencyOptions.some((option) => option.value === cur)) {
+                  setCurrency(cur as Currency);
+                }
+              }}
               restrictedMode={restrictedMode}
-              colSpan="md:col-span-2"
+              error={errors.customer}
             />
 
-            {/* Due Date */}
-            <DateField
-              label="Due Date"
-              value={dueDate}
-              onChange={setDueDate}
-              error={errors.dueDate}
-              restrictedMode={restrictedMode}
-              colSpan="md:col-span-2"
-            />
 
-            {/* RFQ/RFP Number */}
-            <div className="flex flex-col gap-2 min-w-0 md:col-span-3">
-              <span className="text-gray-500 font-medium">RFQ/RFP Number</span>
-              <label
-                htmlFor="rfq-input"
-                className="flex items-center gap-2 w-fit max-w-full cursor-text"
-              >
-                <div className="relative flex items-center min-w-0">
-                  <span className="invisible font-bold truncate block">
-                    {rfqNumber || "Enter"}
-                  </span>
-                  <input
-                    id="rfq-input"
-                    type="text"
-                    value={rfqNumber}
-                    onChange={(e) => setRfqNumber(e.target.value)}
-                    placeholder="Enter"
-                    disabled={restrictedMode}
-                    className="font-bold text-priori-purple outline-none bg-transparent w-full h-full placeholder-priori-purple/70 absolute inset-0 truncate"
-                  />
-                </div>
-                {!restrictedMode && (
-                  <SquarePen
-                    size={20}
-                    className="text-priori-purple shrink-0 cursor-pointer"
-                  />
-                )}
-              </label>
-            </div>
+            {/* Metadata Row */}
+            <div className="flex flex-col gap-2 items-end">
+              <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
 
-            {/* Currency */}
-            <div className="flex flex-col gap-2 md:col-span-1">
-              <span className="text-gray-500 font-medium">Currency</span>
-              <div className="flex items-center gap-2 relative w-fit min-w-20">
-                <span className="font-bold text-priori-purple whitespace-nowrap">
-                  {currency}
-                </span>
-                {!restrictedMode && (
+                {/* Reference */}
+                <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
+                  Reference
+                </label>
+                <Input
+                  value={initialData?.documentReference ?? "Autogenerated"}
+                  disabled
+                  readOnly
+                />
+
+                {/* Transaction Date */}
+                <label
+                  htmlFor="order-date"
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                >
+                  Transaction Date
+                </label>
+                <Input
+                  id="transaction-date"
+                  type="date"
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                  disabled={restrictedMode}
+                  error={errors.transactionDate}
+                />
+
+                {/* Due Date */}
+                <label
+                  htmlFor="due-date"
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                >
+                  Due Date
+                </label>
+                <Input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  disabled={restrictedMode}
+                  error={errors.dueDate}
+                />
+
+                {/* RFQ/RFP Number */}
+                <label
+                  htmlFor="rfq-input"
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                >
+                  RFQ/RFP Number
+                </label>
+                <Input
+                  id="rfq-input"
+                  type="text"
+                  value={rfqNumber}
+                  onChange={(e) => setRfqNumber(e.target.value)}
+                  disabled={restrictedMode}
+                  error={errors.rfqNumber}
+                />
+
+                {/* VAT Toggle */}
+                <label
+                  htmlFor="vat-enabled"
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                >
+                  Add VAT
+                </label>
+
+                <Toggle
+                  id="vat-enabled"
+                  checked={vatEnabled}
+                  onChange={setVatEnabled}
+                  disabled={restrictedMode}
+                  error={errors.vatEnabled}
+                  aria-label="Add VAT"
+                />
+
+                {vatEnabled && (
                   <>
-                    <SquarePen
-                      size={20}
-                      className="text-priori-purple pointer-events-none shrink-0"
-                    />
-                    <select
-                      value={currency}
-                      onChange={(e) =>
-                        setCurrency(e.target.value as CurrencyOption)
-                      }
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    <label
+                      htmlFor="vat-rate"
+                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                     >
-                      {CURRENCY_OPTIONS.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
+                      VAT Rate
+                    </label>
+
+                    <Input
+                      id="vat-rate"
+                      type="number"
+                      value={vatRatePct}
+                      onChange={(e) => setVatRatePct(e.target.value)}
+                      disabled={restrictedMode}
+                      placeholder="16"
+                    />
+
+                    <label
+                      htmlFor="vat-compliance-ref"
+                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                    >
+                      Compliance Ref
+                    </label>
+
+                    <Input
+                      id="vat-compliance-ref"
+                      value={vatComplianceRef}
+                      onChange={(e) => setVatComplianceRef(e.target.value)}
+                      disabled={restrictedMode}
+                      placeholder="PIN"
+                    />
                   </>
                 )}
+
               </div>
             </div>
           </div>
@@ -384,6 +457,7 @@ export function DocumentEditor({
             currency={currency}
             discountType={discountType}
             discountValue={discountValue}
+            vatEnabled={vatEnabled}
             vatLabel={vatLabel}
             restrictedMode={restrictedMode}
             onDiscountTypeChange={setDiscountType}
@@ -397,7 +471,7 @@ export function DocumentEditor({
         </div>
 
         {/* Notes */}
-        <div className="p-8 pt-6">
+        <div className="px-8 py-6">
           <label
             htmlFor="notes-input"
             className="block text-[16px] font-bold text-gray-800 mb-3"
@@ -414,86 +488,41 @@ export function DocumentEditor({
             className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
           />
         </div>
-      </div>
 
-      {/* Submit Error */}
-      {submitError && (
-        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {submitError}
-        </div>
-      )}
+        {/* Submit Error */}
+        {
+          submitError && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {submitError}
+            </div>
+          )
+        }
 
-      {/* Footer Actions */}
-      <div className="flex justify-end items-center gap-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onPreview}
-          disabled={!onPreview}
-          className="px-8 py-3"
-        >
-          Preview
-        </Button>
-
-        {!restrictedMode && (
+        {/* Footer Actions */}
+        <div className="flex justify-end items-center gap-4 px-8 py-6">
           <Button
             type="button"
-            variant="primary"
-            onClick={handleSubmit}
-            loading={isLoading}
-            className="px-8 py-3 flex items-center gap-2"
+            variant="outline"
+            onClick={onPreview}
+            disabled={!onPreview}
+            className="px-8 py-3"
           >
-            <Save size={18} /> Save &amp; Continue
+            Preview
           </Button>
-        )}
-      </div>
-    </div>
-  );
-}
 
-// DateField sub-component
-
-interface DateFieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-  restrictedMode: boolean;
-  colSpan?: string;
-}
-
-function DateField({
-  label,
-  value,
-  onChange,
-  error,
-  restrictedMode,
-  colSpan = "",
-}: DateFieldProps) {
-  return (
-    <div className={`flex flex-col gap-2 ${colSpan}`}>
-      <span className="text-gray-500 font-medium">{label}</span>
-      <div className="flex items-center gap-2 relative w-fit">
-        <span className="font-bold text-priori-purple whitespace-nowrap">
-          {formatDisplayDate(value)}
-        </span>
-        {!restrictedMode && (
-          <>
-            <SquarePen
-              size={20}
-              className="text-priori-purple pointer-events-none shrink-0"
-            />
-            <input
-              type="date"
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              aria-label={label}
-            />
-          </>
-        )}
-      </div>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </div>
+          {!restrictedMode && (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSubmit}
+              loading={isLoading}
+              className="px-8 py-3 flex items-center gap-2"
+            >
+              <Save size={18} /> Save &amp; Continue
+            </Button>
+          )}
+        </div>
+      </div >
+    </div >
   );
 }
