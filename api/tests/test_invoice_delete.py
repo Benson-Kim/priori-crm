@@ -19,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.common.audit import AuditEvent
 from app.common.exceptions import BadRequestException, NotFoundException
-from app.constants.enums import CustomerType, Currency, InvoiceStatus
+from app.constants.enums import Currency, CustomerType, InvoiceStatus
 from app.modules.invoices.models import Invoice, InvoiceLineItem
 from app.modules.invoices.service import InvoiceService
 
