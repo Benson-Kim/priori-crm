@@ -217,19 +217,27 @@ export function getKenyanPhoneGhostText(value: string) {
  */
 
 export function normalizeKenyanPhoneNumber(value: string) {
-  const digits = value.replace(/\D/g, "");
+  if (!value) return "";
 
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (/^\+/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
   if (!digits) return "";
 
   if (digits.startsWith("254")) {
     return `+${digits.slice(0, 12)}`;
   }
 
-  if (digits.startsWith("0")) {
+  if (digits.startsWith("0") && digits.length <= 10) {
     return `+254${digits.slice(1, 10)}`;
   }
 
-  return `+254${digits.slice(0, 9)}`;
+  return trimmed;
 };
 
 /**

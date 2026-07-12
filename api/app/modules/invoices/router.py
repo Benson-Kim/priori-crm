@@ -517,6 +517,7 @@ def cancel_invoice(
         400: {"description": "Invoice is not in DRAFT status"},
         404: {"description": "Invoice not found"},
     },
+    dependencies=[Depends(require_privileged())],
 )
 def delete_invoice(invoice_id: UUID, service: InvoiceServiceDep) -> None:
     """Delete an invoice (only DRAFT invoices can be deleted)."""

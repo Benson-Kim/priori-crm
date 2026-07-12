@@ -19,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.common.audit import AuditEvent
 from app.common.exceptions import BadRequestException, NotFoundException
-from app.constants.enums import InvoiceStatus
+from app.constants.enums import CustomerType, Currency, InvoiceStatus
 from app.modules.invoices.models import Invoice, InvoiceLineItem
 from app.modules.invoices.service import InvoiceService
 
@@ -47,11 +47,13 @@ def sample_customer(db, owner):
     from app.modules.customers.models import Customer
 
     customer = Customer(
-        owner_id=owner.id,
+        customer_type=CustomerType.BUSINESS,
+        company_name="Test Company Ltd",
         first_name="Test",
         last_name="Customer",
         email=f"customer-{uuid.uuid4().hex[:8]}@example.com",
         phone="+254712345678",
+        currency=Currency.KES,
         is_active=True,
     )
     db.add(customer)
@@ -72,7 +74,6 @@ def sample_invoice(db, owner, sample_customer):
 
     def _create_invoice(status=InvoiceStatus.DRAFT):
         invoice = Invoice(
-            owner_id=owner.id,
             customer_id=sample_customer.id,
             status=status,
             invoice_number=f"INV-TEST-{uuid.uuid4().hex[:8]}",
@@ -81,10 +82,12 @@ def sample_invoice(db, owner, sample_customer):
             due_date=date.today() + timedelta(days=30),
             currency="USD",
             subtotal=Decimal("100.00"),
-            vat_amount=Decimal("0.00"),
+            tax_total=Decimal("0.00"),
             total_due=Decimal("100.00"),
             amount_paid=Decimal("0.00"),
             balance_due=Decimal("100.00"),
+            created_by=owner.id,
+            version=1,
         )
         db.add(invoice)
         db.commit()

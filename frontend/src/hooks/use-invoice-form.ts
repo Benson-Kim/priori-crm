@@ -61,6 +61,9 @@ export function useInvoiceForm(invoiceId?: string): UseInvoiceFormReturn {
                 transactionDate: payload.transactionDate,
                 dueDate: payload.dueDate,
                 currency: payload.currency,
+                vatEnabled: payload.vatEnabled,
+                vatRate: payload.vatRate,
+                vatComplianceRef: payload.vatComplianceRef,
                 lineItems: payload.lineItems.map((li) => ({
                     itemName: li.itemName,
                     description: li.description,

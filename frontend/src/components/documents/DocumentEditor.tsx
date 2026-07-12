@@ -20,7 +20,6 @@ import { DocumentTotalsPanel } from "./layout/document-totals";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
   buildVatLabel,
-  calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
   roundMoney,
@@ -194,12 +193,7 @@ export function DocumentEditor({
   // Derived totals (memoized)
   const totals = useMemo(() => {
     const base = calculateTotals(lineItems, discountType, discountValue);
-
-    const taxTotal = calcSubtotalVat(
-      base.subtotal,
-      vatEnabled,
-      vatRateFraction
-    );
+    const taxTotal = base.taxTotal;
 
     return {
       subtotal: base.subtotal,
@@ -207,7 +201,7 @@ export function DocumentEditor({
       taxTotal,
       totalDue: roundMoney(base.subtotal - base.discountAmount + taxTotal),
     };
-  }, [lineItems, discountType, discountValue, vatEnabled, vatRateFraction]);
+  }, [lineItems, discountType, discountValue]);
 
 
   // Line item handlers

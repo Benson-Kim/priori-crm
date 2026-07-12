@@ -188,8 +188,8 @@ export default function QuotesPage() {
             },
         });
 
-        // Convert to Invoice - available for non-expired, non-invoiced quotes
-        if (!quote.is_expired && status !== "invoiced") {
+        // Convert to Invoice - available for approved, non-expired, non-invoiced quotes
+        if (!quote.is_expired && status !== "invoiced" && status === "approved") {
             actions.push({
                 key: "convert-to-invoice",
                 label: "Convert to Invoice",
