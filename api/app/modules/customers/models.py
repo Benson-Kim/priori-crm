@@ -245,6 +245,16 @@ class Customer(Base):
         lazy="select",
     )
 
+    def __init__(self, *args, **kwargs):
+        """Support legacy `is_active` constructor arguments for tests and callers."""
+        if "is_active" in kwargs:
+            is_active = kwargs.pop("is_active")
+            if "status" not in kwargs:
+                kwargs["status"] = (
+                    CustomerStatus.ACTIVE if is_active else CustomerStatus.INACTIVE
+                )
+        super().__init__(*args, **kwargs)
+
     def __repr__(self) -> str:
         """String representation for debugging."""
         if self.customer_type == CustomerType.BUSINESS:

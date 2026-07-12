@@ -345,15 +345,6 @@ export default function InvoicesPage() {
                         />
                         <Button
                             variant="outline-secondary"
-                            onClick={() => {
-                                // Placeholder export action retained for parity with other document lists.
-                            }}
-                            className="hidden"
-                        >
-                            Export Excel
-                        </Button>
-                        <Button
-                            variant="outline-secondary"
                             onClick={() => void handleExport()}
                             disabled={isExporting}
                         >
