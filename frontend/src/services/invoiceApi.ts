@@ -35,6 +35,9 @@ export interface InvoiceCreatePayload {
   transactionDate: string;
   dueDate: string;
   currency: CurrencyOption;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems: LineItemPayload[];
   rfqNumber?: string;
   notes?: string;

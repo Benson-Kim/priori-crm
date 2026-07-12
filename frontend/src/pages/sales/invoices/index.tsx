@@ -8,9 +8,10 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
     deleteInvoice,
+    exportInvoicesExcel,
     getInvoiceCounts,
     getInvoices,
     markAsSent,
@@ -18,7 +19,7 @@ import {
     type InvoiceStatusCounts,
     type InvoiceSummary,
 } from "@/services/invoiceApi";
-import { CheckCircle, CreditCard, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, CreditCard, Download, Eye, Pencil, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -35,6 +36,7 @@ export default function InvoicesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [paymentTarget, setPaymentTarget] = useState<InvoiceSummary | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
     const { showConfirm, ConfirmDialog } = useConfirm();
 
     const navigate = useNavigate();
@@ -139,6 +141,27 @@ export default function InvoicesPage() {
         });
     };
 
+    const handleExport = async () => {
+        const statusMap: Record<string, string | undefined> = {
+            all: undefined,
+            pending: "draft",
+            paid: "paid",
+            overdue: "overdue",
+        };
+
+        setIsExporting(true);
+        try {
+            const blob = await exportInvoicesExcel({
+                status: statusMap[activeTab],
+            });
+            saveBlob(blob, `Invoices_${new Date().toISOString().split("T")[0]}.xlsx`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to export invoices");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const getActions = (invoice: InvoiceSummary): DropdownItem[] => {
         const actions: DropdownItem[] = [
             {
@@ -175,8 +198,8 @@ export default function InvoicesPage() {
             });
         }
 
-        // Record payment: SENT/PARTIAL only, while there is still a balance
-        if ((invoice.status === "sent" || invoice.status === "partial") && Number(invoice.balance_due) > 0) {
+        // Record payment: SENT/PARTIAL/OVERDUE only, while there is still a balance
+        if ((invoice.status === "sent" || invoice.status === "partial" || invoice.status === "overdue") && Number(invoice.balance_due) > 0) {
             actions.push({
                 key: "record-payment",
                 label: "Record payment",
@@ -320,6 +343,22 @@ export default function InvoicesPage() {
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
+                        <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                                // Placeholder export action retained for parity with other document lists.
+                            }}
+                            className="hidden"
+                        >
+                            Export Excel
+                        </Button>
+                        <Button
+                            variant="outline-secondary"
+                            onClick={() => void handleExport()}
+                            disabled={isExporting}
+                        >
+                            <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
+                        </Button>
                         <Button variant="primary" onClick={() => navigate("/invoices/add")}>
                             <Plus size={16} /> Create Invoice
                         </Button>
@@ -362,7 +401,7 @@ export default function InvoicesPage() {
                     reference={paymentTarget.invoice_number}
                     balanceDue={Number(paymentTarget.balance_due)}
                     currency={paymentTarget.currency}
-                    onPaymentRecorded={() => {
+                    onSuccess={() => {
                         setPaymentTarget(null);
                         fetchInvoices();
                         fetchCounts();

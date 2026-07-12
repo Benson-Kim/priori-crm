@@ -985,7 +985,6 @@ export function VendorSummaryCard({
   }, [period]);
 
 
-  const total = data ? Number(data.total) : 0;
   const paid = data ? Number(data.paid_total) : 0;
   const pending = data ? Number(data.pending_total) : 0;
 
@@ -1012,10 +1011,10 @@ export function VendorSummaryCard({
         ) : data && data.items.length > 0 ? (
           <div className="flex justify-between gap-3">
             <div className="">
-              <p className="text-gray-500 text-lg py-3">Total Unpaid</p>
+              <p className="text-gray-500 text-lg py-3">Pending Total</p>
               <p className="font-bold text-gray-800 text-2xl">
                 {formatCurrency(
-                  Number(total), currency)} </p>
+                  Number(pending), currency)} </p>
             </div>
             <div className="">
               <div className="flex items-center gap-3 shrink-0">

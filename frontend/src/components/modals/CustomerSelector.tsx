@@ -81,7 +81,7 @@ export interface CustomerSelectorProps {
         phone: string;
         email: string;
     } | null;
-    onChange: (customerId: string) => void;
+    onChange: (customerId: string, currency?: string) => void;
     restrictedMode?: boolean;
     error?: string;
 }
@@ -123,7 +123,7 @@ export function CustomerSelector({
         setCustomerName(c.display_name);
         setShowDropdown(false);
         setSearchQuery("");
-        onChange(c.id);
+        onChange(c.id, c.currency ?? undefined);
 
         try {
             const customerData = await getCustomer(c.id);
@@ -132,6 +132,7 @@ export function CustomerSelector({
                 phone: customerData.customer.phone,
                 email: customerData.customer.email,
             });
+            onChange(c.id, customerData.customer.currency ?? undefined);
         } catch (err) {
             console.error("[CustomerSelector] Failed to fetch customer details:", err);
             setCustomerDetails({
@@ -153,6 +154,7 @@ export function CustomerSelector({
                 phone: customerData.customer.phone,
                 email: customerData.customer.email,
             });
+            onChange(newCustomerId, customerData.customer.currency ?? undefined);
         } catch (err) {
             console.error("[CustomerSelector] Failed to fetch new customer details:", err);
         }
