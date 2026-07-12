@@ -880,7 +880,7 @@ class InvoiceService(BaseDocumentService):
             # 2. Validate status
             if invoice.status not in self._DELETABLE_STATUSES:
                 raise BadRequestException(
-                    f"Cannot delete an invoice in '{invoice.status.value}' status. "
+                    f"Cannot delete an invoice in '{status_value(invoice.status)}' status. "
                     f"Only DRAFT invoices can be deleted; a sent invoice is a permanent record."
                 )
 
@@ -897,7 +897,7 @@ class InvoiceService(BaseDocumentService):
                 "invoice_reference": invoice.invoice_reference
                 if hasattr(invoice, "invoice_reference")
                 else None,
-                "status": invoice.status.value,
+                "status": status_value(invoice.status),
                 "customer_id": str(invoice.customer_id),
                 "total_due": str(invoice.total_due),
             }
