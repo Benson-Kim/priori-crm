@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { customerTypeOptions } from "@/lib/enums";
+import { currencyOptions, customerTypeOptions } from "@/lib/enums";
+import { formatKenyanPhoneInput, getKenyanPhoneGhostText, normalizeKenyanPhoneNumber } from "@/lib/utils";
 import { customerSchema, type CustomerFormData } from "@/validations/customerSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronLeft, Save } from "lucide-react";
@@ -15,18 +16,6 @@ interface CustomerDetailsFormProps {
     onSave?: (data: CustomerFormData) => void;
     isLoading?: boolean;
 }
-
-// const customerTypeOptions = [
-//     { value: "individual", label: "Individual" },
-//     { value: "business", label: "Business" },
-// ];
-
-
-const currencyOptions = [
-    { value: "KES", label: "Kenyan Shilling (KES)" },
-    { value: "USD", label: "US Dollar (USD)" },
-    { value: "EUR", label: "Euro (EUR)" },
-];
 
 const countryOptions = [
     { value: "KE", label: "Kenya" },
@@ -50,6 +39,7 @@ export function CustomerDetailsForm({
         control,
         handleSubmit,
         reset,
+        watch,
         formState: { errors },
     } = useForm<CustomerFormData>({
         resolver: zodResolver(customerSchema),
@@ -78,22 +68,32 @@ export function CustomerDetailsForm({
         }
     }, [initialData, reset]);
 
+    const customerType = watch("customerType");
+
     const onSubmit = (data: CustomerFormData) => {
-        onSave?.(data);
+        onSave?.({
+            ...data,
+            phone: normalizeKenyanPhoneNumber(data.phone),
+        });
     };
 
-    const renderFieldError = (fieldError: { message?: string } | undefined) => {
-        return fieldError ? (
-            <p className="text-red-500 text-xs font-medium mt-1">
-                {fieldError.message}
-            </p>
-        ) : null;
-    };
+    function Field({ id, label, children, }: Readonly<{
+        id: string; label: string; children: React.ReactNode;
+    }>) {
+        return (
+            <div className="flex flex-col gap-2">
+                <label htmlFor={id} className="text-sm font-semibold leading-6 text-gray-900">
+                    {label}
+                </label>
+                {children}
+            </div>
+        );
+    }
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             {/* Customer Details Section */}
-            <Card className="rounded-xl bg-white border-gray-300 p-6">
+            <Card className="rounded-xl bg-white border-gray-300 p-6 space-y-6">
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-6">
                     <button
@@ -108,62 +108,50 @@ export function CustomerDetailsForm({
 
                 {/* Customer Type & Company Name */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label htmlFor="customerType" className="block text-sm font-semibold text-gray-900 mb-2">
-                            Customer Type
-                        </label>
+
+                    <Field id="customerType" label="Customer Type">
                         <Controller
                             name="customerType"
                             control={control}
                             render={({ field }) => (
-                                <>
-                                    <Select
-                                        {...field}
-                                        id="customerType"
-                                        options={customerTypeOptions}
-                                        placeholder="Select customer type"
-                                    />
-                                    {renderFieldError(errors.customerType)}
-                                </>
+                                <Select
+                                    id="customerType"
+                                    {...field}
+                                    options={customerTypeOptions}
+                                    placeholder="Select customer type"
+                                    error={errors.customerType?.message}
+                                />
                             )}
                         />
-                    </div>
-                    <div>
-                        <label htmlFor="companyName" className="block text-sm font-semibold text-gray-900 mb-2">
-                            Company Name
+                    </Field>
+                    <div className="flex flex-col gap-2">
+                        <label htmlFor="companyName" className="text-sm font-semibold leading-6 text-gray-900">
+                            Company Name{customerType === "business" && <span className="text-red-500 ml-1">*</span>}
                         </label>
                         <Controller
                             name="companyName"
                             control={control}
                             render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="companyName"
-                                        type="text"
-                                        {...field}
-                                        placeholder="Company name"
-                                    />
-                                    {renderFieldError(errors.companyName)}
-                                </>
+                                <Input
+                                    id="companyName"
+                                    type="text"
+                                    {...field}
+                                    placeholder="Company name"
+                                    error={errors.companyName?.message}
+                                />
                             )}
                         />
                     </div>
                 </div>
 
                 {/* First Name & Last Name */}
-                <div>
-                    <label
-                        htmlFor="firstName"
-                        className="block text-sm font-semibold text-gray-900 mb-2"
-                    >
-                        First Name
-                    </label>
+                <div className="grid grid-cols-2 gap-6">
 
-                    <Controller
-                        name="firstName"
-                        control={control}
-                        render={({ field }) => (
-                            <>
+                    <Field id="firstName" label="First Name">
+                        <Controller
+                            name="firstName"
+                            control={control}
+                            render={({ field }) => (
                                 <Input
                                     id="firstName"
                                     type="text"
@@ -171,26 +159,14 @@ export function CustomerDetailsForm({
                                     placeholder="First name"
                                     error={errors.firstName?.message}
                                 />
-
-                                {renderFieldError(errors.firstName)}
-                            </>
-                        )}
-                    />
-                </div>
-
-                <div>
-                    <label
-                        htmlFor="lastName"
-                        className="block text-sm font-semibold text-gray-900 mb-2"
-                    >
-                        Last Name
-                    </label>
-
-                    <Controller
-                        name="lastName"
-                        control={control}
-                        render={({ field }) => (
-                            <>
+                            )}
+                        />
+                    </Field>
+                    <Field id="lastName" label="Last Name">
+                        <Controller
+                            name="lastName"
+                            control={control}
+                            render={({ field }) => (
                                 <Input
                                     id="lastName"
                                     type="text"
@@ -198,104 +174,124 @@ export function CustomerDetailsForm({
                                     placeholder="Last name"
                                     error={errors.lastName?.message}
                                 />
+                            )}
+                        />
+                    </Field>
 
-                                {renderFieldError(errors.lastName)}
-                            </>
-                        )}
-                    />
                 </div>
 
                 {/* Email & Phone */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
-                            Email
-                        </label>
+
+                    <Field id="email" label="Email">
                         <Controller
                             name="email"
                             control={control}
                             render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        {...field}
-                                        placeholder="email@example.com"
-                                        error={errors.email ? "true" : undefined}
-                                    />
-                                    {renderFieldError(errors.email)}
-                                </>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    {...field}
+                                    placeholder="email@example.com"
+                                    error={errors.email?.message}
+                                />
                             )}
                         />
-                    </div>
-                    <div>
-                        <label htmlFor="phone" className="block text-sm font-semibold text-gray-900 mb-2">
-                            Phone
-                        </label>
+                    </Field>
+                    <Field id="phone" label="Phone">
                         <Controller
                             name="phone"
                             control={control}
-                            render={({ field }) => (
-                                <>
+                            render={({ field }) => {
+                                const formattedValue = formatKenyanPhoneInput(field.value ?? "");
+
+                                return (
                                     <Input
                                         id="phone"
                                         prefix="+254"
                                         type="tel"
-                                        {...field}
-                                        placeholder="7XX XXX XXX"
-                                        error={errors.phone ? "true" : undefined}
+                                        name={field.name}
+                                        ref={field.ref}
+                                        value={formattedValue}
+                                        ghostText={getKenyanPhoneGhostText(formattedValue)}
+                                        onBlur={field.onBlur}
+                                        onChange={(event) => {
+                                            const digitsOnly = event.target.value.replace(/\D/g, "");
+
+                                            let localDigits = digitsOnly;
+
+                                            if (localDigits.startsWith("254")) {
+                                                localDigits = localDigits.slice(3);
+                                            }
+
+                                            if (localDigits.startsWith("0")) {
+                                                localDigits = localDigits.slice(1);
+                                            }
+
+                                            field.onChange(localDigits.slice(0, 9));
+                                        }}
+                                        placeholder=""
+                                        error={errors.phone?.message}
                                     />
-                                    {renderFieldError(errors.phone)}
-                                </>
-                            )}
+                                );
+                            }}
                         />
-                    </div>
+                    </Field>
                 </div>
 
-                {/* Website & VAT Number */}
+
+                {/* Currency & VAT Number */}
                 <div className="grid grid-cols-2 gap-6">
-                    <div>
-                        <label htmlFor="website" className="block text-sm font-semibold text-gray-900 mb-2">
-                            Website
-                        </label>
+                    <Field id="currency" label="Currency">
                         <Controller
-                            name="website"
+                            name="currency"
                             control={control}
                             render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="website"
-                                        type="url"
-                                        {...field}
-                                        placeholder="https://example.com"
-                                        error={errors.website ? "true" : undefined}
-                                    />
-                                    {renderFieldError(errors.website)}
-                                </>
+                                <Select
+                                    id="currency"
+                                    {...field}
+                                    options={currencyOptions}
+                                    placeholder="Select currency"
+                                    error={errors.currency?.message}
+                                />
                             )}
                         />
-                    </div>
-                    <div>
-                        <label htmlFor="vatNumber" className="block text-sm font-semibold text-gray-900 mb-2">
-                            VAT Number
-                        </label>
+                    </Field>
+
+                    <Field id="vatNumber" label="VAT Number">
                         <Controller
                             name="vatNumber"
                             control={control}
                             render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="vatNumber"
-                                        type="text"
-                                        {...field}
-                                        placeholder="Enter VAT number"
-                                    />
-                                    {renderFieldError(errors.vatNumber)}
-                                </>
+                                <Input
+                                    id="vatNumber"
+                                    type="text"
+                                    {...field}
+                                    placeholder="Enter VAT number"
+                                    error={errors.vatNumber?.message}
+                                />
                             )}
                         />
-                    </div>
+                    </Field>
+
+
                 </div>
+                {/* Website  */}
+                <Field id="website" label="Website">
+                    <Controller
+                        name="website"
+                        control={control}
+                        render={({ field }) => (
+                            <Input
+                                id="website"
+                                type="url"
+                                {...field}
+                                placeholder="https://example.com"
+                                error={errors.website?.message}
+                            />
+                        )}
+                    />
+                </Field>
             </Card>
 
             {/* Billing Address Section */}
@@ -305,137 +301,94 @@ export function CustomerDetailsForm({
                     Billing Address
                 </h3>
 
-                {/* Currency */}
-                <div className="mb-6">
+                {/* Address Fields */}
+                <div className="grid grid-cols-2 gap-6 mb-6">
                     <Controller
-                        name="currency"
+                        name="address"
                         control={control}
                         render={({ field }) => (
-                            <>
-                                <Select
-                                    id="currency"
-                                    {...field}
-                                    options={currencyOptions}
-                                    placeholder="Select currency"
-                                />
-                                {renderFieldError(errors.currency)}
-                            </>
+                            <Input
+                                id="address"
+                                type="text"
+                                {...field}
+                                placeholder="Address"
+                                error={errors.address?.message}
+                            />
+                        )}
+                    />
+                    <Controller
+                        name="address2"
+                        control={control}
+                        render={({ field }) => (
+                            <Input
+                                id="address2"
+                                type="text"
+                                {...field}
+                                placeholder="Address 2 (optional)"
+                                error={errors.address2?.message}
+                            />
                         )}
                     />
                 </div>
 
-                {/* Address Fields */}
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <Controller
-                            name="address"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="address"
-                                        type="text"
-                                        {...field}
-                                        placeholder="Address"
-                                        error={errors.address ? "true" : undefined}
-                                    />
-                                    {renderFieldError(errors.address)}
-                                </>
-                            )}
-                        />
-                    </div>
-                    <div>
-                        <Controller
-                            name="address2"
-                            control={control}
-                            render={({ field }) => (
-                                <Input
-                                    type="text"
-                                    id="address2"
-                                    {...field}
-                                    placeholder="Address 2 (optional)"
-                                />
-                            )}
-                        />
-                    </div>
-                </div>
-
                 {/* Country & Province */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <Controller
-                            name="country"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Select
-                                        id="country"
-                                        {...field}
-                                        options={countryOptions}
-                                        placeholder="Country"
-                                    />
-                                    {renderFieldError(errors.country)}
-                                </>
-                            )}
-                        />
-                    </div>
-                    <div>
-                        <Controller
-                            name="province"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Select
-                                        id="province"
-                                        {...field}
-                                        options={provinceOptions}
-                                        placeholder="Province/State/County"
-                                    />
-                                    {renderFieldError(errors.province)}
-                                </>
-                            )}
-                        />
-                    </div>
+                    <Controller
+                        name="country"
+                        control={control}
+                        render={({ field }) => (
+                            <Select
+                                id="country"
+                                {...field}
+                                options={countryOptions}
+                                placeholder="Select country"
+                                error={errors.country?.message}
+                            />
+                        )}
+                    />
+                    <Controller
+                        name="province"
+                        control={control}
+                        render={({ field }) => (
+                            <Select
+                                id="province"
+                                {...field}
+                                options={provinceOptions}
+                                placeholder="Select province/state/county"
+                                error={errors.province?.message}
+                            />
+                        )}
+                    />
                 </div>
 
                 {/* City & Postal Code */}
                 <div className="grid grid-cols-2 gap-6">
-                    <div>
-                        <Controller
-                            name="city"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="city"
-                                        type="text"
-                                        {...field}
-                                        placeholder="City"
-                                        error={errors.city ? "true" : undefined}
-                                    />
-                                    {renderFieldError(errors.city)}
-                                </>
-                            )}
-                        />
-                    </div>
-                    <div>
-                        <Controller
-                            name="postalCode"
-                            control={control}
-                            render={({ field }) => (
-                                <>
-                                    <Input
-                                        id="postalCode"
-                                        type="text"
-                                        {...field}
-                                        placeholder="Postal Code"
-                                        error={errors.postalCode ? "true" : undefined}
-                                    />
-                                    {renderFieldError(errors.postalCode)}
-                                </>
-                            )}
-                        />
-                    </div>
+                    <Controller
+                        name="city"
+                        control={control}
+                        render={({ field }) => (
+                            <Input
+                                id="city"
+                                type="text"
+                                {...field}
+                                placeholder="City"
+                                error={errors.city?.message}
+                            />
+                        )}
+                    />
+                    <Controller
+                        name="postalCode"
+                        control={control}
+                        render={({ field }) => (
+                            <Input
+                                id="postalCode"
+                                type="text"
+                                {...field}
+                                placeholder="Postal Code"
+                                error={errors.postalCode?.message}
+                            />
+                        )}
+                    />
                 </div>
             </Card>
 

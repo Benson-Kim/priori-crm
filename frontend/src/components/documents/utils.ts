@@ -187,21 +187,6 @@ export function validateDocument(
   return errors;
 }
 
-/**
- * Build VAT label from tax types
- */
-export function buildVatLabel(taxTypes: (string | undefined)[]): string {
-  const vatTypes = Array.from(
-    new Set(taxTypes.filter((t): t is string => !!t && t.startsWith("vat_")))
-  );
-  if (vatTypes.length === 0) return "VAT";
-  if (vatTypes.length === 1) {
-    const rate = vatTypes[0].split("_")[1];
-    return rate ? `VAT (${rate}%)` : "VAT";
-  }
-  return "VAT (Mixed)";
-}
-
 /*
  * PO-level VAT (PO-27).
  *
@@ -232,7 +217,7 @@ export function calcSubtotalVat(
 }
 
 /**
- * Build the PO-level VAT label from the PO's own fields.
+ * Build the VAT label from tax types.
  *
  * Mirrors the PDF: "VAT {rate}% ({ref})", with the percent trimmed of trailing
  * zeros (0.16 -> "16", 0.075 -> "7.5") and the compliance ref appended when
@@ -241,7 +226,7 @@ export function calcSubtotalVat(
  * @param rate          VAT rate as a fraction (e.g. 0.16 for 16%).
  * @param complianceRef Optional VAT / compliance reference.
  */
-export function buildPoVatLabel(
+export function buildVatLabel(
   rate: number | null | undefined,
   complianceRef?: string | null
 ): string {

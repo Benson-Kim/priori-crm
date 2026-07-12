@@ -10,7 +10,6 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import { Table } from "@/components/ui/Table";
-import { VendorSummaryCard } from "@/components/vendors/VendorSummaryCard";
 import { formatCurrency, formatDate, getNameInitials, saveBlob } from "@/lib/utils";
 import {
   exportVendorCardExcel,
@@ -22,12 +21,26 @@ import {
   getVendorTransactions,
   type Vendor,
   type VendorCardKey,
+  type VendorCardSummary,
   type VendorPayablesSummary,
   type VendorStatement
 } from "@/services/vendorApi";
 import { ChevronLeft, ChevronRight, Download, Eye, Pencil, Printer } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+/**
+ * VendorSummaryCard — one of the three cards on the vendor detail Overview tab
+ * (Total POs / Total Payments / Total Bills). Each card is self-contained: it
+ * owns its date filter, fetches its own aggregate + paginated row list, tags
+ * every row paid/pending, and exports to Excel / PDF.
+ *
+ * The backend card endpoints take explicit period_start/period_end (the same
+ * contract as the vendor statement), so a preset is resolved to concrete dates
+ * here before the request. The reusable PeriodRangePicker still drives the UX.
+ */
+import { PeriodRangePicker } from "@/components/ui/PeriodRangePicker";
+import { isPeriodReady, resolvePeriod, type PeriodFilter } from "@/services/statementsApi";
 
 // Source filter values shown in the type Select.
 type VendorTxnType = "purchase_order" | "expense" | "payments";
@@ -668,25 +681,26 @@ export default function VendorDetailPage() {
               underlying transactions tagged paid/pending. */}
           <div className="space-y-4">
             <h2 className="text-[20px] font-bold text-gray-800">Supplier Statements</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <VendorSummaryCard
                 vendorId={vendor.id}
                 card="purchase-orders"
-                title="Total POs"
+                title="POs"
                 currency={vendor.currency}
               />
               <VendorSummaryCard
                 vendorId={vendor.id}
                 card="payments"
-                title="Total Payments"
+                title="Payments"
                 currency={vendor.currency}
               />
               <VendorSummaryCard
                 vendorId={vendor.id}
                 card="bills"
-                title="Total Bills/Invoices"
+                title="Invoices"
                 currency={vendor.currency}
               />
+
             </div>
           </div>
         </div>
@@ -900,5 +914,131 @@ export default function VendorDetailPage() {
         }}
       />
     </div>
+  );
+}
+
+
+
+
+interface VendorSummaryCardProps {
+  vendorId: string;
+  card: VendorCardKey;
+  title: string;
+  currency: string;
+}
+
+const PER_PAGE = 5;
+
+
+
+function stateBadge(state: "paid" | "pending") {
+  const variant: BadgeVariant = state === "pending" ? "pending" : "paid";
+  return <Badge variant={variant}>{state === "paid" ? "Paid" : "Pending"}</Badge>;
+}
+
+export function VendorSummaryCard({
+  vendorId,
+  card,
+  title,
+  currency,
+}: Readonly<VendorSummaryCardProps>) {
+  // Default preset gives an immediate, useful window without a 12-month load.
+  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_year" });
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<VendorCardSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const periodParams = useCallback(() => {
+    const { start, end } = resolvePeriod(period);
+    const params: { period_start?: string; period_end?: string } = {};
+    if (start) params.period_start = start;
+    if (end) params.period_end = end;
+    return params;
+  }, [period]);
+
+  const fetchCard = useCallback(async () => {
+    if (!isPeriodReady(period)) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getVendorCard(vendorId, card, {
+        ...periodParams(),
+        page,
+        per_page: PER_PAGE,
+      });
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load card");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [vendorId, card, page, period, periodParams]);
+
+  useEffect(() => {
+    void fetchCard();
+  }, [fetchCard]);
+
+  // Reset to page 1 whenever the filter changes.
+  useEffect(() => {
+    setPage(1);
+  }, [period]);
+
+
+  const paid = data ? Number(data.paid_total) : 0;
+  const pending = data ? Number(data.pending_total) : 0;
+
+  return (
+    <Card className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-4">
+      {/* Header: title + total */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-left text-base font-bold text-content-primary">{title}</p>
+
+        {/* Date filter */}
+        <PeriodRangePicker
+          period={period}
+          onPeriodChange={setPeriod}
+          selectWrapperClassName="max-w-[160px] py-1.5"
+        />
+      </div>
+
+      {/* Transaction list */}
+      <div className="min-h-30">
+        {isLoading ? (
+          <LoadingState message="Loading…" className="h-28" />
+        ) : error ? (
+          <p className="text-sm text-red-500 py-4">{error}</p>
+        ) : data && data.items.length > 0 ? (
+          <div className="flex justify-between gap-3">
+            <div className="">
+              <p className="text-gray-500 text-lg py-3">Pending Total</p>
+              <p className="font-bold text-gray-800 text-2xl">
+                {formatCurrency(
+                  Number(pending), currency)} </p>
+            </div>
+            <div className="">
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-sm text-gray-700">
+                  {formatCurrency(Number(paid), currency)}
+                </span>
+                {stateBadge("paid")}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-sm text-gray-700">
+                  {formatCurrency(Number(pending), currency)}
+                </span>
+                {stateBadge("pending")}
+              </div>
+            </div>
+
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 py-6 text-center">
+            No records in this period.
+          </p>
+        )}
+      </div>
+
+    </Card>
   );
 }

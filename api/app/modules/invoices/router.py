@@ -507,6 +507,24 @@ def cancel_invoice(
     return InvoiceResponse.model_validate(invoice)
 
 
+@router.delete(
+    "/{invoice_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete invoice",
+    description="Delete an invoice (only DRAFT invoices can be deleted).",
+    responses={
+        204: {"description": "Invoice deleted successfully"},
+        400: {"description": "Invoice is not in DRAFT status"},
+        404: {"description": "Invoice not found"},
+    },
+    dependencies=[Depends(require_privileged())],
+)
+def delete_invoice(invoice_id: UUID, service: InvoiceServiceDep) -> None:
+    """Delete an invoice (only DRAFT invoices can be deleted)."""
+    service.delete_invoice(invoice_id)
+    return None  # 204 No Content
+
+
 # PDF & EXPORT
 
 

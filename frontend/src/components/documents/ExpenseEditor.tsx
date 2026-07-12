@@ -138,7 +138,7 @@ export function ExpenseEditor({
   );
 
   const vatLabel = useMemo(
-    () => buildVatLabel(lineItems.map((item) => item.taxType)),
+    () => buildVatLabel(null),
     [lineItems]
   );
 

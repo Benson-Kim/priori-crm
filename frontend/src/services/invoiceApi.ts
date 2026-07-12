@@ -6,7 +6,7 @@
  * Request *payloads* stay hand-written as the camelCase transport shape.
  */
 
-import { apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import { apiDelete, apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import type { CurrencyOption } from "@/lib/constants";
 import type { PaginatedApiResponse, PaginatedResult } from "@/lib/types";
@@ -35,6 +35,9 @@ export interface InvoiceCreatePayload {
   transactionDate: string;
   dueDate: string;
   currency: CurrencyOption;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
+  vatComplianceRef?: string | null;
   lineItems: LineItemPayload[];
   rfqNumber?: string;
   notes?: string;
@@ -127,6 +130,10 @@ export interface InvoiceSendPayload {
 /** Send the invoice by email (POST /invoices/{id}/send). */
 export function sendInvoice(id: string, data: InvoiceSendPayload = {}) {
   return apiPost<InvoiceSendResult>(`invoices/${id}/send`, data);
+}
+
+export function deleteInvoice(id: string) {
+  return apiDelete(`invoices/${id}`);
 }
 
 export function exportInvoicesExcel(params?: {
