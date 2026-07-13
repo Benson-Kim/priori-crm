@@ -97,7 +97,7 @@ class QuoteService(BaseDocumentService):
 
     # Formal state machine — enforced via _transition()
     ALLOWED_TRANSITIONS: ClassVar[dict[QuoteStatus, list[QuoteStatus]]] = {
-        QuoteStatus.DRAFT: [QuoteStatus.SENT, QuoteStatus.EXPIRED],
+        QuoteStatus.DRAFT: [QuoteStatus.SENT, QuoteStatus.APPROVED, QuoteStatus.EXPIRED],
         # SENT must be APPROVED before it can be INVOICED — no direct
         # SENT -> INVOICED edge, so conversion can never skip approval
         QuoteStatus.SENT: [
@@ -608,7 +608,7 @@ class QuoteService(BaseDocumentService):
         """
         Convert an approved quote to a new invoice.
 
-        Atomicity (R-1 fix): all mutations run inside a single SAVEPOINT so a
+        Atomicity: all mutations run inside a single SAVEPOINT so a
         mid-operation failure cannot leave orphan invoices or a half-converted quote.
 
         Concurrencythe quote is re-read FOR UPDATE before the
@@ -637,14 +637,23 @@ class QuoteService(BaseDocumentService):
                 detail=f"Quote with ID '{quote_id}' not found", resource="quote"
             )
         if not quote.can_convert_to_invoice:
-            raise BadRequestException(
-                detail=(
-                    f"Quote cannot be converted. Status: {quote.status}, "
-                    f"Expired: {quote.is_expired}, "
-                    f"Already converted: {quote.related_invoice_id is not None}"
-                ),
-                field="status",
-            )
+            if quote.status != QuoteStatus.APPROVED:
+                raise BadRequestException(
+                    detail="Only approved quotes can be converted to invoices.",
+                    field="status",
+                )
+
+            if quote.is_expired:
+                raise BadRequestException(
+                    detail="Expired quotes cannot be converted to invoices.",
+                    field="status",
+                )
+
+            if quote.related_invoice_id is not None:
+                raise BadRequestException(
+                    detail="This quote has already been converted to an invoice.",
+                    field="status",
+                )
 
         try:
             sp = self._db.begin_nested()
@@ -690,6 +699,10 @@ class QuoteService(BaseDocumentService):
                     )
                 )
             self._db.flush()
+
+            if quote.status == QuoteStatus.SENT:
+                self._transition(quote, QuoteStatus.APPROVED)
+                quote.approved_at = datetime.now(UTC)
 
             self._transition(quote, QuoteStatus.INVOICED)
             quote.invoiced_at = datetime.now(UTC)
