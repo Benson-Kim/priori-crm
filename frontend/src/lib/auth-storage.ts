@@ -112,8 +112,10 @@ export function clearTokens(): void {
   try {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem(REMEMBER_ME_KEY);
   } catch {
     /* ignore */
@@ -122,4 +124,23 @@ export function clearTokens(): void {
 
 export function isAuthenticated(): boolean {
   return getAccessToken() !== null;
+}
+
+const AUTH_USER_KEY = "priori.authUser";
+
+export function setAuthUser(user: any): void {
+  try {
+    store().setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function getAuthUser(): any | null {
+  try {
+    const data = store().getItem(AUTH_USER_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
 }
