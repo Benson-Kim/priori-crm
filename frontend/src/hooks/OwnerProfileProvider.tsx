@@ -81,7 +81,7 @@ export function OwnerProfileProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       try {
-        const blob = await fetchOwnerLogo();
+        const blob = await fetchOwnerLogo(logoVersion || undefined);
         if (!cancelled) {
           setLogoObjectUrl(URL.createObjectURL(blob));
         }

@@ -1,7 +1,6 @@
 /**
  * DocumentOwnerHeader — the single owner identity block rendered on every
- * document. Replaces the duplicated COMPANY_INFO blocks in
- * DocumentEditor / DocumentViewer / ExpenseViewer and the vendor statement.
+ * document. 
  *
  * In editable mode it exposes the logo upload/remove controls and an edit
  * modal behind the previously-dead "Update" buttons.
@@ -37,7 +36,7 @@ export function DocumentOwnerHeader({
     setLogoError(false);
   }, [logoUrl]);
 
-  const hasLogo = Boolean(profile?.hasLogo && logoUrl && !logoError);
+  const hasLogo = Boolean(logoUrl && !logoError);
 
   const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,7 +72,7 @@ export function DocumentOwnerHeader({
               >
                 Update <SquarePen size={18} />
               </button>
-              {profile?.hasLogo && (
+              {logoUrl && (
                 <button
                   type="button"
                   onClick={() => removeLogo()}

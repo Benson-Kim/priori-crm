@@ -60,10 +60,16 @@ export function OwnerProfileModal({
 
   const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      await uploadLogo(file);
+
+    try {
+      if (file) {
+        await uploadLogo(file);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload logo.");
+    } finally {
+      e.target.value = "";
     }
-    e.target.value = "";
   };
 
   const update = (key: keyof OwnerProfileUpdate, value: string) =>
@@ -114,44 +120,36 @@ export function OwnerProfileModal({
 
         <div className="flex flex-col gap-6 p-6 bg-white border border-gray-200 rounded-xl">
           <div className="flex items-center justify-between gap-6">
-            {profile?.hasLogo && logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={`${profile.fullName} logo`}
+            {logoUrl ? (
+              <img src={logoUrl} alt={`${profile?.fullName ?? "Owner"} logo`}
                 className="max-h-12 w-auto"
               />
             ) : (
-              <div className="h-12 flex items-center text-gray-400 text-sm">
+                <p className="h-12 flex items-center text-gray-400 text-sm">
                 No logo
-              </div>
+                </p>
             )}
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={saving}
-              className="w-1/3 flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600"
-            >
-              <UploadCloud size={20} />
-              Upload
-            </Button>
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={() => removeLogo()}
-              disabled={saving}
-              className="w-1/3 flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600"
-            >
-              <Trash size={20} />
-              Remove
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_IMAGE_TYPES}
-              className="hidden"
-              onChange={handleLogoPick}
-            />
+            <div className="flex items-center gap-6">
+              <Button variant="outline-secondary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600">
+                <UploadCloud size={20} /> Upload
+              </Button>
+              <Button variant="outline-secondary"
+                onClick={async () => { await removeLogo() }}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600">
+                <Trash size={20} /> Remove
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_IMAGE_TYPES}
+                className="hidden"
+                onChange={handleLogoPick}
+              />
+            </div>
           </div>
 
           {FIELDS.map(({ key, label, type, placeholder, prefix }) => (
@@ -218,25 +216,19 @@ export function OwnerProfileModal({
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <div className="w-full flex items-center justify-between gap-8 mt-8">
-          <Button
-            type="button"
+          <Button type="button"
             variant="outline-secondary"
             onClick={onClose}
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600"
-          >
-            <X size={20} />
-            Cancel
+            className="w-full flex items-center justify-center gap-2 text-[20px] border-gray-300 text-gray-600">
+            <X size={20} /> Cancel
           </Button>
-          <Button
-            type="button"
+          <Button type="button"
             variant="primary"
             onClick={handleSave}
             loading={saving}
-            className="w-full flex items-center justify-center gap-2 text-[20px]"
-          >
-            <CheckCircle size={24} className="font-bold" />
-            Save
+            className="w-full flex items-center justify-center gap-2 text-[20px]">
+            <CheckCircle size={24} className="font-bold" /> Save
           </Button>
         </div>
       </div>

@@ -124,9 +124,9 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
               <MetaField label="RFQ/RFP Number">
                 {data.rfqNumber ?? "—"}
               </MetaField>
-              <MetaField label="Currency">
+              {/* <MetaField label="Currency">
                 {data.currency ?? "—"}
-              </MetaField>
+              </MetaField> */}
             </div>
           </div>
         </div>

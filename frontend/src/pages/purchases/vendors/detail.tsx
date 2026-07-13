@@ -520,8 +520,8 @@ export default function VendorDetailPage() {
 
       {mainTab === "overview" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-8 gap-4">
-            <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+            <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
               <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
                 <p className="flex items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
                   {initials}
@@ -583,7 +583,7 @@ export default function VendorDetailPage() {
               )}
             </div>
 
-            <div className="lg:col-span-6 space-y-4">
+            <div className="lg:col-span-7 space-y-6">
               <div className="grid lg:grid-cols-6 gap-6">
                 <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3 lg:col-span-3">
                   <p className="text-gray-500 text-lg py-3 text-center">Total Unpaid</p>
@@ -641,12 +641,13 @@ export default function VendorDetailPage() {
                           onClick: () => void handleExport("pdf"),
                         },
                       ]}
-                      className="flex items-center gap-2 py-3 px-4 border border-gray-300 text-priori-purple rounded-lg font-sans cursor-pointer bg-gray-50 hover:bg-purple-50 transition-colors"
+                      className="flex items-center gap-2 px-4 py-3 border border-gray-300 text-priori-purple rounded-lg font-sans cursor-pointer bg-gray-50 hover:bg-purple-50 transition-colors"
                     />
                     <Select
                       options={TYPE_TABS}
                       value={typeTab}
                       onChange={(e) => setTypeTab(e.target.value as VendorTxnType)}
+                      wrapperClassName="px-4 py-3"
                     />
                   </div>
                 </div>

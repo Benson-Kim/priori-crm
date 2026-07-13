@@ -18,16 +18,14 @@ import {
 import {
   getInvoiceCounts,
   getInvoices,
-  markAsSent,
   type InvoiceStatusCounts,
-  type InvoiceSummary,
+  type InvoiceSummary
 } from "@/services/invoiceApi";
 import {
-  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Eye,
-  Printer,
+  Printer
 } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -163,35 +161,10 @@ export default function CustomerDetailsPage() {
     startTransition(() => { setCurrentPage(1); });
   }, [activeTab]);
 
-  const handleApprove = async (invoice: InvoiceSummary) => {
-    try {
-      await markAsSent(invoice.id);
-      fetchInvoices();
-      fetchCounts();
-    } catch (err) {
-      console.error("[CustomerDetailsPage] Approve failed:", err);
-    }
-  };
-
-  const getActions = (invoice: InvoiceSummary): DropdownItem[] => [
-    {
-      key: "view",
-      label: "View",
-      icon: <Eye size={16} />,
-      onClick: () => navigate(`/invoices/${invoice.id}`),
-    },
-
-    {
-      key: "approve",
-      label: "Approve",
-      icon: <CheckCircle size={16} />,
-      onClick: () => handleApprove(invoice),
-    },
-  ];
 
   const actions: DropdownItem[] = [];
 
-  const getStatusBadge = (item: InvoiceSummary) => {
+  const getInvoiceStatusBadge = (item: InvoiceSummary) => {
     if (item.is_overdue && item.days_overdue > 0) {
       return (
         <Badge variant="overdue">Overdue ({item.days_overdue} days)</Badge>
@@ -317,13 +290,22 @@ export default function CustomerDetailsPage() {
     {
       key: "status",
       header: "Status",
-      render: (item: InvoiceSummary) => getStatusBadge(item),
+      render: (item: InvoiceSummary) => getInvoiceStatusBadge(item),
     },
     {
       key: "actions",
       header: "Actions",
       className: "w-[120px]",
-      render: (item: InvoiceSummary) => <Dropdown items={getActions(item)} />,
+      render: (item: InvoiceSummary) => (
+        <button
+          type="button"
+          onClick={() => navigate(`/invoices/${item.id}`)}
+          aria-label="View"
+          className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer flex items-center gap-2"
+        >
+          <Eye size={18} /> View
+        </button>
+      ),
     },
   ];
 
@@ -412,9 +394,9 @@ export default function CustomerDetailsPage() {
 
       {/* Overview Tab Content */}
       {mainTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
           {/* Left Column: Customer Info Card */}
-          <div className="rounded-2xl border border-gray-200 bg-white space-y-6">
+          <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
             <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
               <p className="flex items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
                 {initials}
@@ -478,7 +460,7 @@ export default function CustomerDetailsPage() {
           </div>
 
           {/* Right Column: Stats Cards & Invoice Table */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-7 space-y-6">
             <div className="grid grid-cols-2 gap-6">
               <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
                 <p className="text-gray-500 text-lg py-3">Total Unpaid</p>
@@ -502,6 +484,7 @@ export default function CustomerDetailsPage() {
 
             {/* Invoice Table */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
+              <h3 className="text-[18px] font-bold text-gray-800">Invoices</h3>
               {/* Actions Bar */}
               <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                 <FilterTabs
