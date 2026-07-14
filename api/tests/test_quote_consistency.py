@@ -106,7 +106,7 @@ class TestQuoteApprovalGate:
         service = QuoteService(db)
         # Should succeed because it auto-approves before converting
         result = service.convert_to_invoice(quote.id)
-        assert result.quote_id == quote.id
+        assert result["quote_id"] == quote.id
 
     def test_approved_quote_can_convert(self, db):
         customer = _customer(db, email="quote-appr@acme.test")
