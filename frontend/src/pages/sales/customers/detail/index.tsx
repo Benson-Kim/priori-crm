@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table } from "@/components/ui/Table";
 import type { CustomerStatement } from "@/lib/types";
+import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
 import {
   getCustomer,
@@ -18,10 +19,12 @@ import {
 import {
   getInvoiceCounts,
   getInvoices,
+  markAsSent,
   type InvoiceStatusCounts,
   type InvoiceSummary
 } from "@/services/invoiceApi";
 import {
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -32,6 +35,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 export default function CustomerDetailsPage() {
   const { id } = useParams<{ id: string }>();
+  const { showConfirm, ConfirmDialog } = useConfirm();
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +167,45 @@ export default function CustomerDetailsPage() {
 
 
   const actions: DropdownItem[] = [];
+
+  const handleMarkAsSent = (invoice: InvoiceSummary) => {
+      showConfirm({
+          title: "Mark as sent?",
+          description: "Are you sure you want to mark this invoice as sent?",
+          confirmLabel: "Yes, mark as sent",
+          onConfirm: async () => {
+              try {
+                  await markAsSent(invoice.id);
+                  fetchInvoices();
+                  fetchCounts();
+              } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to mark invoice as sent");
+              }
+          },
+      });
+  };
+
+  const getInvoiceActions = (invoice: InvoiceSummary): DropdownItem[] => {
+      const rowActions: DropdownItem[] = [
+          {
+              key: "view",
+              label: "View",
+              icon: <Eye size={16} />,
+              onClick: () => navigate(`/invoices/${invoice.id}`),
+          },
+      ];
+
+      if (invoice.status === "draft") {
+          rowActions.push({
+              key: "mark-as-sent",
+              label: "Mark as sent",
+              icon: <CheckCircle size={16} />,
+              onClick: () => handleMarkAsSent(invoice),
+          });
+      }
+
+      return rowActions;
+  };
 
   const getInvoiceStatusBadge = (item: InvoiceSummary) => {
     if (item.is_overdue && item.days_overdue > 0) {
@@ -297,14 +340,7 @@ export default function CustomerDetailsPage() {
       header: "Actions",
       className: "w-[120px]",
       render: (item: InvoiceSummary) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/invoices/${item.id}`)}
-          aria-label="View"
-          className="text-gray-700 hover:text-priori-purple transition-colors cursor-pointer flex items-center gap-2"
-        >
-          <Eye size={18} /> View
-        </button>
+        <Dropdown items={getInvoiceActions(item)} />
       ),
     },
   ];
@@ -724,6 +760,8 @@ export default function CustomerDetailsPage() {
           )}
         </div>
       )}
+
+      {ConfirmDialog}
     </div>
   );
 }
