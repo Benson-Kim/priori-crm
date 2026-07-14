@@ -97,7 +97,11 @@ class QuoteService(BaseDocumentService):
 
     # Formal state machine — enforced via _transition()
     ALLOWED_TRANSITIONS: ClassVar[dict[QuoteStatus, list[QuoteStatus]]] = {
-        QuoteStatus.DRAFT: [QuoteStatus.SENT, QuoteStatus.APPROVED, QuoteStatus.EXPIRED],
+        QuoteStatus.DRAFT: [
+            QuoteStatus.SENT,
+            QuoteStatus.APPROVED,
+            QuoteStatus.EXPIRED,
+        ],
         # SENT must be APPROVED before it can be INVOICED — no direct
         # SENT -> INVOICED edge, so conversion can never skip approval
         QuoteStatus.SENT: [
@@ -589,6 +593,7 @@ class QuoteService(BaseDocumentService):
         self._transition(quote, QuoteStatus.APPROVED)  # enforces state machine
         quote.approved_at = approved_at or datetime.now(UTC)
         quote.approved_by = approved_by
+        self._capture_owner_snapshot(quote)
         self._db.flush()
         logger.info(
             "Approved quote: %s",
@@ -703,6 +708,7 @@ class QuoteService(BaseDocumentService):
             if quote.status == QuoteStatus.SENT:
                 self._transition(quote, QuoteStatus.APPROVED)
                 quote.approved_at = datetime.now(UTC)
+                self._capture_owner_snapshot(quote)
 
             self._transition(quote, QuoteStatus.INVOICED)
             quote.invoiced_at = datetime.now(UTC)
