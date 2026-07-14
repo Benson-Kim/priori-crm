@@ -1,6 +1,6 @@
 import { getCustomer, getCustomers, type CustomerSummary } from "@/services/customerApi";
 import { ChevronDown, CircleUserRound, Plus, Search, SquarePen } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { AddCustomerModal } from "./AddCustomerModal";
@@ -160,8 +160,24 @@ export function CustomerSelector({
         }
     };
 
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowDropdown(false);
+            }
+        }
+        if (showDropdown) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showDropdown]);
+
     return (
-        <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={dropdownRef}>
             <p className="text-sm text-gray-500 mb-1">{label}</p>
 
             {restrictedMode ? (

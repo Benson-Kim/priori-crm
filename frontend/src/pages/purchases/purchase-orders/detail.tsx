@@ -30,8 +30,6 @@ import {
 import {
     ArrowLeft,
     CheckCircle,
-    ChevronLeft,
-    ChevronRight,
     Copy,
     CreditCard,
     Eye,
@@ -45,6 +43,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ExcelSvg from "@/assets/icons/excel-document-svgrepo-com.svg?react";
+import { Pagination } from "@/components/ui/Pagination";
 
 
 type DetailTab = "overview" | "detail";
@@ -70,6 +69,7 @@ export default function PurchaseOrderDetailPage() {
     const [editingPayment, setEditingPayment] = useState<PurchaseOrderPayment | null>(null);
     // Current page (1-based) of the payments table.
     const [paymentsPage, setPaymentsPage] = useState(1);
+    const [paymentsPerPage, setPaymentsPerPage] = useState(PAYMENTS_PER_PAGE);
 
     useHeaderOverride(po?.po_reference, "");
 
@@ -232,6 +232,7 @@ export default function PurchaseOrderDetailPage() {
     const payments: PurchaseOrderPayment[] = po.payments ?? [];
     const documents = po.documents ?? [];
 
+
     // Actions are scoped to the active tab so each tab surfaces only its
     // logical actions:
     //  - Overview (the document view): document-lifecycle actions.
@@ -289,6 +290,7 @@ export default function PurchaseOrderDetailPage() {
     } else {
         // Detail tab: financial actions only.
         // Record payment: SENT only, while there is still a balance to clear.
+
         if (status === "sent" && balanceDue > 0) {
             actions.push({
                 key: "record-payment",
@@ -319,11 +321,11 @@ export default function PurchaseOrderDetailPage() {
         );
 
     // Client-side pagination for the payments table (PAYMENTS_PER_PAGE rows).
-    const totalPaymentPages = Math.max(1, Math.ceil(payments.length / PAYMENTS_PER_PAGE));
+    const totalPaymentPages = Math.max(1, Math.ceil(payments.length / paymentsPerPage));
     const currentPaymentsPage = Math.min(paymentsPage, totalPaymentPages);
     const pagedPayments = payments.slice(
-        (currentPaymentsPage - 1) * PAYMENTS_PER_PAGE,
-        currentPaymentsPage * PAYMENTS_PER_PAGE,
+        (currentPaymentsPage - 1) * paymentsPerPage,
+        currentPaymentsPage * paymentsPerPage,
     );
 
     // Payments table columns — mirrors the invoices/PO list table format. The
@@ -349,7 +351,7 @@ export default function PurchaseOrderDetailPage() {
             header: "#.",
             render: (_payment: PurchaseOrderPayment, index: number) => (
                 <span className="text-content-primary">
-                    {(currentPaymentsPage - 1) * PAYMENTS_PER_PAGE + index + 1}.
+                    {(currentPaymentsPage - 1) * paymentsPerPage + index + 1}.
                 </span>
             ),
             className: "w-[50px]",
@@ -546,9 +548,9 @@ export default function PurchaseOrderDetailPage() {
 
             {/* Detail tab: vendor summary + running totals + paginated payments. */}
             {activeTab === "detail" && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
                     {/* LEFT: vendor + key dates. */}
-                    <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6 h-fit">
+                    <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6 h-fit lg:col-span-3 space-y-4">
                         <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
                             <div className="min-w-0">
                                 <p className="text-[14px] text-gray-500">Vendor</p>
@@ -573,7 +575,7 @@ export default function PurchaseOrderDetailPage() {
 
                     {/* RIGHT: totals + recorded payments table (paginated). Click a
                         row to view the payment and its related document. */}
-                    <div className="lg:col-span-2 space-y-4">
+                    <div className="lg:col-span-7 space-y-6">
                         <div className="grid grid-cols-2 gap-6">
                             <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
                                 <p className="text-gray-500 text-lg py-3">Total</p>
@@ -616,38 +618,24 @@ export default function PurchaseOrderDetailPage() {
                                         </span>
                                     </div>
                                 )}
-                            </div>
-
-                            {/* Pagination controls — shown only when there is more
-                                than a single page of payments. */}
-                            {payments.length > PAYMENTS_PER_PAGE && (
-                                <div className="flex items-center justify-between pt-2">
-                                    <p className="text-sm text-gray-500">
-                                        Page {currentPaymentsPage} of {totalPaymentPages}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={currentPaymentsPage <= 1}
-                                            onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
-                                            aria-label="Previous page"
-                                        >
-                                            <ChevronLeft size={16} /> Previous
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={currentPaymentsPage >= totalPaymentPages}
-                                            onClick={() => setPaymentsPage((p) => Math.min(totalPaymentPages, p + 1))}
-                                            aria-label="Next page"
-                                        >
-                                            Next <ChevronRight size={16} />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                            </div>                            
                         </div>
+                        {/* Pagination controls — shown only when there is more
+                                than a single page of payments. */}
+                        {payments.length > 0 && (
+                            <div className="py-3 px-4 border border-gray-200 bg-white rounded-2xl">
+                                <Pagination
+                                    currentPage={currentPaymentsPage}
+                                    totalPages={totalPaymentPages}
+                                    perPage={paymentsPerPage}
+                                    onPageChange={setPaymentsPage}
+                                    onPerPageChange={(nextPerPage) => {
+                                        setPaymentsPerPage(nextPerPage);
+                                        setPaymentsPage(1);
+                                    }}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
