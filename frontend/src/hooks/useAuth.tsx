@@ -28,9 +28,10 @@ import {
   verifyOtp as verifyOtpRequest,
   type AuthUser,
 } from "@/services/authApi";
+import { getAuthUser } from "@/lib/auth-storage";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(getAuthUser());
   const [authed, setAuthed] = useState<boolean>(hasToken());
 
   // Bridge unrecoverable 401s from the (non-React) API client into React.

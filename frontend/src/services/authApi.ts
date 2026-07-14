@@ -11,7 +11,7 @@
 
 import { apiPost, apiPostPublic } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
-import { clearTokens, getRefreshToken, setTokens } from "@/lib/auth-storage";
+import { clearTokens, getRefreshToken, setTokens, setAuthUser } from "@/lib/auth-storage";
 
 export type AuthUser = Schema<"UserResponse">;
 
@@ -84,6 +84,7 @@ export async function verifyOtp(
     code,
   });
   setTokens(result.access_token, result.refresh_token);
+  setAuthUser(result.user);
   return result.user;
 }
 
