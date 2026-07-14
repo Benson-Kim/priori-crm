@@ -14,16 +14,16 @@ import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
 import {
+    approveQuote,
     convertQuoteToInvoice,
     deleteQuote,
     downloadQuotePdf,
-    exportQuotesExcel,
     getQuoteCounts,
     getQuotes,
     type QuoteStatusCounts,
     type QuoteSummary
 } from "@/services/quoteApi";
-import { Download, Eye, FileText, Plus, Send, Trash } from "lucide-react";
+import { CheckCircle, Download, Eye, FileText, Plus, Send, Trash } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -104,14 +104,16 @@ export default function QuotesPage() {
 
     // Row actions
     const handleConvertToInvoice = (quote: QuoteSummary) => {
+        const isSent = quote.status.toLowerCase() === "sent";
         showConfirm({
             title: "Convert to Invoice",
-            description: `Convert quote ${quote.quote_number} to an invoice? This will create a new invoice with the same details.`,
-            confirmLabel: "Convert",
+            description: isSent
+                ? `This will approve quote ${quote.quote_number} and convert it to an invoice with the same details. Continue?`
+                : `Convert quote ${quote.quote_number} to an invoice? This will create a new invoice with the same details.`,
+            confirmLabel: isSent ? "Approve & Convert" : "Convert",
             onConfirm: async () => {
                 try {
                     const result = await convertQuoteToInvoice(quote.id);
-                    // Navigate to the new invoice detail page
                     navigate(`/invoices/${result.invoice_id}`);
                 } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to convert quote to invoice");
@@ -137,19 +139,20 @@ export default function QuotesPage() {
         });
     };
 
-    const [isExporting, setIsExporting] = useState(false);
-    const handleExport = async () => {
-        setIsExporting(true);
-        try {
-            const blob = await exportQuotesExcel({
-                status: activeTab !== "all" ? activeTab : undefined,
-            });
-            saveBlob(blob, `Quotes_${new Date().toISOString().split("T")[0]}.xlsx`);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to export quotes");
-        } finally {
-            setIsExporting(false);
-        }
+    const handleApprove = (quote: QuoteSummary) => {
+        showConfirm({
+            title: "Approve Quote",
+            description: `Approve quote ${quote.quote_number}?`,
+            confirmLabel: "Approve",
+            onConfirm: async () => {
+                try {
+                    await approveQuote(quote.id);
+                    refreshAll();
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to approve quote");
+                }
+            },
+        });
     };
 
     const getActions = (quote: QuoteSummary): DropdownItem[] => {
@@ -188,8 +191,18 @@ export default function QuotesPage() {
             },
         });
 
-        // Convert to Invoice - available for approved, non-expired, non-invoiced quotes
-        if (!quote.is_expired && status !== "invoiced" && status === "approved") {
+        // Approve action - available for draft/sent quotes that aren't expired
+        if (["draft", "sent"].includes(status) && !quote.is_expired) {
+            actions.push({
+                key: "approve",
+                label: "Approve",
+                icon: <CheckCircle size={16} />,
+                onClick: () => handleApprove(quote),
+            });
+        }
+
+        // Convert to Invoice - available for approved or sent, non-expired quotes
+        if (["approved", "sent"].includes(status) && !quote.is_expired) {
             actions.push({
                 key: "convert-to-invoice",
                 label: "Convert to Invoice",
@@ -301,17 +314,6 @@ export default function QuotesPage() {
     // Render 
     return (
         <div className="flex flex-col h-full space-y-4 font-sans">
-
-            {/* Export */}
-            <div className="flex justify-end mt-4">
-                <Button
-                    variant="outline-secondary"
-                    onClick={handleExport}
-                    disabled={isExporting}
-                >
-                    <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
-                </Button>
-            </div>
 
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-danger">

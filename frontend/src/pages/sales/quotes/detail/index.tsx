@@ -1,6 +1,5 @@
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
 import { SendQuoteModal } from "@/components/modals/SendQuoteModal";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -110,6 +109,11 @@ export default function QuoteDetailPage() {
 
     const handleConvertToInvoice = async () => {
         if (!quote) return;
+        const isSent = quote.status.toLowerCase() === "sent";
+        const message = isSent
+            ? `This will approve quote ${quote.quote_reference} and convert it to an invoice. Continue?`
+            : `Convert quote ${quote.quote_reference} to an invoice?`;
+        if (!confirm(message)) return;
         try {
             const res = await convertQuoteToInvoice(quote.id);
             navigate(`/invoices/${res.invoice_id}`);
@@ -134,17 +138,6 @@ export default function QuoteDetailPage() {
 
     const status = quote.status.toLowerCase();
 
-    // Determine badge variant
-    let badgeVariant: "draft" | "expired" | "invoiced" | "approved" | "sent" = "draft";
-    if (quote.is_expired) {
-        badgeVariant = "expired";
-    } else if (status === "invoiced") {
-        badgeVariant = "invoiced";
-    } else if (status === "approved") {
-        badgeVariant = "approved";
-    } else if (status === "sent") {
-        badgeVariant = "sent";
-    }
 
     // Build actions
     const actions = [];
@@ -220,10 +213,6 @@ export default function QuoteDetailPage() {
                     <button type="button" onClick={() => navigate("/quotes")} className="text-gray-500 hover:text-gray-700">
                         <ArrowLeft size={20} />
                     </button>
-                    <h2 className="text-2xl font-bold text-gray-800">{quote.quote_reference}</h2>
-                    <Badge variant={badgeVariant}>
-                        {quote.is_expired ? `Expired` : status.charAt(0).toUpperCase() + status.slice(1)}
-                    </Badge>
                 </div>
                 <Dropdown items={actions} className="flex items-center gap-2 px-3 py-4 border border-priori-purple text-priori-purple rounded-lg font-sans cursor-pointer hover:bg-purple-50 transition-colors" />
             </div>
@@ -262,23 +251,21 @@ export default function QuoteDetailPage() {
             {/* Bottom CTAs */}
             <div className="flex justify-end gap-3">
                 {quote.can_convert_to_invoice && (
-                    <Button
+                    <Button variant="primary"
                         onClick={handleConvertToInvoice}
-                        className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-6 py-3"
                     >
-                        <FileText size={16} className="mr-2" />
+                        <FileText size={16} />
                         Convert to Invoice
                     </Button>
                 )}
-                {quote.is_editable && (
                     <Button
+                    variant="outline"
                         onClick={() => navigate(`/quotes/${quote.id}/edit`)}
-                        className="bg-priori-purple hover:bg-priori-purple/90 text-white rounded-lg px-6 py-3"
+                    disabled={!quote.is_editable}
                     >
-                        <Pencil size={16} className="mr-2" />
-                        Edit Quote
-                    </Button>
-                )}
+                    <Pencil size={16} />
+                    Edit
+                </Button>
             </div>
 
             {/* Send Quote Modal */}
