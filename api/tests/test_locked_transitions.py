@@ -69,6 +69,7 @@ class TestApproveQuoteAcquiresLock:
         quote = self._fake_quote()
         db, for_update = _locked_db(quote)
         svc = QuoteService(db)
+        svc._capture_owner_snapshot = MagicMock()
 
         result = svc.approve_quote(quote.id)
 

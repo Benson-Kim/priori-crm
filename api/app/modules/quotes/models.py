@@ -338,12 +338,11 @@ class Quote(Base):
     def can_convert_to_invoice(self) -> bool:
         """Check if quote can be converted to invoice.
 
-        A quote must be APPROVED first: converting a merely SENT quote would
-        leave approved_at/approved_by null and bypass the documented
-        DRAFT -> SENT -> APPROVED -> INVOICED lifecycle.
+        Accepts APPROVED (direct) and SENT (auto-approved during conversion)
+        quotes that are not expired and have not already been converted.
         """
         return (
-            self.status == QuoteStatus.APPROVED
+            self.status in (QuoteStatus.APPROVED, QuoteStatus.SENT)
             and not self.is_expired
             and self.related_invoice_id is None
         )

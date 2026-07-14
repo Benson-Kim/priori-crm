@@ -236,6 +236,7 @@ class TestInvoiceDelete:
         with patch.object(db, "query") as mock_query:
             mock_chain = MagicMock()
             mock_query.return_value = mock_chain
+            mock_chain.options.return_value = mock_chain
             mock_chain.filter.return_value = mock_chain
             mock_chain.with_for_update.return_value = mock_chain
             mock_chain.first.return_value = invoice
