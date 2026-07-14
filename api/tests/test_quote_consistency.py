@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.common.exceptions import BadRequestException, ConflictException
+from app.common.exceptions import ConflictException
 from app.constants.enums import Currency, CustomerStatus, QuoteStatus
 from app.modules.customers.models import Customer
 from app.modules.quotes.models import Quote, QuoteLineItem
@@ -96,16 +96,17 @@ class TestQuoteOptimisticLock:
 
 
 class TestQuoteApprovalGate:
-    """Conversion requires APPROVED, never plain SENT."""
+    """Conversion works for APPROVED and auto-approves SENT."""
 
-    def test_sent_quote_cannot_convert(self, db):
+    def test_sent_quote_can_convert(self, db):
         customer = _customer(db, email="quote-sent@acme.test")
         quote = _quote(db, customer, status=QuoteStatus.SENT, number="QTE-SENT-1")
-        assert quote.can_convert_to_invoice is False
+        assert quote.can_convert_to_invoice is True
 
         service = QuoteService(db)
-        with pytest.raises(BadRequestException):
-            service.convert_to_invoice(quote.id)
+        # Should succeed because it auto-approves before converting
+        result = service.convert_to_invoice(quote.id)
+        assert result.quote_id == quote.id
 
     def test_approved_quote_can_convert(self, db):
         customer = _customer(db, email="quote-appr@acme.test")
