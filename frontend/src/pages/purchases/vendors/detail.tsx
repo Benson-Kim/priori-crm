@@ -934,7 +934,7 @@ const PER_PAGE = 5;
 
 function stateBadge(state: "paid" | "pending") {
   const variant: BadgeVariant = state === "pending" ? "pending" : "paid";
-  return <Badge variant={variant}>{state === "paid" ? "Paid" : "Pending"}</Badge>;
+  return <Badge className="p-0" variant={variant}>{state === "paid" ? "Paid" : "Pending"}</Badge>;
 }
 
 export function VendorSummaryCard({
@@ -986,20 +986,21 @@ export function VendorSummaryCard({
   }, [period]);
 
 
+  const total = data ? Number(data.total) : 0;
   const paid = data ? Number(data.paid_total) : 0;
   const pending = data ? Number(data.pending_total) : 0;
 
   return (
-    <Card className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-4">
+    <Card className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-2">
       {/* Header: title + total */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-left text-base font-bold text-content-primary">{title}</p>
+        <p className="text-left font-bold text-lg text-content-primary">{title}</p>
 
         {/* Date filter */}
         <PeriodRangePicker
           period={period}
           onPeriodChange={setPeriod}
-          selectWrapperClassName="max-w-[160px] py-1.5"
+          selectWrapperClassName="max-w-[160px] py-3 px-4"
         />
       </div>
 
@@ -1010,25 +1011,25 @@ export function VendorSummaryCard({
         ) : error ? (
           <p className="text-sm text-red-500 py-4">{error}</p>
         ) : data && data.items.length > 0 ? (
-          <div className="flex justify-between gap-3">
+          <div className="flex flex-col gap-3">
             <div className="">
-              <p className="text-gray-500 text-lg py-3">Pending Total</p>
-              <p className="font-bold text-gray-800 text-2xl">
+              <p className="text-gray-500">Total</p>
+              <p className="font-bold text-content-primary text-lg">
                 {formatCurrency(
-                  Number(pending), currency)} </p>
+                  Number(total), currency)} </p>
             </div>
-            <div className="">
-              <div className="flex items-center gap-3 shrink-0">
+            <div className="w-full flex items-center">
+              <div className="flex flex-col w-1/2">
+                {stateBadge("paid")}
                 <span className="text-sm text-gray-700">
                   {formatCurrency(Number(paid), currency)}
                 </span>
-                {stateBadge("paid")}
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex flex-col w-1/2">
+                {stateBadge("pending")}
                 <span className="text-sm text-gray-700">
                   {formatCurrency(Number(pending), currency)}
                 </span>
-                {stateBadge("pending")}
               </div>
             </div>
 

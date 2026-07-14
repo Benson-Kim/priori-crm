@@ -328,18 +328,9 @@ export default function PurchaseOrderDetailPage() {
         currentPaymentsPage * paymentsPerPage,
     );
 
-    // Payments table columns — mirrors the invoices/PO list table format. The
-    // row number is offset by the current page so it reflects the absolute
-    // position across all payments, not the position within the page.
-    // Invoice number lives on the payment as `invoice_number` once PO-28 ships
-    // the backend field + regenerated OpenAPI type. Read it via a narrow cast
-    // so this renders "—" today and lights up automatically once the field
-    // exists — no further change needed here.
     const invoiceNumberOf = (payment: PurchaseOrderPayment): string | null =>
         (payment as { invoice_number?: string | null }).invoice_number ?? null;
 
-    // Sum of the Amount column for the rows currently displayed (respects the
-    // active pagination window), shown in the totals row beneath the table.
     const pagedPaymentsTotal = pagedPayments.reduce(
         (sum, payment) => sum + Number(payment.amount ?? 0),
         0,
@@ -514,36 +505,62 @@ export default function PurchaseOrderDetailPage() {
 
             {/* Overview tab: descriptive header + totals. */}
             {activeTab === "overview" && (
-                <PurchaseOrderViewer
-                    editableOwner={false}
-                    data={{
-                        poReference: po.po_reference,
-                        vendorId: po.vendor_id,
-                        vendor: po.vendor,
-                        orderDate: po.order_date,
-                        deliveryDate: po.delivery_date,
-                        currency: po.currency,
-                        isRecurring: po.is_recurring,
-                        complianceRef: po.compliance_ref,
-                        notes: po.notes || undefined,
-                        termsAndConditions: po.terms_and_conditions,
-                        subtotal: Number(po.subtotal),
-                        taxTotal: Number(po.tax_total),
-                        total: Number(po.total),
-                        // PO-level VAT (PO-27), via the shared accessor (falls
-                        // back cleanly until the OpenAPI type carries them).
-                        ...readPoVat(po),
-                        lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
-                            id: item.id ?? `line-${index}`,
-                            itemName: item.item_name,
-                            description: item.description,
-                            quantity: Number(item.quantity),
-                            unitPrice: Number(item.unit_price),
-                            taxType: item.tax_type,
-                            lineTotal: Number(item.line_total ?? Number(item.quantity) * Number(item.unit_price)),
-                        })),
-                    }}
-                />
+                <>
+                    <PurchaseOrderViewer
+                        editableOwner={false}
+                        data={{
+                            poReference: po.po_reference,
+                            vendorId: po.vendor_id,
+                            vendor: po.vendor,
+                            orderDate: po.order_date,
+                            deliveryDate: po.delivery_date,
+                            currency: po.currency,
+                            isRecurring: po.is_recurring,
+                            complianceRef: po.compliance_ref,
+                            notes: po.notes || undefined,
+                            termsAndConditions: po.terms_and_conditions,
+                            subtotal: Number(po.subtotal),
+                            taxTotal: Number(po.tax_total),
+                            total: Number(po.total),
+                            // PO-level VAT (PO-27), via the shared accessor (falls
+                            // back cleanly until the OpenAPI type carries them).
+                            ...readPoVat(po),
+                            lineItems: (po.line_items ?? []).map((item: PurchaseOrderLineItem, index) => ({
+                                id: item.id ?? `line-${index}`,
+                                itemName: item.item_name,
+                                description: item.description,
+                                quantity: Number(item.quantity),
+                                unitPrice: Number(item.unit_price),
+                                taxType: item.tax_type,
+                                lineTotal: Number(item.line_total ?? Number(item.quantity) * Number(item.unit_price)),
+                            })),
+                        }}
+                    />
+                    <div className="grid grid-cols-3 gap-6">
+                        <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                            <p className="text-gray-500 text-lg py-3">Total</p>
+                            <p className="font-bold text-gray-800 text-2xl">
+                                {formatCurrency(Number(total), currency ?? "")}
+                            </p>
+                        </Card>
+                        <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                            <p className="text-gray-500 text-lg py-3 flex items-center gap-2">
+                                Paid
+                            </p>
+                            <p className="font-bold text-gray-800 text-2xl">
+                                {formatCurrency(Number(amountPaid), currency ?? "")}
+                            </p>
+                        </Card>
+                        <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                            <p className="text-gray-500 text-lg py-3 flex items-center gap-2">
+                                {isOverpaid ? "Balance (Overpaid)" : "Balance"}
+                            </p>
+                            <p className={`font-bold text-2xl ${isOverpaid ? "text-priori-purple" : "text-gray-800"}`}>
+                                {formatCurrency(Number(balanceDue), currency ?? "")}
+                            </p>
+                        </Card>
+                    </div>
+                </>
             )}
 
             {/* Detail tab: vendor summary + running totals + paginated payments. */}
@@ -576,11 +593,19 @@ export default function PurchaseOrderDetailPage() {
                     {/* RIGHT: totals + recorded payments table (paginated). Click a
                         row to view the payment and its related document. */}
                     <div className="lg:col-span-7 space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-3 gap-6">
                             <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
                                 <p className="text-gray-500 text-lg py-3">Total</p>
                                 <p className="font-bold text-gray-800 text-2xl">
                                     {formatCurrency(Number(total), currency ?? "")}
+                                </p>
+                            </Card>
+                            <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
+                                <p className="text-gray-500 text-lg py-3 flex items-center gap-2">
+                                    Paid
+                                </p>
+                                <p className="font-bold text-gray-800 text-2xl">
+                                    {formatCurrency(Number(amountPaid), currency ?? "")}
                                 </p>
                             </Card>
                             <Card className="rounded-2xl border border-gray-200 bg-white px-6 py-3">
@@ -618,7 +643,7 @@ export default function PurchaseOrderDetailPage() {
                                         </span>
                                     </div>
                                 )}
-                            </div>                            
+                            </div>
                         </div>
                         {/* Pagination controls — shown only when there is more
                                 than a single page of payments. */}
