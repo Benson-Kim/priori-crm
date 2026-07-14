@@ -18,6 +18,7 @@
 const ACCESS_TOKEN_KEY = "priori.accessToken";
 const REFRESH_TOKEN_KEY = "priori.refreshToken";
 const REMEMBER_ME_KEY = "priori.rememberMe";
+const AUTH_USER_KEY = "priori.authUser";
 
 // In-memory token state.
 let accessToken: string | null = null;
@@ -112,8 +113,10 @@ export function clearTokens(): void {
   try {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem(REMEMBER_ME_KEY);
   } catch {
     /* ignore */
@@ -122,4 +125,21 @@ export function clearTokens(): void {
 
 export function isAuthenticated(): boolean {
   return getAccessToken() !== null;
+}
+
+export function setAuthUser<T extends object>(user: T): void {
+  try {
+    store().setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function getAuthUser<T extends object = object>(): T | null {
+  try {
+    const data = store().getItem(AUTH_USER_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
 }
