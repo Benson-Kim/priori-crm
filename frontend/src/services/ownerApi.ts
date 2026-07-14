@@ -57,6 +57,6 @@ export function removeOwnerLogo(): Promise<OwnerProfile> {
  * never renders. Callers turn the returned Blob into an object URL (and must
  * revoke it when done) — mirroring the expense-document download pattern.
  */
-export function fetchOwnerLogo(): Promise<Blob> {
-  return apiDownload("owner/logo");
+export function fetchOwnerLogo(version?: string): Promise<Blob> {
+  return apiDownload("owner/logo", version ? { v: version } : undefined);
 }
