@@ -17,6 +17,7 @@ import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatCurrency, formatDisplayDate, getNameInitials, saveBlob } from "@/lib/utils";
 import type { InvoiceResponse, Payment } from "@/services/invoiceApi";
 import {
+    cancelInvoice,
     deleteInvoice,
     downloadInvoicePdf,
     duplicateInvoice,
@@ -113,17 +114,24 @@ export function InvoiceDetailPage() {
 
     const handleDelete = () => {
         if (!invoice) return;
+        const isDraft = invoice.status.toLowerCase() === "draft";
         showConfirm({
-            title: "Delete invoice?",
-            description: "Are you sure you want to delete this invoice? This action cannot be undone.",
-            confirmLabel: "Yes, delete it",
+            title: isDraft ? "Delete invoice?" : "Cancel invoice?",
+            description: isDraft
+                ? "Are you sure you want to delete this invoice? This action cannot be undone."
+                : `Cancel invoice ${invoice.invoice_reference}? This will void the invoice and it can no longer be paid.`,
+            confirmLabel: isDraft ? "Yes, delete it" : "Yes, cancel it",
             variant: "danger",
             onConfirm: async () => {
                 try {
-                    await deleteInvoice(invoice.id);
+                    if (isDraft) {
+                        await deleteInvoice(invoice.id);
+                    } else {
+                        await cancelInvoice(invoice.id);
+                    }
                     fetchInvoice();
                 } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to delete invoice");
+                    setError(err instanceof Error ? err.message : (isDraft ? "Failed to delete invoice" : "Failed to cancel invoice"));
                 }
             },
         });
@@ -230,10 +238,10 @@ export function InvoiceDetailPage() {
         onClick: handleDuplicate,
     });
 
-    if (status === "draft") {
+    if (["draft", "sent", "partial", "overdue"].includes(status)) {
         actions.push({
             key: "delete",
-            label: "Delete Invoice",
+            label: status === "draft" ? "Delete Invoice" : "Cancel Invoice",
             icon: <Trash size={16} />,
             onClick: handleDelete,
             danger: true,

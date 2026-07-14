@@ -104,14 +104,16 @@ export default function QuotesPage() {
 
     // Row actions
     const handleConvertToInvoice = (quote: QuoteSummary) => {
+        const isSent = quote.status.toLowerCase() === "sent";
         showConfirm({
             title: "Convert to Invoice",
-            description: `Convert quote ${quote.quote_number} to an invoice? This will create a new invoice with the same details.`,
-            confirmLabel: "Convert",
+            description: isSent
+                ? `This will approve quote ${quote.quote_number} and convert it to an invoice with the same details. Continue?`
+                : `Convert quote ${quote.quote_number} to an invoice? This will create a new invoice with the same details.`,
+            confirmLabel: isSent ? "Approve & Convert" : "Convert",
             onConfirm: async () => {
                 try {
                     const result = await convertQuoteToInvoice(quote.id);
-                    // Navigate to the new invoice detail page
                     navigate(`/invoices/${result.invoice_id}`);
                 } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to convert quote to invoice");

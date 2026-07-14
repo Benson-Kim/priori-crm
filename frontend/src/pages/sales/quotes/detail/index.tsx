@@ -109,6 +109,11 @@ export default function QuoteDetailPage() {
 
     const handleConvertToInvoice = async () => {
         if (!quote) return;
+        const isSent = quote.status.toLowerCase() === "sent";
+        const message = isSent
+            ? `This will approve quote ${quote.quote_reference} and convert it to an invoice. Continue?`
+            : `Convert quote ${quote.quote_reference} to an invoice?`;
+        if (!confirm(message)) return;
         try {
             const res = await convertQuoteToInvoice(quote.id);
             navigate(`/invoices/${res.invoice_id}`);
