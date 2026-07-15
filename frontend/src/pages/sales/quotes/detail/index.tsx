@@ -9,15 +9,13 @@ import {
     convertQuoteToInvoice,
     deleteQuote,
     downloadQuotePdf,
-    duplicateQuote,
     getQuote,
     markQuoteAsSent,
-    type QuoteResponse,
+    type QuoteResponse
 } from "@/services/quoteApi";
 import {
     ArrowLeft,
     CheckCircle,
-    Copy,
     Download,
     FileText,
     Pencil,
@@ -60,19 +58,6 @@ export default function QuoteDetailPage() {
             fetchQuote();
         } catch (err) {
             console.error("[QuoteDetail] Mark sent failed:", err);
-        }
-    };
-
-    const handleDuplicate = async () => {
-        if (!quote) return;
-        try {
-            const dup = await duplicateQuote(quote.id);
-            navigate(`/quotes/${dup.new_quote_id}/edit`);
-        } catch (err) {
-            console.error("[QuoteDetail] Duplicate failed:", err);
-            setError(
-                err instanceof Error ? err.message : "Failed to duplicate quote"
-            );
         }
     };
 
@@ -189,12 +174,6 @@ export default function QuoteDetailPage() {
         icon: <Download size={16} />,
         onClick: handleDownloadPdf
     });
-    actions.push({
-        key: "duplicate",
-        label: "Duplicate",
-        icon: <Copy size={16} />,
-        onClick: handleDuplicate
-    });
 
     if (status === "draft") {
         actions.push({
@@ -226,7 +205,7 @@ export default function QuoteDetailPage() {
                     transactionDate: quote.transaction_date,
                     dueDate: quote.due_date,
                     currency: quote.currency,
-                    rfqNumber: quote.rfq_rfp_number || undefined,
+                    // rfqNumber: quote.rfq_rfp_number || undefined,
                     notes: quote.notes || undefined,
                     discountType: (quote.discount_type === "amount" || quote.discount_type === "percentage")
                         ? quote.discount_type
@@ -258,11 +237,11 @@ export default function QuoteDetailPage() {
                         Convert to Invoice
                     </Button>
                 )}
-                    <Button
+                <Button
                     variant="outline"
-                        onClick={() => navigate(`/quotes/${quote.id}/edit`)}
+                    onClick={() => navigate(`/quotes/${quote.id}/edit`)}
                     disabled={!quote.is_editable}
-                    >
+                >
                     <Pencil size={16} />
                     Edit
                 </Button>

@@ -20,6 +20,8 @@ export interface OwnerProfileUpdate {
   address?: string | null;
   email?: string | null;
   phone?: string | null;
+  vatEnabled?: boolean;
+  vatRate?: number | null;
   taxPin?: string | null;
   website?: string | null;
   // Org-scoped document-settings defaults (PO-11). Persisted once at org

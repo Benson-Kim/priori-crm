@@ -24,7 +24,6 @@ export type QuoteSummary = Schema<"QuoteSummary">;
 export type QuoteResponse = Schema<"QuoteResponse">;
 export type QuoteStatusCounts = Schema<"QuoteStatusCounts">;
 export type QuoteConvertResponse = Schema<"QuoteConvertToInvoiceResponse">;
-export type QuoteDuplicateResponse = Schema<"QuoteDuplicateResponse">;
 export type QuoteSendResult = Schema<"QuoteSendResponse">;
 
 export interface QuoteLineItemPayload {
@@ -109,10 +108,6 @@ export function approveQuote(id: string, approvedAt?: string) {
 
 export function convertQuoteToInvoice(id: string) {
   return apiPost<QuoteConvertResponse>(`quotes/${id}/convert-to-invoice`, {});
-}
-
-export function duplicateQuote(id: string) {
-  return apiPost<QuoteDuplicateResponse>(`quotes/${id}/duplicate`, {});
 }
 
 export function deleteQuote(id: string) {

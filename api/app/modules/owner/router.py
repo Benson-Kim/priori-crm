@@ -31,6 +31,8 @@ def _to_response(profile) -> OwnerProfileResponse:
         address=profile.address,
         email=profile.email,
         phone=profile.phone,
+        vat_enabled=profile.vat_enabled,
+        vat_rate=profile.vat_rate,
         tax_pin=profile.tax_pin,
         website=profile.website,
         default_terms_and_conditions=(

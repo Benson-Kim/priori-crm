@@ -1,3 +1,4 @@
+import ExcelSvg from "@/assets/icons/excel-document-svgrepo-com.svg?react";
 import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -9,9 +10,10 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { Table } from "@/components/ui/Table";
 import type { CustomerStatement } from "@/lib/types";
-import { useConfirm } from "@/hooks/useConfirm";
-import { formatCurrency, formatDate, getNameInitials } from "@/lib/utils";
+import { formatCurrency, formatDate, getNameInitials, saveBlob } from "@/lib/utils";
 import {
+  downloadCustomerStatementPdf,
+  exportCustomerStatementExcel,
   getCustomer,
   getCustomerStatement,
   type CustomerDetail,
@@ -19,23 +21,21 @@ import {
 import {
   getInvoiceCounts,
   getInvoices,
-  markAsSent,
   type InvoiceStatusCounts,
   type InvoiceSummary
 } from "@/services/invoiceApi";
 import {
-  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Eye,
-  Printer
+  FileClock
 } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+
 export default function CustomerDetailsPage() {
   const { id } = useParams<{ id: string }>();
-  const { showConfirm, ConfirmDialog } = useConfirm();
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,20 +117,41 @@ export default function CustomerDetailsPage() {
     }
   }, [id]);
 
+  const handlePeriodChange = (direction: "prev" | "next") => {
+    setPeriodMonths((prev) => {
+      if (direction === "prev") {
+        return Math.max(3, prev - 3); // Don't go below 3 months
+      } else {
+        return prev + 3; // Increase by 3 months
+      }
+    });
+  };
+
+  const getStatementPeriod = useCallback(
+    (months?: number) => {
+      const periodEnd = new Date().toISOString().split("T")[0];
+
+      const periodStart = new Date();
+      periodStart.setMonth(periodStart.getMonth() - (months ?? periodMonths));
+
+      return {
+        periodStart: periodStart.toISOString().split("T")[0],
+        periodEnd,
+      };
+    },
+    [periodMonths]
+  );
+
   const fetchStatement = useCallback(
     async (months?: number) => {
       if (!id) return;
+
       setIsLoadingStatement(true);
       setStatementError(null);
-      try {
-        // Calculate date range based on months
-        const periodEnd = new Date().toISOString().split("T")[0];
-        const periodStart = new Date();
-        const monthsToUse = months ?? periodMonths;
-        periodStart.setMonth(periodStart.getMonth() - monthsToUse);
-        const periodStartStr = periodStart.toISOString().split("T")[0];
 
-        const data = await getCustomerStatement(id, periodStartStr, periodEnd);
+      try {
+        const { periodStart, periodEnd } = getStatementPeriod(months);
+        const data = await getCustomerStatement(id, periodStart, periodEnd);
         setStatement(data);
       } catch (err) {
         setStatementError(
@@ -140,7 +161,7 @@ export default function CustomerDetailsPage() {
         setIsLoadingStatement(false);
       }
     },
-    [id, periodMonths]
+    [id, getStatementPeriod]
   );
 
   useEffect(() => {
@@ -168,45 +189,6 @@ export default function CustomerDetailsPage() {
 
   const actions: DropdownItem[] = [];
 
-  const handleMarkAsSent = (invoice: InvoiceSummary) => {
-      showConfirm({
-          title: "Mark as sent?",
-          description: "Are you sure you want to mark this invoice as sent?",
-          confirmLabel: "Yes, mark as sent",
-          onConfirm: async () => {
-              try {
-                  await markAsSent(invoice.id);
-                  fetchInvoices();
-                  fetchCounts();
-              } catch (err) {
-                  setError(err instanceof Error ? err.message : "Failed to mark invoice as sent");
-              }
-          },
-      });
-  };
-
-  const getInvoiceActions = (invoice: InvoiceSummary): DropdownItem[] => {
-      const rowActions: DropdownItem[] = [
-          {
-              key: "view",
-              label: "View",
-              icon: <Eye size={16} />,
-              onClick: () => navigate(`/invoices/${invoice.id}`),
-          },
-      ];
-
-      if (invoice.status === "draft") {
-          rowActions.push({
-              key: "mark-as-sent",
-              label: "Mark as sent",
-              icon: <CheckCircle size={16} />,
-              onClick: () => handleMarkAsSent(invoice),
-          });
-      }
-
-      return rowActions;
-  };
-
   const getInvoiceStatusBadge = (item: InvoiceSummary) => {
     if (item.is_overdue && item.days_overdue > 0) {
       return (
@@ -231,6 +213,35 @@ export default function CustomerDetailsPage() {
     return <Badge variant={status}>{labelMap[status] ?? item.status}</Badge>;
   };
 
+
+  /** Download this customer's statement as a PDF. */
+  const handleDownloadPDFCustomerStatement = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const { periodStart, periodEnd } = getStatementPeriod();
+      const blob = await downloadCustomerStatementPdf(id, periodStart, periodEnd);
+      saveBlob(blob, `Customer_Statement_${periodStart}_to_${periodEnd}.pdf`);
+    } catch (err) {
+      setStatementError(
+        err instanceof Error ? err.message : "Failed to download customer statement PDF"
+      );
+    }
+  }, [id, getStatementPeriod]);
+
+  /** Export this customer's statement to an Excel workbook. */
+  const handleExportExcelCustomerStatement = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const { periodStart, periodEnd } = getStatementPeriod();
+      const blob = await exportCustomerStatementExcel(id, periodStart, periodEnd);
+      saveBlob(blob, `Customer_Statement_${periodStart}_to_${periodEnd}.xlsx`);
+    } catch (err) {
+      setStatementError(err instanceof Error ? err.message : "Failed to export customer statements excel");
+    }
+  }, [id, getStatementPeriod]);
+
   if (isFetching) {
     return (
       <LoadingState message="Loading customer details..." className="h-64" />
@@ -249,24 +260,6 @@ export default function CustomerDetailsPage() {
   }
 
   const { customer: details, financial_summary } = customer;
-
-  actions.push({
-    key: "edit",
-    label: "Edit",
-    onClick: () => navigate(`/customers/${details.id}/edit`),
-  });
-
-  actions.push({
-    key: "create-invoice",
-    label: "Create Invoice",
-    onClick: () => navigate(`/invoices/add?customerId=${details.id}`),
-  });
-
-  actions.push({
-    key: "create-quote",
-    label: "Create Quote",
-    onClick: () => navigate(`/quotes/add?customerId=${details.id}`),
-  });
 
   // Create display name from customer data
   const displayName =
@@ -340,24 +333,46 @@ export default function CustomerDetailsPage() {
       header: "Actions",
       className: "w-[120px]",
       render: (item: InvoiceSummary) => (
-        <Dropdown items={getInvoiceActions(item)} />
+        <button
+          type="button"
+          onClick={() => navigate(`/invoices/${item.id}`)}
+          aria-label="View"
+          className="text-gray-700 flex items-center gap-2 hover:text-priori-purple transition-colors cursor-pointer"
+        >
+          <Eye size={18} /> View
+        </button>
       ),
     },
   ];
 
-  const handlePrintStatement = () => {
-    window.print();
-  };
-
-  const handlePeriodChange = (direction: "prev" | "next") => {
-    setPeriodMonths((prev) => {
-      if (direction === "prev") {
-        return Math.max(3, prev - 3); // Don't go below 3 months
-      } else {
-        return prev + 3; // Increase by 3 months
-      }
+  if (mainTab === "overview") {
+    actions.push({
+      key: "create-invoice",
+      label: "Create Invoice",
+      onClick: () => navigate(`/invoices/add?customerId=${details.id}`),
     });
-  };
+
+    actions.push({
+      key: "create-quote",
+      label: "Create Quote",
+      onClick: () => navigate(`/quotes/add?customerId=${details.id}`),
+    });
+  } else {
+    // Balance-aware statement PDF (payments applied + running balance).
+    actions.push({
+      key: "download-pdf-customer-statement",
+      label: "Download statement",
+      icon: <FileClock size={16} />,
+      onClick: handleDownloadPDFCustomerStatement,
+    });
+    // Export this payments to Excel.
+    actions.push({
+      key: "export-excel-customer-statement",
+      label: "Export excel",
+      icon: <ExcelSvg className="w-4 h-4" />,
+      onClick: handleExportExcelCustomerStatement,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -411,14 +426,6 @@ export default function CustomerDetailsPage() {
                   <ChevronRight size={18} className="text-gray-600" />
                 </button>
               </div>
-              <Button
-                variant="outline"
-                onClick={handlePrintStatement}
-                className="border-gray-300 text-gray-700"
-              >
-                <Printer size={16} className="mr-2" />
-                Print Statement
-              </Button>
             </>
           )}
           <Dropdown
@@ -672,32 +679,6 @@ export default function CustomerDetailsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Opening Balance Row */}
-                    <tr className="grid grid-cols-5 gap-4 pt-2">
-                      <td className="col-span-2 px-3 py-4 flex flex-col gap-1">
-                        <span className="font-bold text-gray-800">
-                          Opening Balance
-                        </span>
-                        <span className="text-gray-600 text-sm whitespace-pre-wrap">
-                          -
-                        </span>
-                      </td>
-                      <td className="px-3 py-4 text-center text-gray-800">
-                        {formatCurrency(
-                          statement.summary.opening_balance,
-                          statement.customer.currency
-                        )}
-                      </td>
-                      <td className="px-3 py-4 text-center text-gray-800">-</td>
-                      <td className="px-3 py-4 text-right text-gray-800">
-                        {formatCurrency(
-                          statement.summary.opening_balance,
-                          statement.customer.currency
-                        )}
-                      </td>
-                    </tr>
-
-                    {/* Transaction Rows */}
                     {statement.transactions.map((transaction, index) => (
                       <tr key={index} className="grid grid-cols-5 gap-4 pt-2">
                         <td className="col-span-2 px-3 py-4 flex flex-col gap-1">
@@ -761,7 +742,6 @@ export default function CustomerDetailsPage() {
         </div>
       )}
 
-      {ConfirmDialog}
     </div>
   );
 }

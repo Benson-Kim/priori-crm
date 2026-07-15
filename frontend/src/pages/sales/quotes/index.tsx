@@ -244,8 +244,7 @@ export default function QuotesPage() {
         { key: "all", label: "All", count: counts.all },
         { key: "invoiced", label: "Invoiced", count: counts.invoiced },
         { key: "draft", label: "Draft", count: counts.draft },
-        { key: "sent", label: "Sent", count: counts.sent },
-        { key: "approved", label: "Approved", count: counts.approved },
+        { key: "sent", label: "Sent", count: (counts.sent ?? 0) + (counts.approved ?? 0) },
     ];
 
     // Column definitions 
@@ -341,7 +340,7 @@ export default function QuotesPage() {
                             variant="primary"
                             onClick={() => navigate("/quotes/add")}
                         >
-                            <Plus size={16} /> Add Quote
+                            <Plus size={16} /> Create Quote
                         </Button>
                     </div>
                 </div>

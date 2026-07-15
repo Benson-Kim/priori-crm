@@ -368,7 +368,7 @@ export function InvoiceDetailPage() {
                             transactionDate: invoice.transaction_date,
                             dueDate: invoice.due_date,
                             currency: invoice.currency,
-                            rfqNumber: invoice.rfq_number ?? undefined,
+                            // rfqNumber: invoice.rfq_number ?? undefined,
                             notes: invoice.notes ?? undefined,
                             discountType: invoice.discount_type as
                                 | "amount"

@@ -133,7 +133,7 @@ class PurchaseOrderService(BaseDocumentService):
         dict[PurchaseOrderStatus, list[PurchaseOrderStatus]]
     ] = {
         PurchaseOrderStatus.DRAFT: [PurchaseOrderStatus.SENT],
-        # PAID is reached only by full settlement (record_payment, PO-19).
+        # PAID is reached only by full settlement (record_payment).
         PurchaseOrderStatus.SENT: [PurchaseOrderStatus.PAID],
         PurchaseOrderStatus.PAID: [],  # terminal
     }
@@ -175,7 +175,7 @@ class PurchaseOrderService(BaseDocumentService):
         )
 
     def _owner_defaults(self):
-        """Resolve the org-scoped PO Settings defaults (PO-11).
+        """Resolve the org-scoped PO Settings defaults.
 
         Thin wrapper over OwnerService so create() reads the org default T&C /
         send message / jurisdiction from the single authoritative source.
@@ -201,7 +201,7 @@ class PurchaseOrderService(BaseDocumentService):
 
     @staticmethod
     def _strip_line_tax(line_items_data: list[dict]) -> list[dict]:
-        """Force per-line tax to no_tax/0 for purchase orders (PO-27).
+        """Force per-line tax to no_tax/0 for purchase orders.
 
         PO VAT is charged once on the subtotal (PO-level), so a line item must
         never carry per-line tax. Mutating the built dicts here keeps the
@@ -216,7 +216,7 @@ class PurchaseOrderService(BaseDocumentService):
     def _owner_vat_compliance_ref(self) -> str | None:
         """Default VAT compliance reference from the owner profile's tax_pin.
 
-        Option A (PO-27): the PO's ``vat_compliance_ref`` defaults from the
+        Option A: the PO's ``vat_compliance_ref`` defaults from the
         organisation's own tax PIN, editable per PO. Resolved via OwnerService
         (lazy import to avoid the module-level cycle) and tolerant of a
         missing profile / tax_pin (returns None).
@@ -268,7 +268,7 @@ class PurchaseOrderService(BaseDocumentService):
         po_currency = vendor.currency or Currency.KES
         compliance_ref = vendor.tax_id_pin
 
-        # PO-level VAT (PO-27): tax is charged once on the subtotal, not per
+        # PO-level VAT: tax is charged once on the subtotal, not per
         # line. Per-line tax fields are forced to no_tax/0 so they can never
         # contribute to PO totals. The VAT compliance ref defaults from the
         # owner profile's tax_pin (editable per PO) when the client omits it.
@@ -847,7 +847,7 @@ Best regards,
                 field="delivery_date",
             )
 
-        # PO-level VAT (PO-27): totals must be recomputed when the line items
+        # PO-level VAT: totals must be recomputed when the line items
         # change OR the VAT toggle / rate changes. Resolve the effective VAT
         # inputs from the payload (override) or the persisted values.
         vat_changed = (
@@ -1784,7 +1784,7 @@ Best regards,
         """
         Calculate PO totals without persisting — live preview endpoint.
 
-        PO-27: VAT is a PO-level charge on the subtotal, not a per-line tax, so
+        VAT is a PO-level charge on the subtotal, not a per-line tax, so
         per-line tax is stripped to no_tax/0 and ``tax_total`` is computed via
         the shared ``calculate_subtotal_vat``. This is, by construction,
         identical to what create()/update() persist for the same inputs

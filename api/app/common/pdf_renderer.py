@@ -80,3 +80,14 @@ class DocumentPdfRenderer:
             logo_bytes=logo_bytes,
             include_balance=include_balance,
         )
+
+    def render_customer_statement(self, statement: Any) -> bytes:
+        """Render customer statement of accounts PDF."""
+        from app.common.pdf import DocumentPDFGenerator
+
+        owner_info, logo_bytes = self.load_owner_branding(statement)
+        return DocumentPDFGenerator().generate_customer_statement_pdf(
+            statement,
+            owner=owner_info,
+            logo_bytes=logo_bytes,
+        )

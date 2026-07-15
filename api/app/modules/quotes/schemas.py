@@ -571,15 +571,6 @@ class QuoteConvertToInvoiceResponse(BaseModel):
     message: str = "Quote converted to invoice successfully"
 
 
-class QuoteDuplicateResponse(BaseModel):
-    """Response after duplicating a quote."""
-
-    original_quote_id: UUID
-    new_quote_id: UUID
-    new_quote_number: str
-    message: str = "Quote duplicated successfully"
-
-
 class QuoteCalculationResponse(BaseModel):
     """Response for quote total calculations (preview)."""
 

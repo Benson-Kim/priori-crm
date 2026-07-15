@@ -94,3 +94,14 @@ export function getDaysOverdue(
   const current = new Date(`${today}T12:00:00Z`);
   return Math.floor((current.getTime() - due.getTime()) / MS_PER_DAY);
 }
+
+
+export function buildStatementParams(periodStart?: string, periodEnd?: string) {
+  const params: Record<string, string> = {};
+
+  if (periodStart) params.period_start = periodStart;
+  if (periodEnd) params.period_end = periodEnd;
+
+  return params;
+}
+

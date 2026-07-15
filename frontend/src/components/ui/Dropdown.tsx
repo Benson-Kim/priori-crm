@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -101,7 +101,6 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
             >
               {item.icon && <span className="shrink-0">{item.icon}</span>}
               <span>{item.label}</span>
-              <ChevronRight size={16} className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
             </button>
           ))}
         </div>,
