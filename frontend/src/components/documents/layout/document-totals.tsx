@@ -69,7 +69,7 @@ export function DocumentTotalsPanel({
                                         Discount <span className="font-normal">({discountType === "percentage" ? `${discountValue}%` : "Fixed"})</span>
                                     </span>
                                     <span className="text-red-500 font-medium">
-                                            -{formatCurrency(totals.discountAmount, currency ?? "KES")}
+                                        -{formatCurrency(totals.discountAmount, currency ?? "KES")}
                                     </span>
                                 </>
                             ) : (
@@ -105,7 +105,7 @@ export function DocumentTotalsPanel({
                                         </button>
                                     </div>
                                     <span className="text-red-500 font-medium">
-                                                -{formatCurrency(totals.discountAmount, currency ?? "KES")}
+                                        -{formatCurrency(totals.discountAmount, currency ?? "KES")}
                                     </span>
                                 </>
                             )}
@@ -115,13 +115,14 @@ export function DocumentTotalsPanel({
 
 
                 {/* VAT */}
-                {vatEnabled && (
+                {(vatEnabled || restrictedMode || totals.taxTotal > 0) && (
                     <>
-                        <div className="flex justify-between items-center text-gray-800">
-                            <span>{vatLabel ?? "VAT"}</span>
-                            <span>{formatCurrency(totals.taxTotal, currency ?? "KES")}</span>
-                        </div>
+                        {/* <Divider /> */}
 
+                        <div className="flex justify-between items-center text-gray-800">
+                            <span>{vatLabel}</span>
+                            <span>{formatCurrency(totals.taxTotal, currency)}</span>
+                        </div>
                     </>
                 )}
 

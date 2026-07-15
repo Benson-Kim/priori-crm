@@ -8,7 +8,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
 
+from app.common.analytics import emit_event
 from app.common.dependencies import CurrentUser, CustomerServiceDep
 from app.common.exceptions import (
     DatabaseException,
@@ -352,3 +354,94 @@ def generate_customer_statement(
     period_start, period_end = default_statement_period(period_start, period_end)
 
     return service.generate_statement(customer_id, period_start, period_end)
+
+@router.get(
+    "/{po_id}/pdf",
+    summary="Download purchase order as PDF",
+    description=(
+        "Generate and stream the purchase-order PDF. The document is "
+        "read-only: no edit controls, action buttons or attachments list. "
+        "Available at any status. Owner branding comes from the PO's "
+        "immutable snapshot once sent, else the live profile for a Draft "
+        "preview."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Purchase order not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_purchase_order_pdf(
+    customer_id: UUID,
+    service: CustomerServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.export_limiter import run_export
+
+    # Cap concurrent PDF builds and run the blocking render in a worker
+    # thread. Loads the PO once (no second query just for the filename).
+    # This is the ORIGINAL document: full amount, no payments shown.
+    pdf_data, customer = await run_export(
+        service.generate_pdf_for_download, customer_id, False
+    )
+
+    emit_event(CustomerEvent.CUSTOMER_PDF_DOWNLOADED, {"customer_id": str(customer_id)})
+
+    display_name = getattr(customer, "display_name", "customer")
+    filename = (
+        f"CustomerStatement_{customer.statement_reference}_"
+        f"{_safe_filename_token(display_name)}.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get(
+    "/{po_id}/pdf/statement",
+    summary="Download the current (balance-aware) customer statement PDF",
+    description=(
+        "Generate and stream the CURRENT customer statement PDF: the same "
+        "document as /pdf but with Amount Paid and Balance Due rows appended "
+        "to the summary, reflecting payments recorded so far. Read-only and "
+        "available at any status; owner branding comes from the PO's "
+        "immutable snapshot once sent, else the live profile."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Purchase order not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_customer_statement_pdf(
+    customer_id: UUID,
+    service: CustomerServiceDep,
+) -> StreamingResponse:
+    import io
+
+    from app.common.export_limiter import run_export
+
+    # CURRENT document: payments applied + running balance.
+    pdf_data, customer = await run_export(
+        service.generate_pdf_for_download, customer_id, True
+    )
+
+    emit_event(CustomerEvent.CUSTOMER_PDF_DOWNLOADED, {"customer_id": str(customer_id)})
+
+    display_name = getattr(customer, "display_name", "customer")
+    filename = (
+        f"CustomerStatement_{customer.statement_reference}_"
+        f"{_safe_filename_token(display_name)}_current.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

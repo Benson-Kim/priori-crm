@@ -11,6 +11,7 @@ from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import ServiceBase
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     ConflictException,
     DatabaseException,
@@ -933,3 +934,50 @@ class CustomerService(ServiceBase):
         ).scalar() or Decimal("0.00")
 
         return Decimal(str(invoiced)) - Decimal(str(paid))
+
+    # PDF GENERATION
+
+    def _render_pdf(
+        self, customer: Customer) -> bytes:
+        """Render a PDF for an already-loaded customer statement.
+
+        Orchestration (owner branding + ReportLab generator) is shared with
+        invoices/quotes via DocumentPdfRenderer.
+
+        A rendering failure is not swallowed: it surfaces as an explicit 500
+        carrying the message so the UI can show "PDF could not be
+        generated. Please try again." instead of leaking a stack trace.
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        try:
+            return DocumentPdfRenderer(self._db).render_customer_statement(
+                customer
+            )
+        except Exception as exc:
+            logger.exception(
+                "Failed to render customer statement PDF %s",
+                customer.display_name,
+                extra={"customer_id": str(customer.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc
+
+    def generate_pdf(self, customer_id: uuid.UUID) -> bytes:
+        """Generate the PDF for a customer statement by id."""
+        return self._render_pdf(self.get_by_id(customer_id))
+
+    def generate_pdf_for_download(self, customer_id: uuid.UUID) -> tuple[bytes, Customer]:
+        """Generate the customer statement PDF and return it with the loaded customer.
+
+        Loads the customer once and renders from it, so the download endpoint does
+        not re-query just for the attachment filename.
+        """
+        customer = self.get_by_id(customer_id)
+        return (
+            self._render_pdf(customer),
+            customer,
+        )
