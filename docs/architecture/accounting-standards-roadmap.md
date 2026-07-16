@@ -151,7 +151,7 @@ review/staging deployment:
 | 2 | Owner `vat_rate` precision Numeric(5,4) | - | Implemented (this MR) |
 | 3 | Postgres statement timeout guard | - | Implemented (this MR) |
 | 4 | Edit pages preserve persisted VAT state | - | Implemented (this MR) |
-| 5 | Double-entry general ledger, trial balance, balance sheet | #7 | Open |
+| 5 | Double-entry general ledger, trial balance, balance sheet | #7 | Core ledger + reports shipped; statement rewrite & closing entries remain |
 | 6 | Period locking + period close | #8 | Locking implemented (close procedure follows the GL in #7) |
 | 7 | Credit notes + customer credits (unapplied cash) | #9 | Open |
 | 8 | Vendor bills, goods receipts, three-way match, FX gain/loss | #10 | Open |

@@ -18,6 +18,7 @@ import app.modules.auth.models
 import app.modules.customers.models
 import app.modules.expenses.models
 import app.modules.invoices.models
+import app.modules.ledger.models
 import app.modules.owner.models
 import app.modules.periods.models
 import app.modules.purchase_orders.models
@@ -40,6 +41,7 @@ from app.modules.dashboard.router import router as dashboard_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
+from app.modules.ledger.router import router as ledger_router
 from app.modules.owner.router import router as owner_router
 from app.modules.periods.router import router as periods_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
@@ -171,6 +173,9 @@ def _register_routers(app: FastAPI) -> None:
     )
     app.include_router(
         dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
+    )
+    app.include_router(
+        ledger_router, prefix=f"{api_prefix}/ledger", tags=["General Ledger"]
     )
     logger.info(
         "Registered routers: %s",

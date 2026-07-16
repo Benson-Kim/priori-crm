@@ -620,6 +620,15 @@ class InvoiceService(BaseDocumentService):
         snapshot = OwnerService(self._db).snapshot_current()
         invoice.owner_snapshot_id = snapshot.id
 
+        # First-issue side effect: both send paths (mark_as_sent and the
+        # DocumentSendMixin locked phase) converge here exactly once per
+        # invoice, so this is the single point where revenue is recognised.
+        # Posted in the same transaction; the ledger additionally dedupes
+        # on (source_type, source_id).
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_invoice_issued(invoice)
+
     def mark_as_sent(
         self,
         invoice_id: uuid.UUID,
@@ -801,6 +810,11 @@ class InvoiceService(BaseDocumentService):
 
         self._update_customer_balance(invoice.customer_id)
 
+        # Ledger: DR Cash / CR Accounts Receivable, same transaction.
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_invoice_payment(payment, invoice)
+
         # Durable audit trail: commits atomically with the payment.
         record_audit_event(
             self._db,
@@ -939,6 +953,13 @@ class InvoiceService(BaseDocumentService):
         # Canceling removes this invoice from the customer's outstanding
         # balance; resync in the same unit of work so it cannot drift.
         self._update_customer_balance(invoice.customer_id)
+
+        # Ledger: reverse the issue entry (if one exists), dated TODAY -
+        # a cancellation is an event of the current period and must never
+        # be backdated into a closed one.
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_invoice_canceled(invoice)
 
         # Durable audit trail.
         record_audit_event(
