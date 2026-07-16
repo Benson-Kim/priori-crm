@@ -156,7 +156,7 @@ class OwnerInfo(BaseModel):
     # without reading the live profile.
     jurisdiction: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"populate_by_name": True, "from_attributes": True}
 
 
 class PurchaseOrderSettingsDefaults(BaseModel):

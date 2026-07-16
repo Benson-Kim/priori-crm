@@ -19,11 +19,27 @@ export default defineConfig({
     // the lazy route chunks that need them, never by the entry chunk.
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-charts": ["recharts"],
-          "vendor-icons": ["lucide-react"],
-          "vendor-forms": ["react-hook-form", "@hookform/resolvers", "zod"],
+        // Function form: the object form fails the OutputOptions overload
+        // under this Rollup/Vite type combination.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("recharts")) return "vendor-charts";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          if (
+            id.includes("react-hook-form") ||
+            id.includes("@hookform") ||
+            id.includes("zod")
+          ) {
+            return "vendor-forms";
+          }
+          if (
+            /node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(
+              id
+            )
+          ) {
+            return "vendor-react";
+          }
+          return undefined;
         },
       },
     },

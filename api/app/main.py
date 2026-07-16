@@ -31,6 +31,7 @@ from app.common.middleware import (
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.common.otel import setup_metrics, shutdown_metrics
 from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
@@ -71,10 +72,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("Redis connectivity check failed at startup", exc_info=e)
 
+    # OTel metrics (no-op unless OTEL_METRICS_ENABLED).
+    setup_metrics()
+
     logger.info("API documentation available at /docs")
     yield
     # --- Shutdown ---
     logger.info("Shutting down application")
+    shutdown_metrics()
     engine.dispose()
     logger.info("Database connections closed")
 

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.common.otel import record_http_request
 from app.common.rate_limit_store import (
     InMemoryRateLimitStore,
     build_rate_limit_store,
@@ -109,6 +110,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
             },
+        )
+
+        # OTel HTTP server metrics (no-op unless OTEL_METRICS_ENABLED).
+        # The templated route path keeps attribute cardinality bounded.
+        route = request.scope.get("route")
+        record_http_request(
+            method=request.method,
+            route=getattr(route, "path", request.url.path),
+            status_code=response.status_code,
+            duration_ms=duration_ms,
         )
 
         # Add timing header
