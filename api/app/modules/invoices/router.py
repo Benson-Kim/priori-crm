@@ -184,20 +184,49 @@ def calculate_invoice_totals(
     discount_type: Annotated[str | None, Query()] = None,
     discount_amount: Annotated[float | None, Query()] = None,
     discount_percentage: Annotated[float | None, Query()] = None,
+    vat_enabled: Annotated[
+        bool,
+        Query(
+            alias="vatEnabled",
+            description="Enable document-level VAT on the discounted subtotal",
+        ),
+    ] = False,
+    vat_rate: Annotated[
+        float | None,
+        Query(
+            alias="vatRate",
+            ge=0,
+            le=1,
+            description=(
+                "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled."
+            ),
+        ),
+    ] = None,
 ) -> InvoiceCalculationResponse:
     """
     Calculate invoice totals without saving.
     """
     from decimal import Decimal
 
+    from app.common.exceptions import BadRequestException
     from app.constants.enums import DiscountType
+
+    # Preview/persist parity: a rate is required when VAT is enabled.
+    if vat_enabled and vat_rate is None:
+        raise BadRequestException(
+            detail="vat_rate is required when vat_enabled is true",
+            field="vatRate",
+        )
 
     # Convert discount parameters
     dt = DiscountType(discount_type) if discount_type else None
     da = Decimal(str(discount_amount)) if discount_amount else None
     dp = Decimal(str(discount_percentage)) if discount_percentage else None
+    vr = Decimal(str(vat_rate)) if vat_rate is not None else None
 
-    return InvoiceService.calculate_totals(line_items, dt, da, dp)
+    return InvoiceService.calculate_totals(
+        line_items, dt, da, dp, vat_enabled=vat_enabled, vat_rate=vr
+    )
 
 
 @router.get(
