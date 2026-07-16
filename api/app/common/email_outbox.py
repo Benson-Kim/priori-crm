@@ -205,6 +205,71 @@ class EmailOutboxService:
             "dead": dead,
         }
 
+    # Dead-letter queue (operator tooling)
+
+    def list_dead(self, limit: int = 50) -> list[dict]:
+        """Inspect dead-lettered rows (operator entry point).
+
+        Returns the oldest ``limit`` rows whose delivery attempts are
+        exhausted, with enough context (recipient, subject, attempts,
+        last_error) to diagnose the failure without touching the database.
+        """
+        rows = (
+            self._db.query(EmailOutbox)
+            .filter(EmailOutbox.status == EmailOutboxStatus.DEAD)
+            .order_by(EmailOutbox.created_at)
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": str(row.id),
+                "recipient": row.recipient,
+                "subject": row.subject,
+                "document_type": row.document_type,
+                "document_id": str(row.document_id) if row.document_id else None,
+                "attempts": row.attempts,
+                "last_error": row.last_error,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in rows
+        ]
+
+    def requeue_dead(
+        self,
+        outbox_id: uuid.UUID | None = None,
+        limit: int = 50,
+    ) -> dict[str, int]:
+        """Return dead-lettered rows to the retry queue (operator action).
+
+        Resets status to FAILED with a fresh attempt budget so the drainer
+        picks the rows up again — use only after the delivery root cause
+        has been fixed. Targets one row when ``outbox_id`` is given, else
+        the oldest ``limit`` dead rows. ``SKIP LOCKED`` keeps a concurrent
+        drainer from racing the requeue.
+        """
+        query = self._db.query(EmailOutbox).filter(
+            EmailOutbox.status == EmailOutboxStatus.DEAD
+        )
+        if outbox_id is not None:
+            query = query.filter(EmailOutbox.id == outbox_id)
+        rows = (
+            query.order_by(EmailOutbox.created_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+            .all()
+        )
+        for row in rows:
+            row.status = EmailOutboxStatus.FAILED
+            row.attempts = 0
+            row.last_error = None
+        self._db.commit()
+        logger.info(
+            "Email outbox dead rows requeued",
+            extra={"requeued": len(rows)},
+        )
+        return {"requeued": len(rows)}
+
     # Internals
 
     def _attempt(self, row: EmailOutbox) -> bool:
