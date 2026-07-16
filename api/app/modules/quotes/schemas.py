@@ -174,6 +174,30 @@ class QuoteCreate(BaseModel):
         alias="discountPercentage",
     )
 
+    # Document-level VAT (optional). When BOTH fields are omitted the
+    # service defaults them from the owner profile's VAT settings, so new
+    # quotes inherit our own (owner) VAT configuration.
+    vat_enabled: bool | None = Field(
+        None,
+        alias="vatEnabled",
+        description=(
+            "Enable document-level VAT computed once on the discounted "
+            "subtotal. Omit (together with vatRate) to inherit the owner "
+            "profile's VAT settings."
+        ),
+    )
+
+    vat_rate: Decimal | None = Field(
+        None,
+        ge=0,
+        le=1,
+        alias="vatRate",
+        description=(
+            "VAT rate as a fraction (e.g. 0.16 for 16%). Required when "
+            "vatEnabled is true."
+        ),
+    )
+
     @field_validator("rfq_rfp_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:

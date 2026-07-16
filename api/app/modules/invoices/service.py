@@ -21,10 +21,12 @@ from app.common.exceptions import (
 from app.common.financial import (
     build_line_items,
     calculate_discount,
+    calculate_subtotal_vat,
+    neutralize_line_tax,
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType, InvoiceStatus
+from app.constants.enums import DiscountType, InvoiceStatus, TaxType
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
 from app.modules.invoices.queries import (
     InvoiceExportQuery,
