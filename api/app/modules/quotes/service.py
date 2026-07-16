@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload, lazyload
 
@@ -21,10 +22,12 @@ from app.common.exceptions import (
 from app.common.financial import (
     build_line_items,
     calculate_discount,
+    calculate_subtotal_vat,
+    neutralize_line_tax,
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType, QuoteStatus
+from app.constants.enums import DiscountType, QuoteStatus, TaxType
 from app.modules.quotes.models import Quote, QuoteLineItem
 from app.modules.quotes.queries import (
     QuoteExportQuery,
@@ -146,12 +149,29 @@ class QuoteService(BaseDocumentService):
             )
         quote_currency = customer.currency
 
+        # Document-level VAT: when the client sent neither field, default
+        # from the owner profile so new quotes inherit our own VAT
+        # settings. An explicit toggle always wins.
+        vat_enabled, vat_rate = self._resolve_vat(
+            data.vat_enabled,
+            data.vat_rate,
+            fields_sent={"vat_enabled", "vat_rate"} & data.model_fields_set,
+        )
+
         line_items_data = build_line_items(data.line_items)
+        if vat_enabled:
+            # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
+            neutralize_line_tax(line_items_data)
         subtotal, tax_total = sum_line_totals(line_items_data)
 
         discount_value = calculate_discount(
             subtotal, data.discount_type, data.discount_amount, data.discount_percentage
         )
+        if vat_enabled:
+            # VAT is charged once on the discounted base.
+            tax_total = calculate_subtotal_vat(
+                subtotal - discount_value, vat_enabled, vat_rate
+            )
         total_due = subtotal - discount_value + tax_total
 
         def _build() -> Quote:
@@ -167,6 +187,8 @@ class QuoteService(BaseDocumentService):
                 discount_type=data.discount_type,
                 discount_amount=data.discount_amount,
                 discount_percentage=data.discount_percentage,
+                vat_enabled=vat_enabled,
+                vat_rate=vat_rate,
                 tax_total=tax_total,
                 total_due=total_due,
                 rfq_rfp_number=data.rfq_rfp_number,
@@ -417,6 +439,16 @@ class QuoteService(BaseDocumentService):
                 update_data.setdefault("discount_amount", None)
                 update_data.setdefault("discount_percentage", None)
 
+        # Effective document-level VAT after this update: supplied fields
+        # win, otherwise the persisted values are kept.
+        effective_vat_enabled = bool(update_data.get("vat_enabled", quote.vat_enabled))
+        effective_vat_rate = update_data.get("vat_rate", quote.vat_rate)
+        if effective_vat_enabled and effective_vat_rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+
         # Handle line items update (replace all)
         if "line_items" in update_data:
             self._db.query(QuoteLineItem).filter(
@@ -425,6 +457,9 @@ class QuoteService(BaseDocumentService):
 
             line_items_raw: list[dict] = update_data.pop("line_items")
             line_items_data = build_line_items(line_items_raw)
+            if effective_vat_enabled:
+                # Document-level VAT replaces per-line tax (mirrors POs).
+                neutralize_line_tax(line_items_data)
             subtotal, tax_total = sum_line_totals(line_items_data)
 
             for item in line_items_data:
@@ -432,6 +467,29 @@ class QuoteService(BaseDocumentService):
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
+        elif "vat_enabled" in update_data:
+            if effective_vat_enabled:
+                # VAT switched on without replacing line items: neutralise
+                # the persisted per-line tax so it can never double-tax the
+                # document.
+                self._db.query(QuoteLineItem).filter(
+                    QuoteLineItem.quote_id == quote_id
+                ).update(
+                    {"tax_type": TaxType.NO_TAX.value, "tax_amount": Decimal("0.00")}
+                )
+            else:
+                # VAT switched off: tax falls back to the per-line sum of
+                # the persisted items.
+                update_data["tax_total"] = Decimal(
+                    str(
+                        self._db.query(
+                            func.coalesce(func.sum(QuoteLineItem.tax_amount), 0)
+                        )
+                        .filter(QuoteLineItem.quote_id == quote_id)
+                        .scalar()
+                        or 0
+                    )
+                )
 
         if any(
             k in update_data
@@ -440,6 +498,8 @@ class QuoteService(BaseDocumentService):
                 "discount_type",
                 "discount_amount",
                 "discount_percentage",
+                "vat_enabled",
+                "vat_rate",
             )
         ):
             s = update_data.get("subtotal", quote.subtotal)
@@ -454,6 +514,12 @@ class QuoteService(BaseDocumentService):
             disc = calculate_discount(
                 s, effective_type, effective_amount, effective_percentage
             )
+
+            if effective_vat_enabled:
+                # Document-level VAT is charged once on the discounted base.
+                t = calculate_subtotal_vat(s - disc, True, effective_vat_rate)
+                update_data["tax_total"] = t
+
             update_data["total_due"] = s - disc + t
 
         # Apply updates
@@ -735,74 +801,6 @@ class QuoteService(BaseDocumentService):
         except SQLAlchemyError as e:
             logger.exception("Database error converting quote %s", quote_id)
             raise DatabaseException("Failed to convert quote to invoice") from e
-
-    def duplicate_quote(
-        self,
-        quote_id: uuid.UUID,
-        user_id: uuid.UUID | None = None,
-    ) -> Quote:
-        """Duplicate an existing quote as a new DRAFT."""
-        try:
-            original = self.get_by_id(quote_id)
-            from datetime import timedelta
-
-            new_transaction_date = date.today()
-            new_due_date = new_transaction_date + timedelta(days=30)
-
-            def _build() -> Quote:
-                duplicate = Quote(
-                    quote_number=self._generate_quote_number(),
-                    quote_reference=self._generate_quote_reference(),
-                    customer_id=original.customer_id,
-                    transaction_date=new_transaction_date,
-                    due_date=new_due_date,
-                    currency=original.currency,
-                    status=QuoteStatus.DRAFT,
-                    subtotal=original.subtotal,
-                    discount_type=original.discount_type,
-                    discount_amount=original.discount_amount,
-                    discount_percentage=original.discount_percentage,
-                    tax_total=original.tax_total,
-                    total_due=original.total_due,
-                    rfq_rfp_number=original.rfq_rfp_number,
-                    notes=original.notes,
-                    created_by=user_id,
-                )
-                self._db.add(duplicate)
-                self._db.flush()
-                for orig_item in original.line_items:
-                    self._db.add(
-                        QuoteLineItem(
-                            quote_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        )
-                    )
-                self._db.flush()
-                logger.info(
-                    "Duplicated quote %s → %s",
-                    original.quote_number,
-                    duplicate.quote_number,
-                    extra={
-                        "original_id": str(original.id),
-                        "duplicate_id": str(duplicate.id),
-                    },
-                )
-                return duplicate
-
-            return self._with_reference_retry(_build, "quote")
-
-        except NotFoundException:
-            raise
-        except SQLAlchemyError as e:
-            logger.exception("Error duplicating quote %s", quote_id)
-            raise DatabaseException("Failed to duplicate quote") from e
 
     def delete_quote(self, quote_id: uuid.UUID) -> None:
         """

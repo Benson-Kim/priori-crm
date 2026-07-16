@@ -21,7 +21,7 @@ export interface DocumentViewerData {
   transactionDate?: string;
   dueDate?: string;
   currency?: string;
-  rfqNumber?: string;
+  // rfqNumber?: string;
   notes?: string;
   discountType?: "amount" | "percentage" | null;
   discountAmount?: number | null;
@@ -121,9 +121,9 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
               <MetaField label="Due Date">
                 {data.dueDate ? formatDisplayDate(data.dueDate) : "—"}
               </MetaField>
-              <MetaField label="RFQ/RFP Number">
+              {/* <MetaField label="RFQ/RFP Number">
                 {data.rfqNumber ?? "—"}
-              </MetaField>
+              </MetaField> */}
               {/* <MetaField label="Currency">
                 {data.currency ?? "—"}
               </MetaField> */}
@@ -219,9 +219,9 @@ function MetaField({
   children,
   tooltip,
 }: {
-    label: string;
+  label: string;
   children: React.ReactNode;
-    tooltip?: string;
+  tooltip?: string;
 }) {
   return (
     <>

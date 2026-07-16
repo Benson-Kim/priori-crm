@@ -228,6 +228,259 @@ class DocumentPDFGenerator:
             include_balance=include_balance,
         )
 
+    def generate_customer_statement_pdf(
+        self,
+        statement,
+        owner=None,
+        logo_bytes: bytes | None = None,
+    ) -> bytes:
+        """Return PDF bytes for a customer statement of accounts."""
+
+        def get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def money(value) -> Decimal:
+            if isinstance(value, Decimal):
+                return value
+            return Decimal(str(value or "0.00"))
+
+        customer = get(statement, "customer")
+        summary = get(statement, "summary")
+        transactions = get(statement, "transactions", [])
+
+        currency = get(customer, "currency", "") or ""
+        customer_name = (
+            get(customer, "company_name")
+            or f"{get(customer, 'first_name', '')} {get(customer, 'last_name', '')}".strip()
+            or get(customer, "email")
+            or "Customer"
+        )
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+
+        content_width = doc.width
+        elements: list = []
+
+        logo_flowable = self._build_logo(logo_bytes)
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+
+        left_cell: list = []
+        if logo_flowable is not None:
+            left_cell.append(logo_flowable)
+            left_cell.append(Spacer(1, 4 * mm))
+
+        left_cell.append(Paragraph(owner_name, _HEADER_STYLE))
+        left_cell.append(Spacer(1, 2 * mm))
+
+        if owner is not None:
+            for field in (
+                getattr(owner, "address", None),
+                getattr(owner, "email", None),
+                getattr(owner, "phone", None),
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
+                getattr(owner, "website", None),
+            ):
+                for line in _split_lines(field):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
+
+        header_table = Table(
+            [[left_cell, Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]],
+            colWidths=[content_width - 85 * mm, 85 * mm],
+        )
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        elements.append(header_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        period_start = get(statement, "period_start")
+        period_end = get(statement, "period_end")
+
+        period_text = ""
+        if period_start and period_end:
+            period_text = (
+                f"{period_start.strftime('%b %d, %Y')} to "
+                f"{period_end.strftime('%b %d, %Y')}"
+            )
+
+        customer_cell: list = [
+            Paragraph("To", _SECTION_LABEL_STYLE),
+            Paragraph(str(customer_name), _LABEL_STYLE),
+        ]
+
+        for field in (
+            get(customer, "phone"),
+            get(customer, "email"),
+        ):
+            for line in _split_lines(field):
+                customer_cell.append(Paragraph(line, _SUB_STYLE))
+
+        summary_rows = [
+            [
+                Paragraph("Opening Balance", _LABEL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'opening_balance')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Invoiced Amount", _LABEL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'invoiced_amount')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Amount Paid", _LABEL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'amount_paid')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Balance Due", _LABEL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'balance_due')):,.2f}",
+                    _VAL_BOLD_STYLE,
+                ),
+            ],
+        ]
+
+        right_cell: list = []
+        if period_text:
+            right_cell.append(Paragraph(period_text, _META_VAL_STYLE))
+            right_cell.append(Spacer(1, 4 * mm))
+        right_cell.append(Paragraph("ACCOUNT SUMMARY", _SECTION_LABEL_STYLE))
+        right_cell.append(Table(summary_rows, colWidths=[38 * mm, 35 * mm]))
+
+        intro_table = Table(
+            [[customer_cell, right_cell]],
+            colWidths=[content_width - 80 * mm, 80 * mm],
+        )
+        intro_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        elements.append(intro_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        rows = [
+            [
+                Paragraph("Date", _ITEM_HEADER_STYLE),
+                Paragraph("Details", _ITEM_HEADER_STYLE),
+                Paragraph("Amount", _ITEM_HEADER_RIGHT_STYLE),
+                Paragraph("Payment", _ITEM_HEADER_RIGHT_STYLE),
+                Paragraph("Balance", _ITEM_HEADER_RIGHT_STYLE),
+            ]
+        ]
+
+        for tx in transactions:
+            tx_date = get(tx, "date")
+            date_str = tx_date.strftime("%b %d, %Y") if tx_date else "—"
+
+            rows.append(
+                [
+                    Paragraph(date_str, _ITEM_STYLE),
+                    Paragraph(str(get(tx, "description", "")), _ITEM_STYLE),
+                    Paragraph(f"{money(get(tx, 'amount')):,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(f"{money(get(tx, 'payment')):,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(f"{money(get(tx, 'balance')):,.2f}", _STMT_NUM_STYLE),
+                ]
+            )
+
+        stmt_table = Table(
+            rows,
+            colWidths=[
+                28 * mm,
+                content_width - 118 * mm,
+                30 * mm,
+                30 * mm,
+                30 * mm,
+            ],
+            repeatRows=1,
+        )
+        stmt_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+
+        elements.append(stmt_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        balance_rows = [
+            [
+                Paragraph("Balance Due", _CLOSING_LBL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'balance_due')):,.2f}",
+                    _CLOSING_VAL_STYLE,
+                ),
+            ]
+        ]
+
+        balance_table = Table(
+            [[Spacer(1, 1), Table(balance_rows, colWidths=[35 * mm, 35 * mm])]],
+            colWidths=[content_width - 70 * mm, 70 * mm],
+        )
+        balance_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        elements.append(balance_table)
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+
+        logger.info(
+            "Generated customer statement PDF: %s (%d bytes)",
+            customer_name,
+            len(pdf_bytes),
+        )
+
+        return pdf_bytes
+
     def generate_list_pdf(
         self,
         *,

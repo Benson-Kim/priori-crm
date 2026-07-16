@@ -21,7 +21,6 @@ from app.modules.quotes.schemas import (
     QuoteCalculationResponse,
     QuoteConvertToInvoiceResponse,
     QuoteCreate,
-    QuoteDuplicateResponse,
     QuoteFilterParams,
     QuoteLineItemCreate,
     QuoteMarkSentRequest,
@@ -158,13 +157,43 @@ def calculate_quote_totals(
     discount_type: Annotated[str | None, Query()] = None,
     discount_amount: Annotated[float | None, Query()] = None,
     discount_percentage: Annotated[float | None, Query()] = None,
+    vat_enabled: Annotated[
+        bool,
+        Query(
+            alias="vatEnabled",
+            description="Enable document-level VAT on the discounted subtotal",
+        ),
+    ] = False,
+    vat_rate: Annotated[
+        float | None,
+        Query(
+            alias="vatRate",
+            ge=0,
+            le=1,
+            description=(
+                "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled."
+            ),
+        ),
+    ] = None,
 ) -> QuoteCalculationResponse:
     """Calculate quote totals without saving (preview)."""
+    from app.common.exceptions import BadRequestException
+
+    # Preview/persist parity: a rate is required when VAT is enabled.
+    if vat_enabled and vat_rate is None:
+        raise BadRequestException(
+            detail="vat_rate is required when vat_enabled is true",
+            field="vatRate",
+        )
+
     dt = DiscountType(discount_type) if discount_type else None
     da = Decimal(str(discount_amount)) if discount_amount is not None else None
     dp = Decimal(str(discount_percentage)) if discount_percentage is not None else None
+    vr = Decimal(str(vat_rate)) if vat_rate is not None else None
 
-    return QuoteService.calculate_totals(line_items, dt, da, dp)
+    return QuoteService.calculate_totals(
+        line_items, dt, da, dp, vat_enabled=vat_enabled, vat_rate=vr
+    )
 
 
 @router.get(
@@ -270,34 +299,6 @@ def get_quote_by_number(
     """Get quote by quote number."""
     quote = service.get_by_number(quote_number)
     return QuoteResponse.model_validate(quote)
-
-
-# DUPLICATE
-
-
-@router.post(
-    "/{quote_id}/duplicate",
-    response_model=QuoteDuplicateResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Duplicate quote",
-    description="Create a copy of a quote as a new DRAFT.",
-    responses={
-        201: {"description": "Quote duplicated successfully"},
-        404: {"description": "Quote not found"},
-    },
-)
-def duplicate_quote(
-    quote_id: UUID,
-    service: QuoteServiceDep,
-) -> QuoteDuplicateResponse:
-    """Duplicate an existing quote as a new DRAFT."""
-    duplicate = service.duplicate_quote(quote_id, service.actor_id)
-    return QuoteDuplicateResponse(
-        original_quote_id=quote_id,
-        new_quote_id=duplicate.id,
-        new_quote_number=duplicate.quote_number,
-        message="Quote duplicated successfully",
-    )
 
 
 # GET BY ID

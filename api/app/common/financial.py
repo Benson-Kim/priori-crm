@@ -186,6 +186,20 @@ def calculate_subtotal_vat(
     return quantize_money(subtotal * vat_rate)
 
 
+def neutralize_line_tax(line_items_data: list[dict]) -> list[dict]:
+    """Force per-line tax to no_tax/0 when document-level VAT is enabled.
+
+    Document-level VAT (purchase orders, and sales invoices/quotes with the
+    VAT toggle on) is charged once on the (discounted) subtotal, so a line
+    item must never also carry per-line tax — that would double-tax the
+    document. Mutates the built dicts in place and returns them.
+    """
+    for item in line_items_data:
+        item["tax_type"] = TaxType.NO_TAX.value
+        item["tax_amount"] = Decimal("0.00")
+    return line_items_data
+
+
 # Discount Calculation
 
 

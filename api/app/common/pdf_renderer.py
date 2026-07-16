@@ -80,3 +80,34 @@ class DocumentPdfRenderer:
             logo_bytes=logo_bytes,
             include_balance=include_balance,
         )
+
+    def load_live_branding(self) -> tuple[Any, Any]:
+        """Resolve the owner header (info + logo bytes) from the live profile.
+
+        For documents that carry no immutable owner snapshot (e.g. a
+        statement of accounts, which is always generated fresh for a
+        period), the header is always the current live profile.
+        """
+        from app.modules.owner.service import OwnerService
+
+        owner_service = OwnerService(self._db)
+        source = owner_service.get_or_create()
+        return (
+            owner_service.to_owner_info(source),
+            owner_service.load_logo_bytes(source),
+        )
+
+    def render_customer_statement(self, statement: Any) -> bytes:
+        """Render a customer statement-of-accounts PDF.
+
+        Statements have no owner snapshot (they are generated on demand
+        for a period), so branding always resolves from the live profile.
+        """
+        from app.common.pdf import DocumentPDFGenerator
+
+        owner_info, logo_bytes = self.load_live_branding()
+        return DocumentPDFGenerator().generate_customer_statement_pdf(
+            statement,
+            owner=owner_info,
+            logo_bytes=logo_bytes,
+        )

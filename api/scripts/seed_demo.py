@@ -76,6 +76,8 @@ def _seed_owner(db) -> None:
             address="1 Demo Plaza, Upper Hill, Nairobi",
             email="hello@prioritech.example",
             phone="+254700000000",
+            vat_enabled=True,
+            vat_rate=16.0,
             tax_pin="P000000000X",
             website="prioritech.example",
             jurisdiction="KE",

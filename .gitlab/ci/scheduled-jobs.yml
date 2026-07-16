@@ -98,3 +98,46 @@ scheduled:nightly-transitions:
     - call_internal "/api/v1/expenses/internal/transition-overdue"
     - call_internal "/api/v1/auth/internal/purge-otps"
     - call_internal "/api/v1/internal/email-outbox/drain?limit=200"
+
+# Synthetic monitoring: exercise the critical path every 5 minutes so we know
+# the system is breaking before customers do (see docs/operations/slos.md).
+# Create a schedule with SCHEDULED_TASK=synthetic and cron */5 * * * *.
+# Fails (and thereby alerts) on any non-2xx status, an unexpected body, or a
+# response slower than the latency budget. FRONTEND_BASE_URL is optional; when
+# set, the frontend root is probed too.
+scheduled:synthetic-critical-path:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "synthetic"'
+  variables:
+    # Per-request latency budget (seconds) before the probe fails.
+    SYNTHETIC_MAX_SECONDS: "5"
+  script:
+    - |
+      probe() {
+        url="$1"; expect="$2"
+        echo "GET ${url}"
+        body=$(mktemp)
+        out=$(curl -sS -o "$body" -w "%{http_code} %{time_total}" \
+          --max-time "${SYNTHETIC_MAX_SECONDS}" "$url") || {
+          echo "Probe failed (timeout / connection) for ${url}" >&2
+          return 1
+        }
+        code=${out% *}; secs=${out#* }
+        echo "HTTP ${code} in ${secs}s"
+        cat "$body"; echo
+        if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+          echo "Probe ${url} returned HTTP ${code}" >&2
+          return 1
+        fi
+        if [ -n "$expect" ] && ! grep -q "$expect" "$body"; then
+          echo "Probe ${url} body missing expected marker '${expect}'" >&2
+          return 1
+        fi
+        return 0
+      }
+      probe "${API_BASE_URL%/}/api/v1/health" '"status":"healthy"'
+      probe "${API_BASE_URL%/}/api/v1/ping" '"ping":"pong"'
+      if [ -n "$FRONTEND_BASE_URL" ]; then
+        probe "${FRONTEND_BASE_URL%/}/" ""
+      fi
