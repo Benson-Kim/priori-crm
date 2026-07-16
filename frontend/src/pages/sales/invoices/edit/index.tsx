@@ -47,7 +47,7 @@ export default function EditInvoicePage() {
                             transactionDate: initialData.transaction_date,
                             dueDate: initialData.due_date,
                             currency: initialData.currency as CurrencyOption,
-                            rfqNumber: initialData.rfq_number ?? undefined,
+                            // rfqNumber: initialData.rfq_number ?? undefined,
                             notes: initialData.notes ?? undefined,
                             discountType: initialData.discount_type as
                                 | "amount"
