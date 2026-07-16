@@ -1,7 +1,7 @@
 """Read-side SQL for the financial statements module.
 
 Accounting basis — single source of truth
------------------------------------------
+
 Every statements endpoint (overview, income statement, cashflow) derives
 from the same two recognition predicates defined here, so the three
 views can never disagree:

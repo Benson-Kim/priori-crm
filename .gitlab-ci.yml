@@ -47,7 +47,6 @@ workflow:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
-# ---------------------------------------------------------------------------
 # Security scanning
 #
 # GitLab-managed analyzers. Their own `rules` run them on branch pipelines
@@ -55,7 +54,6 @@ workflow:
 # SAST and Secret Detection need no extra config; Dependency Scanning picks
 # up api/requirements.txt and frontend/package-lock.json. The injected jobs
 # are placed in the `security` stage below.
-# ---------------------------------------------------------------------------
 
 # Place the injected analyzer jobs in the `security` stage and make them run
 # unconditionally on MR pipelines and on develop/main pushes. SAST fans out
@@ -83,9 +81,7 @@ workflow:
   stage: security
   rules: *security-rules
 
-# ---------------------------------------------------------------------------
 # Backend (api/)
-# ---------------------------------------------------------------------------
 
 api:lint:
   stage: lint
@@ -163,7 +159,6 @@ api:test:
   script:
     - pytest -v --tb=short
 
-# ---------------------------------------------------------------------------
 # Contract types
 #
 # The frontend previously hand-mirrored the FastAPI Pydantic schemas, which
@@ -175,7 +170,6 @@ api:test:
 # The schema is exported *offline* (scripts/export_openapi.py serialises
 # app.openapi() with no server and no DB), then published as an artifact the
 # ui:lint-build job consumes to generate src/lib/api-schema.d.ts before tsc.
-# ---------------------------------------------------------------------------
 
 api:openapi-schema:
   stage: contract
@@ -212,9 +206,7 @@ api:openapi-schema:
       - frontend/openapi.json
     expire_in: 1 day
 
-# ---------------------------------------------------------------------------
 # Frontend (frontend/)
-# ---------------------------------------------------------------------------
 
 ui:lint-build:
   stage: test

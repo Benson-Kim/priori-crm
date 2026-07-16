@@ -43,7 +43,7 @@ export interface QuoteCreatePayload {
   vatRate?: number | null;
   vatComplianceRef?: string | null;
   lineItems: QuoteLineItemPayload[];
-  rfqRfpNumber?: string;
+  // rfqRfpNumber?: string;
   notes?: string;
   discountType?: string;
   discountAmount?: number;
