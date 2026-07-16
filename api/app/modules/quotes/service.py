@@ -149,12 +149,29 @@ class QuoteService(BaseDocumentService):
             )
         quote_currency = customer.currency
 
+        # Document-level VAT: when the client sent neither field, default
+        # from the owner profile so new quotes inherit our own VAT
+        # settings. An explicit toggle always wins.
+        vat_enabled, vat_rate = self._resolve_vat(
+            data.vat_enabled,
+            data.vat_rate,
+            fields_sent={"vat_enabled", "vat_rate"} & data.model_fields_set,
+        )
+
         line_items_data = build_line_items(data.line_items)
+        if vat_enabled:
+            # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
+            neutralize_line_tax(line_items_data)
         subtotal, tax_total = sum_line_totals(line_items_data)
 
         discount_value = calculate_discount(
             subtotal, data.discount_type, data.discount_amount, data.discount_percentage
         )
+        if vat_enabled:
+            # VAT is charged once on the discounted base.
+            tax_total = calculate_subtotal_vat(
+                subtotal - discount_value, vat_enabled, vat_rate
+            )
         total_due = subtotal - discount_value + tax_total
 
         def _build() -> Quote:
