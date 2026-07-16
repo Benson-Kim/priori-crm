@@ -137,9 +137,7 @@ class TestPeriodGuard:
 
     def test_open_period_allows(self, db):
         d = date.today() - timedelta(days=40)
-        PeriodsService(db).create(
-            _period(d - timedelta(days=5), d + timedelta(days=5))
-        )
+        PeriodsService(db).create(_period(d - timedelta(days=5), d + timedelta(days=5)))
         assert_period_open(db, d)  # open period: must not raise
 
     def test_closed_period_blocks_with_field_name(self, db):
@@ -188,9 +186,7 @@ class TestPeriodsService:
     def test_reopen_requires_closed_period(self, db):
         svc = PeriodsService(db)
         d = date.today() - timedelta(days=40)
-        period = svc.create(
-            _period(d - timedelta(days=5), d + timedelta(days=5))
-        )
+        period = svc.create(_period(d - timedelta(days=5), d + timedelta(days=5)))
         with pytest.raises(BadRequestException):
             svc.reopen(period.id, "typo in window")
 
@@ -232,9 +228,7 @@ class TestDocumentWritesBlocked:
         d = date.today() - timedelta(days=40)
         _closed_window(db, d)
         customer = _customer(db)
-        invoice = InvoiceService(db).create(
-            _invoice_payload(customer.id, date.today())
-        )
+        invoice = InvoiceService(db).create(_invoice_payload(customer.id, date.today()))
         assert invoice.id is not None
 
     def test_quote_create_into_closed_period_rejected(self, db):
@@ -309,7 +303,5 @@ class TestDocumentWritesBlocked:
         with pytest.raises(BadRequestException):
             service.update(
                 invoice.id,
-                InvoiceUpdate.model_validate(
-                    {"transaction_date": d.isoformat()}
-                ),
+                InvoiceUpdate.model_validate({"transaction_date": d.isoformat()}),
             )
