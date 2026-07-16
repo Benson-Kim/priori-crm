@@ -202,3 +202,13 @@ def get_periods_service(db: DbSession, current_user: CurrentUser):
 
 
 PeriodsServiceDep = Annotated["PeriodsService", Depends(get_periods_service)]  # noqa: F821
+
+
+def get_ledger_service(db: DbSession, current_user: CurrentUser):
+    """Provide a LedgerService scoped to the current request and acting user."""
+    from app.modules.ledger.service import LedgerService
+
+    return LedgerService(db, current_user=current_user)
+
+
+LedgerServiceDep = Annotated["LedgerService", Depends(get_ledger_service)]  # noqa: F821

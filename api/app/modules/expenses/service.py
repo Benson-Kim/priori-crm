@@ -206,6 +206,12 @@ class ExpenseService(BaseDocumentService):
 
         expense = self._with_reference_retry(_build, "expense")
 
+        # Ledger (accrual): DR Operating Expenses (+ DR VAT input) /
+        # CR Accounts Payable, in the same transaction as the expense.
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_expense_recorded(expense)
+
         logger.info(
             "Created expense: %s",
             expense.expense_number,
@@ -554,6 +560,13 @@ class ExpenseService(BaseDocumentService):
                 "new_status": status_value(expense.status),
             },
         )
+
+        # Ledger: DR Accounts Payable / CR Cash, same transaction. This is
+        # the single chokepoint shared by record_payment and mark_as_paid.
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_expense_payment(payment, expense)
+
         return payment
 
     def mark_as_paid(
@@ -850,6 +863,13 @@ class ExpenseService(BaseDocumentService):
         # version exactly once.
         self._transition(expense, ExpenseStatus.CANCELED)
         self._db.flush()
+
+        # Ledger: reverse the recorded bill (if posted), dated today. Any
+        # payments already made keep their entries; refunding them is the
+        # customer/vendor-credit flow (#9), not a silent reversal here.
+        from app.modules.ledger.service import LedgerService
+
+        LedgerService(self._db).post_expense_canceled(expense)
 
         # Durable audit trail .
         record_audit_event(
