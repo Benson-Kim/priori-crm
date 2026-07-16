@@ -439,6 +439,16 @@ class QuoteService(BaseDocumentService):
                 update_data.setdefault("discount_amount", None)
                 update_data.setdefault("discount_percentage", None)
 
+        # Effective document-level VAT after this update: supplied fields
+        # win, otherwise the persisted values are kept.
+        effective_vat_enabled = bool(update_data.get("vat_enabled", quote.vat_enabled))
+        effective_vat_rate = update_data.get("vat_rate", quote.vat_rate)
+        if effective_vat_enabled and effective_vat_rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+
         # Handle line items update (replace all)
         if "line_items" in update_data:
             self._db.query(QuoteLineItem).filter(
@@ -447,6 +457,9 @@ class QuoteService(BaseDocumentService):
 
             line_items_raw: list[dict] = update_data.pop("line_items")
             line_items_data = build_line_items(line_items_raw)
+            if effective_vat_enabled:
+                # Document-level VAT replaces per-line tax (mirrors POs).
+                neutralize_line_tax(line_items_data)
             subtotal, tax_total = sum_line_totals(line_items_data)
 
             for item in line_items_data:
@@ -454,6 +467,29 @@ class QuoteService(BaseDocumentService):
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
+        elif "vat_enabled" in update_data:
+            if effective_vat_enabled:
+                # VAT switched on without replacing line items: neutralise
+                # the persisted per-line tax so it can never double-tax the
+                # document.
+                self._db.query(QuoteLineItem).filter(
+                    QuoteLineItem.quote_id == quote_id
+                ).update(
+                    {"tax_type": TaxType.NO_TAX.value, "tax_amount": Decimal("0.00")}
+                )
+            else:
+                # VAT switched off: tax falls back to the per-line sum of
+                # the persisted items.
+                update_data["tax_total"] = Decimal(
+                    str(
+                        self._db.query(
+                            func.coalesce(func.sum(QuoteLineItem.tax_amount), 0)
+                        )
+                        .filter(QuoteLineItem.quote_id == quote_id)
+                        .scalar()
+                        or 0
+                    )
+                )
 
         if any(
             k in update_data
@@ -462,6 +498,8 @@ class QuoteService(BaseDocumentService):
                 "discount_type",
                 "discount_amount",
                 "discount_percentage",
+                "vat_enabled",
+                "vat_rate",
             )
         ):
             s = update_data.get("subtotal", quote.subtotal)
@@ -476,6 +514,12 @@ class QuoteService(BaseDocumentService):
             disc = calculate_discount(
                 s, effective_type, effective_amount, effective_percentage
             )
+
+            if effective_vat_enabled:
+                # Document-level VAT is charged once on the discounted base.
+                t = calculate_subtotal_vat(s - disc, True, effective_vat_rate)
+                update_data["tax_total"] = t
+
             update_data["total_due"] = s - disc + t
 
         # Apply updates
