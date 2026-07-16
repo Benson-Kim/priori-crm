@@ -104,4 +104,3 @@ export function buildStatementParams(periodStart?: string, periodEnd?: string) {
 
   return params;
 }
-

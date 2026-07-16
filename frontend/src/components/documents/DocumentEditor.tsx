@@ -110,7 +110,7 @@ export function DocumentEditor({
   restrictedMode = false,
 }: Readonly<DocumentEditorProps>) {
   const label = type === "invoice" ? "INVOICE" : "QUOTE";
-  const referenceLabel = type === "invoice" ? "INV" : "QO";
+  const referenceLabel = type === "invoice" ? "INV" : "QT";
 
   // State
   const [customerId, setCustomerId] = useState(initialData?.customerId ?? "");
@@ -436,48 +436,6 @@ export function DocumentEditor({
                   error={errors.vatEnabled}
                   aria-label="Add VAT"
                 />
-
-                {vatEnabled && (
-                  <>
-                    <label
-                      htmlFor="vat-rate"
-                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                    >
-                      VAT Rate (%)
-                    </label>
-
-                    <Input
-                      id="vat-rate"
-                      type="number"
-                      value={vatRatePct}
-                      onChange={(e) => {
-                        vatRateDirty.current = true;
-                        setVatRatePct(e.target.value);
-                      }}
-                      disabled={restrictedMode}
-                      placeholder="16"
-                    />
-
-                    <label
-                      htmlFor="vat-compliance-ref"
-                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                    >
-                      Compliance Ref
-                    </label>
-
-                    <Input
-                      id="vat-compliance-ref"
-                      value={vatComplianceRef}
-                      onChange={(e) => {
-                        vatRefTouched.current = true;
-                        setVatComplianceRef(e.target.value);
-                      }}
-                      disabled={restrictedMode}
-                      placeholder="PIN"
-                    />
-                  </>
-                )}
-
               </div>
             </div>
           </div>

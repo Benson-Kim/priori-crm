@@ -52,6 +52,7 @@ interface DocumentViewerProps {
 
 export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
   const label = type === "invoice" ? "INVOICE" : "QUOTE";
+  const referenceLabel = type === "invoice" ? "INV" : "QT";
 
   // Build VAT label 
   const vatEnabled = Boolean(data.vatEnabled || data.taxTotal > 0);
@@ -110,7 +111,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
           {/*  Metadata Row  */}
           <div className="flex flex-col gap-6 min-w-0 self-end">
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
-              <MetaField label="Reference">
+              <MetaField label={`${referenceLabel} Num`}>
                 {data.documentReference ?? "—"}
               </MetaField>
               <MetaField label="Transaction Date">
