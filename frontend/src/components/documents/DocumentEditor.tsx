@@ -167,14 +167,30 @@ export function DocumentEditor({
         : ""
   );
 
+  // Default new documents to the owner's (our own) VAT settings: the
+  // toggle, the rate and the compliance ref all seed from the profile
+  // until the user touches them. Editing an existing document never
+  // re-defaults, and the seed runs at most once.
   const vatRefTouched = useRef(false);
+  const vatDefaulted = useRef(false);
   useEffect(() => {
-    if (isEditing || vatRefTouched.current) return;
+    if (isEditing || vatRefTouched.current || vatDefaulted.current) return;
     if (initialData?.vatComplianceRef != null) return;
-    if (initialData?.vatRate != null) return;
-    if (profile?.taxPin) setVatComplianceRef(profile.taxPin);
-    if (profile?.vatRate) setVatRatePct(profile.vatRate * 100 + '%');
-  }, [isEditing, initialData?.vatComplianceRef, profile?.taxPin]);
+    if (initialData?.vatRate != null || initialData?.vatEnabled != null) return;
+    if (!profile) return;
+    vatDefaulted.current = true;
+    if (profile.taxPin) setVatComplianceRef(profile.taxPin);
+    if (profile.vatRate) {
+      setVatRatePct(String(Number((profile.vatRate * 100).toFixed(4))));
+    }
+    if (profile.vatEnabled != null) setVatEnabled(Boolean(profile.vatEnabled));
+  }, [
+    isEditing,
+    initialData?.vatComplianceRef,
+    initialData?.vatEnabled,
+    initialData?.vatRate,
+    profile,
+  ]);
 
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() => {
