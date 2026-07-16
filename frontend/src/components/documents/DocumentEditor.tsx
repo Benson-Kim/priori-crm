@@ -224,10 +224,18 @@ export function DocumentEditor({
     [vatEnabled, vatRateFraction, vatComplianceRef]
   );
 
-  // Derived totals (memoized)
+  // Derived totals (memoized). When the document-level VAT toggle is on,
+  // VAT replaces per-line tax and is charged once on the discounted base,
+  // mirroring the backend computation exactly.
   const totals = useMemo(() => {
     const base = calculateTotals(lineItems, discountType, discountValue);
-    const taxTotal = base.taxTotal;
+    const taxTotal = vatEnabled
+      ? calcSubtotalVat(
+        base.subtotal - base.discountAmount,
+        vatEnabled,
+        vatRateFraction
+      )
+      : base.taxTotal;
 
     return {
       subtotal: base.subtotal,
@@ -235,7 +243,7 @@ export function DocumentEditor({
       taxTotal,
       totalDue: roundMoney(base.subtotal - base.discountAmount + taxTotal),
     };
-  }, [lineItems, discountType, discountValue]);
+  }, [lineItems, discountType, discountValue, vatEnabled, vatRateFraction]);
 
 
   // Line item handlers
