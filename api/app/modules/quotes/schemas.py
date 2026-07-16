@@ -256,6 +256,13 @@ class QuoteCreate(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_vat(self) -> "QuoteCreate":
+        """A VAT rate is required when VAT is explicitly enabled."""
+        if self.vat_enabled and self.vat_rate is None:
+            raise ValueError("vat_rate is required when vat_enabled is true")
+        return self
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {

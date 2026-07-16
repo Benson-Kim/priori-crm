@@ -22,10 +22,12 @@ from app.common.exceptions import (
 from app.common.financial import (
     build_line_items,
     calculate_discount,
+    calculate_subtotal_vat,
+    neutralize_line_tax,
     sum_line_totals,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DiscountType, QuoteStatus
+from app.constants.enums import DiscountType, QuoteStatus, TaxType
 from app.modules.quotes.models import Quote, QuoteLineItem
 from app.modules.quotes.queries import (
     QuoteExportQuery,
