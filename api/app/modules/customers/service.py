@@ -937,9 +937,8 @@ class CustomerService(ServiceBase):
 
     # PDF GENERATION
 
-    def _render_pdf(
-        self, customer: Customer) -> bytes:
-        """Render a PDF for an already-loaded customer statement.
+    def _render_pdf(self, statement: CustomerStatement) -> bytes:
+        """Render a PDF for an already-generated customer statement.
 
         Orchestration (owner branding + ReportLab generator) is shared with
         invoices/quotes via DocumentPdfRenderer.
@@ -952,13 +951,12 @@ class CustomerService(ServiceBase):
 
         try:
             return DocumentPdfRenderer(self._db).render_customer_statement(
-                customer
+                statement
             )
         except Exception as exc:
             logger.exception(
-                "Failed to render customer statement PDF %s",
-                customer.display_name,
-                extra={"customer_id": str(customer.id)},
+                "Failed to render customer statement PDF",
+                extra={"customer_id": str(statement.customer.id)},
             )
             raise AppException(
                 status_code=500,
@@ -966,18 +964,17 @@ class CustomerService(ServiceBase):
                 error_code="PDF_GENERATION_FAILED",
             ) from exc
 
-    def generate_pdf(self, customer_id: uuid.UUID) -> bytes:
-        """Generate the PDF for a customer statement by id."""
-        return self._render_pdf(self.get_by_id(customer_id))
+    def generate_statement_pdf(
+        self,
+        customer_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, CustomerStatement]:
+        """Generate the statement-of-accounts PDF for a customer and period.
 
-    def generate_pdf_for_download(self, customer_id: uuid.UUID) -> tuple[bytes, Customer]:
-        """Generate the customer statement PDF and return it with the loaded customer.
-
-        Loads the customer once and renders from it, so the download endpoint does
-        not re-query just for the attachment filename.
+        Builds the statement once and returns it alongside the rendered
+        bytes, so the download endpoint never re-queries just for the
+        attachment filename.
         """
-        customer = self.get_by_id(customer_id)
-        return (
-            self._render_pdf(customer),
-            customer,
-        )
+        statement = self.generate_statement(customer_id, period_start, period_end)
+        return self._render_pdf(statement), statement
