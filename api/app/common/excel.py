@@ -535,7 +535,9 @@ class ExcelExporter:
 
             for col_idx in (3, 4, 5):
                 ws.cell(row=row_idx, column=col_idx).number_format = _MONEY_FORMAT
-                ws.cell(row=row_idx, column=col_idx).alignment = Alignment(horizontal="right")
+                ws.cell(row=row_idx, column=col_idx).alignment = Alignment(
+                    horizontal="right"
+                )
 
             for col_idx in range(1, 6):
                 ws.cell(row=row_idx, column=col_idx).font = _BODY_FONT
