@@ -179,7 +179,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             )}
 
             {(mode === 'new' || mode === 'edit') && (
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] overflow-y-auto px-2 pb-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 px-2 pb-4">
                     {/* Vendor Details Section */}
                     <Card className="rounded-xl bg-white border-gray-300 flex flex-col gap-6 p-6">
 

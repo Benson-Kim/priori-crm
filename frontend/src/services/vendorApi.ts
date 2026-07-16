@@ -17,6 +17,7 @@ import {
   flattenPaginated,
 } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
+import { buildStatementParams } from "@/lib/dateUtils";
 import type { PaginatedApiResponse } from "@/lib/types";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
@@ -206,5 +207,24 @@ export function exportVendorCardPdf(
   return apiDownload(
     `vendors/${vendorId}/cards/${CARD_PATH[card]}/export/pdf`,
     params
+  );
+}
+
+
+export function downloadVendorStatementPdf(
+  vendorId: string, periodStart?: string, periodEnd?: string
+): Promise<Blob> {
+  return apiDownload(
+    `vendors/${vendorId}/statement/pdf`,
+    buildStatementParams(periodStart, periodEnd)
+  );
+}
+
+export function exportVendorStatementExcel(
+  vendorId: string, periodStart?: string, periodEnd?: string
+): Promise<Blob> {
+  return apiDownload(
+    `vendors/${vendorId}/statement/excel`,
+    buildStatementParams(periodStart, periodEnd)
   );
 }

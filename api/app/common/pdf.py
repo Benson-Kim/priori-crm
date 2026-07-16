@@ -17,7 +17,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    Frame,
     Image,
+    PageTemplate,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -38,8 +40,10 @@ _LOGO_MAX_WIDTH_MM = 60
 _INK = colors.HexColor("#333333")
 _PURE_BLACK = colors.black
 _MUTED_LABEL = colors.HexColor("#817d7d")
-_TABLE_HEADER_BG = colors.HexColor("#2C1A54")
+_PRIORI_BLUE = colors.HexColor("#2C1A54")
+_PRIORI_PURPLE = colors.HexColor("#912b90")
 _TABLE_LINE = colors.HexColor("#E3E3E3")
+_PRIORI_LIGHT_PURPLE = colors.HexColor("#DAA3C8")
 
 # Reusable styles
 _STYLES = getSampleStyleSheet()
@@ -263,9 +267,29 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
+        )
+        doc.addPageTemplates(
+            [
+                PageTemplate(
+                    id="normal",
+                    frames=[
+                        Frame(
+                            doc.leftMargin,
+                            doc.bottomMargin,
+                            doc.width,
+                            doc.height,
+                            leftPadding=0,
+                            rightPadding=0,
+                            topPadding=0,
+                            bottomPadding=0,
+                            id="normal",
+                        )
+                    ],
+                )
+            ]
         )
 
         content_width = doc.width
@@ -312,7 +336,7 @@ class DocumentPDFGenerator:
         )
 
         elements.append(header_table)
-        elements.append(Spacer(1, 10 * mm))
+        elements.append(Spacer(1, 4 * mm))
 
         period_start = get(statement, "period_start")
         period_end = get(statement, "period_end")
@@ -320,39 +344,44 @@ class DocumentPDFGenerator:
         period_text = ""
         if period_start and period_end:
             period_text = (
-                f"{period_start.strftime('%b %d, %Y')} to "
+                f"{period_start.strftime('%b %d, %Y')} - "
                 f"{period_end.strftime('%b %d, %Y')}"
             )
 
+        rule_table = Table([[""]], colWidths=[content_width])
+        rule_table.setStyle(
+            TableStyle([("LINEBELOW", (0, 0), (-1, 0), 1.25, _PURE_BLACK)])
+        )
+        elements.append(rule_table)
+        elements.append(Spacer(1, 8 * mm))
+
         customer_cell: list = [
             Paragraph("To", _SECTION_LABEL_STYLE),
+            Spacer(1, 2),
             Paragraph(str(customer_name), _LABEL_STYLE),
         ]
 
-        for field in (
-            get(customer, "phone"),
-            get(customer, "email"),
-        ):
+        for field in (get(customer, "phone"), get(customer, "email")):
             for line in _split_lines(field):
-                customer_cell.append(Paragraph(line, _SUB_STYLE))
+                customer_cell.append(Paragraph(line, _BODY_STYLE))
 
         summary_rows = [
             [
-                Paragraph("Opening Balance", _LABEL_STYLE),
+                Paragraph("Opening Balance", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'opening_balance')):,.2f}",
                     _SUMMARY_VAL_STYLE,
                 ),
             ],
             [
-                Paragraph("Invoiced Amount", _LABEL_STYLE),
+                Paragraph("Invoiced Amount", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'invoiced_amount')):,.2f}",
                     _SUMMARY_VAL_STYLE,
                 ),
             ],
             [
-                Paragraph("Amount Paid", _LABEL_STYLE),
+                Paragraph("Amount Paid", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'amount_paid')):,.2f}",
                     _SUMMARY_VAL_STYLE,
@@ -372,11 +401,29 @@ class DocumentPDFGenerator:
             right_cell.append(Paragraph(period_text, _META_VAL_STYLE))
             right_cell.append(Spacer(1, 4 * mm))
         right_cell.append(Paragraph("ACCOUNT SUMMARY", _SECTION_LABEL_STYLE))
-        right_cell.append(Table(summary_rows, colWidths=[38 * mm, 35 * mm]))
+
+        summary_table = Table(summary_rows, colWidths=[48 * mm, 42 * mm])
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("BACKGROUND", (0, 0), (-1, 2), _PRIORI_PURPLE),
+                    ("LINEBELOW", (0, 0), (-1, 2), 0.5, colors.white),
+                    ("LINEABOVE", (0, -1), (-1, -1), 1, _PRIORI_BLUE),
+                    ("TOPPADDING", (0, -1), (-1, -1), 8),
+                ]
+            )
+        )
+
+        right_cell.append(summary_table)
 
         intro_table = Table(
             [[customer_cell, right_cell]],
-            colWidths=[content_width - 80 * mm, 80 * mm],
+            colWidths=[content_width - 90 * mm, 90 * mm],
+            hAlign="LEFT",
         )
         intro_table.setStyle(
             TableStyle(
@@ -387,9 +434,12 @@ class DocumentPDFGenerator:
                 ]
             )
         )
+        if period_text:
+            elements.append(Paragraph(period_text, _META_VAL_STYLE))
+            elements.append(Spacer(1, 4 * mm))
 
         elements.append(intro_table)
-        elements.append(Spacer(1, 8 * mm))
+        elements.append(Spacer(1, 10 * mm))
 
         rows = [
             [
@@ -426,19 +476,20 @@ class DocumentPDFGenerator:
             ],
             repeatRows=1,
         )
-        stmt_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
-                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 8),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ]
-            )
-        )
+        row_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]
+
+        for i in range(1, len(rows)):
+            if i % 2 == 0:
+                row_style.append(("BACKGROUND", (0, i), (-1, i), _PRIORI_LIGHT_PURPLE))
+        stmt_table.setStyle(TableStyle(row_style))
 
         elements.append(stmt_table)
         elements.append(Spacer(1, 6 * mm))
@@ -468,6 +519,18 @@ class DocumentPDFGenerator:
         )
 
         elements.append(balance_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        if currency:
+            elements.append(Paragraph(f"<i>Currency: {currency}</i>", _SUB_STYLE))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(
+            Paragraph(
+                f"<i>Please remit payment to {owner_name} within 30 days of "
+                f"invoice date. Contact {get(customer, 'email') or ''} with any queries.</i>",
+                _SUB_STYLE,
+            )
+        )
 
         doc.build(elements)
         pdf_bytes = buf.getvalue()
@@ -506,7 +569,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -584,7 +647,7 @@ class DocumentPDFGenerator:
         list_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -666,7 +729,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -817,7 +880,7 @@ class DocumentPDFGenerator:
         items_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 10),
@@ -1046,7 +1109,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -1163,7 +1226,7 @@ class DocumentPDFGenerator:
         stmt_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -1235,7 +1298,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )

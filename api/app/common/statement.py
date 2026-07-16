@@ -16,6 +16,17 @@ from app.common.financial import quantize_money
 # Default statement window when the caller does not supply explicit bounds.
 DEFAULT_STATEMENT_PERIOD_DAYS = 365
 
+#: Statuses excluded from statement balances: drafts are not yet
+#: receivable/payable, and canceled documents — including payments recorded
+#: against them — must not move the balance. Plain strings so the predicate
+#: applies to invoices (draft/canceled) and expenses (canceled) alike.
+#:
+#: This is the single source of truth for exclusions applied symmetrically to
+#: the debit side (documents) and credit side (payments recorded against them)
+#: in both customer and vendor statement services. Asymmetric or per-service
+#: copies of this rule are how opening balances can drift after cancellations.
+EXCLUDED_STATEMENT_STATUSES: tuple[str, ...] = ("draft", "canceled")
+
 
 def default_statement_period(
     period_start: date | None = None,

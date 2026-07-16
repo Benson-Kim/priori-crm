@@ -12,9 +12,25 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { navItems } from "./nav-items";
 
-interface NavItem {
+import type { ComponentType, SVGProps } from "react";
+
+type SidebarIcon = ComponentType<
+    SVGProps<SVGSVGElement> & {
+        size?: number | string;
+    }
+>;
+
+interface NavChild {
     path: string;
     label: string;
+    icon?: SidebarIcon;
+}
+
+interface NavItem {
+    path?: string;
+    label: string;
+    icon?: SidebarIcon;
+    children?: NavChild[];
 }
 
 /** localStorage key persisting the collapsed/expanded preference. */
@@ -180,25 +196,39 @@ export function Sidebar() {
                                                 : "max-h-0 opacity-0 pointer-events-none"
                                         )}
                                     >
-                                        {item.children.map((child) => (
-                                            <Link
-                                                key={child.path}
-                                                to={child.path}
-                                                aria-label={child.label}
-                                                title={collapsed ? child.label : undefined}
-                                                className={cn(
-                                                    "flex items-center gap-3 rounded-xl text-sm font-medium transition-all border",
-                                                    collapsed
-                                                        ? "justify-center px-1 py-2 text-[11px] text-center leading-tight"
-                                                        : "p-3 pl-6",
-                                                    isActive(child.path)
-                                                        ? "bg-white text-priori-purple font-bold border-gray-200"
-                                                        : "text-gray-600 hover:bg-white/50 border-transparent hover:border-gray-200"
-                                                )}
-                                            >
-                                                {child.label}
-                                            </Link>
-                                        ))}
+                                        {item.children.map((child) => {
+                                            const ChildIcon = child.icon;
+
+                                            return (
+                                                <Link
+                                                    key={child.path}
+                                                    to={child.path}
+                                                    aria-label={child.label}
+                                                    title={collapsed ? child.label : undefined}
+                                                    className={cn(
+                                                        "flex items-center gap-3 rounded-xl text-sm font-medium transition-all border",
+                                                        collapsed
+                                                            ? "justify-center px-1 py-2"
+                                                            : "p-3 pl-6",
+                                                        isActive(child.path)
+                                                            ? "bg-white text-priori-purple font-bold border-gray-200"
+                                                            : "text-gray-600 hover:bg-white/50 border-transparent hover:border-gray-200"
+                                                    )}
+                                                >
+                                                    {ChildIcon && (
+                                                        <ChildIcon
+                                                            size={16}
+                                                            className="shrink-0"
+                                                            aria-hidden="true"
+                                                        />
+                                                    )}
+
+                                                    {!collapsed && (
+                                                        <span className="truncate">{child.label}</span>
+                                                    )}
+                                                </Link>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
