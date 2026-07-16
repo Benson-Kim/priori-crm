@@ -48,7 +48,7 @@ export interface DocumentPayload {
   transactionDate: string;
   dueDate: string;
   currency: Currency;
-  // rfqNumber?: string;
+  rfqNumber?: string;
   notes?: string;
   discountType?: "amount" | "percentage";
   discountAmount?: number;
@@ -72,7 +72,7 @@ export interface DocumentInitialData {
   transactionDate?: string;
   dueDate?: string;
   currency?: Currency;
-  // rfqNumber?: string;
+  rfqNumber?: string;
   notes?: string;
   vatEnabled?: boolean;
   vatRate?: number | null;
@@ -295,7 +295,9 @@ export function DocumentEditor({
         : null,
       vatComplianceRef: vatComplianceRef.trim() || null,
       lineItems: items,
-      // rfqNumber: rfqNumber.trim() || undefined,
+      // No RFQ input is rendered yet; pass the persisted value through so
+      // an update never silently drops it.
+      rfqNumber: initialData?.rfqNumber,
       notes: notes.trim() || undefined,
       discountType: discountType ?? undefined,
       discountAmount:

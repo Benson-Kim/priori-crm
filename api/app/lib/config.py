@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
+    # OpenTelemetry metrics (observability follow-up, issue #4). Off by
+    # default; when enabled, HTTP server metrics are exported over
+    # OTLP/HTTP to OTEL_EXPORTER_OTLP_ENDPOINT (or the SDK default).
+    OTEL_METRICS_ENABLED: bool = False
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
+    OTEL_METRIC_EXPORT_INTERVAL_MS: int = Field(default=60000, ge=1000, le=300000)
+
     # Batch Processing
     BATCH_SIZE: int = Field(default=1000, ge=100, le=10000)
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
