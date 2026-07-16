@@ -115,9 +115,7 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   return null;
 };
 
-// ---------------------------------------------------------------------------
 // Section-level widget: Summary cards
-// ---------------------------------------------------------------------------
 
 interface SummaryWidgetProps {
   currency: string;
@@ -216,9 +214,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Section-level widget: Cashflow chart
-// ---------------------------------------------------------------------------
 
 interface CashflowWidgetProps {
   currency: string;
@@ -315,8 +311,8 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
               tick={{ fill: "#9ca3af", fontSize: 12 }}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
-              <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
-              <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
+            <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
+            <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -324,9 +320,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Section-level widget: Top Sales
-// ---------------------------------------------------------------------------
 
 const SALES_COLUMNS = [
   {
@@ -336,9 +330,8 @@ const SALES_COLUMNS = [
     render: (item: TopSaleLine) => (
       <div className="flex items-center space-x-3">
         <p
-          className={`h-10 w-10 flex items-center justify-center text-white ${
-            badgeForName(item.item_name)
-          }`}
+          className={`h-10 w-10 flex items-center justify-center text-white ${badgeForName(item.item_name)
+            }`}
         >
           {getNameInitials(item.item_name).slice(0, 1) || "?"}
         </p>
@@ -445,9 +438,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Section-level widget: Recent Transactions
-// ---------------------------------------------------------------------------
 
 interface TransactionsWidgetProps {
   currency: string;
@@ -573,7 +564,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
             placeholder="Select range"
             selectWrapperClassName="min-w-[180px]"
           />
-          <Button variant="outline">View all</Button>
+          <Button variant="outline" size="lg">View all</Button>
         </div>
       </div>
 
@@ -598,9 +589,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Page root
-// ---------------------------------------------------------------------------
 
 /**
  * DashboardPage
