@@ -189,6 +189,22 @@ class Quote(Base):
         comment="Discount percentage 0-100 (if discount_type = 'percentage')",
     )
 
+    # Document-level VAT (sales VAT toggle — mirrors PO-level VAT). When
+    # enabled, tax_total is computed once on the discounted subtotal at
+    # vat_rate and line items persist tax_type=no_tax / tax_amount=0.
+    vat_enabled: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment="Enable document-level VAT computed on the discounted subtotal",
+    )
+
+    vat_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4),
+        nullable=True,
+        comment="Document-level VAT rate as a fraction (e.g. 0.1600)",
+    )
+
     tax_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,
