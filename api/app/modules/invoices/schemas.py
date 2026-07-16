@@ -427,6 +427,8 @@ class InvoiceResponse(BaseModel):
     discount_type: str | None = None
     discount_amount: Decimal | None = None
     discount_percentage: Decimal | None = None
+    vat_enabled: bool = False
+    vat_rate: Decimal | None = None
     tax_total: Decimal
     total_due: Decimal
     amount_paid: Decimal
