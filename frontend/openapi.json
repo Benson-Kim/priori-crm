@@ -2756,6 +2756,36 @@
             "format": "date",
             "title": "Transactiondate",
             "type": "string"
+          },
+          "vatEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Enable document-level VAT computed once on the discounted subtotal. Omit (together with vatRate) to inherit the owner profile's VAT settings.",
+            "title": "Vatenabled"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "VAT rate as a fraction (e.g. 0.16 for 16%). Required when vatEnabled is true.",
+            "title": "Vatrate"
           }
         },
         "required": [
@@ -3155,6 +3185,23 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "vat_enabled": {
+            "default": false,
+            "title": "Vat Enabled",
+            "type": "boolean"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
           },
           "version": {
             "title": "Version",
@@ -3624,6 +3671,34 @@
               }
             ],
             "title": "Transactiondate"
+          },
+          "vatEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatenabled"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatrate"
           }
         },
         "title": "InvoiceUpdate",
@@ -3844,6 +3919,22 @@
             ],
             "title": "Updatedat"
           },
+          "vatEnabled": {
+            "default": false,
+            "title": "Vatenabled",
+            "type": "boolean"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatrate"
+          },
           "website": {
             "anyOf": [
               {
@@ -3967,6 +4058,22 @@
               }
             ],
             "title": "Taxpin"
+          },
+          "vatEnabled": {
+            "default": false,
+            "title": "Vatenabled",
+            "type": "boolean"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatrate"
           },
           "website": {
             "anyOf": [
@@ -5994,6 +6101,36 @@
             "format": "date",
             "title": "Transactiondate",
             "type": "string"
+          },
+          "vatEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Enable document-level VAT computed once on the discounted subtotal. Omit (together with vatRate) to inherit the owner profile's VAT settings.",
+            "title": "Vatenabled"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "VAT rate as a fraction (e.g. 0.16 for 16%). Required when vatEnabled is true.",
+            "title": "Vatrate"
           }
         },
         "required": [
@@ -6002,37 +6139,6 @@
           "lineItems"
         ],
         "title": "QuoteCreate",
-        "type": "object"
-      },
-      "QuoteDuplicateResponse": {
-        "description": "Response after duplicating a quote.",
-        "properties": {
-          "message": {
-            "default": "Quote duplicated successfully",
-            "title": "Message",
-            "type": "string"
-          },
-          "new_quote_id": {
-            "format": "uuid",
-            "title": "New Quote Id",
-            "type": "string"
-          },
-          "new_quote_number": {
-            "title": "New Quote Number",
-            "type": "string"
-          },
-          "original_quote_id": {
-            "format": "uuid",
-            "title": "Original Quote Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "original_quote_id",
-          "new_quote_id",
-          "new_quote_number"
-        ],
-        "title": "QuoteDuplicateResponse",
         "type": "object"
       },
       "QuoteLineItemCreate": {
@@ -6431,6 +6537,23 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "vat_enabled": {
+            "default": false,
+            "title": "Vat Enabled",
+            "type": "boolean"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
           },
           "version": {
             "title": "Version",
@@ -6894,6 +7017,34 @@
               }
             ],
             "title": "Transactiondate"
+          },
+          "vatEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatenabled"
+          },
+          "vatRate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vatrate"
           }
         },
         "title": "QuoteUpdate",
@@ -9662,6 +9813,187 @@
         ]
       }
     },
+    "/api/v1/customers/{customer_id}/statement/excel": {
+      "get": {
+        "description": "Export the customer statement-of-accounts for a date range (defaults to the last 12 months) as an .xlsx workbook: period and account summary block plus one row per ledger transaction. The workbook is rendered off the event loop.",
+        "operationId": "export_customer_statement_excel_api_v1_customers__customer_id__statement_excel_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Period start date",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Period start date",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "Period end date",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Period end date",
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel file"
+          },
+          "404": {
+            "description": "Customer not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export customer statement to Excel",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/statement/pdf": {
+      "get": {
+        "description": "Generate and stream the customer statement-of-accounts PDF for a date range (defaults to the last 12 months). Renders the same content as the Statements tab: owner branding header, account summary and the chronological transactions ledger with a running balance. Owner branding always comes from the live profile.",
+        "operationId": "download_customer_statement_pdf_api_v1_customers__customer_id__statement_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Period start date",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Period start date",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "Period end date",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Period end date",
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/pdf": {}
+            },
+            "description": "PDF file"
+          },
+          "404": {
+            "description": "Customer not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "description": "PDF could not be generated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download customer statement as PDF",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
     "/api/v1/dashboard/cashflow-series": {
       "get": {
         "description": "Zero-filled income/expense buckets covering the selected period exactly, plus period totals. Measured at tax-inclusive totals (the same cash view as the statements cashflow ledger).",
@@ -11736,6 +12068,38 @@
                 }
               ],
               "title": "Discount Percentage"
+            }
+          },
+          {
+            "description": "Enable document-level VAT on the discounted subtotal",
+            "in": "query",
+            "name": "vatEnabled",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Enable document-level VAT on the discounted subtotal",
+              "title": "Vatenabled",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+            "in": "query",
+            "name": "vatRate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+              "title": "Vatrate"
             }
           }
         ],
@@ -14728,6 +15092,38 @@
               ],
               "title": "Discount Percentage"
             }
+          },
+          {
+            "description": "Enable document-level VAT on the discounted subtotal",
+            "in": "query",
+            "name": "vatEnabled",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Enable document-level VAT on the discounted subtotal",
+              "title": "Vatenabled",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+            "in": "query",
+            "name": "vatRate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled.",
+              "title": "Vatrate"
+            }
           }
         ],
         "requestBody": {
@@ -15353,58 +15749,6 @@
           }
         ],
         "summary": "Convert quote to invoice",
-        "tags": [
-          "Quotes"
-        ]
-      }
-    },
-    "/api/v1/quotes/{quote_id}/duplicate": {
-      "post": {
-        "description": "Create a copy of a quote as a new DRAFT.",
-        "operationId": "duplicate_quote_api_v1_quotes__quote_id__duplicate_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "quote_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Quote Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QuoteDuplicateResponse"
-                }
-              }
-            },
-            "description": "Quote duplicated successfully"
-          },
-          "404": {
-            "description": "Quote not found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Duplicate quote",
         "tags": [
           "Quotes"
         ]
