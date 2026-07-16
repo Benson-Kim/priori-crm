@@ -1,39 +1,24 @@
-import ForgotPasswordPage from "@/pages/auth/forgot-password";
-import LoginPage from "@/pages/auth/login";
-import OTPPage from "@/pages/auth/otp";
-import ResetPasswordPage from "@/pages/auth/reset-password";
-import ExpensesPage from "@/pages/purchases/expenses";
-import AddExpensePage from "@/pages/purchases/expenses/add";
-import ExpensesDetailPage from "@/pages/purchases/expenses/detail";
-import EditExpensePage from "@/pages/purchases/expenses/edit";
-import PurchaseOrdersPage from "@/pages/purchases/purchase-orders";
-import AddPurchaseOrderPage from "@/pages/purchases/purchase-orders/add";
-import PurchaseOrderDetailPage from "@/pages/purchases/purchase-orders/detail";
-import EditPurchaseOrderPage from "@/pages/purchases/purchase-orders/edit";
-import VendorsPage from "@/pages/purchases/vendors";
-import VendorDetailPage from "@/pages/purchases/vendors/detail";
-import CustomersPage from "@/pages/sales/customers";
-import AddCustomerPage from "@/pages/sales/customers/add";
-import CustomerDetailsPage from "@/pages/sales/customers/detail";
-import EditCustomerPage from "@/pages/sales/customers/edit";
-import InvoicesPage from "@/pages/sales/invoices";
-import AddInvoicePage from "@/pages/sales/invoices/add";
-import { InvoiceDetailPage } from "@/pages/sales/invoices/detail";
-import EditInvoicePage from "@/pages/sales/invoices/edit";
-import QuotesPage from "@/pages/sales/quotes";
-import AddQuotePage from "@/pages/sales/quotes/add";
-import QuoteDetailPage from "@/pages/sales/quotes/detail";
-import EditQuotePage from "@/pages/sales/quotes/edit";
-
-
-import DashboardPage from "@/pages/dashboard";
-import CashflowPage from "@/pages/statements/cashflow";
-import IncomeStatementsPage from "@/pages/statements/income-statement";
+import { lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
+
+import { LoadingState } from "@/components/ui/LoadingState";
+import LoginPage from "@/pages/auth/login";
 import RequireAuth from "./auth/RequireAuth";
 import DefaultLayout from "./layout/default-layout";
 
-
+// Route-based code splitting: every page below is fetched on demand, so the
+// initial bundle only ships the shell (router, auth guard, layout) and the
+// login page. This is the single biggest lever for first paint on slow
+// (3G) networks — heavy dependencies like recharts (dashboard/statements)
+// and react-pdf (document previews) stay out of the entry chunk entirely.
+const lazyPage = (loader: () => Promise<{ default: ComponentType }>) => {
+    const Page = lazy(loader);
+    return (
+        <Suspense fallback={<LoadingState message="Loading..." className="h-64" />}>
+            <Page />
+        </Suspense>
+    );
+};
 
 const routes = [
     {
@@ -42,15 +27,15 @@ const routes = [
     },
     {
         path: "/verify-otp",
-        element: <OTPPage />,
+        element: lazyPage(() => import("@/pages/auth/otp")),
     },
     {
         path: "/forgot-password",
-        element: <ForgotPasswordPage />,
+        element: lazyPage(() => import("@/pages/auth/forgot-password")),
     },
     {
         path: "/reset-password",
-        element: <ResetPasswordPage />,
+        element: lazyPage(() => import("@/pages/auth/reset-password")),
     },
     {
         element: <RequireAuth />,
@@ -68,7 +53,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <DashboardPage />,
+                                element: lazyPage(() => import("@/pages/dashboard")),
                                 handle: {
                                     header: {
                                         title: "Welcome, Frank ",
@@ -83,7 +68,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <CustomersPage />,
+                                element: lazyPage(() => import("@/pages/sales/customers")),
                                 handle: {
                                     header: {
                                         title: "Customers",
@@ -93,7 +78,7 @@ const routes = [
                             },
                             {
                                 path: "add",
-                                element: <AddCustomerPage />,
+                                element: lazyPage(() => import("@/pages/sales/customers/add")),
                                 handle: {
                                     header: {
                                         title: "Create Customer",
@@ -103,7 +88,7 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <CustomerDetailsPage />,
+                                element: lazyPage(() => import("@/pages/sales/customers/detail")),
                                 handle: {
                                     header: {
                                         title: "Customer Profile",
@@ -113,7 +98,7 @@ const routes = [
                             },
                             {
                                 path: ":id/edit",
-                                element: <EditCustomerPage />,
+                                element: lazyPage(() => import("@/pages/sales/customers/edit")),
                                 handle: {
                                     header: {
                                         title: "Edit Customer",
@@ -128,7 +113,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <QuotesPage />,
+                                element: lazyPage(() => import("@/pages/sales/quotes")),
                                 handle: {
                                     header: {
                                         title: "Quotes",
@@ -138,7 +123,7 @@ const routes = [
                             },
                             {
                                 path: "add",
-                                element: <AddQuotePage />,
+                                element: lazyPage(() => import("@/pages/sales/quotes/add")),
                                 handle: {
                                     header: {
                                         title: "Create New Quote",
@@ -148,7 +133,7 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <QuoteDetailPage />,
+                                element: lazyPage(() => import("@/pages/sales/quotes/detail")),
                                 handle: {
                                     header: {
                                         title: "Quote Detail",
@@ -158,7 +143,7 @@ const routes = [
                             },
                             {
                                 path: ":id/edit",
-                                element: <EditQuotePage />,
+                                element: lazyPage(() => import("@/pages/sales/quotes/edit")),
                                 handle: {
                                     header: {
                                         title: "Edit Quote",
@@ -173,7 +158,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <InvoicesPage />,
+                                element: lazyPage(() => import("@/pages/sales/invoices")),
                                 handle: {
                                     header: {
                                         title: "Invoices",
@@ -183,7 +168,7 @@ const routes = [
                             },
                             {
                                 path: "add",
-                                element: <AddInvoicePage />,
+                                element: lazyPage(() => import("@/pages/sales/invoices/add")),
                                 handle: {
                                     header: {
                                         title: "Create New Invoice",
@@ -193,7 +178,11 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <InvoiceDetailPage />,
+                                element: lazyPage(() =>
+                                    import("@/pages/sales/invoices/detail").then((m) => ({
+                                        default: m.InvoiceDetailPage,
+                                    }))
+                                ),
                                 handle: {
                                     header: {
                                         title: "Invoice Detail",
@@ -203,7 +192,7 @@ const routes = [
                             },
                             {
                                 path: ":id/edit",
-                                element: <EditInvoicePage />,
+                                element: lazyPage(() => import("@/pages/sales/invoices/edit")),
                                 handle: {
                                     header: {
                                         title: "Edit Invoice",
@@ -218,7 +207,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <VendorsPage />,
+                                element: lazyPage(() => import("@/pages/purchases/vendors")),
                                 handle: {
                                     header: {
                                         title: "Vendors",
@@ -228,7 +217,7 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <VendorDetailPage />,
+                                element: lazyPage(() => import("@/pages/purchases/vendors/detail")),
                                 handle: {
                                     header: {
                                         title: "Vendor Detail",
@@ -243,7 +232,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <ExpensesPage />,
+                                element: lazyPage(() => import("@/pages/purchases/expenses")),
                                 handle: {
                                     header: {
                                         title: "Expenses",
@@ -253,7 +242,7 @@ const routes = [
                             },
                             {
                                 path: "new",
-                                element: <AddExpensePage />,
+                                element: lazyPage(() => import("@/pages/purchases/expenses/add")),
                                 handle: {
                                     header: {
                                         title: "Create New Expense",
@@ -263,7 +252,7 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <ExpensesDetailPage />,
+                                element: lazyPage(() => import("@/pages/purchases/expenses/detail")),
                                 handle: {
                                     header: {
                                         title: "Expense Detail",
@@ -273,7 +262,7 @@ const routes = [
                             },
                             {
                                 path: ":id/edit",
-                                element: <EditExpensePage />,
+                                element: lazyPage(() => import("@/pages/purchases/expenses/edit")),
                                 handle: {
                                     header: {
                                         title: "Edit Expense",
@@ -288,7 +277,7 @@ const routes = [
                         children: [
                             {
                                 index: true,
-                                element: <PurchaseOrdersPage />,
+                                element: lazyPage(() => import("@/pages/purchases/purchase-orders")),
                                 handle: {
                                     header: {
                                         title: "Purchase Orders",
@@ -298,7 +287,7 @@ const routes = [
                             },
                             {
                                 path: "new",
-                                element: <AddPurchaseOrderPage />,
+                                element: lazyPage(() => import("@/pages/purchases/purchase-orders/add")),
                                 handle: {
                                     header: {
                                         title: "Create New Purchase Order",
@@ -308,7 +297,7 @@ const routes = [
                             },
                             {
                                 path: ":id",
-                                element: <PurchaseOrderDetailPage />,
+                                element: lazyPage(() => import("@/pages/purchases/purchase-orders/detail")),
                                 handle: {
                                     header: {
                                         title: "Purchase Order Detail",
@@ -318,7 +307,7 @@ const routes = [
                             },
                             {
                                 path: ":id/edit",
-                                element: <EditPurchaseOrderPage />,
+                                element: lazyPage(() => import("@/pages/purchases/purchase-orders/edit")),
                                 handle: {
                                     header: {
                                         title: "Edit Purchase Order",
@@ -330,7 +319,7 @@ const routes = [
                     },
                     {
                         path: "income-statement",
-                        element: <IncomeStatementsPage />,
+                        element: lazyPage(() => import("@/pages/statements/income-statement")),
                         handle: {
                             header: {
                                 title: "Income Statements",
@@ -340,7 +329,7 @@ const routes = [
                     },
                     {
                         path: "cashflow",
-                        element: <CashflowPage />,
+                        element: lazyPage(() => import("@/pages/statements/cashflow")),
                         handle: {
                             header: {
                                 title: "Cashflow",
