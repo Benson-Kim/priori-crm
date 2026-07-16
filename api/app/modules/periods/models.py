@@ -8,7 +8,7 @@ the service enforces this on create (a privileged, low-frequency path).
 
 import uuid
 from datetime import UTC, date, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import CheckConstraint, Date, DateTime, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.common.database import Base
 
 
-class PeriodStatus(str, Enum):
+class PeriodStatus(StrEnum):
     """Lifecycle of an accounting period."""
 
     OPEN = "open"
