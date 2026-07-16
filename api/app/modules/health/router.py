@@ -162,3 +162,63 @@ def drain_email_outbox(
     from app.common.email_outbox import EmailOutboxService
 
     return EmailOutboxService(db).drain(limit=limit)
+
+
+@router.get(
+    "/internal/email-outbox/dead",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+    summary="List dead-lettered outbox emails (internal)",
+    description=(
+        "Inspect emails whose delivery attempts are exhausted "
+        "(status='dead'). Operator tooling for the dead-letter queue; see "
+        "docs/operations/email-outbox-dlq.md. Requires X-Internal-Secret."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_dead_letter_emails(
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> dict:
+    from app.common.email_outbox import EmailOutboxService
+
+    items = EmailOutboxService(db).list_dead(limit=limit)
+    return {"count": len(items), "items": items}
+
+
+@router.post(
+    "/internal/email-outbox/requeue",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+    summary="Requeue dead-lettered outbox emails (internal)",
+    description=(
+        "Return dead-lettered emails to the retry queue with a fresh "
+        "attempt budget. Use only after the delivery root cause is fixed; "
+        "see docs/operations/email-outbox-dlq.md. Optionally target one "
+        "row via outboxId. Requires X-Internal-Secret."
+    ),
+    dependencies=[Depends(verify_internal_secret)],
+)
+def requeue_dead_letter_emails(
+    db: Annotated[Session, Depends(get_db)],
+    outbox_id: Annotated[
+        str | None,
+        Query(alias="outboxId", description="Requeue a single row by id"),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> dict:
+    import uuid as uuid_module
+
+    from app.common.email_outbox import EmailOutboxService
+    from app.common.exceptions import BadRequestException
+
+    parsed_id = None
+    if outbox_id:
+        try:
+            parsed_id = uuid_module.UUID(outbox_id)
+        except ValueError:
+            raise BadRequestException(
+                detail="outboxId must be a valid UUID", field="outboxId"
+            ) from None
+
+    return EmailOutboxService(db).requeue_dead(outbox_id=parsed_id, limit=limit)
