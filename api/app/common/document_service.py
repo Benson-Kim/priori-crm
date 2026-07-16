@@ -427,6 +427,31 @@ class BaseDocumentService(
             )
         return enabled, rate
 
+    def _resolve_vat_compliance_ref(
+        self,
+        vat_compliance_ref: str | None,
+        *,
+        field_sent: bool,
+        vat_enabled: bool,
+    ) -> str | None:
+        """Resolve the document's VAT compliance reference for create.
+
+        Mirrors PO-27 Option A: an explicitly supplied reference always
+        wins (blank normalises to NULL); when omitted and VAT is enabled,
+        it defaults from the owner profile's tax PIN so issued documents
+        carry our own registration number.
+        """
+        if field_sent:
+            cleaned = (vat_compliance_ref or "").strip()
+            return cleaned or None
+        if not vat_enabled:
+            return None
+
+        from app.modules.owner.service import OwnerService
+
+        pin = (OwnerService(self._db).get_or_create().tax_pin or "").strip()
+        return pin or None
+
     #: Response class returned by calculate_totals (set per service).
     _calculation_response_cls: ClassVar[Any] = None
 

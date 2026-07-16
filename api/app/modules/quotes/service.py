@@ -158,6 +158,14 @@ class QuoteService(BaseDocumentService):
             fields_sent={"vat_enabled", "vat_rate"} & data.model_fields_set,
         )
 
+        # VAT compliance reference: explicit value wins; when omitted and
+        # VAT is enabled it defaults from the owner tax PIN (PO-27 parity).
+        vat_compliance_ref = self._resolve_vat_compliance_ref(
+            data.vat_compliance_ref,
+            field_sent="vat_compliance_ref" in data.model_fields_set,
+            vat_enabled=vat_enabled,
+        )
+
         line_items_data = build_line_items(data.line_items)
         if vat_enabled:
             # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
@@ -189,6 +197,7 @@ class QuoteService(BaseDocumentService):
                 discount_percentage=data.discount_percentage,
                 vat_enabled=vat_enabled,
                 vat_rate=vat_rate,
+                vat_compliance_ref=vat_compliance_ref,
                 tax_total=tax_total,
                 total_due=total_due,
                 rfq_rfp_number=data.rfq_rfp_number,

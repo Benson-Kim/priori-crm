@@ -47,6 +47,13 @@ export default function EditQuotePage() {
                             transactionDate: initialData.transaction_date,
                             dueDate: initialData.due_date,
                             currency: initialData.currency as CurrencyOption,
+                            vatEnabled: initialData.vat_enabled ?? undefined,
+                            vatRate:
+                                initialData.vat_rate == null
+                                    ? undefined
+                                    : Number(initialData.vat_rate),
+                            vatComplianceRef:
+                                initialData.vat_compliance_ref ?? undefined,
                             rfqNumber: initialData.rfq_rfp_number ?? undefined,
                             notes: initialData.notes ?? undefined,
                             discountType: initialData.discount_type as
