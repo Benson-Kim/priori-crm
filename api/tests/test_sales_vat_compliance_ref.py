@@ -182,9 +182,7 @@ class TestOwnerVatRatePrecision:
         owner = OwnerService(db)
         owner.get_or_create()
         owner.update(
-            OwnerProfileUpdate(
-                fullName="Acme Ltd", vatEnabled=True, vatRate=0.165
-            )
+            OwnerProfileUpdate(fullName="Acme Ltd", vatEnabled=True, vatRate=0.165)
         )
         db.flush()
         profile = owner.get_or_create()

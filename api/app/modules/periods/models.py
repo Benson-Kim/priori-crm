@@ -89,6 +89,4 @@ class AccountingPeriod(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<AccountingPeriod {self.start_date}..{self.end_date} {self.status}>"
-        )
+        return f"<AccountingPeriod {self.start_date}..{self.end_date} {self.status}>"
