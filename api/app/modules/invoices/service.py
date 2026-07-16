@@ -183,6 +183,8 @@ class InvoiceService(BaseDocumentService):
                 discount_type=data.discount_type,
                 discount_amount=data.discount_amount,
                 discount_percentage=data.discount_percentage,
+                vat_enabled=vat_enabled,
+                vat_rate=vat_rate,
                 tax_total=tax_total,
                 total_due=total_due,
                 amount_paid=Decimal("0.00"),

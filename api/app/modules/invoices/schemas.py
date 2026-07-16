@@ -378,6 +378,12 @@ class InvoiceUpdate(BaseModel):
         None, ge=0, le=100, alias="discountPercentage"
     )
 
+    # Document-level VAT (editable while the invoice is editable). The
+    # service validates that an effective rate exists whenever the toggle
+    # ends up enabled.
+    vat_enabled: bool | None = Field(None, alias="vatEnabled")
+    vat_rate: Decimal | None = Field(None, ge=0, le=1, alias="vatRate")
+
     @field_validator("rfq_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
