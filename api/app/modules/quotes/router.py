@@ -157,13 +157,43 @@ def calculate_quote_totals(
     discount_type: Annotated[str | None, Query()] = None,
     discount_amount: Annotated[float | None, Query()] = None,
     discount_percentage: Annotated[float | None, Query()] = None,
+    vat_enabled: Annotated[
+        bool,
+        Query(
+            alias="vatEnabled",
+            description="Enable document-level VAT on the discounted subtotal",
+        ),
+    ] = False,
+    vat_rate: Annotated[
+        float | None,
+        Query(
+            alias="vatRate",
+            ge=0,
+            le=1,
+            description=(
+                "VAT rate as a fraction (e.g. 0.16). Required when vatEnabled."
+            ),
+        ),
+    ] = None,
 ) -> QuoteCalculationResponse:
     """Calculate quote totals without saving (preview)."""
+    from app.common.exceptions import BadRequestException
+
+    # Preview/persist parity: a rate is required when VAT is enabled.
+    if vat_enabled and vat_rate is None:
+        raise BadRequestException(
+            detail="vat_rate is required when vat_enabled is true",
+            field="vatRate",
+        )
+
     dt = DiscountType(discount_type) if discount_type else None
     da = Decimal(str(discount_amount)) if discount_amount is not None else None
     dp = Decimal(str(discount_percentage)) if discount_percentage is not None else None
+    vr = Decimal(str(vat_rate)) if vat_rate is not None else None
 
-    return QuoteService.calculate_totals(line_items, dt, da, dp)
+    return QuoteService.calculate_totals(
+        line_items, dt, da, dp, vat_enabled=vat_enabled, vat_rate=vr
+    )
 
 
 @router.get(

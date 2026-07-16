@@ -272,8 +272,20 @@ class PurchaseOrderService(BaseDocumentService):
         # line. Per-line tax fields are forced to no_tax/0 so they can never
         # contribute to PO totals. The VAT compliance ref defaults from the
         # owner profile's tax_pin (editable per PO) when the client omits it.
-        vat_enabled = bool(data.vat_enabled)
-        vat_rate = data.vat_rate if vat_enabled else None
+        # When the client sent neither VAT field, default the toggle from
+        # the owner profile so new POs inherit our own VAT settings.
+        vat_fields_sent = {"vat_enabled", "vat_rate"} & data.model_fields_set
+        if vat_fields_sent:
+            vat_enabled = bool(data.vat_enabled)
+            vat_rate = data.vat_rate if vat_enabled else None
+        else:
+            from app.modules.owner.service import OwnerService
+
+            _profile = OwnerService(self._db).get_or_create()
+            vat_enabled = (
+                bool(_profile.vat_enabled) and _profile.vat_rate is not None
+            )
+            vat_rate = Decimal(str(_profile.vat_rate)) if vat_enabled else None
         vat_compliance_ref = data.vat_compliance_ref
         if vat_compliance_ref is None:
             vat_compliance_ref = self._owner_vat_compliance_ref()
