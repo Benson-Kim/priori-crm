@@ -435,20 +435,23 @@ export function DocumentEditor({
                   aria-label="Add VAT"
                 />
 
-                {/* {vatEnabled && (
+                {vatEnabled && (
                   <>
                     <label
                       htmlFor="vat-rate"
                       className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                     >
-                      VAT Rate
+                      VAT Rate (%)
                     </label>
 
                     <Input
                       id="vat-rate"
                       type="number"
                       value={vatRatePct}
-                      onChange={(e) => setVatRatePct(e.target.value)}
+                      onChange={(e) => {
+                        vatRateDirty.current = true;
+                        setVatRatePct(e.target.value);
+                      }}
                       disabled={restrictedMode}
                       placeholder="16"
                     />
@@ -463,12 +466,15 @@ export function DocumentEditor({
                     <Input
                       id="vat-compliance-ref"
                       value={vatComplianceRef}
-                      onChange={(e) => setVatComplianceRef(e.target.value)}
+                      onChange={(e) => {
+                        vatRefTouched.current = true;
+                        setVatComplianceRef(e.target.value);
+                      }}
                       disabled={restrictedMode}
                       placeholder="PIN"
                     />
                   </>
-                )} */}
+                )}
 
               </div>
             </div>
