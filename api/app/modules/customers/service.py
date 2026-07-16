@@ -11,6 +11,7 @@ from app.common.audit import record_audit_event, status_value
 from app.common.database import assert_version
 from app.common.document_service import ServiceBase
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     ConflictException,
     DatabaseException,
@@ -933,3 +934,45 @@ class CustomerService(ServiceBase):
         ).scalar() or Decimal("0.00")
 
         return Decimal(str(invoiced)) - Decimal(str(paid))
+
+    # PDF GENERATION
+
+    def _render_pdf(self, statement: CustomerStatement) -> bytes:
+        """Render a PDF for an already-generated customer statement.
+
+        Orchestration (owner branding + ReportLab generator) is shared with
+        invoices/quotes via DocumentPdfRenderer.
+
+        A rendering failure is not swallowed: it surfaces as an explicit 500
+        carrying the message so the UI can show "PDF could not be
+        generated. Please try again." instead of leaking a stack trace.
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        try:
+            return DocumentPdfRenderer(self._db).render_customer_statement(statement)
+        except Exception as exc:
+            logger.exception(
+                "Failed to render customer statement PDF",
+                extra={"customer_id": str(statement.customer.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc
+
+    def generate_statement_pdf(
+        self,
+        customer_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, CustomerStatement]:
+        """Generate the statement-of-accounts PDF for a customer and period.
+
+        Builds the statement once and returns it alongside the rendered
+        bytes, so the download endpoint never re-queries just for the
+        attachment filename.
+        """
+        statement = self.generate_statement(customer_id, period_start, period_end)
+        return self._render_pdf(statement), statement

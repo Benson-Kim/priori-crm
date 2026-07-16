@@ -6,7 +6,6 @@ import { useConfirm } from "@/hooks/useConfirm";
 import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
-import { VAT_RATE_OPTIONS } from "@/lib/constants";
 import { getTodayString } from "@/lib/dateUtils";
 import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
@@ -21,7 +20,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Divider } from "../ui/Divider";
 import { Dropdown, type DropdownItem } from "../ui/Dropdown";
-import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
@@ -50,11 +48,8 @@ export interface PurchaseOrderPayload {
   notes?: string;
   termsAndConditions?: string | null;
   lineItems: PurchaseOrderLineItemPayload[];
-  /** PO-level VAT toggle (tax charged on the subtotal). */
   vatEnabled: boolean;
-  /** VAT rate as a fraction (e.g. 0.16). Null when disabled. */
   vatRate: number | null | undefined;
-  /** VAT/compliance ref printed on the VAT line (defaults from owner PIN). */
   vatComplianceRef?: string | null;
 }
 
@@ -111,7 +106,7 @@ export function PurchaseOrderEditor({
   isLoading,
   restrictedMode = false,
 }: Readonly<PurchaseOrderEditorProps>) {
-  // Org-scoped Settings defaults (PO-11), resolved from the persisted owner
+  // Org-scoped Settings defaults, resolved from the persisted owner
   // profile with the built-in constants as fallback.
   const { profile } = useOwnerProfile();
   const navigate = useNavigate();
@@ -136,12 +131,11 @@ export function PurchaseOrderEditor({
   // totals preview shows the right currency before the server round-trip. The
   // server remains the source of truth on save (currency is vendor-derived).
   const [currency, setCurrency] = useState<string>(
-    initialData?.vendor?.currency ?? "Ksh"
+    initialData?.vendor?.currency ?? "KES"
   );
 
   const [notes, setNotes] = useState(initialData?.notes ?? "");
 
-  // PO-level VAT (PO-27): a single charge on the subtotal, not per line.
   const [vatEnabled, setVatEnabled] = useState<boolean>(
     initialData?.vatEnabled ?? false
   );
@@ -177,7 +171,9 @@ export function PurchaseOrderEditor({
   useEffect(() => {
     if (isEditingDoc || vatRefTouched.current) return;
     if (initialData?.vatComplianceRef != null) return;
+    if (initialData?.vatRate != null) return;
     if (profile?.taxPin) setVatComplianceRef(profile.taxPin);
+    if (profile?.vatRate) setVatRatePct(profile.vatRate * 100 + '%');
   }, [isEditingDoc, initialData?.vatComplianceRef, profile?.taxPin]);
 
   const isEditing = !!initialData?.poReference;
@@ -212,10 +208,7 @@ export function PurchaseOrderEditor({
     return Number.isFinite(pct) ? pct / 100 : 0;
   }, [vatRatePct]);
 
-  // Derived totals (client-side preview; server is the source of truth on
-  // save). PO-27: VAT is charged on the subtotal, not per line, so line tax is
-  // ignored here and the tax is computed via the shared helper (identical
-  // rounding to the backend) when enabled.
+  // Derived totals (client-side preview; server is the source of truth on save
   const totals = useMemo(() => {
     const base = calculateTotals(lineItems, null, "");
     const taxTotal = calcSubtotalVat(base.subtotal, vatEnabled, vatRateFraction);
@@ -555,67 +548,22 @@ export function PurchaseOrderEditor({
                   error={errors.deliveryDate}
                 />
 
-                {/* PO-level VAT (PO-27) — shown once a vendor is selected. */}
-                {vendorId && (
-                  <>
-                    <label
-                      htmlFor="vat-enabled"
-                      className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                    >
-                      Add VAT
-                    </label>
 
-                    <Toggle
-                      id="vat-enabled"
-                      checked={vatEnabled}
-                      onChange={setVatEnabled}
-                      disabled={restrictedMode}
-                      error={errors.vatEnabled}
-                      aria-label="Add VAT"
-                    />
+                <label
+                  htmlFor="vat-enabled"
+                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                >
+                  Add VAT
+                </label>
 
-                    {vatEnabled && (
-                      <>
-                        <label
-                          htmlFor="vat-rate"
-                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                        >
-                          VAT Rate
-                        </label>
-                        <Select
-                          id="vat-rate"
-                          value={vatRatePct}
-                          onChange={(e) => {
-                            vatRateDirty.current = true;
-                            setVatRatePct(e.target.value);
-                          }}
-                          disabled={restrictedMode}
-                          options={VAT_RATE_OPTIONS.map((o) => ({
-                            value: o.value,
-                            label: o.label,
-                          }))}
-                        />
-
-                        <label
-                          htmlFor="vat-compliance-ref"
-                          className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
-                        >
-                          Compliance Ref
-                        </label>
-                        <Input
-                          id="vat-compliance-ref"
-                          value={vatComplianceRef}
-                          onChange={(e) => {
-                            vatRefTouched.current = true;
-                            setVatComplianceRef(e.target.value);
-                          }}
-                          disabled={restrictedMode}
-                          placeholder="VAT / compliance reference"
-                        />
-                      </>
-                    )}
-                  </>
-                )}
+                <Toggle
+                  id="vat-enabled"
+                  checked={vatEnabled}
+                  onChange={setVatEnabled}
+                  disabled={restrictedMode}
+                  error={errors.vatEnabled}
+                  aria-label="Add VAT"
+                />
 
               </div>
             </div>

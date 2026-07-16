@@ -390,6 +390,43 @@ class BaseDocumentService(
 
         return DocumentPdfRenderer(self._db).load_owner_branding(entity)
 
+    def _resolve_vat(
+        self,
+        vat_enabled: bool | None,
+        vat_rate: Any,
+        *,
+        fields_sent: set[str],
+    ) -> tuple[bool, Any]:
+        """Resolve the effective document-level VAT settings for create.
+
+        When the client sent neither VAT field, the document defaults to
+        the owner profile's VAT settings (our own VAT), so new documents
+        inherit the org configuration. An explicitly supplied toggle always
+        wins. Raises 400 when VAT ends up enabled without a rate.
+        """
+        from decimal import Decimal
+
+        if fields_sent:
+            enabled = bool(vat_enabled)
+            rate = vat_rate if enabled else None
+        else:
+            from app.modules.owner.service import OwnerService
+
+            profile = OwnerService(self._db).get_or_create()
+            enabled = bool(profile.vat_enabled)
+            rate = (
+                Decimal(str(profile.vat_rate))
+                if enabled and profile.vat_rate is not None
+                else None
+            )
+
+        if enabled and rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+        return enabled, rate
+
     #: Response class returned by calculate_totals (set per service).
     _calculation_response_cls: ClassVar[Any] = None
 
@@ -400,20 +437,30 @@ class BaseDocumentService(
         discount_type: Any = None,
         discount_amount: Any = None,
         discount_percentage: Any = None,
+        vat_enabled: bool = False,
+        vat_rate: Any = None,
     ) -> Any:
         """Calculate document totals without saving (preview).
 
         Shared by invoices and quotes: the computation was
         duplicated verbatim, differing only in the response class, which
         concrete services declare via ``_calculation_response_cls``.
+
+        ``vat_enabled`` / ``vat_rate`` switch on document-level VAT:
+        per-line tax is neutralised and VAT is charged once on the
+        discounted subtotal, mirroring the persisted computation.
         """
         from app.common.financial import (
             build_line_items,
             calculate_discount,
+            calculate_subtotal_vat,
+            neutralize_line_tax,
             sum_line_totals,
         )
 
         built_items = build_line_items(line_items)
+        if vat_enabled:
+            neutralize_line_tax(built_items)
         subtotal, tax_total = sum_line_totals(built_items)
         calculated_items = [
             {
@@ -431,6 +478,11 @@ class BaseDocumentService(
         discount_value = calculate_discount(
             subtotal, discount_type, discount_amount, discount_percentage
         )
+        if vat_enabled:
+            # Document-level VAT is charged once on the discounted base.
+            tax_total = calculate_subtotal_vat(
+                subtotal - discount_value, vat_enabled, vat_rate
+            )
         total_due = subtotal - discount_value + tax_total
 
         return cls._calculation_response_cls(

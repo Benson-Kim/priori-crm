@@ -1,5 +1,6 @@
-import { apiDelete, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
+import { apiDelete, apiDownload, apiGet, apiPost, apiPut, flattenPaginated } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
+import { buildStatementParams } from "@/lib/dateUtils";
 import type { CustomerStatement, PaginatedApiResponse } from "@/lib/types";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
@@ -85,13 +86,28 @@ export function deleteCustomer(id: string, hardDelete = false, force = false) {
 }
 
 export async function getCustomerStatement(
-  customerId: string,
-  periodStart?: string,
-  periodEnd?: string
+  customerId: string, periodStart?: string, periodEnd?: string
 ): Promise<CustomerStatement> {
-  const params: Record<string, string> = {};
-  if (periodStart) params.period_start = periodStart;
-  if (periodEnd) params.period_end = periodEnd;
+  return apiGet<CustomerStatement>(
+    `customers/${customerId}/statement`,
+    buildStatementParams(periodStart, periodEnd)
+  );
+}
 
-  return apiGet<CustomerStatement>(`customers/${customerId}/statement`, params);
+export function downloadCustomerStatementPdf(
+  customerId: string, periodStart?: string, periodEnd?: string
+): Promise<Blob> {
+  return apiDownload(
+    `customers/${customerId}/statement/pdf`,
+    buildStatementParams(periodStart, periodEnd)
+  );
+}
+
+export function exportCustomerStatementExcel(
+  customerId: string, periodStart?: string, periodEnd?: string
+): Promise<Blob> {
+  return apiDownload(
+    `customers/${customerId}/statement/excel`,
+    buildStatementParams(periodStart, periodEnd)
+  );
 }

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.common.otel import record_http_request
 from app.common.rate_limit_store import (
     InMemoryRateLimitStore,
     build_rate_limit_store,
@@ -21,11 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Add unique request ID to each request for tracing."""
+    """Add a unique request ID to each request for tracing.
+
+    Honours a well-formed inbound ``X-Request-ID`` (validated as a UUID) so
+    a caller-supplied correlation ID survives across the frontend, this API
+    and downstream logs — one ID correlates logs, metrics and traces.
+    Anything malformed is replaced with a fresh UUID, so a client can never
+    inject arbitrary text into logs or response headers.
+    """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and add request ID."""
-        request_id = str(uuid.uuid4())
+        incoming = request.headers.get("X-Request-ID", "")
+        try:
+            request_id = str(uuid.UUID(incoming.strip()))
+        except (ValueError, AttributeError):
+            request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
         response = await call_next(request)
@@ -98,6 +110,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
             },
+        )
+
+        # OTel HTTP server metrics (no-op unless OTEL_METRICS_ENABLED).
+        # The templated route path keeps attribute cardinality bounded.
+        route = request.scope.get("route")
+        record_http_request(
+            method=request.method,
+            route=getattr(route, "path", request.url.path),
+            status_code=response.status_code,
+            duration_ms=duration_ms,
         )
 
         # Add timing header

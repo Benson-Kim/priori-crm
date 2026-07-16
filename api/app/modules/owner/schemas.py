@@ -43,6 +43,8 @@ class OwnerProfileUpdate(BaseModel):
     address: str | None = Field(None, max_length=5000)
     email: EmailStr | None = Field(None, max_length=255)
     phone: str | None = Field(None, max_length=30)
+    vat_enabled: bool = Field(False, alias="vatEnabled")
+    vat_rate: float | None = Field(None, alias="vatRate")
     tax_pin: str | None = Field(None, max_length=50, alias="taxPin")
     website: str | None = Field(None, max_length=255)
     # Org-scoped document-settings defaults
@@ -64,6 +66,8 @@ class OwnerProfileUpdate(BaseModel):
         "full_name",
         "location_watermark",
         "address",
+        "vat_enabled",
+        "vat_rate",
         "tax_pin",
         "default_terms_and_conditions",
         "default_send_message",
@@ -109,6 +113,8 @@ class OwnerProfileResponse(BaseModel):
     address: str | None = None
     email: str | None = None
     phone: str | None = None
+    vat_enabled: bool = Field(False, alias="vatEnabled")
+    vat_rate: float | None = Field(None, alias="vatRate")
     tax_pin: str | None = Field(None, alias="taxPin")
     website: str | None = None
     # Org-scoped document-settings defaults
@@ -135,12 +141,14 @@ class OwnerInfo(BaseModel):
     renderer never depends on the global ``settings`` singleton for branding.
     """
 
-    full_name: str
-    location_watermark: str | None = None
+    full_name: str = Field(..., alias="fullName")
+    location_watermark: str | None = Field(None, alias="locationWatermark")
     address: str | None = None
     email: str | None = None
     phone: str | None = None
-    tax_pin: str | None = None
+    vat_enabled: bool = Field(False, alias="vatEnabled")
+    vat_rate: float | None = Field(None, alias="vatRate")
+    tax_pin: str | None = Field(None, alias="taxPin")
     website: str | None = None
     logo_storage_key: str | None = None
     # Jurisdiction (frozen on the snapshot at issue time) so the renderer can
@@ -148,7 +156,7 @@ class OwnerInfo(BaseModel):
     # without reading the live profile.
     jurisdiction: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"populate_by_name": True, "from_attributes": True}
 
 
 class PurchaseOrderSettingsDefaults(BaseModel):

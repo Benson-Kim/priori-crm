@@ -71,7 +71,7 @@ export function useInvoiceForm(invoiceId?: string): UseInvoiceFormReturn {
                     unitPrice: li.unitPrice,
                     taxType: li.taxType,
                 })),
-                rfqNumber: payload.rfqNumber,
+                // rfqNumber: payload.rfqNumber,
                 notes: payload.notes,
                 discountType: payload.discountType,
                 discountAmount: payload.discountAmount,

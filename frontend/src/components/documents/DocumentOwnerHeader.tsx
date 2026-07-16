@@ -28,9 +28,6 @@ export function DocumentOwnerHeader({
   const showEdit = editable && canEdit;
   const [modalOpen, setModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Track image load failure so a transiently-broken blob URL falls back to
-  // the placeholder instead of the browser's broken-image + alt text. Reset
-  // whenever the logo URL changes (e.g. after an upload refetch).
   const [logoError, setLogoError] = useState(false);
   useEffect(() => {
     setLogoError(false);

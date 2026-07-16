@@ -17,8 +17,10 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
+    Numeric,
     String,
     Text,
     text,
@@ -59,6 +61,8 @@ class OwnerProfile(Base):
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    vat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     tax_pin: Mapped[str | None] = mapped_column(String(50), nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Opaque, sanitized storage key (not a servable path) for the logo, or
@@ -143,6 +147,8 @@ class OwnerProfileSnapshot(Base):
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    vat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     tax_pin: Mapped[str | None] = mapped_column(String(50), nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)

@@ -174,6 +174,30 @@ class QuoteCreate(BaseModel):
         alias="discountPercentage",
     )
 
+    # Document-level VAT (optional). When BOTH fields are omitted the
+    # service defaults them from the owner profile's VAT settings, so new
+    # quotes inherit our own (owner) VAT configuration.
+    vat_enabled: bool | None = Field(
+        None,
+        alias="vatEnabled",
+        description=(
+            "Enable document-level VAT computed once on the discounted "
+            "subtotal. Omit (together with vatRate) to inherit the owner "
+            "profile's VAT settings."
+        ),
+    )
+
+    vat_rate: Decimal | None = Field(
+        None,
+        ge=0,
+        le=1,
+        alias="vatRate",
+        description=(
+            "VAT rate as a fraction (e.g. 0.16 for 16%). Required when "
+            "vatEnabled is true."
+        ),
+    )
+
     @field_validator("rfq_rfp_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -232,6 +256,13 @@ class QuoteCreate(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_vat(self) -> "QuoteCreate":
+        """A VAT rate is required when VAT is explicitly enabled."""
+        if self.vat_enabled and self.vat_rate is None:
+            raise ValueError("vat_rate is required when vat_enabled is true")
+        return self
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {
@@ -280,6 +311,12 @@ class QuoteUpdate(BaseModel):
     discount_percentage: Decimal | None = Field(
         None, ge=0, le=100, alias="discountPercentage"
     )
+
+    # Document-level VAT (editable while the quote is editable). The
+    # service validates that an effective rate exists whenever the toggle
+    # ends up enabled.
+    vat_enabled: bool | None = Field(None, alias="vatEnabled")
+    vat_rate: Decimal | None = Field(None, ge=0, le=1, alias="vatRate")
 
     @field_validator("rfq_rfp_number", "notes", mode="before")
     @classmethod
@@ -351,6 +388,8 @@ class QuoteResponse(BaseModel):
     discount_type: str | None = None
     discount_amount: Decimal | None = None
     discount_percentage: Decimal | None = None
+    vat_enabled: bool = False
+    vat_rate: Decimal | None = None
     tax_total: Decimal
     total_due: Decimal
 
@@ -569,15 +608,6 @@ class QuoteConvertToInvoiceResponse(BaseModel):
     invoice_id: UUID
     invoice_number: str
     message: str = "Quote converted to invoice successfully"
-
-
-class QuoteDuplicateResponse(BaseModel):
-    """Response after duplicating a quote."""
-
-    original_quote_id: UUID
-    new_quote_id: UUID
-    new_quote_number: str
-    message: str = "Quote duplicated successfully"
 
 
 class QuoteCalculationResponse(BaseModel):

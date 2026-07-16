@@ -13,13 +13,14 @@ import {
   DEFAULT_DUE_DATE_DAYS,
 } from "@/lib/constants";
 import { Save } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { DocumentTotalsPanel } from "./layout/document-totals";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
   buildVatLabel,
+  calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
   roundMoney,
@@ -27,6 +28,7 @@ import {
   type LineItemRow,
 } from "./utils";
 
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { getDefaultDueDate, getTodayString } from "@/lib/dateUtils";
 import { currencyOptions, type Currency } from "@/lib/enums";
 import { Input } from "../ui/Input";
@@ -108,6 +110,7 @@ export function DocumentEditor({
   restrictedMode = false,
 }: Readonly<DocumentEditorProps>) {
   const label = type === "invoice" ? "INVOICE" : "QUOTE";
+  const referenceLabel = type === "invoice" ? "INV" : "QO";
 
   // State
   const [customerId, setCustomerId] = useState(initialData?.customerId ?? "");
@@ -129,12 +132,17 @@ export function DocumentEditor({
     initialData?.currency ??
     "KES"
   );
-  const [rfqNumber, setRfqNumber] = useState(initialData?.rfqNumber ?? "");
+  // const [rfqNumber, setRfqNumber] = useState(initialData?.rfqNumber ?? "");
   const [notes, setNotes] = useState(initialData?.notes ?? "");
 
   const [vatEnabled, setVatEnabled] = useState<boolean>(
     initialData?.vatEnabled ?? false
   );
+
+  const isEditing = !!initialData?.documentReference;
+  const vatRateDirty = useRef(false);
+  const { profile } = useOwnerProfile();
+
 
   const [vatRatePct, setVatRatePct] = useState<string>(() => {
     const fraction = initialData?.vatRate;
@@ -158,6 +166,32 @@ export function DocumentEditor({
         ? String(initialData?.discountPercentage ?? "")
         : ""
   );
+
+  // Default new documents to the owner's (our own) VAT settings: the
+  // toggle, the rate and the compliance ref all seed from the profile
+  // until the user touches them. Editing an existing document never
+  // re-defaults, and the seed runs at most once.
+  const vatRefTouched = useRef(false);
+  const vatDefaulted = useRef(false);
+  useEffect(() => {
+    if (isEditing || vatRefTouched.current || vatDefaulted.current) return;
+    if (initialData?.vatComplianceRef != null) return;
+    if (initialData?.vatRate != null || initialData?.vatEnabled != null) return;
+    if (!profile) return;
+    vatDefaulted.current = true;
+    if (profile.taxPin) setVatComplianceRef(profile.taxPin);
+    if (profile.vatRate) {
+      setVatRatePct(String(Number((profile.vatRate * 100).toFixed(4))));
+    }
+    if (profile.vatEnabled != null) setVatEnabled(Boolean(profile.vatEnabled));
+  }, [
+    isEditing,
+    initialData?.vatComplianceRef,
+    initialData?.vatEnabled,
+    initialData?.vatRate,
+    profile,
+  ]);
+
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() => {
     if (initialData?.lineItems?.length) {
@@ -190,10 +224,18 @@ export function DocumentEditor({
     [vatEnabled, vatRateFraction, vatComplianceRef]
   );
 
-  // Derived totals (memoized)
+  // Derived totals (memoized). When the document-level VAT toggle is on,
+  // VAT replaces per-line tax and is charged once on the discounted base,
+  // mirroring the backend computation exactly.
   const totals = useMemo(() => {
     const base = calculateTotals(lineItems, discountType, discountValue);
-    const taxTotal = base.taxTotal;
+    const taxTotal = vatEnabled
+      ? calcSubtotalVat(
+        base.subtotal - base.discountAmount,
+        vatEnabled,
+        vatRateFraction
+      )
+      : base.taxTotal;
 
     return {
       subtotal: base.subtotal,
@@ -201,7 +243,7 @@ export function DocumentEditor({
       taxTotal,
       totalDue: roundMoney(base.subtotal - base.discountAmount + taxTotal),
     };
-  }, [lineItems, discountType, discountValue]);
+  }, [lineItems, discountType, discountValue, vatEnabled, vatRateFraction]);
 
 
   // Line item handlers
@@ -248,10 +290,14 @@ export function DocumentEditor({
       dueDate,
       currency,
       vatEnabled,
-      vatRate: vatEnabled ? vatRateFraction : null,
+      vatRate: vatEnabled
+        ? (!isEditing || vatRateDirty.current ? vatRateFraction : undefined)
+        : null,
       vatComplianceRef: vatComplianceRef.trim() || null,
       lineItems: items,
-      rfqNumber: rfqNumber.trim() || undefined,
+      // No RFQ input is rendered yet; pass the persisted value through so
+      // an update never silently drops it.
+      rfqNumber: initialData?.rfqNumber,
       notes: notes.trim() || undefined,
       discountType: discountType ?? undefined,
       discountAmount:
@@ -318,7 +364,7 @@ export function DocumentEditor({
 
                 {/* Reference */}
                 <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
-                  Reference
+                  {`${referenceLabel} Num`}
                 </label>
                 <Input
                   value={initialData?.documentReference ?? "Autogenerated"}
@@ -359,7 +405,7 @@ export function DocumentEditor({
                 />
 
                 {/* RFQ/RFP Number */}
-                <label
+                {/* <label
                   htmlFor="rfq-input"
                   className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                 >
@@ -372,7 +418,7 @@ export function DocumentEditor({
                   onChange={(e) => setRfqNumber(e.target.value)}
                   disabled={restrictedMode}
                   error={errors.rfqNumber}
-                />
+                /> */}
 
                 {/* VAT Toggle */}
                 <label
@@ -397,14 +443,17 @@ export function DocumentEditor({
                       htmlFor="vat-rate"
                       className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
                     >
-                      VAT Rate
+                      VAT Rate (%)
                     </label>
 
                     <Input
                       id="vat-rate"
                       type="number"
                       value={vatRatePct}
-                      onChange={(e) => setVatRatePct(e.target.value)}
+                      onChange={(e) => {
+                        vatRateDirty.current = true;
+                        setVatRatePct(e.target.value);
+                      }}
                       disabled={restrictedMode}
                       placeholder="16"
                     />
@@ -419,7 +468,10 @@ export function DocumentEditor({
                     <Input
                       id="vat-compliance-ref"
                       value={vatComplianceRef}
-                      onChange={(e) => setVatComplianceRef(e.target.value)}
+                      onChange={(e) => {
+                        vatRefTouched.current = true;
+                        setVatComplianceRef(e.target.value);
+                      }}
                       disabled={restrictedMode}
                       placeholder="PIN"
                     />
