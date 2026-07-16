@@ -62,7 +62,7 @@ class OwnerProfile(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     vat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     tax_pin: Mapped[str | None] = mapped_column(String(50), nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Opaque, sanitized storage key (not a servable path) for the logo, or
@@ -148,7 +148,7 @@ class OwnerProfileSnapshot(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     vat_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     tax_pin: Mapped[str | None] = mapped_column(String(50), nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)

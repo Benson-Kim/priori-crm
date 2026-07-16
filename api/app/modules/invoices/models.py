@@ -208,6 +208,12 @@ class Invoice(Base):
         comment="Document-level VAT rate as a fraction (e.g. 0.1600)",
     )
 
+    vat_compliance_ref: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Tax/VAT registration reference printed on the document",
+    )
+
     tax_total: Mapped[Decimal] = mapped_column(
         Numeric(15, 2),
         nullable=False,

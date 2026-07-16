@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = Field(default=30, ge=10, le=60)
     DB_POOL_RECYCLE: int = Field(default=3600, ge=300)
     DB_ECHO: bool = Field(default=False)
+    # Postgres per-session statement timeout in milliseconds (0 = disabled).
+    # Caps runaway queries so one heavy report cannot starve the shared pool
+    # on constrained hardware.
+    DB_STATEMENT_TIMEOUT_MS: int = Field(default=0, ge=0, le=600_000)
 
     # JWT
     JWT_SECRET_KEY: str

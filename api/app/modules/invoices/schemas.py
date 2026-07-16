@@ -265,6 +265,17 @@ class InvoiceCreate(BaseModel):
         ),
     )
 
+    vat_compliance_ref: str | None = Field(
+        None,
+        max_length=50,
+        alias="vatComplianceRef",
+        description=(
+            "Tax/VAT registration reference printed on the document. "
+            "Defaults from the owner profile's tax PIN when omitted and "
+            "VAT is enabled."
+        ),
+    )
+
     @field_validator("rfq_number", "notes", mode="before")
     @classmethod
     def empty_str_to_none(cls, v: str | None) -> str | None:
@@ -383,6 +394,9 @@ class InvoiceUpdate(BaseModel):
     # ends up enabled.
     vat_enabled: bool | None = Field(None, alias="vatEnabled")
     vat_rate: Decimal | None = Field(None, ge=0, le=1, alias="vatRate")
+    vat_compliance_ref: str | None = Field(
+        None, max_length=50, alias="vatComplianceRef"
+    )
 
     @field_validator("rfq_number", "notes", mode="before")
     @classmethod
@@ -429,6 +443,7 @@ class InvoiceResponse(BaseModel):
     discount_percentage: Decimal | None = None
     vat_enabled: bool = False
     vat_rate: Decimal | None = None
+    vat_compliance_ref: str | None = None
     tax_total: Decimal
     total_due: Decimal
     amount_paid: Decimal

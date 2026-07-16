@@ -33,6 +33,14 @@ class Base(DeclarativeBase):
     metadata = metadata
 
 
+# Per-session Postgres statement timeout (0 disables). Bounds the damage a
+# single runaway query can do to the shared pool on constrained hardware.
+_connect_args: dict[str, Any] = {}
+if settings.DB_STATEMENT_TIMEOUT_MS > 0:
+    _connect_args["options"] = (
+        f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT_MS}"
+    )
+
 # Database engine with connection pooling
 engine = create_engine(
     str(settings.DATABASE_URL),
@@ -44,6 +52,7 @@ engine = create_engine(
     echo=settings.DB_ECHO,
     future=True,
     isolation_level="READ COMMITTED",  # Default isolation level
+    connect_args=_connect_args,
 )
 
 # Session factory
