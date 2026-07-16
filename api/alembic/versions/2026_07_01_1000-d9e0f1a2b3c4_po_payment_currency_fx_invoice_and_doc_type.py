@@ -42,7 +42,7 @@ _DOCUMENTS = "purchase_order_documents"
 
 
 def upgrade() -> None:
-    # --- purchase_order_payments -------------------------------------
+    # purchase_order_payments
     op.add_column(
         _PAYMENTS,
         sa.Column("invoice_number", sa.String(length=200), nullable=True),
@@ -85,7 +85,7 @@ def upgrade() -> None:
         "exchange_rate > 0",
     )
 
-    # --- purchase_order_documents ------------------------------------
+    # purchase_order_documents
     op.add_column(
         _DOCUMENTS,
         sa.Column(

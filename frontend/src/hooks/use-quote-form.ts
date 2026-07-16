@@ -80,7 +80,7 @@ export function useQuoteForm(quoteId?: string): UseQuoteFormReturn {
                     unitPrice: li.unitPrice,
                     taxType: li.taxType,
                 })),
-                rfqRfpNumber: payload.rfqNumber,
+                // rfqRfpNumber: payload.rfqNumber,
                 notes: payload.notes,
                 discountType: payload.discountType,
                 discountAmount: payload.discountAmount,

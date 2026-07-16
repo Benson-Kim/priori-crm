@@ -69,7 +69,7 @@ class OwnerProfile(Base):
     # NULL when no logo is set. Served/streamed via StorageService.
     logo_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    # --- Org-scoped document-settings defaults (PO-11) -------------------
+    # Org-scoped document-settings defaults
     # Stored once on the singleton (org scope), NOT per document. Applied to a
     # Purchase Order at create time only, so editing a default never alters an
     # existing PO. NULL means "use the built-in default" (see

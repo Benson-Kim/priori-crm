@@ -29,9 +29,7 @@ from app.modules.purchase_orders.schemas import (
 )
 from app.modules.purchase_orders.service import PurchaseOrderService
 
-# ---------------------------------------------------------------------------
 # Minimal fake PO + service wiring (mirrors test_po_payments.py)
-# ---------------------------------------------------------------------------
 
 
 class _FakePO:
@@ -93,9 +91,7 @@ def _make_service(monkeypatch, po: _FakePO):
     return service, payments
 
 
-# ---------------------------------------------------------------------------
 # Gate D: update_payment same-currency guard
-# ---------------------------------------------------------------------------
 
 
 class TestUpdatePaymentSameCurrencyGuard:
@@ -162,9 +158,7 @@ class TestUpdatePaymentSameCurrencyGuard:
         assert payments[payment_id].exchange_rate == Decimal("1")
 
 
-# ---------------------------------------------------------------------------
 # Gate E: FX rounding policy
-# ---------------------------------------------------------------------------
 
 
 class TestFxResyncMultiPayment:

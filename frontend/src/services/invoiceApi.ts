@@ -39,7 +39,7 @@ export interface InvoiceCreatePayload {
   vatRate?: number | null;
   vatComplianceRef?: string | null;
   lineItems: LineItemPayload[];
-  rfqNumber?: string;
+  // rfqNumber?: string;
   notes?: string;
   discountType?: string;
   discountAmount?: number;

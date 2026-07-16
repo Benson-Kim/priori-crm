@@ -51,20 +51,19 @@ class QuoteService(BaseDocumentService):
     Service layer for quote operations.
 
     Atomicity contract
-    ------------------
+
     All mutating methods call self._db.flush() only. The session commit/rollback
     is owned by get_db() in database.py. Multi-step mutations use
     self._db.begin_nested() (SAVEPOINT) so inner failures roll back only
     the affected work, never the entire session.
 
     Race-condition contract
-    -----------------------
+
     Sequential identifier generation uses pg_advisory_xact_lock so only one
     transaction can enter the generation critical section per unique key.
     Unique DB constraints + retry loops serve as safety nets.
 
     Editable-field matrix
-    ---------------------------------
     The single, authoritative statement of which fields may change in which
     status. Enforced by ``QuoteResponse.is_editable`` and the SENT
     restricted-field guard in ``update()`` below; mirrors the invoices policy.

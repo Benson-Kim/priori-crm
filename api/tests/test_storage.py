@@ -40,9 +40,7 @@ def test_sanitize_storage_key_rejects_empty():
         sanitize_storage_key("", "/")
 
 
-# ---------------------------------------------------------------------------
 # Local backend
-# ---------------------------------------------------------------------------
 
 
 def test_local_backend_round_trip(tmp_path):
@@ -86,9 +84,7 @@ def test_storage_service_base_dir_back_compat(tmp_path):
     assert service.delete_file(key)
 
 
-# ---------------------------------------------------------------------------
 # S3 backend (stubbed client)
-# ---------------------------------------------------------------------------
 
 
 class _FakeBody:
