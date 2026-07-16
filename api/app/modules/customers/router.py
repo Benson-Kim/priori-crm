@@ -355,43 +355,75 @@ def generate_customer_statement(
 
     return service.generate_statement(customer_id, period_start, period_end)
 
+
+def _safe_filename_token(value: str) -> str:
+    """Reduce a free-text value to a safe Content-Disposition filename token.
+
+    Keeps alphanumerics, dash and underscore; collapses everything else to
+    underscores so a customer name with spaces, slashes or quotes can never
+    break the header or escape the filename.
+    """
+    import re
+
+    token = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_")
+    return token or "customer"
+
+
+def _statement_display_name(statement) -> str:
+    """Resolve the customer display name used in export filenames."""
+    customer = statement.customer
+    return (
+        customer.company_name
+        or f"{customer.first_name} {customer.last_name}".strip()
+        or customer.email
+    )
+
+
 @router.get(
-    "/{po_id}/pdf",
-    summary="Download purchase order as PDF",
+    "/{customer_id}/statement/pdf",
+    summary="Download customer statement as PDF",
     description=(
-        "Generate and stream the purchase-order PDF. The document is "
-        "read-only: no edit controls, action buttons or attachments list. "
-        "Available at any status. Owner branding comes from the PO's "
-        "immutable snapshot once sent, else the live profile for a Draft "
-        "preview."
+        "Generate and stream the customer statement-of-accounts PDF for a "
+        "date range (defaults to the last 12 months). Renders the same "
+        "content as the Statements tab: owner branding header, account "
+        "summary and the chronological transactions ledger with a running "
+        "balance. Owner branding always comes from the live profile."
     ),
     responses={
         200: {"description": "PDF file", "content": {"application/pdf": {}}},
-        404: {"description": "Purchase order not found"},
+        404: {"description": "Customer not found"},
         500: {"description": "PDF could not be generated"},
     },
 )
-async def download_purchase_order_pdf(
+async def download_customer_statement_pdf(
     customer_id: UUID,
     service: CustomerServiceDep,
+    period_start: Annotated[date | None, Query(description="Period start date")] = None,
+    period_end: Annotated[date | None, Query(description="Period end date")] = None,
 ) -> StreamingResponse:
     import io
 
     from app.common.export_limiter import run_export
 
-    # Cap concurrent PDF builds and run the blocking render in a worker
-    # thread. Loads the PO once (no second query just for the filename).
-    # This is the ORIGINAL document: full amount, no payments shown.
-    pdf_data, customer = await run_export(
-        service.generate_pdf_for_download, customer_id, False
+    # Default to the last 12 months (shared with the vendor statement).
+    period_start, period_end = default_statement_period(period_start, period_end)
+
+    # Cap concurrent PDF builds and run the statement build + blocking
+    # render in a worker thread. The statement is returned too, so the
+    # filename never needs a second query.
+    pdf_data, statement = await run_export(
+        service.generate_statement_pdf, customer_id, period_start, period_end
     )
 
-    emit_event(CustomerEvent.CUSTOMER_PDF_DOWNLOADED, {"customer_id": str(customer_id)})
+    emit_event(
+        "customer_statement_pdf_downloaded",
+        {"customer_id": str(customer_id), "row_count": len(statement.transactions)},
+    )
 
-    display_name = getattr(customer, "display_name", "customer")
+    display_name = _statement_display_name(statement)
     filename = (
-        f"CustomerStatement_{customer.statement_reference}_"
-        f"{_safe_filename_token(display_name)}.pdf"
+        f"CustomerStatement_{_safe_filename_token(display_name)}_"
+        f"{period_start.isoformat()}_to_{period_end.isoformat()}.pdf"
     )
     return StreamingResponse(
         io.BytesIO(pdf_data),
@@ -403,44 +435,57 @@ async def download_purchase_order_pdf(
 
 
 @router.get(
-    "/{po_id}/pdf/statement",
-    summary="Download the current (balance-aware) customer statement PDF",
+    "/{customer_id}/statement/excel",
+    summary="Export customer statement to Excel",
     description=(
-        "Generate and stream the CURRENT customer statement PDF: the same "
-        "document as /pdf but with Amount Paid and Balance Due rows appended "
-        "to the summary, reflecting payments recorded so far. Read-only and "
-        "available at any status; owner branding comes from the PO's "
-        "immutable snapshot once sent, else the live profile."
+        "Export the customer statement-of-accounts for a date range "
+        "(defaults to the last 12 months) as an .xlsx workbook: period and "
+        "account summary block plus one row per ledger transaction. The "
+        "workbook is rendered off the event loop."
     ),
     responses={
-        200: {"description": "PDF file", "content": {"application/pdf": {}}},
-        404: {"description": "Purchase order not found"},
-        500: {"description": "PDF could not be generated"},
+        200: {
+            "description": "Excel file",
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+        },
+        404: {"description": "Customer not found"},
     },
 )
-async def download_customer_statement_pdf(
+async def export_customer_statement_excel(
     customer_id: UUID,
     service: CustomerServiceDep,
+    period_start: Annotated[date | None, Query(description="Period start date")] = None,
+    period_end: Annotated[date | None, Query(description="Period end date")] = None,
 ) -> StreamingResponse:
     import io
 
+    from app.common.excel import ExcelExporter
     from app.common.export_limiter import run_export
 
-    # CURRENT document: payments applied + running balance.
-    pdf_data, customer = await run_export(
-        service.generate_pdf_for_download, customer_id, True
+    # Default to the last 12 months (shared with the vendor statement).
+    period_start, period_end = default_statement_period(period_start, period_end)
+
+    statement = service.generate_statement(customer_id, period_start, period_end)
+
+    # Cap concurrency and build the workbook off the event loop.
+    exporter = ExcelExporter()
+    xlsx_bytes = await run_export(exporter.export_customer_statement, statement)
+
+    emit_event(
+        "customer_statement_excel_exported",
+        {"customer_id": str(customer_id), "row_count": len(statement.transactions)},
     )
 
-    emit_event(CustomerEvent.CUSTOMER_PDF_DOWNLOADED, {"customer_id": str(customer_id)})
-
-    display_name = getattr(customer, "display_name", "customer")
+    display_name = _statement_display_name(statement)
     filename = (
-        f"CustomerStatement_{customer.statement_reference}_"
-        f"{_safe_filename_token(display_name)}_current.pdf"
+        f"CustomerStatement_{_safe_filename_token(display_name)}_"
+        f"{period_start.isoformat()}_to_{period_end.isoformat()}.xlsx"
     )
     return StreamingResponse(
-        io.BytesIO(pdf_data),
-        media_type="application/pdf",
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
