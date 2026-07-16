@@ -20,6 +20,7 @@ import { DocumentTotalsPanel } from "./layout/document-totals";
 import { LineItemsTable } from "./layout/line-items-table";
 import {
   buildVatLabel,
+  calcSubtotalVat,
   calculateTotals,
   createEmptyRow,
   roundMoney,
