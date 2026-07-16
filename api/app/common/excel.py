@@ -506,7 +506,9 @@ class ExcelExporter:
 
         for offset, (label, value) in enumerate(summary_rows):
             row = summary_start + offset
-            ws.cell(row=row, column=1, value=label).font = Font(name="Calibri", bold=True)
+            ws.cell(row=row, column=1, value=label).font = Font(
+                name="Calibri", bold=True
+            )
             value_cell = ws.cell(row=row, column=2, value=float(value or 0))
             value_cell.number_format = _MONEY_FORMAT
             value_cell.alignment = Alignment(horizontal="right")
