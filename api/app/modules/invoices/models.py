@@ -81,6 +81,14 @@ class Invoice(Base):
             "(discount_type IS NULL AND discount_amount IS NULL AND discount_percentage IS NULL)",
             name="ck_invoices_discount_type_consistency",
         ),
+        CheckConstraint(
+            "vat_rate IS NULL OR (vat_rate >= 0 AND vat_rate <= 1)",
+            name="ck_invoices_vat_rate_range",
+        ),
+        CheckConstraint(
+            "vat_enabled = false OR vat_rate IS NOT NULL",
+            name="ck_invoices_vat_rate_present_when_enabled",
+        ),
         # Indexes for common queries
         Index("ix_invoices_customer_status", "customer_id", "status"),
         Index("ix_invoices_status_due_date", "status", "due_date"),
