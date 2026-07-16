@@ -481,7 +481,9 @@ class ExcelExporter:
         ws.title = "Statement"
 
         ws.merge_cells("A1:E1")
-        title = ws.cell(row=1, column=1, value=f"{customer_name} — Statement of Accounts")
+        title = ws.cell(
+            row=1, column=1, value=f"{customer_name} — Statement of Accounts"
+        )
         title.font = Font(name="Calibri", bold=True, size=14, color="2C1A54")
         title.alignment = Alignment(horizontal="left", vertical="center")
 

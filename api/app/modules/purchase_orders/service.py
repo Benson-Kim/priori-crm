@@ -282,9 +282,7 @@ class PurchaseOrderService(BaseDocumentService):
             from app.modules.owner.service import OwnerService
 
             _profile = OwnerService(self._db).get_or_create()
-            vat_enabled = (
-                bool(_profile.vat_enabled) and _profile.vat_rate is not None
-            )
+            vat_enabled = bool(_profile.vat_enabled) and _profile.vat_rate is not None
             vat_rate = Decimal(str(_profile.vat_rate)) if vat_enabled else None
         vat_compliance_ref = data.vat_compliance_ref
         if vat_compliance_ref is None:

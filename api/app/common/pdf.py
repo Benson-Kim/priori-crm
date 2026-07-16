@@ -287,7 +287,11 @@ class DocumentPDFGenerator:
                 getattr(owner, "address", None),
                 getattr(owner, "email", None),
                 getattr(owner, "phone", None),
-                f"Tax PIN: {owner.tax_pin}" if getattr(owner, "tax_pin", None) else None,
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
                 getattr(owner, "website", None),
             ):
                 for line in _split_lines(field):

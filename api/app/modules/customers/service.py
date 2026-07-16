@@ -950,9 +950,7 @@ class CustomerService(ServiceBase):
         from app.common.pdf_renderer import DocumentPdfRenderer
 
         try:
-            return DocumentPdfRenderer(self._db).render_customer_statement(
-                statement
-            )
+            return DocumentPdfRenderer(self._db).render_customer_statement(statement)
         except Exception as exc:
             logger.exception(
                 "Failed to render customer statement PDF",
