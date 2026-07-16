@@ -149,6 +149,11 @@ class QuoteService(BaseDocumentService):
             )
         quote_currency = customer.currency
 
+        # Period control: a document cannot be issued into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.transaction_date)
+
         # Document-level VAT: when the client sent neither field, default
         # from the owner profile so new quotes inherit our own VAT
         # settings. An explicit toggle always wins.
@@ -447,6 +452,14 @@ class QuoteService(BaseDocumentService):
             else:
                 update_data.setdefault("discount_amount", None)
                 update_data.setdefault("discount_percentage", None)
+
+        # Period control: neither the persisted document date nor a newly
+        # supplied one may fall inside a closed accounting period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, quote.transaction_date)
+        if "transaction_date" in update_data:
+            assert_period_open(self._db, update_data["transaction_date"])
 
         # Effective document-level VAT after this update: supplied fields
         # win, otherwise the persisted values are kept.

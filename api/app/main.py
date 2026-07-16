@@ -19,6 +19,7 @@ import app.modules.customers.models
 import app.modules.expenses.models
 import app.modules.invoices.models
 import app.modules.owner.models
+import app.modules.periods.models
 import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
@@ -40,6 +41,7 @@ from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
 from app.modules.owner.router import router as owner_router
+from app.modules.periods.router import router as periods_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.statements.router import router as statements_router
@@ -161,6 +163,9 @@ def _register_routers(app: FastAPI) -> None:
         tags=["Purchase Orders"],
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
+    app.include_router(
+        periods_router, prefix=f"{api_prefix}/periods", tags=["Accounting Periods"]
+    )
     app.include_router(
         statements_router, prefix=f"{api_prefix}/statements", tags=["Statements"]
     )

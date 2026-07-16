@@ -168,6 +168,11 @@ class ExpenseService(BaseDocumentService):
             )
         expense_currency = vendor.currency or data.currency
 
+        # Period control: an expense cannot be recorded into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.expense_date, field="expense_date")
+
         # Calculate outside retry loop — deterministic, no DB writes
         line_items_data = self._build_line_items(data.line_items)
         subtotal, tax_total = self._sum_line_totals(line_items_data)
@@ -674,6 +679,11 @@ class ExpenseService(BaseDocumentService):
                 detail="Cannot record payment for a canceled expense",
                 field="status",
             )
+
+        # Period control: payments cannot be recorded into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.payment_date, field="payment_date")
 
         # Overpayment is allowed: this app records payments rather than taking
         # them. An amount exceeding the balance drives balance_due negative (a
