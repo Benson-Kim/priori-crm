@@ -145,6 +145,11 @@ class InvoiceService(BaseDocumentService):
             )
         invoice_currency = customer.currency
 
+        # Period control: a document cannot be issued into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.transaction_date)
+
         # Document-level VAT: when the client sent neither field, default
         # from the owner profile so new invoices inherit our own VAT
         # settings. An explicit toggle always wins.
@@ -460,6 +465,14 @@ class InvoiceService(BaseDocumentService):
                 update_data.setdefault("discount_amount", None)
                 update_data.setdefault("discount_percentage", None)
 
+        # Period control: neither the persisted document date nor a newly
+        # supplied one may fall inside a closed accounting period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, invoice.transaction_date)
+        if "transaction_date" in update_data:
+            assert_period_open(self._db, update_data["transaction_date"])
+
         # Effective document-level VAT after this update: supplied fields
         # win, otherwise the persisted values are kept.
         effective_vat_enabled = bool(
@@ -733,6 +746,11 @@ class InvoiceService(BaseDocumentService):
                 detail="Cannot record payment for canceled invoice", field="status"
             )
 
+        # Period control: payments cannot be recorded into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.payment_date, field="payment_date")
+
         # Overpayment is allowed: this app records payments, it does not take
         # them, so an amount exceeding the balance is a legitimate event. It
         # drives balance_due negative (a credit owed back), which is no longer
@@ -825,6 +843,11 @@ class InvoiceService(BaseDocumentService):
             new_transaction_date = date.today()
             new_due_date = new_transaction_date + timedelta(days=30)
 
+            # Period control: the duplicate is a new document dated today.
+            from app.common.period_guard import assert_period_open
+
+            assert_period_open(self._db, new_transaction_date)
+
             def _build() -> InvoiceDuplicateResponse:
                 duplicate = Invoice(
                     invoice_number=self._generate_invoice_number(),
@@ -838,6 +861,9 @@ class InvoiceService(BaseDocumentService):
                     discount_type=original.discount_type,
                     discount_amount=original.discount_amount,
                     discount_percentage=original.discount_percentage,
+                    vat_enabled=original.vat_enabled,
+                    vat_rate=original.vat_rate,
+                    vat_compliance_ref=original.vat_compliance_ref,
                     tax_total=original.tax_total,
                     total_due=original.total_due,
                     amount_paid=Decimal("0.00"),

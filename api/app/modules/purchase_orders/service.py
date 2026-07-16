@@ -262,6 +262,11 @@ class PurchaseOrderService(BaseDocumentService):
                 field="vendor_id",
             )
 
+        # Period control: a PO cannot be raised into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.order_date, field="order_date")
+
         # Vendor-derived, never client-supplied: pin currency to the vendor's
         # currency (KES fallback) and take the compliance / eTIMS reference
         # from the vendor's tax_id_pin (KRA PIN).
@@ -844,6 +849,14 @@ Best regards,
             # PIN). currency stays locked after first save and is not touched.
             update_data["compliance_ref"] = vendor.tax_id_pin
 
+        # Period control: neither the persisted order date nor a newly
+        # supplied one may fall inside a closed accounting period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, purchase_order.order_date, field="order_date")
+        if "order_date" in update_data:
+            assert_period_open(self._db, update_data["order_date"], field="order_date")
+
         # Cross-field date validation across the mixed case (one date in the
         # payload, the other from the DB). Pydantic only guards when both are
         # supplied; the DB CHECK is the final net.
@@ -1310,6 +1323,11 @@ Best regards,
                 ),
                 field="status",
             )
+
+        # Period control: payments cannot be recorded into a closed period.
+        from app.common.period_guard import assert_period_open
+
+        assert_period_open(self._db, data.payment_date, field="payment_date")
 
         # Validate the optional proof-of-payment document. The scoped lookup
         # (po_id + document_id) ensures a document from a different PO cannot
