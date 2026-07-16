@@ -72,9 +72,7 @@ class JournalEntry(Base):
 
     __table_args__ = (
         # Idempotent posting: one entry per source event, forever.
-        UniqueConstraint(
-            "source_type", "source_id", name="uq_journal_entries_source"
-        ),
+        UniqueConstraint("source_type", "source_id", name="uq_journal_entries_source"),
         Index("ix_journal_entries_entry_date", "entry_date"),
     )
 

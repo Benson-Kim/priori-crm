@@ -196,9 +196,7 @@ class TestInvoicePostings:
         customer = _customer(db)
         service = InvoiceService(db)
         invoice = service.create(
-            _invoice_payload(
-                customer.id, vat_enabled=True, vat_rate="0.16"
-            )
+            _invoice_payload(customer.id, vat_enabled=True, vat_rate="0.16")
         )
         assert db.query(JournalEntry).count() == 0  # drafts post nothing
 
@@ -325,9 +323,7 @@ class TestReportsAndBackfill:
         service = InvoiceService(db)
         for _ in range(2):
             invoice = service.create(
-                _invoice_payload(
-                    customer.id, vat_enabled=True, vat_rate="0.16"
-                )
+                _invoice_payload(customer.id, vat_enabled=True, vat_rate="0.16")
             )
             service.mark_as_sent(invoice.id)
 

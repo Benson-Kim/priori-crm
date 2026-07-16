@@ -73,7 +73,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_accounting_periods_status_dates", table_name="accounting_periods"
-    )
+    op.drop_index("ix_accounting_periods_status_dates", table_name="accounting_periods")
     op.drop_table("accounting_periods")

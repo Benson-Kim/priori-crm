@@ -77,9 +77,7 @@ def upgrade() -> None:
             "source_type", "source_id", name="uq_journal_entries_source"
         ),
     )
-    op.create_index(
-        "ix_journal_entries_entry_date", "journal_entries", ["entry_date"]
-    )
+    op.create_index("ix_journal_entries_entry_date", "journal_entries", ["entry_date"])
 
     op.create_table(
         "journal_lines",

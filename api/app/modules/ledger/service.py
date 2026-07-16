@@ -318,9 +318,7 @@ class LedgerService:
         for code, name, type_, currency, debit, credit in rows:
             debit = Decimal(str(debit))
             credit = Decimal(str(credit))
-            balance = (
-                debit - credit if type_ in _DEBIT_NORMAL else credit - debit
-            )
+            balance = debit - credit if type_ in _DEBIT_NORMAL else credit - debit
             result.append(
                 {
                     "account_code": code,
@@ -378,10 +376,7 @@ class LedgerService:
                 (i["balance"] for i in sections["asset"]), Decimal("0.00")
             )
             total_liab_equity = sum(
-                (
-                    i["balance"]
-                    for i in sections["liability"] + sections["equity"]
-                ),
+                (i["balance"] for i in sections["liability"] + sections["equity"]),
                 Decimal("0.00"),
             )
             sheets.append(
@@ -418,9 +413,7 @@ class LedgerService:
             "expense_payments": 0,
         }
 
-        issued = (
-            self._db.query(Invoice).filter(Invoice.sent_at.isnot(None)).all()
-        )
+        issued = self._db.query(Invoice).filter(Invoice.sent_at.isnot(None)).all()
         for invoice in issued:
             if self.post_invoice_issued(invoice):
                 counts["invoices_issued"] += 1
@@ -431,9 +424,7 @@ class LedgerService:
 
         for payment in self._db.query(Payment).all():
             invoice = (
-                self._db.query(Invoice)
-                .filter(Invoice.id == payment.invoice_id)
-                .first()
+                self._db.query(Invoice).filter(Invoice.id == payment.invoice_id).first()
             )
             if invoice is not None and self.post_invoice_payment(payment, invoice):
                 counts["invoice_payments"] += 1
@@ -448,9 +439,7 @@ class LedgerService:
 
         for payment in self._db.query(ExpensePayment).all():
             expense = (
-                self._db.query(Expense)
-                .filter(Expense.id == payment.expense_id)
-                .first()
+                self._db.query(Expense).filter(Expense.id == payment.expense_id).first()
             )
             if expense is not None and self.post_expense_payment(payment, expense):
                 counts["expense_payments"] += 1
