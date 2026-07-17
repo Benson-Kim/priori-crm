@@ -587,6 +587,16 @@ class ExcelExporter:
         def tx_date(tx):
             return get(tx, "date") or get(tx, "transaction_date")
 
+        def tx_details(tx) -> str:
+            description = str(get(tx, "description", "") or "").strip()
+            reference = str(get(tx, "reference", "") or "").strip()
+            detail = str(get(tx, "detail", "") or "").strip()
+
+            title = " ".join(part for part in (description, reference) if part)
+            if detail:
+                return f"{title} ({detail})" if title else detail
+            return title
+
         vendor = get(statement, "vendor")
         summary = get(statement, "summary")
         transactions = get(statement, "transactions", [])
@@ -641,7 +651,7 @@ class ExcelExporter:
         row_idx = header_row + 1
         for tx in transactions:
             ws.cell(row=row_idx, column=1, value=tx_date(tx))
-            ws.cell(row=row_idx, column=2, value=get(tx, "description", ""))
+            ws.cell(row=row_idx, column=2, value=tx_details(tx))
             ws.cell(row=row_idx, column=3, value=float(get(tx, "amount", 0) or 0))
             ws.cell(row=row_idx, column=4, value=float(get(tx, "payment", 0) or 0))
             ws.cell(row=row_idx, column=5, value=float(get(tx, "balance", 0) or 0))

@@ -47,11 +47,15 @@ def default_statement_period(
 
 @dataclass(frozen=True, slots=True)
 class DebitEntry:
-    """A charge row (invoice / expense) to be added to the ledger."""
+    """A charge row (invoice / expense / PO) to be added to the ledger."""
 
     date: date
     description: str
     amount: Decimal
+    source_type: str = "debit"
+    source_id: str | None = None
+    reference: str | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +65,10 @@ class CreditEntry:
     date: date
     description: str
     amount: Decimal
+    source_type: str = "credit"
+    source_id: str | None = None
+    reference: str | None = None
+    detail: str | None = None
 
 
 class StatementGenerator:
@@ -93,7 +101,8 @@ class StatementGenerator:
         Returns:
             (transactions, summary) where:
                 transactions — list of dicts with keys:
-                    date, description, amount, payment, balance
+                    date, description, amount, payment, balance,
+                    source_type, source_id, reference, detail
                 summary — dict with keys:
                     opening_balance, invoiced_amount, amount_paid, balance_due
         """
@@ -108,6 +117,10 @@ class StatementGenerator:
                 "amount": opening_balance,
                 "payment": Decimal("0.00"),
                 "balance": opening_balance,
+                "source_type": "opening_balance",
+                "source_id": None,
+                "reference": None,
+                "detail": "Balance carried forwad",
             }
         )
 
@@ -135,6 +148,10 @@ class StatementGenerator:
                         "amount": entry.amount,
                         "payment": Decimal("0.00"),
                         "balance": running_balance,
+                        "source_type": entry.source_type,
+                        "source_id": entry.source_id,
+                        "reference": entry.reference,
+                        "detail": entry.detail,
                     }
                 )
             else:
@@ -147,6 +164,10 @@ class StatementGenerator:
                         "amount": Decimal("0.00"),
                         "payment": entry.amount,
                         "balance": running_balance,
+                        "source_type": entry.source_type,
+                        "source_id": entry.source_id,
+                        "reference": entry.reference,
+                        "detail": entry.detail,
                     }
                 )
 

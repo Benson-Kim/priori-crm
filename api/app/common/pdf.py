@@ -565,6 +565,16 @@ class DocumentPDFGenerator:
         def tx_date(tx):
             return get(tx, "date") or get(tx, "transaction_date")
 
+        def tx_details(tx) -> str:
+            description = str(get(tx, "description", "") or "").strip()
+            reference = str(get(tx, "reference", "") or "").strip()
+            detail = str(get(tx, "detail", "") or "").strip()
+
+            title = " ".join(part for part in (description, reference) if part)
+            if detail:
+                return f"{title} ({detail})" if title else detail
+            return title
+
         vendor = get(statement, "vendor")
         summary = get(statement, "summary")
         transactions = get(statement, "transactions", [])
@@ -772,7 +782,7 @@ class DocumentPDFGenerator:
             rows.append(
                 [
                     Paragraph(date_str, _ITEM_STYLE),
-                    Paragraph(str(get(tx, "description", "")), _ITEM_STYLE),
+                    Paragraph(tx_details(tx), _ITEM_STYLE),
                     Paragraph(f"{money(get(tx, 'amount')):,.2f}", _STMT_NUM_STYLE),
                     Paragraph(f"{money(get(tx, 'payment')):,.2f}", _STMT_NUM_STYLE),
                     Paragraph(f"{money(get(tx, 'balance')):,.2f}", _STMT_NUM_STYLE),
