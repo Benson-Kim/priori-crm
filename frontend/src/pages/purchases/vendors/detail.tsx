@@ -68,6 +68,20 @@ interface VendorTxnRow {
   source?: string;
 }
 
+
+type VendorStatementTransaction = VendorStatement["transactions"][number];
+
+function statementRowTitle(transaction: VendorStatementTransaction): string {
+  const reference = transaction.reference?.trim();
+  return reference
+    ? `${transaction.description} ${reference}`
+    : transaction.description;
+}
+
+function statementRowDetail(transaction: VendorStatementTransaction): string {
+  return transaction.detail?.trim() || formatDate(transaction.date);
+}
+
 // Which export card each source type maps to.
 const CARD_KEY_BY_TYPE: Record<VendorTxnType, VendorCardKey> = {
   purchase_order: "purchase-orders",
@@ -877,12 +891,10 @@ export default function VendorDetailPage() {
                         <tr key={index} className="grid grid-cols-5 gap-4 pt-2">
                           <td className="col-span-2 px-3 py-4 flex flex-col gap-1">
                             <span className="font-bold text-gray-800">
-                              {transaction.description.split("—")[0]?.trim()}
+                              {statementRowTitle(transaction)}
                             </span>
                             <span className="text-gray-600 text-sm whitespace-pre-wrap">
-                              {transaction.description.includes("—")
-                                ? transaction.description.split("—")[1]?.trim()
-                                : formatDate(transaction.date)}
+                              {statementRowDetail(transaction)}
                             </span>
                           </td>
                           <td className="px-3 py-4 text-center text-gray-800">

@@ -431,12 +431,30 @@ class VendorPayablesSummary(BaseModel):
 
 # Statement Schemas
 
+VendorStatementSourceType = Literal[
+    "opening_balance",
+    "expense",
+    "purchase_order",
+    "expense_payment",
+    "po_payment",
+]
+
 
 class VendorStatementTransaction(BaseModel):
     """Single transaction line in a vendor statement."""
 
     transaction_date: date = Field(description="Date of the transaction", alias="date")
     description: str = Field(description="Human-readable description of the line")
+    source_type: VendorStatementSourceType = Field(description="Type of source")
+    source_id: UUID | None = Field(
+        default=None, description="UUID of the source record for this ledger row"
+    )
+    reference: str | None = Field(
+        default=None, description="Reference number of the source document"
+    )
+    detail: str | None = Field(
+        default=None, description="Detailed description of the transaction"
+    )
     amount: Decimal = Field(
         description="Amount charged (expense/bill). 0.00 for payments."
     )

@@ -104,7 +104,6 @@ def test_vendor_statement_includes_sent_po_and_po_payment(db):
     vendor = _vendor(db)
     today = date.today()
 
-    draft_po = _make_po(db, vendor, order_date=today)
     sent_po = _make_po(db, vendor, order_date=today)
 
     po_service = PurchaseOrderService(db)
@@ -131,12 +130,20 @@ def test_vendor_statement_includes_sent_po_and_po_payment(db):
     assert statement.summary.amount_paid == Decimal("75.00")
     assert statement.summary.balance_due == Decimal("125.00")
 
-    descriptions = [txn.description for txn in statement.transactions]
-    assert f"Purchase Order {sent_po.po_number}" in descriptions
-    assert any(
-        description.endswith(f"for {sent_po.po_number}") for description in descriptions
-    )
-    assert f"Purchase Order {draft_po.po_number}" not in descriptions
+    po_rows = [
+        txn for txn in statement.transactions if txn.source_type == "purchase_order"
+    ]
+    assert len(po_rows) == 1
+    assert po_rows[0].source_id == sent_po.id
+    assert po_rows[0].description == "Purchase Order"
+    assert po_rows[0].reference == sent_po.po_number
+
+    po_payment_rows = [
+        txn for txn in statement.transactions if txn.source_type == "po_payment"
+    ]
+    assert len(po_payment_rows) == 1
+    assert po_payment_rows[0].reference == "PO-PMT-001"
+    assert po_payment_rows[0].detail.endswith(f"for {sent_po.po_number}")
 
 
 def test_vendor_statement_opening_balance_includes_prior_sent_po_and_payment(db):
@@ -200,3 +207,41 @@ def test_vendor_statement_pdf_and_excel_exports(db):
     assert pdf_bytes.startswith(b"%PDF")
     assert xlsx_bytes.startswith(b"PK")
     assert len(pdf_statement.transactions) == len(xlsx_statement.transactions)
+
+
+def test_vendor_statement_rows_are_structured_for_display(db):
+    vendor = _vendor(db)
+    today = date.today()
+    expense = _make_expense(db, vendor, expense_date=today)
+
+    ExpenseService(db).record_payment(
+        expense.id,
+        ExpensePaymentCreate(
+            amount=Decimal("100.00"),
+            payment_date=today,
+            reference="EXP-PMT-001",
+        ),
+    )
+
+    statement = VendorService(db).generate_statement(
+        vendor.id,
+        today - timedelta(days=1),
+        today + timedelta(days=1),
+    )
+
+    opening, expense_row, payment_row = statement.transactions
+    assert opening.source_type == "opening_balance"
+    assert opening.detail == "Balance carried forward"
+
+    assert expense_row.source_type == "expense"
+    assert expense_row.source_id == expense.id
+    assert expense_row.description == "Expense"
+    assert expense_row.reference == expense.expense_number
+
+    assert payment_row.source_type == "expense_payment"
+    assert payment_row.description == "Payment Made"
+    assert payment_row.reference == "EXP-PMT-001"
+    assert payment_row.detail == (
+        f"{vendor.currency} 100.00 for {expense.expense_number}"
+    )
+    assert "—" not in payment_row.description

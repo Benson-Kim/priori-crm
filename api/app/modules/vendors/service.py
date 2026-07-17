@@ -1336,39 +1336,48 @@ class VendorService(StateMachineMixin, ServiceBase):
         debits = [
             DebitEntry(
                 date=exp.expense_date,
-                description=f"Expense {exp.expense_number}",
+                description="Expense",
                 amount=exp.total_due,
+                source_type="expense",
+                source_id=str(exp.id),
+                reference=exp.expense_number,
+                detail=exp.expense_reference,
             )
             for exp in period_expenses
         ]
         debits.extend(
             DebitEntry(
                 date=po.order_date,
-                description=f"Purchase Order {po.po_number}",
+                description="Purchase Order",
                 amount=po.total,
+                source_type="purchase_order",
+                source_id=str(po.id),
+                reference=po.po_number,
+                detail=po.po_reference,
             )
             for po in period_purchase_orders
         )
         credits = [
             CreditEntry(
                 date=pmt.payment_date,
-                description=(
-                    f"Payment Made — {vendor.currency} {pmt.amount} "
-                    f"for {pmt.expense.expense_number}"
-                ),
+                description="Payment Made",
                 amount=pmt.amount,
+                source_type="expense_payment",
+                source_id=str(pmt.id),
+                reference=pmt.payment_reference,
+                detail=f"{vendor.currency} {pmt.amount} for {pmt.expense.expense_number}",
             )
             for pmt in period_payments
         ]
         credits.extend(
             CreditEntry(
                 date=pmt.payment_date,
-                description=(
-                    f"Payment Made — {vendor.currency} "
-                    f"{pmt.amount * pmt.exchange_rate} for "
-                    f"{pmt.purchase_order.po_number}"
-                ),
+                description="Payment Made",
                 amount=pmt.amount * pmt.exchange_rate,
+                source_type="po_payment",
+                source_id=str(pmt.id),
+                reference=pmt.payment_reference,
+                detail=f"{vendor.currency} {pmt.amount * pmt.exchange_rate} for {pmt.purchase_order.po_number}",
             )
             for pmt in period_po_payments
         )
@@ -1385,6 +1394,10 @@ class VendorService(StateMachineMixin, ServiceBase):
             VendorStatementTransaction(
                 date=t["date"],
                 description=t["description"],
+                source_type=t["source_type"],
+                source_id=t.get("source_id"),
+                reference=t.get("reference"),
+                detail=t.get("detail"),
                 amount=t["amount"],
                 payment=t["payment"],
                 balance=t["balance"],
