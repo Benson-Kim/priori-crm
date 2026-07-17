@@ -576,6 +576,112 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    def export_vendor_statement(self, statement) -> bytes:
+        """Export a vendor statement of accounts to .xlsx bytes."""
+
+        def get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def tx_date(tx):
+            return get(tx, "date") or get(tx, "transaction_date")
+
+        vendor = get(statement, "vendor")
+        summary = get(statement, "summary")
+        transactions = get(statement, "transactions", [])
+
+        vendor_name = get(vendor, "vendor_name") or get(vendor, "email") or "Vendor"
+        currency = get(vendor, "currency", "")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Statement"
+
+        ws.merge_cells("A1:E1")
+        title = ws.cell(row=1, column=1, value=f"{vendor_name} — Statement of Accounts")
+        title.font = Font(name="Calibri", bold=True, size=14, color="2C1A54")
+        title.alignment = Alignment(horizontal="left", vertical="center")
+
+        ws.cell(row=2, column=1, value="Period Start")
+        ws.cell(row=2, column=2, value=get(statement, "period_start"))
+        ws.cell(row=3, column=1, value="Period End")
+        ws.cell(row=3, column=2, value=get(statement, "period_end"))
+
+        for row in (2, 3):
+            ws.cell(row=row, column=1).font = Font(name="Calibri", bold=True)
+            ws.cell(row=row, column=2).number_format = _DATE_FORMAT
+
+        summary_start = 5
+        summary_rows = [
+            ("Opening Balance", get(summary, "opening_balance")),
+            ("Invoiced Amount", get(summary, "invoiced_amount")),
+            ("Amount Paid", get(summary, "amount_paid")),
+            ("Balance Due", get(summary, "balance_due")),
+        ]
+
+        for offset, (label, value) in enumerate(summary_rows):
+            row = summary_start + offset
+            ws.cell(row=row, column=1, value=label).font = Font(
+                name="Calibri", bold=True
+            )
+            value_cell = ws.cell(row=row, column=2, value=float(value or 0))
+            value_cell.number_format = _MONEY_FORMAT
+            value_cell.alignment = Alignment(horizontal="right")
+
+        header_row = summary_start + len(summary_rows) + 2
+        headers = ["Date", "Details", "Amount", "Payment", "Balance"]
+
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col_idx, value=header)
+            cell.font = _HEADER_FONT
+            cell.fill = _HEADER_FILL
+            cell.alignment = _HEADER_ALIGN
+
+        row_idx = header_row + 1
+        for tx in transactions:
+            ws.cell(row=row_idx, column=1, value=tx_date(tx))
+            ws.cell(row=row_idx, column=2, value=get(tx, "description", ""))
+            ws.cell(row=row_idx, column=3, value=float(get(tx, "amount", 0) or 0))
+            ws.cell(row=row_idx, column=4, value=float(get(tx, "payment", 0) or 0))
+            ws.cell(row=row_idx, column=5, value=float(get(tx, "balance", 0) or 0))
+
+            ws.cell(row=row_idx, column=1).number_format = _DATE_FORMAT
+            for col_idx in (3, 4, 5):
+                ws.cell(row=row_idx, column=col_idx).number_format = _MONEY_FORMAT
+                ws.cell(row=row_idx, column=col_idx).alignment = Alignment(
+                    horizontal="right"
+                )
+
+            for col_idx in range(1, 6):
+                ws.cell(row=row_idx, column=col_idx).font = _BODY_FONT
+                ws.cell(row=row_idx, column=col_idx).border = _THIN_BORDER
+
+            row_idx += 1
+
+        row_idx += 1
+        ws.cell(row=row_idx, column=4, value="Balance Due").font = Font(
+            name="Calibri", bold=True
+        )
+        balance_cell = ws.cell(
+            row=row_idx,
+            column=5,
+            value=float(get(summary, "balance_due", 0) or 0),
+        )
+        balance_cell.font = Font(name="Calibri", bold=True)
+        balance_cell.number_format = _MONEY_FORMAT
+        balance_cell.alignment = Alignment(horizontal="right")
+
+        note = ws.cell(row=row_idx + 2, column=1, value=f"Currency: {currency}")
+        note.font = Font(name="Calibri", italic=True, size=9, color="817D7D")
+
+        for col, width in {"A": 16, "B": 45, "C": 16, "D": 16, "E": 16}.items():
+            ws.column_dimensions[col].width = width
+
+        ws.freeze_panes = f"A{header_row + 1}"
+
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(

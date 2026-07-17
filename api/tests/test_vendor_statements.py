@@ -168,3 +168,35 @@ def test_vendor_statement_opening_balance_includes_prior_sent_po_and_payment(db)
     assert statement.summary.invoiced_amount == Decimal("0.00")
     assert statement.summary.amount_paid == Decimal("0.00")
     assert statement.summary.balance_due == Decimal("160.00")
+
+
+def test_vendor_statement_pdf_and_excel_exports(db):
+    vendor = _vendor(db)
+    today = date.today()
+    expense = _make_expense(db, vendor, expense_date=today)
+    ExpenseService(db).record_payment(
+        expense.id,
+        ExpensePaymentCreate(
+            amount=Decimal("50.00"),
+            payment_date=today,
+            reference="EXP-PMT-001",
+            currency="KES",
+            exchange_rate=Decimal("1.0"),
+        ),
+    )
+
+    service = VendorService(db)
+    pdf_bytes, pdf_statement = service.generate_statement_pdf(
+        vendor_id=vendor.id,
+        period_start=today - timedelta(days=1),
+        period_end=today + timedelta(days=1),
+    )
+    xlsx_bytes, xlsx_statement = service.generate_statement_excel(
+        vendor_id=vendor.id,
+        period_start=today - timedelta(days=1),
+        period_end=today + timedelta(days=1),
+    )
+
+    assert pdf_bytes.startswith(b"%PDF")
+    assert xlsx_bytes.startswith(b"PK")
+    assert len(pdf_statement.transactions) == len(xlsx_statement.transactions)
