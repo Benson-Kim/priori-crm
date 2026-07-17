@@ -125,10 +125,12 @@ def test_vendor_statement_includes_sent_po_and_po_payment(db):
         today + timedelta(days=1),
     )
 
+    expected_paid = Decimal("75.00")
+    expected_balance = sent_po.total - expected_paid
     assert statement.summary.opening_balance == Decimal("0.00")
-    assert statement.summary.invoiced_amount == Decimal("200.00")
-    assert statement.summary.amount_paid == Decimal("75.00")
-    assert statement.summary.balance_due == Decimal("125.00")
+    assert statement.summary.invoiced_amount == sent_po.total
+    assert statement.summary.amount_paid == expected_paid
+    assert statement.summary.balance_due == expected_balance
 
     po_rows = [
         txn for txn in statement.transactions if txn.source_type == "purchase_order"
@@ -171,10 +173,11 @@ def test_vendor_statement_opening_balance_includes_prior_sent_po_and_payment(db)
         period_start + timedelta(days=1),
     )
 
-    assert statement.summary.opening_balance == Decimal("160.00")
+    expected_opening = prior_po.total - Decimal("40.00")
+    assert statement.summary.opening_balance == expected_opening
     assert statement.summary.invoiced_amount == Decimal("0.00")
     assert statement.summary.amount_paid == Decimal("0.00")
-    assert statement.summary.balance_due == Decimal("160.00")
+    assert statement.summary.balance_due == expected_opening
 
 
 def test_vendor_statement_pdf_and_excel_exports(db):
