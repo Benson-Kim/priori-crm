@@ -1,3 +1,4 @@
+import ExcelSvg from "@/assets/icons/excel-document-svgrepo-com.svg?react";
 import { DocumentOwnerHeader } from "@/components/documents/DocumentOwnerHeader";
 import { VendorModal } from "@/components/modals/VendorModal";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -12,8 +13,10 @@ import { Select } from "@/components/ui/Select";
 import { Table } from "@/components/ui/Table";
 import { formatCurrency, formatDate, getNameInitials, saveBlob } from "@/lib/utils";
 import {
+  downloadVendorStatementPdf,
   exportVendorCardExcel,
   exportVendorCardPdf,
+  exportVendorStatementExcel,
   getVendor,
   getVendorCard,
   getVendorPayables,
@@ -25,9 +28,10 @@ import {
   type VendorPayablesSummary,
   type VendorStatement
 } from "@/services/vendorApi";
-import { ChevronLeft, ChevronRight, Download, Eye, Pencil, Printer } from "lucide-react";
+import { Download, Eye, FileClock, Pencil } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
 
 /**
  * VendorSummaryCard — one of the three cards on the vendor detail Overview tab
@@ -64,6 +68,20 @@ interface VendorTxnRow {
   source?: string;
 }
 
+
+type VendorStatementTransaction = VendorStatement["transactions"][number];
+
+function statementRowTitle(transaction: VendorStatementTransaction): string {
+  const reference = transaction.reference?.trim();
+  return reference
+    ? `${transaction.description} ${reference}`
+    : transaction.description;
+}
+
+function statementRowDetail(transaction: VendorStatementTransaction): string {
+  return transaction.detail?.trim() || formatDate(transaction.date);
+}
+
 // Which export card each source type maps to.
 const CARD_KEY_BY_TYPE: Record<VendorTxnType, VendorCardKey> = {
   purchase_order: "purchase-orders",
@@ -86,7 +104,7 @@ export default function VendorDetailPage() {
   const [statement, setStatement] = useState<VendorStatement | null>(null);
   const [isLoadingStatement, setIsLoadingStatement] = useState(false);
   const [statementError, setStatementError] = useState<string | null>(null);
-  const [periodMonths, setPeriodMonths] = useState(12);
+  const [statementPeriod, setStatementPeriod] = useState<PeriodFilter>({ range: "last_12_months" });
   const [isExporting, setIsExporting] = useState(false);
 
 
@@ -172,19 +190,36 @@ export default function VendorDetailPage() {
     }
   }, [id, currentPage, perPage, activeTab, typeTab]);
 
+  const getResolvedPeriod = useCallback(() => {
+    if (!isPeriodReady(statementPeriod)) {
+      return null;
+    }
+
+    const { start, end } = resolvePeriod(statementPeriod)
+    if (!start || !end) {
+      return null
+    }
+    return { periodStart: start, periodEnd: end };
+  }, [statementPeriod]
+  );
+
+
   const fetchStatement = useCallback(
-    async (months?: number) => {
+    async () => {
       if (!id) return;
+
+      const period = getResolvedPeriod()
+      if (!period) {
+        setStatement(null)
+        return
+      }
+
       setIsLoadingStatement(true);
       setStatementError(null);
-      try {
-        const periodEnd = new Date().toISOString().split("T")[0];
-        const periodStart = new Date();
-        const monthsToUse = months ?? periodMonths;
-        periodStart.setMonth(periodStart.getMonth() - monthsToUse);
-        const periodStartStr = periodStart.toISOString().split("T")[0];
 
-        const data = await getVendorStatement(id, periodStartStr, periodEnd);
+      try {
+        const { periodStart, periodEnd } = period;
+        const data = await getVendorStatement(id, periodStart, periodEnd);
         setStatement(data);
       } catch (err) {
         setStatementError(
@@ -194,8 +229,50 @@ export default function VendorDetailPage() {
         setIsLoadingStatement(false);
       }
     },
-    [id, periodMonths]
+    [id, getResolvedPeriod]
   );
+
+  /** Download this customer's statement as a PDF. */
+  const handleDownloadPDFVendorStatement = useCallback(async () => {
+    if (!id) return;
+
+    const period = getResolvedPeriod();
+    if (!period) {
+      setStatementError("Select a complete statement period before downloading.")
+      return
+    }
+
+    try {
+      const { periodStart, periodEnd } = period;
+      const blob = await downloadVendorStatementPdf(id, periodStart, periodEnd);
+      saveBlob(blob, `Vendor_Statement_${periodStart}_to_${periodEnd}.pdf`);
+    } catch (err) {
+      setStatementError(
+        err instanceof Error ? err.message : "Failed to download vendor statement PDF"
+      );
+    }
+  }, [id, getResolvedPeriod]);
+
+  /** Export this customer's statement to an Excel workbook. */
+  const handleExportExcelVendorStatement = useCallback(async () => {
+    if (!id) return;
+
+    const period = getResolvedPeriod();
+    if (!period) {
+      setStatementError("Select a complete statement period before downloading.")
+      return
+    }
+
+    try {
+      const { periodStart, periodEnd } = period;
+      const blob = await exportVendorStatementExcel(id, periodStart, periodEnd);
+      saveBlob(blob, `Vendor_Statement_${periodStart}_to_${periodEnd}.xlsx`);
+    } catch (err) {
+      setStatementError(err instanceof Error ? err.message : "Failed to export vendor statements excel");
+    }
+  }, [id, getResolvedPeriod]);
+
+
 
   useEffect(() => {
     void (async () => { await fetchVendorData(); })();
@@ -203,9 +280,14 @@ export default function VendorDetailPage() {
 
   useEffect(() => {
     if (mainTab === "statements") {
+      if (!isPeriodReady(statementPeriod)) {
+        setStatement(null)
+        return
+      }
+
       void (async () => { await fetchStatement(); })();
     }
-  }, [mainTab, fetchStatement, periodMonths]);
+  }, [mainTab, fetchStatement, statementPeriod]);
 
   useEffect(() => {
     void (async () => { await fetchTransactions(); })();
@@ -215,14 +297,32 @@ export default function VendorDetailPage() {
     startTransition(() => { setCurrentPage(1); });
   }, [activeTab, typeTab]);
 
-  const actions: DropdownItem[] = [
-    {
+  const actions: DropdownItem[] = [];
+
+  if (mainTab === "overview") {
+    actions.push({
       key: "edit",
       label: "Edit",
       icon: <Pencil size={16} />,
       onClick: () => setIsEditModalOpen(true),
-    },
-  ];
+    });
+
+  } else {
+    // Balance-aware statement PDF (payments applied + running balance).
+    actions.push({
+      key: "download-pdf-vendor-statement",
+      label: "Download statement",
+      icon: <FileClock size={16} />,
+      onClick: handleDownloadPDFVendorStatement,
+    });
+    // Export this payments to Excel.
+    actions.push({
+      key: "export-excel-vendor-statement",
+      label: "Export excel",
+      icon: <ExcelSvg className="w-4 h-4" />,
+      onClick: handleExportExcelVendorStatement,
+    });
+  }
 
   const getStatusBadge = (item: VendorTxnRow) => {
     if (!item.status) return null;
@@ -250,20 +350,6 @@ export default function VendorDetailPage() {
     );
   };
 
-  // Route a transaction row to its source document's View. For a payment we
-  // route to the parent document (PO / expense) it was recorded against.
-  const handleViewTransaction = (item: VendorTxnRow) => {
-    if (item.source === "po_payment" && item.parent_id) {
-      navigate(`/purchase-orders/${item.parent_id}`);
-    } else if (item.source === "expense_payment" && item.parent_id) {
-      navigate(`/expenses/${item.parent_id}`);
-    } else if (item.transaction_type === "purchase_order") {
-      navigate(`/purchase-orders/${item.id}`);
-    } else if (item.transaction_type === "expense") {
-      navigate(`/expenses/${item.id}`);
-    }
-  };
-
   if (isFetching) {
     return (
       <LoadingState message="Loading vendor details..." className="h-64" />
@@ -280,6 +366,21 @@ export default function VendorDetailPage() {
       </div>
     );
   }
+
+  // Route a transaction row to its source document's View. For a payment we
+  // route to the parent document (PO / expense) it was recorded against.
+  const handleViewTransaction = (item: VendorTxnRow) => {
+    if (item.source === "po_payment" && item.parent_id) {
+      navigate(`/purchase-orders/${item.parent_id}`);
+    } else if (item.source === "expense_payment" && item.parent_id) {
+      navigate(`/expenses/${item.parent_id}`);
+    } else if (item.transaction_type === "purchase_order") {
+      navigate(`/purchase-orders/${item.id}`);
+    } else if (item.transaction_type === "expense") {
+      navigate(`/expenses/${item.id}`);
+    }
+  };
+
 
   const displayName = vendor.vendor_name || vendor.email || "Vendor";
   const initials = vendor.display_initials || getNameInitials(displayName);
@@ -438,19 +539,7 @@ export default function VendorDetailPage() {
     }
   };
 
-  const handlePrintStatement = () => {
-    window.print();
-  };
 
-  const handlePeriodChange = (direction: "prev" | "next") => {
-    setPeriodMonths((prev) => {
-      if (direction === "prev") {
-        return Math.max(3, prev - 3);
-      } else {
-        return prev + 3;
-      }
-    });
-  };
 
   return (
     <div className="space-y-6">
@@ -482,34 +571,14 @@ export default function VendorDetailPage() {
           </button>
         </div>
         <div className="flex justify-end items-center gap-3">
-          {mainTab === "statements" && statement && (
-            <>
-              <div className="flex items-center gap-1 border border-gray-300 rounded-lg px-4 py-2">
-                <button
-                  className="p-1 hover:bg-gray-100 rounded"
-                  onClick={() => handlePeriodChange("prev")}
-                >
-                  <ChevronLeft size={18} className="text-gray-600" />
-                </button>
-                <span className="text-base font-medium text-gray-700 px-2">
-                  Last {periodMonths} Months
-                </span>
-                <button
-                  className="p-1 hover:bg-gray-100 rounded"
-                  onClick={() => handlePeriodChange("next")}
-                >
-                  <ChevronRight size={18} className="text-gray-600" />
-                </button>
-              </div>
-              <Button
-                variant="outline"
-                onClick={handlePrintStatement}
-                className="border-gray-300 text-gray-700"
-              >
-                <Printer size={16} className="mr-2" />
-                Print Statement
-              </Button>
-            </>
+          {mainTab === "statements" && (
+            <PeriodRangePicker
+              period={statementPeriod}
+              onPeriodChange={setStatementPeriod}
+              placeholder="Statement period"
+              wrapperClassName="flex-row items-center"
+              selectWrapperClassName="min-w-[120px] px-4 py-3"
+            />
           )}
           <Dropdown
             items={actions}
@@ -819,40 +888,14 @@ export default function VendorDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="grid grid-cols-5 gap-4 pt-2">
-                        <td className="col-span-2 px-3 py-4 flex flex-col gap-1">
-                          <span className="font-bold text-gray-800">
-                            Opening Balance
-                          </span>
-                          <span className="text-gray-600 text-sm whitespace-pre-wrap">
-                            -
-                          </span>
-                        </td>
-                        <td className="px-3 py-4 text-center text-gray-800">
-                          {formatCurrency(
-                            Number(statement.summary.opening_balance),
-                            statement.vendor.currency
-                          )}
-                        </td>
-                        <td className="px-3 py-4 text-center text-gray-800">-</td>
-                        <td className="px-3 py-4 text-right text-gray-800">
-                          {formatCurrency(
-                            Number(statement.summary.opening_balance),
-                            statement.vendor.currency
-                          )}
-                        </td>
-                      </tr>
-
                       {statement.transactions.map((transaction, index) => (
                         <tr key={index} className="grid grid-cols-5 gap-4 pt-2">
                           <td className="col-span-2 px-3 py-4 flex flex-col gap-1">
                             <span className="font-bold text-gray-800">
-                              {transaction.description.split("—")[0]?.trim()}
+                              {statementRowTitle(transaction)}
                             </span>
                             <span className="text-gray-600 text-sm whitespace-pre-wrap">
-                              {transaction.description.includes("—")
-                                ? transaction.description.split("—")[1]?.trim()
-                                : formatDate(transaction.date)}
+                              {statementRowDetail(transaction)}
                             </span>
                           </td>
                           <td className="px-3 py-4 text-center text-gray-800">

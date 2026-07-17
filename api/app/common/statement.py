@@ -16,6 +16,17 @@ from app.common.financial import quantize_money
 # Default statement window when the caller does not supply explicit bounds.
 DEFAULT_STATEMENT_PERIOD_DAYS = 365
 
+#: Statuses excluded from statement balances: drafts are not yet
+#: receivable/payable, and canceled documents — including payments recorded
+#: against them — must not move the balance. Plain strings so the predicate
+#: applies to invoices (draft/canceled) and expenses (canceled) alike.
+#:
+#: This is the single source of truth for exclusions applied symmetrically to
+#: the debit side (documents) and credit side (payments recorded against them)
+#: in both customer and vendor statement services. Asymmetric or per-service
+#: copies of this rule are how opening balances can drift after cancellations.
+EXCLUDED_STATEMENT_STATUSES: tuple[str, ...] = ("draft", "canceled")
+
 
 def default_statement_period(
     period_start: date | None = None,
@@ -36,11 +47,15 @@ def default_statement_period(
 
 @dataclass(frozen=True, slots=True)
 class DebitEntry:
-    """A charge row (invoice / expense) to be added to the ledger."""
+    """A charge row (invoice / expense / PO) to be added to the ledger."""
 
     date: date
     description: str
     amount: Decimal
+    source_type: str = "debit"
+    source_id: str | None = None
+    reference: str | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +65,10 @@ class CreditEntry:
     date: date
     description: str
     amount: Decimal
+    source_type: str = "credit"
+    source_id: str | None = None
+    reference: str | None = None
+    detail: str | None = None
 
 
 class StatementGenerator:
@@ -82,7 +101,8 @@ class StatementGenerator:
         Returns:
             (transactions, summary) where:
                 transactions — list of dicts with keys:
-                    date, description, amount, payment, balance
+                    date, description, amount, payment, balance,
+                    source_type, source_id, reference, detail
                 summary — dict with keys:
                     opening_balance, invoiced_amount, amount_paid, balance_due
         """
@@ -97,6 +117,10 @@ class StatementGenerator:
                 "amount": opening_balance,
                 "payment": Decimal("0.00"),
                 "balance": opening_balance,
+                "source_type": "opening_balance",
+                "source_id": None,
+                "reference": None,
+                "detail": "Balance carried forward",
             }
         )
 
@@ -124,6 +148,10 @@ class StatementGenerator:
                         "amount": entry.amount,
                         "payment": Decimal("0.00"),
                         "balance": running_balance,
+                        "source_type": entry.source_type,
+                        "source_id": entry.source_id,
+                        "reference": entry.reference,
+                        "detail": entry.detail,
                     }
                 )
             else:
@@ -136,6 +164,10 @@ class StatementGenerator:
                         "amount": Decimal("0.00"),
                         "payment": entry.amount,
                         "balance": running_balance,
+                        "source_type": entry.source_type,
+                        "source_id": entry.source_id,
+                        "reference": entry.reference,
+                        "detail": entry.detail,
                     }
                 )
 

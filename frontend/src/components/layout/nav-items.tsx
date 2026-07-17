@@ -1,13 +1,36 @@
 import {
+    ClipboardList,
+    DollarSign,
+    FileText,
+    Receipt,
     ReceiptText,
     ShoppingCart,
+    Store,
+    Users
 } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 
 import Invoice from "@/assets/icons/invoice-uxwing.svg?react";
 import Briefcase from "@/assets/icons/sell-svgrepo-com 1.svg?react";
 import Home from "@/assets/icons/send2.svg?react";
 
-export const navItems = [
+export type NavIcon = ComponentType<
+    SVGProps<SVGSVGElement> & {
+        size?: number | string;
+    }
+>;
+
+export type NavChild = {
+    path: string;
+    label: string;
+    icon?: NavIcon;
+}
+
+export type NavItem =
+    | { path: string; label: string; icon?: NavIcon; children?: never }
+    | { label: string; icon?: NavIcon; children: NavChild[]; path?: never }
+
+export const navItems: NavItem[] = [
     {
         label: "Dashboard",
         icon: Home,
@@ -18,8 +41,8 @@ export const navItems = [
         label: "Income / Sales",
         icon: Briefcase,
         children: [
-            { label: "Customers", path: "/customers" },
-            { label: "Quotes", path: "/quotes" },
+            { label: "Customers", path: "/customers", icon: Users },
+            { label: "Quotes", path: "/quotes", icon: FileText },
             { label: "Invoices", path: "/invoices", icon: Invoice },
         ],
     },
@@ -28,9 +51,13 @@ export const navItems = [
         label: "Purchases",
         icon: ShoppingCart,
         children: [
-            { label: "Vendors", path: "/vendors" },
-            { label: "Expenses", path: "/expenses" },
-            { label: "Purchase Orders", path: "/purchase-orders" },
+            { label: "Vendors", path: "/vendors", icon: Store },
+            { label: "Expenses", path: "/expenses", icon: Receipt },
+            {
+                label: "Purchase Orders",
+                path: "/purchase-orders",
+                icon: ClipboardList,
+            },
         ],
     },
 
@@ -38,8 +65,12 @@ export const navItems = [
         label: "Statements",
         icon: ReceiptText,
         children: [
-            { label: "Income Statement", path: "/income-statement" },
-            { label: "Cashflow", path: "/cashflow" },
+            {
+                label: "Income Statement",
+                path: "/income-statement",
+                icon: FileText,
+            },
+            { label: "Cashflow", path: "/cashflow", icon: DollarSign },
         ],
     },
 ];

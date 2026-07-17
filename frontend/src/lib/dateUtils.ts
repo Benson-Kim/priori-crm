@@ -8,6 +8,7 @@ export const DATE_RANGE_OPTIONS = [
   { label: "Last Month", value: "last_month" },
   { label: "This Quarter", value: "this_quarter" },
   { label: "This Year", value: "this_year" },
+  { label: "Last 12 Months", value: "last_12_months" },
   { label: "Custom Range", value: "custom" },
 ];
 
@@ -104,4 +105,3 @@ export function buildStatementParams(periodStart?: string, periodEnd?: string) {
 
   return params;
 }
-

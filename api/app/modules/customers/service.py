@@ -19,8 +19,12 @@ from app.common.exceptions import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
-from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
-from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
+from app.common.statement import (
+    EXCLUDED_STATEMENT_STATUSES,
+    CreditEntry,
+    DebitEntry,
+    StatementGenerator,
+)
 from app.common.statistics import status_counts
 from app.constants.enums import CustomerStatus
 from app.modules.customers.models import Customer
