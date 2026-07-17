@@ -8194,16 +8194,66 @@
             "title": "Description",
             "type": "string"
           },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Detailed description of the transaction",
+            "title": "Detail"
+          },
           "payment": {
             "description": "Amount paid. 0.00 for expense/bill lines.",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Payment",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reference number of the source document",
+            "title": "Reference"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UUID of the source record for this ledger row",
+            "title": "Source Id"
+          },
+          "source_type": {
+            "description": "Type of source",
+            "enum": [
+              "opening_balance",
+              "expense",
+              "purchase_order",
+              "expense_payment",
+              "po_payment"
+            ],
+            "title": "Source Type",
             "type": "string"
           }
         },
         "required": [
           "date",
           "description",
+          "source_type",
           "amount",
           "payment",
           "balance"
@@ -17806,6 +17856,187 @@
           }
         ],
         "summary": "Generate vendor statement",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/statement/excel": {
+      "get": {
+        "description": "Export the vendor statement-of-accounts for a date range (defaults to the last 12 months) as an .xlsx workbook: period and account summary block plus one row per ledger transaction.",
+        "operationId": "export_vendor_statement_excel_api_v1_vendors__vendor_id__statement_excel_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Start date for the statement period",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date for the statement period",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "End date for the statement period",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date for the statement period",
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel file"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export vendor statement to Excel",
+        "tags": [
+          "Vendors"
+        ]
+      }
+    },
+    "/api/v1/vendors/{vendor_id}/statement/pdf": {
+      "get": {
+        "description": "Generate and stream the vendor statement-of-accounts PDF for a date range (defaults to the last 12 months). Renders the same ledger data as the Statement tab: owner branding header, account summary and chronological transactions with a running balance.",
+        "operationId": "download_vendor_statement_pdf_api_v1_vendors__vendor_id__statement_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Vendor Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Start date for the statement period",
+            "in": "query",
+            "name": "period_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date for the statement period",
+              "title": "Period Start"
+            }
+          },
+          {
+            "description": "End date for the statement period",
+            "in": "query",
+            "name": "period_end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date for the statement period",
+              "title": "Period End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/pdf": {}
+            },
+            "description": "PDF file"
+          },
+          "404": {
+            "description": "Vendor not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "description": "PDF could not be generated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download vendor statement as PDF",
         "tags": [
           "Vendors"
         ]
