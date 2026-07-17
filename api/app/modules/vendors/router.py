@@ -676,3 +676,107 @@ def get_vendor_statement(
         period_start=period_start,
         period_end=period_end,
     )
+
+
+def _safe_filename_token(value: str) -> str:
+    """Reduce free text to a safe Content-Disposition filename token."""
+    import re
+
+    token = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_")
+    return token or "vendor"
+
+
+def _statement_display_name(statement: VendorStatement) -> str:
+    """Resolve the vendor display name used in statement export filenames."""
+    vendor = statement.vendor
+    return vendor.vendor_name or vendor.email or str(vendor.id)
+
+
+@router.get(
+    "/{vendor_id}/statement/pdf",
+    summary="Download vendor statement as PDF",
+    description=(
+        "Generate and stream the vendor statement-of-accounts PDF for a date "
+        "range (defaults to the last 12 months). Renders the same ledger data "
+        "as the Statement tab: owner branding header, account summary and "
+        "chronological transactions with a running balance."
+    ),
+    responses={
+        200: {"description": "PDF file", "content": {"application/pdf": {}}},
+        404: {"description": "Vendor not found"},
+        500: {"description": "PDF could not be generated"},
+    },
+)
+async def download_vendor_statement_pdf(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[
+        date | None,
+        Query(alias="period_start", description="Start date for the statement period"),
+    ] = None,
+    period_end: Annotated[
+        date | None,
+        Query(alias="period_end", description="End date for the statement period"),
+    ] = None,
+) -> StreamingResponse:
+    """Download a vendor statement PDF, defaulting to the last 12 months."""
+    period_start, period_end = default_statement_period(period_start, period_end)
+
+    pdf_data, statement = await run_export(
+        service.generate_statement_pdf, vendor_id, period_start, period_end
+    )
+
+    display_name = _statement_display_name(statement)
+    filename = (
+        f"VendorStatement_{_safe_filename_token(display_name)}_"
+        f"{period_start.isoformat()}_to_{period_end.isoformat()}.pdf"
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/{vendor_id}/statement/excel",
+    summary="Export vendor statement to Excel",
+    description=(
+        "Export the vendor statement-of-accounts for a date range "
+        "(defaults to the last 12 months) as an .xlsx workbook: period and "
+        "account summary block plus one row per ledger transaction."
+    ),
+    responses={
+        200: {"description": "Excel file", "content": {_XLSX_MEDIA_TYPE: {}}},
+        404: {"description": "Vendor not found"},
+    },
+)
+async def export_vendor_statement_excel(
+    vendor_id: UUID,
+    service: VendorServiceDep,
+    period_start: Annotated[
+        date | None,
+        Query(alias="period_start", description="Start date for the statement period"),
+    ] = None,
+    period_end: Annotated[
+        date | None,
+        Query(alias="period_end", description="End date for the statement period"),
+    ] = None,
+) -> StreamingResponse:
+    """Export a vendor statement workbook, defaulting to the last 12 months."""
+    period_start, period_end = default_statement_period(period_start, period_end)
+
+    xlsx_bytes, statement = await run_export(
+        service.generate_statement_excel, vendor_id, period_start, period_end
+    )
+
+    display_name = _statement_display_name(statement)
+    filename = (
+        f"VendorStatement_{_safe_filename_token(display_name)}_"
+        f"{period_start.isoformat()}_to_{period_end.isoformat()}.xlsx"
+    )
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

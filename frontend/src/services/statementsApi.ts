@@ -36,6 +36,7 @@ export const RANGE_PRESETS = [
   "last_month",
   "this_quarter",
   "this_year",
+  "last_12_months",
   "custom",
 ] as const;
 
@@ -122,6 +123,11 @@ export function resolvePeriod(
     }
     case "this_year": {
       const s = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+      return { start: startOf(s), end: endStr };
+    }
+    case "last_12_months": {
+      const s = new Date(end);
+      s.setUTCFullYear(s.getUTCFullYear() - 1);
       return { start: startOf(s), end: endStr };
     }
     case "custom":

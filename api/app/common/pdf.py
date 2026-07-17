@@ -17,7 +17,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    Frame,
     Image,
+    PageTemplate,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -38,8 +40,10 @@ _LOGO_MAX_WIDTH_MM = 60
 _INK = colors.HexColor("#333333")
 _PURE_BLACK = colors.black
 _MUTED_LABEL = colors.HexColor("#817d7d")
-_TABLE_HEADER_BG = colors.HexColor("#2C1A54")
+_PRIORI_BLUE = colors.HexColor("#2C1A54")
+_PRIORI_PURPLE = colors.HexColor("#912b90")
 _TABLE_LINE = colors.HexColor("#E3E3E3")
+_PRIORI_LIGHT_PURPLE = colors.HexColor("#DAA3C8")
 
 # Reusable styles
 _STYLES = getSampleStyleSheet()
@@ -263,9 +267,29 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
+        )
+        doc.addPageTemplates(
+            [
+                PageTemplate(
+                    id="normal",
+                    frames=[
+                        Frame(
+                            doc.leftMargin,
+                            doc.bottomMargin,
+                            doc.width,
+                            doc.height,
+                            leftPadding=0,
+                            rightPadding=0,
+                            topPadding=0,
+                            bottomPadding=0,
+                            id="normal",
+                        )
+                    ],
+                )
+            ]
         )
 
         content_width = doc.width
@@ -312,7 +336,7 @@ class DocumentPDFGenerator:
         )
 
         elements.append(header_table)
-        elements.append(Spacer(1, 10 * mm))
+        elements.append(Spacer(1, 4 * mm))
 
         period_start = get(statement, "period_start")
         period_end = get(statement, "period_end")
@@ -320,39 +344,44 @@ class DocumentPDFGenerator:
         period_text = ""
         if period_start and period_end:
             period_text = (
-                f"{period_start.strftime('%b %d, %Y')} to "
+                f"{period_start.strftime('%b %d, %Y')} - "
                 f"{period_end.strftime('%b %d, %Y')}"
             )
 
+        rule_table = Table([[""]], colWidths=[content_width])
+        rule_table.setStyle(
+            TableStyle([("LINEBELOW", (0, 0), (-1, 0), 1.25, _PURE_BLACK)])
+        )
+        elements.append(rule_table)
+        elements.append(Spacer(1, 8 * mm))
+
         customer_cell: list = [
             Paragraph("To", _SECTION_LABEL_STYLE),
+            Spacer(1, 2),
             Paragraph(str(customer_name), _LABEL_STYLE),
         ]
 
-        for field in (
-            get(customer, "phone"),
-            get(customer, "email"),
-        ):
+        for field in (get(customer, "phone"), get(customer, "email")):
             for line in _split_lines(field):
-                customer_cell.append(Paragraph(line, _SUB_STYLE))
+                customer_cell.append(Paragraph(line, _BODY_STYLE))
 
         summary_rows = [
             [
-                Paragraph("Opening Balance", _LABEL_STYLE),
+                Paragraph("Opening Balance", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'opening_balance')):,.2f}",
                     _SUMMARY_VAL_STYLE,
                 ),
             ],
             [
-                Paragraph("Invoiced Amount", _LABEL_STYLE),
+                Paragraph("Invoiced Amount", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'invoiced_amount')):,.2f}",
                     _SUMMARY_VAL_STYLE,
                 ),
             ],
             [
-                Paragraph("Amount Paid", _LABEL_STYLE),
+                Paragraph("Amount Paid", _BODY_STYLE),
                 Paragraph(
                     f"{currency} {money(get(summary, 'amount_paid')):,.2f}",
                     _SUMMARY_VAL_STYLE,
@@ -372,11 +401,29 @@ class DocumentPDFGenerator:
             right_cell.append(Paragraph(period_text, _META_VAL_STYLE))
             right_cell.append(Spacer(1, 4 * mm))
         right_cell.append(Paragraph("ACCOUNT SUMMARY", _SECTION_LABEL_STYLE))
-        right_cell.append(Table(summary_rows, colWidths=[38 * mm, 35 * mm]))
+
+        summary_table = Table(summary_rows, colWidths=[48 * mm, 42 * mm])
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("BACKGROUND", (0, 0), (-1, 2), _PRIORI_PURPLE),
+                    ("LINEBELOW", (0, 0), (-1, 2), 0.5, colors.white),
+                    ("LINEABOVE", (0, -1), (-1, -1), 1, _PRIORI_BLUE),
+                    ("TOPPADDING", (0, -1), (-1, -1), 8),
+                ]
+            )
+        )
+
+        right_cell.append(summary_table)
 
         intro_table = Table(
             [[customer_cell, right_cell]],
-            colWidths=[content_width - 80 * mm, 80 * mm],
+            colWidths=[content_width - 90 * mm, 90 * mm],
+            hAlign="LEFT",
         )
         intro_table.setStyle(
             TableStyle(
@@ -387,9 +434,12 @@ class DocumentPDFGenerator:
                 ]
             )
         )
+        if period_text:
+            elements.append(Paragraph(period_text, _META_VAL_STYLE))
+            elements.append(Spacer(1, 4 * mm))
 
         elements.append(intro_table)
-        elements.append(Spacer(1, 8 * mm))
+        elements.append(Spacer(1, 10 * mm))
 
         rows = [
             [
@@ -426,19 +476,20 @@ class DocumentPDFGenerator:
             ],
             repeatRows=1,
         )
-        stmt_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
-                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 8),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ]
-            )
-        )
+        row_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]
+
+        for i in range(1, len(rows)):
+            if i % 2 == 0:
+                row_style.append(("BACKGROUND", (0, i), (-1, i), _PRIORI_LIGHT_PURPLE))
+        stmt_table.setStyle(TableStyle(row_style))
 
         elements.append(stmt_table)
         elements.append(Spacer(1, 6 * mm))
@@ -468,6 +519,18 @@ class DocumentPDFGenerator:
         )
 
         elements.append(balance_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        if currency:
+            elements.append(Paragraph(f"<i>Currency: {currency}</i>", _SUB_STYLE))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(
+            Paragraph(
+                f"<i>Please remit payment to {owner_name} within 30 days of "
+                f"invoice date. Contact {get(customer, 'email') or ''} with any queries.</i>",
+                _SUB_STYLE,
+            )
+        )
 
         doc.build(elements)
         pdf_bytes = buf.getvalue()
@@ -477,6 +540,322 @@ class DocumentPDFGenerator:
             "Generated customer statement PDF: %s (%d bytes)",
             customer_name,
             len(pdf_bytes),
+        )
+
+        return pdf_bytes
+
+    def generate_vendor_statement_pdf(
+        self,
+        statement,
+        owner=None,
+        logo_bytes: bytes | None = None,
+    ) -> bytes:
+        """Return PDF bytes for a vendor statement of accounts."""
+
+        def get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def money(value) -> Decimal:
+            if isinstance(value, Decimal):
+                return value
+            return Decimal(str(value or "0.00"))
+
+        def tx_date(tx):
+            return get(tx, "date") or get(tx, "transaction_date")
+
+        def tx_details(tx) -> str:
+            description = str(get(tx, "description", "") or "").strip()
+            reference = str(get(tx, "reference", "") or "").strip()
+            detail = str(get(tx, "detail", "") or "").strip()
+
+            title = " ".join(part for part in (description, reference) if part)
+            if detail:
+                return f"{title} ({detail})" if title else detail
+            return title
+
+        vendor = get(statement, "vendor")
+        summary = get(statement, "summary")
+        transactions = get(statement, "transactions", [])
+
+        currency = get(vendor, "currency", "") or ""
+        vendor_name = get(vendor, "vendor_name") or get(vendor, "email") or "Vendor"
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=15 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        doc.addPageTemplates(
+            [
+                PageTemplate(
+                    id="normal",
+                    frames=[
+                        Frame(
+                            doc.leftMargin,
+                            doc.bottomMargin,
+                            doc.width,
+                            doc.height,
+                            leftPadding=0,
+                            rightPadding=0,
+                            topPadding=0,
+                            bottomPadding=0,
+                            id="normal",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        content_width = doc.width
+        elements: list = []
+
+        logo_flowable = self._build_logo(logo_bytes)
+        owner_name = getattr(owner, "full_name", None) or settings.APP_NAME
+
+        left_cell: list = []
+        if logo_flowable is not None:
+            left_cell.append(logo_flowable)
+            left_cell.append(Spacer(1, 4 * mm))
+
+        left_cell.append(Paragraph(owner_name, _HEADER_STYLE))
+        left_cell.append(Spacer(1, 2 * mm))
+
+        if owner is not None:
+            for field in (
+                getattr(owner, "address", None),
+                getattr(owner, "email", None),
+                getattr(owner, "phone", None),
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
+                getattr(owner, "website", None),
+            ):
+                for line in _split_lines(field):
+                    left_cell.append(Paragraph(line, _SUB_STYLE))
+
+        header_table = Table(
+            [[left_cell, Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]],
+            colWidths=[content_width - 85 * mm, 85 * mm],
+        )
+        header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        elements.append(header_table)
+        elements.append(Spacer(1, 4 * mm))
+
+        period_start = get(statement, "period_start")
+        period_end = get(statement, "period_end")
+
+        period_text = ""
+        if period_start and period_end:
+            period_text = (
+                f"{period_start.strftime('%b %d, %Y')} - "
+                f"{period_end.strftime('%b %d, %Y')}"
+            )
+
+        rule_table = Table([[""]], colWidths=[content_width])
+        rule_table.setStyle(
+            TableStyle([("LINEBELOW", (0, 0), (-1, 0), 1.25, _PURE_BLACK)])
+        )
+        elements.append(rule_table)
+        elements.append(Spacer(1, 8 * mm))
+
+        vendor_cell: list = [
+            Paragraph("To", _SECTION_LABEL_STYLE),
+            Spacer(1, 2),
+            Paragraph(str(vendor_name), _LABEL_STYLE),
+        ]
+
+        for field in (
+            get(vendor, "phone_primary"),
+            get(vendor, "phone_secondary"),
+            get(vendor, "email"),
+        ):
+            for line in _split_lines(field):
+                vendor_cell.append(Paragraph(line, _BODY_STYLE))
+
+        summary_rows = [
+            [
+                Paragraph("Opening Balance", _BODY_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'opening_balance')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Invoiced Amount", _BODY_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'invoiced_amount')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Amount Paid", _BODY_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'amount_paid')):,.2f}",
+                    _SUMMARY_VAL_STYLE,
+                ),
+            ],
+            [
+                Paragraph("Balance Due", _LABEL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'balance_due')):,.2f}",
+                    _VAL_BOLD_STYLE,
+                ),
+            ],
+        ]
+
+        right_cell: list = []
+        if period_text:
+            right_cell.append(Paragraph(period_text, _META_VAL_STYLE))
+            right_cell.append(Spacer(1, 4 * mm))
+        right_cell.append(Paragraph("ACCOUNT SUMMARY", _SECTION_LABEL_STYLE))
+
+        summary_table = Table(summary_rows, colWidths=[48 * mm, 42 * mm])
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("BACKGROUND", (0, 0), (-1, 2), _PRIORI_PURPLE),
+                    ("LINEBELOW", (0, 0), (-1, 2), 0.5, colors.white),
+                    ("LINEABOVE", (0, -1), (-1, -1), 1, _PRIORI_BLUE),
+                    ("TOPPADDING", (0, -1), (-1, -1), 8),
+                ]
+            )
+        )
+
+        right_cell.append(summary_table)
+
+        intro_table = Table(
+            [[vendor_cell, right_cell]],
+            colWidths=[content_width - 90 * mm, 90 * mm],
+            hAlign="LEFT",
+        )
+        intro_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        if period_text:
+            elements.append(Paragraph(period_text, _META_VAL_STYLE))
+            elements.append(Spacer(1, 4 * mm))
+
+        elements.append(intro_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        rows = [
+            [
+                Paragraph("Date", _ITEM_HEADER_STYLE),
+                Paragraph("Details", _ITEM_HEADER_STYLE),
+                Paragraph("Amount", _ITEM_HEADER_RIGHT_STYLE),
+                Paragraph("Payment", _ITEM_HEADER_RIGHT_STYLE),
+                Paragraph("Balance", _ITEM_HEADER_RIGHT_STYLE),
+            ]
+        ]
+
+        for tx in transactions:
+            row_date = tx_date(tx)
+            date_str = row_date.strftime("%b %d, %Y") if row_date else "—"
+
+            rows.append(
+                [
+                    Paragraph(date_str, _ITEM_STYLE),
+                    Paragraph(tx_details(tx), _ITEM_STYLE),
+                    Paragraph(f"{money(get(tx, 'amount')):,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(f"{money(get(tx, 'payment')):,.2f}", _STMT_NUM_STYLE),
+                    Paragraph(f"{money(get(tx, 'balance')):,.2f}", _STMT_NUM_STYLE),
+                ]
+            )
+
+        stmt_table = Table(
+            rows,
+            colWidths=[28 * mm, content_width - 118 * mm, 30 * mm, 30 * mm, 30 * mm],
+            repeatRows=1,
+        )
+        row_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]
+
+        for i in range(1, len(rows)):
+            if i % 2 == 0:
+                row_style.append(("BACKGROUND", (0, i), (-1, i), _PRIORI_LIGHT_PURPLE))
+        stmt_table.setStyle(TableStyle(row_style))
+
+        elements.append(stmt_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        balance_rows = [
+            [
+                Paragraph("Balance Due", _CLOSING_LBL_STYLE),
+                Paragraph(
+                    f"{currency} {money(get(summary, 'balance_due')):,.2f}",
+                    _CLOSING_VAL_STYLE,
+                ),
+            ]
+        ]
+
+        balance_table = Table(
+            [[Spacer(1, 1), Table(balance_rows, colWidths=[35 * mm, 35 * mm])]],
+            colWidths=[content_width - 70 * mm, 70 * mm],
+        )
+        balance_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+
+        elements.append(balance_table)
+        elements.append(Spacer(1, 10 * mm))
+
+        if currency:
+            elements.append(Paragraph(f"<i>Currency: {currency}</i>", _SUB_STYLE))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(
+            Paragraph(
+                f"<i>Generated by {owner_name}. Contact "
+                f"{getattr(owner, 'email', None) or ''} with any queries.</i>",
+                _SUB_STYLE,
+            )
+        )
+
+        doc.build(elements)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+
+        logger.info(
+            "Generated vendor statement PDF: %s (%d bytes)", vendor_name, len(pdf_bytes)
         )
 
         return pdf_bytes
@@ -506,7 +885,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -584,7 +963,7 @@ class DocumentPDFGenerator:
         list_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -666,7 +1045,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -817,7 +1196,7 @@ class DocumentPDFGenerator:
         items_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 10),
@@ -1046,7 +1425,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )
@@ -1163,7 +1542,7 @@ class DocumentPDFGenerator:
         stmt_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), _TABLE_HEADER_BG),
+                    ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -1235,7 +1614,7 @@ class DocumentPDFGenerator:
             buf,
             pagesize=A4,
             leftMargin=20 * mm,
-            rightMargin=20 * mm,
+            rightMargin=15 * mm,
             topMargin=20 * mm,
             bottomMargin=20 * mm,
         )

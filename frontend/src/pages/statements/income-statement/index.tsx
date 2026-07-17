@@ -111,7 +111,7 @@ export default function IncomeStatementsPage() {
           <tfoot>
                <tr className="bg-gray-50 border-t-2 border-green-200">
                     <td colSpan={3} className="p-3 text-[16px] font-bold text-gray-800">
-                         Total Operating Revenue
+                         Total Revenue
                     </td>
                     <td className="p-3 text-[16px] font-bold text-success-600 text-right">
                          {money(Number(statement.operating_revenue.total))}
@@ -124,7 +124,7 @@ export default function IncomeStatementsPage() {
           <tfoot>
                <tr className="bg-gray-50 border-t-2 border-red-200">
                     <td colSpan={3} className="p-3 text-[16px] font-bold text-gray-800">
-                         Total Operating Expenses
+                         Total Expenses
                     </td>
                     <td className="p-3 text-[16px] font-bold text-error-600 text-right">
                          {money(Number(statement.operating_expenses.total))}
@@ -149,7 +149,7 @@ export default function IncomeStatementsPage() {
                     <>
                          <div className="bg-white p-4 rounded-2xl border border-gray-200 overflow-hidden">
                               <h3 className="font-bold py-3 leading-6 text-lg text-success-600">
-                                   Operating Revenue
+                                   Revenue
                               </h3>
                               <Table
                                    columns={revenueColumns}
@@ -158,14 +158,14 @@ export default function IncomeStatementsPage() {
                                    onRowClick={(item) => handleRowClick(item, "income")}
                                    rowClassName={() => "bg-green-25 hover:bg-success-50"}
                                    footer={revenueFooter}
-                                   emptyMessage="No operating revenue found for the selected period."
+                                   emptyMessage="No revenue found for the selected period."
                                    className="border border-gray-200 rounded-xl"
                               />
                          </div>
 
                          <div className="bg-white p-4 rounded-2xl border border-gray-200 overflow-hidden">
                               <h3 className="font-bold py-3 leading-6 text-lg text-red-600">
-                                   Operating Expenses
+                                   Expenses
                               </h3>
                               <Table
                                    columns={expenseColumns}
@@ -174,7 +174,7 @@ export default function IncomeStatementsPage() {
                                    onRowClick={(item) => handleRowClick(item, "expense")}
                                    rowClassName={() => "bg-red-25 hover:bg-error-50"}
                                    footer={expenseFooter}
-                                   emptyMessage="No operating expenses found for the selected period."
+                                   emptyMessage="No expenses found for the selected period."
                                    className="border border-gray-200 rounded-xl"
                               />
                          </div>

@@ -57,7 +57,7 @@ export function PurchaseOrderViewer({
   return (
     <div className="bg-white rounded-[20px] border-0 border-purple-25 overflow-hidden">
       {/* Top Section */}
-        {/* Owner identity (logo + company block) - single source of truth. */}
+      {/* Owner identity (logo + company block) - single source of truth. */}
 
 
       <div className="p-6 flex justify-between">
@@ -77,12 +77,12 @@ export function PurchaseOrderViewer({
               {data.vendor?.vendor_name ?? data.vendorId}
             </p>
 
-              <>
+            <>
               {data.vendor?.address && (
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                    {data.vendor.address}
-                  </p>
-                )}
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {data.vendor.address}
+                </p>
+              )}
 
               {(data.vendor?.phone_primary || data.vendor?.phone_secondary) && (
                 <p className="text-sm text-gray-600">
@@ -101,7 +101,7 @@ export function PurchaseOrderViewer({
           {/* RIGHT - Metadata */}
           <div className="flex flex-col gap-6 min-w-0 self-end">
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
-              <MetaField label="Reference">
+              <MetaField label="PO No.">
                 {data.poReference ?? "-"}
               </MetaField>
 

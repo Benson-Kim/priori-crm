@@ -18,6 +18,7 @@ from app.common.audit import record_audit_event
 from app.common.database import assert_version
 from app.common.document_service import ServiceBase, StateMachineMixin
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     ConflictException,
     DatabaseException,
@@ -25,8 +26,12 @@ from app.common.exceptions import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.search import build_search_clause
-from app.common.statement import CreditEntry, DebitEntry, StatementGenerator
-from app.common.statement_filters import EXCLUDED_STATEMENT_STATUSES
+from app.common.statement import (
+    EXCLUDED_STATEMENT_STATUSES,
+    CreditEntry,
+    DebitEntry,
+    StatementGenerator,
+)
 from app.common.statistics import status_counts
 from app.constants.enums import (
     Currency,
@@ -1270,6 +1275,10 @@ class VendorService(StateMachineMixin, ServiceBase):
         vendor = self.get_by_id(vendor_id)
 
         from app.modules.expenses.models import Expense, ExpensePayment
+        from app.modules.purchase_orders.models import (
+            PurchaseOrder,
+            PurchaseOrderPayment,
+        )
 
         opening_balance = self._calculate_balance_at_date(vendor_id, period_start)
 
@@ -1277,6 +1286,7 @@ class VendorService(StateMachineMixin, ServiceBase):
             self._db.query(Expense)
             .filter(
                 Expense.vendor_id == vendor_id,
+                Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
                 Expense.expense_date >= period_start,
                 Expense.expense_date <= period_end,
             )
@@ -1291,8 +1301,34 @@ class VendorService(StateMachineMixin, ServiceBase):
                 Expense.vendor_id == vendor_id,
                 ExpensePayment.payment_date >= period_start,
                 ExpensePayment.payment_date <= period_end,
+                Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
             )
             .order_by(ExpensePayment.payment_date)
+            .all()
+        )
+
+        period_purchase_orders = (
+            self._db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.vendor_id == vendor_id,
+                PurchaseOrder.status.in_(CARD_PO_STATUSES),
+                PurchaseOrder.order_date >= period_start,
+                PurchaseOrder.order_date <= period_end,
+            )
+            .order_by(PurchaseOrder.order_date)
+            .all()
+        )
+
+        period_po_payments = (
+            self._db.query(PurchaseOrderPayment)
+            .join(PurchaseOrder)
+            .filter(
+                PurchaseOrder.vendor_id == vendor_id,
+                PurchaseOrder.status.in_(CARD_PO_STATUSES),
+                PurchaseOrderPayment.payment_date >= period_start,
+                PurchaseOrderPayment.payment_date <= period_end,
+            )
+            .order_by(PurchaseOrderPayment.payment_date)
             .all()
         )
 
@@ -1300,22 +1336,51 @@ class VendorService(StateMachineMixin, ServiceBase):
         debits = [
             DebitEntry(
                 date=exp.expense_date,
-                description=f"Expense {exp.expense_number}",
+                description="Expense",
                 amount=exp.total_due,
+                source_type="expense",
+                source_id=str(exp.id),
+                reference=exp.expense_number,
+                detail=exp.expense_reference,
             )
             for exp in period_expenses
         ]
+        debits.extend(
+            DebitEntry(
+                date=po.order_date,
+                description="Purchase Order",
+                amount=po.total,
+                source_type="purchase_order",
+                source_id=str(po.id),
+                reference=po.po_number,
+                detail=po.po_reference,
+            )
+            for po in period_purchase_orders
+        )
         credits = [
             CreditEntry(
                 date=pmt.payment_date,
-                description=(
-                    f"Payment Made — {vendor.currency} {pmt.amount} "
-                    f"for {pmt.expense.expense_number}"
-                ),
+                description="Payment Made",
                 amount=pmt.amount,
+                source_type="expense_payment",
+                source_id=str(pmt.id),
+                reference=pmt.reference,
+                detail=f"{vendor.currency} {pmt.amount} for {pmt.expense.expense_number}",
             )
             for pmt in period_payments
         ]
+        credits.extend(
+            CreditEntry(
+                date=pmt.payment_date,
+                description="Payment Made",
+                amount=pmt.amount * pmt.exchange_rate,
+                source_type="po_payment",
+                source_id=str(pmt.id),
+                reference=pmt.reference,
+                detail=f"{vendor.currency} {pmt.amount * pmt.exchange_rate} for {pmt.purchase_order.po_number}",
+            )
+            for pmt in period_po_payments
+        )
 
         # Delegate to shared StatementGenerator
         txns, summary_data = StatementGenerator.generate(
@@ -1329,6 +1394,10 @@ class VendorService(StateMachineMixin, ServiceBase):
             VendorStatementTransaction(
                 date=t["date"],
                 description=t["description"],
+                source_type=t["source_type"],
+                source_id=t.get("source_id"),
+                reference=t.get("reference"),
+                detail=t.get("detail"),
                 amount=t["amount"],
                 payment=t["payment"],
                 balance=t["balance"],
@@ -1351,6 +1420,28 @@ class VendorService(StateMachineMixin, ServiceBase):
             transactions=transactions,
         )
 
+    def generate_statement_pdf(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, VendorStatement]:
+        """Generate the vendor statement PDF and return it with its data."""
+        statement = self.generate_statement(vendor_id, period_start, period_end)
+        return self._render_pdf(statement), statement
+
+    def generate_statement_excel(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, VendorStatement]:
+        """Generate the vendor statement Excel workbook and return its data."""
+        from app.common.excel import ExcelExporter
+
+        statement = self.generate_statement(vendor_id, period_start, period_end)
+        return ExcelExporter().export_vendor_statement(statement), statement
+
     def _calculate_balance_at_date(
         self,
         vendor_id: uuid.UUID,
@@ -1358,6 +1449,10 @@ class VendorService(StateMachineMixin, ServiceBase):
     ) -> Decimal:
         """Calculate vendor balance as of a specific date (invoiced - paid)."""
         from app.modules.expenses.models import Expense, ExpensePayment
+        from app.modules.purchase_orders.models import (
+            PurchaseOrder,
+            PurchaseOrderPayment,
+        )
 
         # Same status predicate on both sides as the customer statement canceled
         # expenses and payments against them must not move the opening balance.
@@ -1367,10 +1462,52 @@ class VendorService(StateMachineMixin, ServiceBase):
             Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
+        po_amount = self._db.query(func.sum(PurchaseOrder.total)).filter(
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrder.order_date < as_of_date,
+            PurchaseOrder.status.in_(CARD_PO_STATUSES),
+        ).scalar() or Decimal("0.00")
+
         paid = self._db.query(func.sum(ExpensePayment.amount)).join(Expense).filter(
             Expense.vendor_id == vendor_id,
             ExpensePayment.payment_date < as_of_date,
             Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
-        return Decimal(str(invoiced)) - Decimal(str(paid))
+        po_paid = self._db.query(
+            func.sum(PurchaseOrderPayment.amount * PurchaseOrderPayment.exchange_rate)
+        ).join(PurchaseOrder).filter(
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrderPayment.payment_date < as_of_date,
+            PurchaseOrder.status.in_(CARD_PO_STATUSES),
+        ).scalar() or Decimal("0.00")
+
+        return (
+            Decimal(str(invoiced))
+            + Decimal(str(po_amount))
+            - Decimal(str(paid))
+            - Decimal(str(po_paid))
+        )
+
+    def _render_pdf(self, statement: VendorStatement) -> bytes:
+        """Render a PDF for an already-generated vendor statement.
+
+        Statements are generated on demand for a period and do not carry an
+        immutable owner snapshot, so the renderer resolves live owner branding.
+        Rendering failures are surfaced as explicit application errors so the
+        API returns the same clean failure shape as customer statement PDFs.
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        try:
+            return DocumentPdfRenderer(self._db).render_vendor_statement(statement)
+        except Exception as exc:
+            logger.exception(
+                "Failed to render vendor statement PDF",
+                extra={"vendor_id": str(statement.vendor.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc

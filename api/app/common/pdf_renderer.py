@@ -111,3 +111,18 @@ class DocumentPdfRenderer:
             owner=owner_info,
             logo_bytes=logo_bytes,
         )
+
+    def render_vendor_statement(self, statement: Any) -> bytes:
+        """Render a vendor statement-of-accounts PDF.
+
+        Statements have no owner snapshot (they are generated on demand for a
+        period), so branding always resolves from the live profile.
+        """
+        from app.common.pdf import DocumentPDFGenerator
+
+        owner_info, logo_bytes = self.load_live_branding()
+        return DocumentPDFGenerator().generate_vendor_statement_pdf(
+            statement,
+            owner=owner_info,
+            logo_bytes=logo_bytes,
+        )
