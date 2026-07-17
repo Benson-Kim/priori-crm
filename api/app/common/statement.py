@@ -120,7 +120,7 @@ class StatementGenerator:
                 "source_type": "opening_balance",
                 "source_id": None,
                 "reference": None,
-                "detail": "Balance carried forwad",
+                "detail": "Balance carried forward",
             }
         )
 
