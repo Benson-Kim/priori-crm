@@ -10,28 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { navItems } from "./nav-items";
-
-import type { ComponentType, SVGProps } from "react";
-
-type SidebarIcon = ComponentType<
-    SVGProps<SVGSVGElement> & {
-        size?: number | string;
-    }
->;
-
-interface NavChild {
-    path: string;
-    label: string;
-    icon?: SidebarIcon;
-}
-
-interface NavItem {
-    path?: string;
-    label: string;
-    icon?: SidebarIcon;
-    children?: NavChild[];
-}
+import { navItems, type NavChild } from "./nav-items";
 
 /** localStorage key persisting the collapsed/expanded preference. */
 const COLLAPSED_STORAGE_KEY = "sidebar:collapsed";
@@ -54,8 +33,8 @@ export function Sidebar() {
     const isActive = (path: string) =>
         pathname === path || pathname.startsWith(path + "/");
 
-    const isGroupActive = (children?: NavItem[]) =>
-        children?.some((item) => isActive(item.path));
+    const isGroupActive = (children?: NavChild[]) =>
+        children?.some((child) => isActive(child.path));
 
     const [manualOpen, setManualOpen] = useState<Record<string, boolean>>({});
     const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed);
