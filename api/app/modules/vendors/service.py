@@ -1274,6 +1274,10 @@ class VendorService(StateMachineMixin, ServiceBase):
         vendor = self.get_by_id(vendor_id)
 
         from app.modules.expenses.models import Expense, ExpensePayment
+        from app.modules.purchase_orders.models import (
+            PurchaseOrder,
+            PurchaseOrderPayment,
+        )
 
         opening_balance = self._calculate_balance_at_date(vendor_id, period_start)
 
@@ -1302,6 +1306,31 @@ class VendorService(StateMachineMixin, ServiceBase):
             .all()
         )
 
+        period_purchase_orders = (
+            self._db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.vendor_id == vendor_id,
+                PurchaseOrder.status.in_(CARD_PO_STATUSES),
+                PurchaseOrder.order_date >= period_start,
+                PurchaseOrder.order_date <= period_end,
+            )
+            .order_by(PurchaseOrder.order_date)
+            .all()
+        )
+
+        period_po_payments = (
+            self._db.query(PurchaseOrderPayment)
+            .join(PurchaseOrder)
+            .filter(
+                PurchaseOrder.vendor_id == vendor_id,
+                PurchaseOrder.status.in_(CARD_PO_STATUSES),
+                PurchaseOrderPayment.payment_date >= period_start,
+                PurchaseOrderPayment.payment_date <= period_end,
+            )
+            .order_by(PurchaseOrderPayment.payment_date)
+            .all()
+        )
+
         # Build entries for the shared generator
         debits = [
             DebitEntry(
@@ -1311,6 +1340,14 @@ class VendorService(StateMachineMixin, ServiceBase):
             )
             for exp in period_expenses
         ]
+        debits.extend(
+            DebitEntry(
+                date=po.order_date,
+                description=f"Purchase Order {po.po_number}",
+                amount=po.total,
+            )
+            for po in period_purchase_orders
+        )
         credits = [
             CreditEntry(
                 date=pmt.payment_date,
@@ -1322,6 +1359,18 @@ class VendorService(StateMachineMixin, ServiceBase):
             )
             for pmt in period_payments
         ]
+        credits.extend(
+            CreditEntry(
+                date=pmt.payment_date,
+                description=(
+                    f"Payment Made — {vendor.currency} "
+                    f"{pmt.amount * pmt.exchange_rate} for "
+                    f"{pmt.purchase_order.po_number}"
+                ),
+                amount=pmt.amount * pmt.exchange_rate,
+            )
+            for pmt in period_po_payments
+        )
 
         # Delegate to shared StatementGenerator
         txns, summary_data = StatementGenerator.generate(
@@ -1364,6 +1413,10 @@ class VendorService(StateMachineMixin, ServiceBase):
     ) -> Decimal:
         """Calculate vendor balance as of a specific date (invoiced - paid)."""
         from app.modules.expenses.models import Expense, ExpensePayment
+        from app.modules.purchase_orders.models import (
+            PurchaseOrder,
+            PurchaseOrderPayment,
+        )
 
         # Same status predicate on both sides as the customer statement canceled
         # expenses and payments against them must not move the opening balance.
@@ -1373,10 +1426,29 @@ class VendorService(StateMachineMixin, ServiceBase):
             Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
+        po_amount = self._db.query(func.sum(PurchaseOrder.total)).filter(
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrder.order_date < as_of_date,
+            PurchaseOrder.status.in_(CARD_PO_STATUSES),
+        ).scalar() or Decimal("0.00")
+
         paid = self._db.query(func.sum(ExpensePayment.amount)).join(Expense).filter(
             Expense.vendor_id == vendor_id,
             ExpensePayment.payment_date < as_of_date,
             Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
         ).scalar() or Decimal("0.00")
 
-        return Decimal(str(invoiced)) - Decimal(str(paid))
+        po_paid = self._db.query(
+            func.sum(PurchaseOrderPayment.amount * PurchaseOrderPayment.exchange_rate)
+        ).join(PurchaseOrder).filter(
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrderPayment.payment_date < as_of_date,
+            PurchaseOrder.status.in_(CARD_PO_STATUSES),
+        ).scalar() or Decimal("0.00")
+
+        return (
+            Decimal(str(invoiced))
+            + Decimal(str(po_amount))
+            - Decimal(str(paid))
+            - Decimal(str(po_paid))
+        )

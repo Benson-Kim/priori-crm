@@ -10,6 +10,12 @@ from app.modules.expenses.schemas import (
     ExpensePaymentCreate,
 )
 from app.modules.expenses.service import ExpenseService
+from app.modules.purchase_orders.schemas import (
+    PurchaseOrderCreate,
+    PurchaseOrderLineItemCreate,
+    PurchaseOrderPaymentCreate,
+)
+from app.modules.purchase_orders.service import PurchaseOrderService
 from app.modules.vendors.models import Vendor
 from app.modules.vendors.service import VendorService
 
@@ -46,6 +52,26 @@ def _make_expense(db, vendor, **kw):
     return svc.create(payload)
 
 
+def _make_po(db, vendor, **kw):
+    svc = PurchaseOrderService(db)
+    kw.setdefault("vat_enabled", False)
+    payload = PurchaseOrderCreate(
+        vendor_id=vendor.id,
+        order_date=kw.pop("order_date", date.today()),
+        line_items=[
+            PurchaseOrderLineItemCreate(
+                item_name="Office supplies",
+                description="Pens, notebooks, etc.",
+                quantity=Decimal("10"),
+                unit_price=Decimal("5.00"),
+                tax_type=TaxType.NO_TAX,
+            )
+        ],
+        **kw,
+    )
+    return svc.create(payload)
+
+
 def test_vendor_statement_excludes_canceled_expenses_and_their_payments(db):
     vendor = _vendor(db)
     expense_date = date.today() - timedelta(days=1)
@@ -72,3 +98,73 @@ def test_vendor_statement_excludes_canceled_expenses_and_their_payments(db):
     assert statement.summary.amount_paid == Decimal("0.00")
     assert statement.summary.balance_due == Decimal("0.00")
     assert [txn.description for txn in statement.transactions] == ["Opening Balance"]
+
+
+def test_vendor_statement_includes_sent_po_and_po_payment(db):
+    vendor = _vendor(db)
+    today = date.today()
+
+    draft_po = _make_po(db, vendor, order_date=today)
+    sent_po = _make_po(db, vendor, order_date=today)
+
+    po_service = PurchaseOrderService(db)
+    po_service.mark_as_sent(sent_po.id)
+    po_service.record_payment(
+        sent_po.id,
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("75.00"),
+            payment_date=today,
+            reference="PO-PMT-001",
+            currency="KES",
+            exchange_rate=Decimal("1.0"),
+        ),
+    )
+
+    statement = VendorService(db).generate_statement(
+        vendor.id,
+        today - timedelta(days=1),
+        today + timedelta(days=1),
+    )
+
+    assert statement.summary.opening_balance == Decimal("0.00")
+    assert statement.summary.invoiced_amount == Decimal("200.00")
+    assert statement.summary.amount_paid == Decimal("75.00")
+    assert statement.summary.balance_due == Decimal("125.00")
+
+    descriptions = [txn.description for txn in statement.transactions]
+    assert f"Purchase Order {sent_po.po_number}" in descriptions
+    assert any(
+        description.endswith(f"for {sent_po.po_number}") for description in descriptions
+    )
+    assert f"Purchase Order {draft_po.po_number}" not in descriptions
+
+
+def test_vendor_statement_opening_balance_includes_prior_sent_po_and_payment(db):
+    vendor = _vendor(db)
+    today = date.today()
+    period_start = today
+
+    prior_po = _make_po(db, vendor, order_date=period_start - timedelta(days=10))
+    po_service = PurchaseOrderService(db)
+    po_service.mark_as_sent(prior_po.id)
+    po_service.record_payment(
+        prior_po.id,
+        PurchaseOrderPaymentCreate(
+            amount=Decimal("40.00"),
+            payment_date=period_start - timedelta(days=5),
+            reference="PO-PMT-PRIOR",
+            currency="KES",
+            exchange_rate=Decimal("1.0"),
+        ),
+    )
+
+    statement = VendorService(db).generate_statement(
+        vendor.id,
+        period_start,
+        period_start + timedelta(days=1),
+    )
+
+    assert statement.summary.opening_balance == Decimal("160.00")
+    assert statement.summary.invoiced_amount == Decimal("0.00")
+    assert statement.summary.amount_paid == Decimal("0.00")
+    assert statement.summary.balance_due == Decimal("160.00")
