@@ -44,6 +44,7 @@ _PRIORI_BLUE = colors.HexColor("#2C1A54")
 _PRIORI_PURPLE = colors.HexColor("#912b90")
 _TABLE_LINE = colors.HexColor("#E3E3E3")
 _PRIORI_LIGHT_PURPLE = colors.HexColor("#DAA3C8")
+_PRIORI_LIGHT_FILL = colors.HexColor("#F5EDF4")
 
 # Reusable styles
 _STYLES = getSampleStyleSheet()
@@ -631,18 +632,28 @@ class DocumentPDFGenerator:
                 getattr(owner, "address", None),
                 getattr(owner, "email", None),
                 getattr(owner, "phone", None),
-                (
-                    f"Tax PIN: {owner.tax_pin}"
-                    if getattr(owner, "tax_pin", None)
-                    else None
-                ),
+                (f"Tax PIN: {owner.tax_pin}" if getattr(owner, "tax_pin", None) else None),
                 getattr(owner, "website", None),
             ):
                 for line in _split_lines(field):
                     left_cell.append(Paragraph(line, _SUB_STYLE))
 
+        period_start = get(statement, "period_start")
+        period_end = get(statement, "period_end")
+
+        period_text = ""
+        if period_start and period_end:
+            period_text = (
+                f"{period_start.strftime('%b %d, %Y')} - "
+                f"{period_end.strftime('%b %d, %Y')}"
+            )
+        title_cell: list =[Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]
+        if period_text:
+            title_cell.append(Spacer(1, 3))
+            title_cell.append(Paragraph(period_text, _META_VAL_STYLE))
+
         header_table = Table(
-            [[left_cell, Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]],
+            [[left_cell, title_cell]],
             colWidths=[content_width - 85 * mm, 85 * mm],
         )
         header_table.setStyle(
@@ -656,24 +667,15 @@ class DocumentPDFGenerator:
         )
 
         elements.append(header_table)
-        elements.append(Spacer(1, 4 * mm))
+        elements.append(Spacer(1, 12))
 
-        period_start = get(statement, "period_start")
-        period_end = get(statement, "period_end")
-
-        period_text = ""
-        if period_start and period_end:
-            period_text = (
-                f"{period_start.strftime('%b %d, %Y')} - "
-                f"{period_end.strftime('%b %d, %Y')}"
-            )
 
         rule_table = Table([[""]], colWidths=[content_width])
         rule_table.setStyle(
             TableStyle([("LINEBELOW", (0, 0), (-1, 0), 1.25, _PURE_BLACK)])
         )
         elements.append(rule_table)
-        elements.append(Spacer(1, 8 * mm))
+        elements.append(Spacer(1, 12))
 
         vendor_cell: list = [
             Paragraph("To", _SECTION_LABEL_STYLE),
@@ -721,10 +723,27 @@ class DocumentPDFGenerator:
         ]
 
         right_cell: list = []
-        if period_text:
-            right_cell.append(Paragraph(period_text, _META_VAL_STYLE))
-            right_cell.append(Spacer(1, 4 * mm))
-        right_cell.append(Paragraph("ACCOUNT SUMMARY", _SECTION_LABEL_STYLE))
+        summary_header = Table(
+            [[Paragraph(
+                "ACCOUNT SUMMARY",
+                ParagraphStyle(
+                    "SummaryHeader", parent=_STYLES["Normal"],
+                    fontName="Helvetica-Bold", fontSize=10.5,
+                    textColor=colors.white, alignment=TA_CENTER,
+                ),
+            )]],
+            colWidths=[90 * mm],
+        )
+        summary_header.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), _PRIORI_PURPLE),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        right_cell.append(summary_header)
 
         summary_table = Table(summary_rows, colWidths=[48 * mm, 42 * mm])
         summary_table.setStyle(
@@ -734,7 +753,7 @@ class DocumentPDFGenerator:
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                     ("LEFTPADDING", (0, 0), (-1, -1), 6),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("BACKGROUND", (0, 0), (-1, 2), _PRIORI_PURPLE),
+                    ("BACKGROUND", (0, 0), (-1, 2), _PRIORI_LIGHT_FILL),
                     ("LINEBELOW", (0, 0), (-1, 2), 0.5, colors.white),
                     ("LINEABOVE", (0, -1), (-1, -1), 1, _PRIORI_BLUE),
                     ("TOPPADDING", (0, -1), (-1, -1), 8),
@@ -758,12 +777,9 @@ class DocumentPDFGenerator:
                 ]
             )
         )
-        if period_text:
-            elements.append(Paragraph(period_text, _META_VAL_STYLE))
-            elements.append(Spacer(1, 4 * mm))
 
         elements.append(intro_table)
-        elements.append(Spacer(1, 10 * mm))
+        elements.append(Spacer(1, 12))
 
         rows = [
             [
@@ -795,7 +811,7 @@ class DocumentPDFGenerator:
             repeatRows=1,
         )
         row_style = [
-            ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_BLUE),
+            ("BACKGROUND", (0, 0), (-1, 0), _PRIORI_PURPLE),
             ("LINEBELOW", (0, 0), (-1, -1), 0.5, _TABLE_LINE),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("TOPPADDING", (0, 0), (-1, -1), 8),
@@ -806,11 +822,11 @@ class DocumentPDFGenerator:
 
         for i in range(1, len(rows)):
             if i % 2 == 0:
-                row_style.append(("BACKGROUND", (0, i), (-1, i), _PRIORI_LIGHT_PURPLE))
+                row_style.append(("BACKGROUND", (0, i), (-1, i), _PRIORI_LIGHT_FILL))
         stmt_table.setStyle(TableStyle(row_style))
 
         elements.append(stmt_table)
-        elements.append(Spacer(1, 6 * mm))
+        elements.append(Spacer(1, 12))
 
         balance_rows = [
             [
