@@ -8,12 +8,29 @@ import {
     Store,
     Users
 } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 
 import Invoice from "@/assets/icons/invoice-uxwing.svg?react";
 import Briefcase from "@/assets/icons/sell-svgrepo-com 1.svg?react";
 import Home from "@/assets/icons/send2.svg?react";
 
-export const navItems = [
+export type NavIcon = ComponentType<
+    SVGProps<SVGSVGElement> & {
+        size?: number | string;
+    }
+>;
+
+export type NavChild = {
+    path: string;
+    label: string;
+    icon?: NavIcon;
+}
+
+export type NavItem =
+    | { path: string; label: string; icon?: NavIcon; children?: never }
+    | { label: string; icon?: NavIcon; children: NavChild[]; path?: never }
+
+export const navItems: NavItem[] = [
     {
         label: "Dashboard",
         icon: Home,
