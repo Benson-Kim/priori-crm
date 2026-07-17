@@ -86,7 +86,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
             </h2>
 
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
-              <MetaField label="EXP Num">
+              <MetaField label="EXP No.">
                 {data.expenseReference ?? "—"}
               </MetaField>
 
