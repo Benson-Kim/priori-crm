@@ -1364,7 +1364,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                 amount=pmt.amount,
                 source_type="expense_payment",
                 source_id=str(pmt.id),
-                reference=pmt.payment_reference,
+                reference=pmt.reference,
                 detail=f"{vendor.currency} {pmt.amount} for {pmt.expense.expense_number}",
             )
             for pmt in period_payments
@@ -1376,7 +1376,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                 amount=pmt.amount * pmt.exchange_rate,
                 source_type="po_payment",
                 source_id=str(pmt.id),
-                reference=pmt.payment_reference,
+                reference=pmt.reference,
                 detail=f"{vendor.currency} {pmt.amount * pmt.exchange_rate} for {pmt.purchase_order.po_number}",
             )
             for pmt in period_po_payments
