@@ -1,15 +1,12 @@
 import {
-    ChartLine,
     ClipboardList,
     DollarSign,
     FileText,
-    Landmark,
     Receipt,
     ReceiptText,
     ShoppingCart,
     Store,
-    TrendingUp,
-    Users,
+    Users
 } from "lucide-react";
 
 import Invoice from "@/assets/icons/invoice-uxwing.svg?react";
@@ -44,16 +41,6 @@ export const navItems = [
                 path: "/purchase-orders",
                 icon: ClipboardList,
             },
-        ],
-    },
-
-    {
-        label: "Reports",
-        icon: ChartLine,
-        children: [
-            { label: "Sales", path: "/reports/sales", icon: TrendingUp },
-            { label: "Expenses", path: "/reports/expenses", icon: ReceiptText },
-            { label: "Taxes", path: "/reports/taxes", icon: Landmark },
         ],
     },
 

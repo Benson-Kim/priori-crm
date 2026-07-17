@@ -101,7 +101,7 @@ export function PurchaseOrderViewer({
           {/* RIGHT - Metadata */}
           <div className="flex flex-col gap-6 min-w-0 self-end">
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-3 items-start">
-              <MetaField label="PO NUm">
+              <MetaField label="PO No.">
                 {data.poReference ?? "-"}
               </MetaField>
 

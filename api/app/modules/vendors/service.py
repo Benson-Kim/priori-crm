@@ -1281,6 +1281,7 @@ class VendorService(StateMachineMixin, ServiceBase):
             self._db.query(Expense)
             .filter(
                 Expense.vendor_id == vendor_id,
+                Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
                 Expense.expense_date >= period_start,
                 Expense.expense_date <= period_end,
             )
@@ -1295,6 +1296,7 @@ class VendorService(StateMachineMixin, ServiceBase):
                 Expense.vendor_id == vendor_id,
                 ExpensePayment.payment_date >= period_start,
                 ExpensePayment.payment_date <= period_end,
+                Expense.status.notin_(EXCLUDED_STATEMENT_STATUSES),
             )
             .order_by(ExpensePayment.payment_date)
             .all()
