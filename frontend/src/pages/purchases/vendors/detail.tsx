@@ -28,7 +28,7 @@ import {
   type VendorPayablesSummary,
   type VendorStatement
 } from "@/services/vendorApi";
-import { ChevronLeft, ChevronRight, Download, Eye, FileClock, Pencil } from "lucide-react";
+import { Download, Eye, FileClock, Pencil } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -104,7 +104,7 @@ export default function VendorDetailPage() {
   const [statement, setStatement] = useState<VendorStatement | null>(null);
   const [isLoadingStatement, setIsLoadingStatement] = useState(false);
   const [statementError, setStatementError] = useState<string | null>(null);
-  const [periodMonths, setPeriodMonths] = useState(12);
+  const [statementPeriod, setStatementPeriod] = useState<PeriodFilter>({ range: "last_12_months" });
   const [isExporting, setIsExporting] = useState(false);
 
 
@@ -190,31 +190,35 @@ export default function VendorDetailPage() {
     }
   }, [id, currentPage, perPage, activeTab, typeTab]);
 
-  const getStatementPeriod = useCallback(
-    (months?: number) => {
-      const periodEnd = new Date().toISOString().split("T")[0];
+  const getResolvedPeriod = useCallback(() => {
+    if (!isPeriodReady(statementPeriod)) {
+      return null;
+    }
 
-      const periodStart = new Date();
-      periodStart.setMonth(periodStart.getMonth() - (months ?? periodMonths));
-
-      return {
-        periodStart: periodStart.toISOString().split("T")[0],
-        periodEnd,
-      };
-    },
-    [periodMonths]
+    const { start, end } = resolvePeriod(statementPeriod)
+    if (!start || !end) {
+      return null
+    }
+    return { periodStart: start, periodEnd: end };
+  }, [statementPeriod]
   );
 
 
   const fetchStatement = useCallback(
-    async (months?: number) => {
+    async () => {
       if (!id) return;
+
+      const period = getResolvedPeriod()
+      if (!period) {
+        setStatement(null)
+        return
+      }
 
       setIsLoadingStatement(true);
       setStatementError(null);
 
       try {
-        const { periodStart, periodEnd } = getStatementPeriod(months);
+        const { periodStart, periodEnd } = period;
         const data = await getVendorStatement(id, periodStart, periodEnd);
         setStatement(data);
       } catch (err) {
@@ -225,15 +229,21 @@ export default function VendorDetailPage() {
         setIsLoadingStatement(false);
       }
     },
-    [id, getStatementPeriod]
+    [id, getResolvedPeriod]
   );
 
   /** Download this customer's statement as a PDF. */
   const handleDownloadPDFVendorStatement = useCallback(async () => {
     if (!id) return;
 
+    const period = getResolvedPeriod();
+    if (!period) {
+      setStatementError("Select a complete statement period before downloading.")
+      return
+    }
+
     try {
-      const { periodStart, periodEnd } = getStatementPeriod();
+      const { periodStart, periodEnd } = period;
       const blob = await downloadVendorStatementPdf(id, periodStart, periodEnd);
       saveBlob(blob, `Vendor_Statement_${periodStart}_to_${periodEnd}.pdf`);
     } catch (err) {
@@ -241,20 +251,26 @@ export default function VendorDetailPage() {
         err instanceof Error ? err.message : "Failed to download vendor statement PDF"
       );
     }
-  }, [id, getStatementPeriod]);
+  }, [id, getResolvedPeriod]);
 
   /** Export this customer's statement to an Excel workbook. */
   const handleExportExcelVendorStatement = useCallback(async () => {
     if (!id) return;
 
+    const period = getResolvedPeriod();
+    if (!period) {
+      setStatementError("Select a complete statement period before downloading.")
+      return
+    }
+
     try {
-      const { periodStart, periodEnd } = getStatementPeriod();
+      const { periodStart, periodEnd } = period;
       const blob = await exportVendorStatementExcel(id, periodStart, periodEnd);
       saveBlob(blob, `Vendor_Statement_${periodStart}_to_${periodEnd}.xlsx`);
     } catch (err) {
       setStatementError(err instanceof Error ? err.message : "Failed to export vendor statements excel");
     }
-  }, [id, getStatementPeriod]);
+  }, [id, getResolvedPeriod]);
 
 
 
@@ -264,9 +280,14 @@ export default function VendorDetailPage() {
 
   useEffect(() => {
     if (mainTab === "statements") {
+      if (!isPeriodReady(statementPeriod)) {
+        setStatement(null)
+        return
+      }
+
       void (async () => { await fetchStatement(); })();
     }
-  }, [mainTab, fetchStatement, periodMonths]);
+  }, [mainTab, fetchStatement, statementPeriod]);
 
   useEffect(() => {
     void (async () => { await fetchTransactions(); })();
@@ -518,15 +539,7 @@ export default function VendorDetailPage() {
     }
   };
 
-  const handlePeriodChange = (direction: "prev" | "next") => {
-    setPeriodMonths((prev) => {
-      if (direction === "prev") {
-        return Math.max(3, prev - 3);
-      } else {
-        return prev + 3;
-      }
-    });
-  };
+
 
   return (
     <div className="space-y-6">
@@ -558,26 +571,14 @@ export default function VendorDetailPage() {
           </button>
         </div>
         <div className="flex justify-end items-center gap-3">
-          {mainTab === "statements" && statement && (
-            <>
-              <div className="flex items-center gap-1 border border-gray-300 rounded-lg px-4 py-3">
-                <button
-                  className="p-1 hover:bg-gray-100 rounded"
-                  onClick={() => handlePeriodChange("prev")}
-                >
-                  <ChevronLeft size={18} className="text-gray-600" />
-                </button>
-                <span className="text-sm font-medium text-gray-700 px-2">
-                  Last {periodMonths} Months
-                </span>
-                <button
-                  className="p-1 hover:bg-gray-100 rounded"
-                  onClick={() => handlePeriodChange("next")}
-                >
-                  <ChevronRight size={18} className="text-gray-600" />
-                </button>
-              </div>
-            </>
+          {mainTab === "statements" && (
+            <PeriodRangePicker
+              period={statementPeriod}
+              onPeriodChange={setStatementPeriod}
+              placeholder="Statement period"
+              wrapperClassName="flex-row items-center"
+              selectWrapperClassName="min-w-[120px] px-4 py-3"
+            />
           )}
           <Dropdown
             items={actions}
