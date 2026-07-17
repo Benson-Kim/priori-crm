@@ -632,7 +632,11 @@ class DocumentPDFGenerator:
                 getattr(owner, "address", None),
                 getattr(owner, "email", None),
                 getattr(owner, "phone", None),
-                (f"Tax PIN: {owner.tax_pin}" if getattr(owner, "tax_pin", None) else None),
+                (
+                    f"Tax PIN: {owner.tax_pin}"
+                    if getattr(owner, "tax_pin", None)
+                    else None
+                ),
                 getattr(owner, "website", None),
             ):
                 for line in _split_lines(field):
@@ -647,7 +651,7 @@ class DocumentPDFGenerator:
                 f"{period_start.strftime('%b %d, %Y')} - "
                 f"{period_end.strftime('%b %d, %Y')}"
             )
-        title_cell: list =[Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]
+        title_cell: list = [Paragraph("STATEMENT OF ACCOUNTS", _TITLE_STYLE)]
         if period_text:
             title_cell.append(Spacer(1, 3))
             title_cell.append(Paragraph(period_text, _META_VAL_STYLE))
@@ -668,7 +672,6 @@ class DocumentPDFGenerator:
 
         elements.append(header_table)
         elements.append(Spacer(1, 12))
-
 
         rule_table = Table([[""]], colWidths=[content_width])
         rule_table.setStyle(
@@ -724,14 +727,21 @@ class DocumentPDFGenerator:
 
         right_cell: list = []
         summary_header = Table(
-            [[Paragraph(
-                "ACCOUNT SUMMARY",
-                ParagraphStyle(
-                    "SummaryHeader", parent=_STYLES["Normal"],
-                    fontName="Helvetica-Bold", fontSize=10.5,
-                    textColor=colors.white, alignment=TA_CENTER,
-                ),
-            )]],
+            [
+                [
+                    Paragraph(
+                        "ACCOUNT SUMMARY",
+                        ParagraphStyle(
+                            "SummaryHeader",
+                            parent=_STYLES["Normal"],
+                            fontName="Helvetica-Bold",
+                            fontSize=10.5,
+                            textColor=colors.white,
+                            alignment=TA_CENTER,
+                        ),
+                    )
+                ]
+            ],
             colWidths=[90 * mm],
         )
         summary_header.setStyle(
