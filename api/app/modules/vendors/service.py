@@ -18,6 +18,7 @@ from app.common.audit import record_audit_event
 from app.common.database import assert_version
 from app.common.document_service import ServiceBase, StateMachineMixin
 from app.common.exceptions import (
+    AppException,
     BadRequestException,
     ConflictException,
     DatabaseException,
@@ -1406,6 +1407,28 @@ class VendorService(StateMachineMixin, ServiceBase):
             transactions=transactions,
         )
 
+    def generate_statement_pdf(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, VendorStatement]:
+        """Generate the vendor statement PDF and return it with its data."""
+        statement = self.generate_statement(vendor_id, period_start, period_end)
+        return self._render_pdf(statement), statement
+
+    def generate_statement_excel(
+        self,
+        vendor_id: uuid.UUID,
+        period_start: date,
+        period_end: date,
+    ) -> tuple[bytes, VendorStatement]:
+        """Generate the vendor statement Excel workbook and return its data."""
+        from app.common.excel import ExcelExporter
+
+        statement = self.generate_statement(vendor_id, period_start, period_end)
+        return ExcelExporter().export_vendor_statement(statement), statement
+
     def _calculate_balance_at_date(
         self,
         vendor_id: uuid.UUID,
@@ -1452,3 +1475,26 @@ class VendorService(StateMachineMixin, ServiceBase):
             - Decimal(str(paid))
             - Decimal(str(po_paid))
         )
+
+    def _render_pdf(self, statement: VendorStatement) -> bytes:
+        """Render a PDF for an already-generated vendor statement.
+
+        Statements are generated on demand for a period and do not carry an
+        immutable owner snapshot, so the renderer resolves live owner branding.
+        Rendering failures are surfaced as explicit application errors so the
+        API returns the same clean failure shape as customer statement PDFs.
+        """
+        from app.common.pdf_renderer import DocumentPdfRenderer
+
+        try:
+            return DocumentPdfRenderer(self._db).render_vendor_statement(statement)
+        except Exception as exc:
+            logger.exception(
+                "Failed to render vendor statement PDF",
+                extra={"vendor_id": str(statement.vendor.id)},
+            )
+            raise AppException(
+                status_code=500,
+                detail="PDF could not be generated. Please try again.",
+                error_code="PDF_GENERATION_FAILED",
+            ) from exc
