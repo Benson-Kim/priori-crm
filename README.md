@@ -1,4 +1,4 @@
-# Priori Technologies — Accounting Software
+# Priori Technologies - Accounting Software
 
 > Modern accounting & CRM platform built with FastAPI and React.
 
@@ -20,21 +20,21 @@ their team.
 
 **Sales (receivables)**
 
-- **Customers** — contact records, single currency per customer, running balance.
-- **Quotes** — priced proposals that can be approved and converted to invoices.
-- **Invoices** — issued documents with payments, partial settlement, overdue tracking, PDF generation and email delivery.
+- **Customers** - contact records, single currency per customer, running balance.
+- **Quotes** - priced proposals that can be approved and converted to invoices.
+- **Invoices** - issued documents with payments, partial settlement, overdue tracking, PDF generation and email delivery.
 
 **Purchases (payables)**
 
-- **Vendors** — supplier records.
-- **Purchase Orders** — orders raised against a vendor, sent by email, settled by recorded payments, with proof-of-payment attachments.
-- **Expenses** — standalone vendor-facing costs with payments and documents.
+- **Vendors** - supplier records.
+- **Purchase Orders** - orders raised against a vendor, sent by email, settled by recorded payments, with proof-of-payment attachments.
+- **Expenses** - standalone vendor-facing costs with payments and documents.
 
 **Cross-cutting**
 
-- **Owner profile** — company branding (logo + details) snapshotted immutably onto each issued document.
-- **Dashboard & Statements** — aggregated metrics, cashflow and income statements.
-- **Auth** — email + password with mandatory OTP (2FA) and role-based access control.
+- **Owner profile** - company branding (logo + details) snapshotted immutably onto each issued document.
+- **Dashboard & Statements** - aggregated metrics, cashflow and income statements.
+- **Auth** - email + password with mandatory OTP (2FA) and role-based access control.
 
 Key domain rules: every issued document captures an immutable owner-branding
 snapshot; mutating operations use optimistic locking (`version`); financial
@@ -491,5 +491,5 @@ actively maintained.
 
 ## License
 
-© 2026 Priori Technologies — All Rights Reserved
+© 2026 Priori Technologies - All Rights Reserved
 
