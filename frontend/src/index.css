@@ -87,6 +87,31 @@
   [tabindex]:focus-visible {
     @apply outline-none ring-1 ring-priori-purple border-priori-purple;
   }
+
+  /*
+   * Prevent Chrome and Safari autofill from painting a separate
+   * background over the native input element.
+   */
+  .ui-input:-webkit-autofill,
+  .ui-input:-webkit-autofill:hover,
+  .ui-input:-webkit-autofill:focus,
+  .ui-input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--color-gray-900, #101828) !important;
+    caret-color: var(--color-gray-900, #101828);
+
+    -webkit-box-shadow:
+      0 0 0 1000px var(--color-gray-50) inset !important;
+
+    box-shadow:
+      0 0 0 1000px var(--color-gray-50) inset !important;
+
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  .ui-input:autofill {
+    box-shadow:
+      0 0 0 1000px var(--color-gray-50) inset !important;
+  }
 }
 
 .date-picker-overlay::-webkit-calendar-picker-indicator {
