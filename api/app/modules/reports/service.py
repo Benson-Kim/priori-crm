@@ -14,7 +14,11 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.common.pagination import PaginatedResponse, PaginationMetadata, PaginationParams
+from app.common.pagination import (
+    PaginatedResponse,
+    PaginationMetadata,
+    PaginationParams,
+)
 from app.constants.enums import Currency
 from app.modules.reports.queries import ReportsRepository
 from app.modules.reports.schemas import (
@@ -30,14 +34,14 @@ from app.modules.reports.schemas import (
     AgingBuckets,
     PurchasesLedgerEntry,
     PurchasesReportSummaryResponse,
-    PurchasesSummaryMetrics,
     PurchasesSourceCounts,
+    PurchasesSummaryMetrics,
     RevenueByCategory,
     RevenueByCustomer,
     SalesLedgerEntry,
     SalesReportSummaryResponse,
-    SalesSummaryMetrics,
     SalesStatusCounts,
+    SalesSummaryMetrics,
     SpendByVendor,
     TaxByTypeRow,
     TaxReportResponse,
@@ -58,7 +62,6 @@ class ReportsService:
         self.current_user = current_user
         self.repo = ReportsRepository(db)
 
-
     # Sales: Summary
 
     def get_sales_summary(
@@ -66,8 +69,12 @@ class ReportsService:
     ) -> SalesReportSummaryResponse:
         """Overview metrics + top-customer + category breakdowns."""
         summary = self.repo.sales_summary(period.date_from, period.date_to, currency)
-        cust_rows = self.repo.revenue_by_customer(period.date_from, period.date_to, currency)
-        cat_rows = self.repo.revenue_by_category(period.date_from, period.date_to, currency)
+        cust_rows = self.repo.revenue_by_customer(
+            period.date_from, period.date_to, currency
+        )
+        cat_rows = self.repo.revenue_by_category(
+            period.date_from, period.date_to, currency
+        )
 
         return SalesReportSummaryResponse(
             period=period,
@@ -115,13 +122,20 @@ class ReportsService:
         total = None
         if params.with_total:
             total = self.repo.sales_ledger_total(
-                period.date_from, period.date_to, currency,
-                search=search, status=status,
+                period.date_from,
+                period.date_to,
+                currency,
+                search=search,
+                status=status,
             )
         rows = self.repo.sales_ledger(
-            period.date_from, period.date_to, currency,
-            search=search, status=status,
-            offset=params.offset, limit=params.fetch_limit,
+            period.date_from,
+            period.date_to,
+            currency,
+            search=search,
+            status=status,
+            offset=params.offset,
+            limit=params.fetch_limit,
         )
         entries = [
             SalesLedgerEntry(
@@ -153,8 +167,11 @@ class ReportsService:
     ) -> int:
         """Exact count for the sales ledger."""
         return self.repo.sales_ledger_total(
-            period.date_from, period.date_to, currency,
-            search=search, status=status,
+            period.date_from,
+            period.date_to,
+            currency,
+            search=search,
+            status=status,
         )
 
     def get_sales_status_counts(
@@ -171,15 +188,18 @@ class ReportsService:
             overdue=raw.get("overdue", 0),
         )
 
-
     # Purchases: Summary
 
     def get_purchases_summary(
         self, period: ResolvedPeriod, currency: Currency
     ) -> PurchasesReportSummaryResponse:
         """Overview metrics + top-vendor breakdown."""
-        summary = self.repo.purchases_summary(period.date_from, period.date_to, currency)
-        vendor_rows = self.repo.spend_by_vendor(period.date_from, period.date_to, currency)
+        summary = self.repo.purchases_summary(
+            period.date_from, period.date_to, currency
+        )
+        vendor_rows = self.repo.spend_by_vendor(
+            period.date_from, period.date_to, currency
+        )
 
         return PurchasesReportSummaryResponse(
             period=period,
@@ -204,7 +224,6 @@ class ReportsService:
             ],
         )
 
-
     # Purchases: Ledger
 
     def list_purchases_ledger(
@@ -220,13 +239,20 @@ class ReportsService:
         total = None
         if params.with_total:
             total = self.repo.purchases_ledger_total(
-                period.date_from, period.date_to, currency,
-                source=source, search=search,
+                period.date_from,
+                period.date_to,
+                currency,
+                source=source,
+                search=search,
             )
         rows = self.repo.purchases_ledger(
-            period.date_from, period.date_to, currency,
-            source=source, search=search,
-            offset=params.offset, limit=params.fetch_limit,
+            period.date_from,
+            period.date_to,
+            currency,
+            source=source,
+            search=search,
+            offset=params.offset,
+            limit=params.fetch_limit,
         )
         entries = [
             PurchasesLedgerEntry(
@@ -257,8 +283,11 @@ class ReportsService:
     ) -> int:
         """Exact count for the purchases ledger."""
         return self.repo.purchases_ledger_total(
-            period.date_from, period.date_to, currency,
-            source=source, search=search,
+            period.date_from,
+            period.date_to,
+            currency,
+            source=source,
+            search=search,
         )
 
     def get_purchases_source_counts(
@@ -278,7 +307,6 @@ class ReportsService:
             purchase_order=raw.get("purchase_order", 0),
         )
 
-
     # Tax Report
 
     def get_tax_report(
@@ -286,8 +314,12 @@ class ReportsService:
     ) -> TaxReportResponse:
         """VAT position + per-type breakdowns for sales and purchases."""
         tax_s = self.repo.tax_summary(period.date_from, period.date_to, currency)
-        sales_rows = self.repo.tax_by_type_sales(period.date_from, period.date_to, currency)
-        purch_rows = self.repo.tax_by_type_purchases(period.date_from, period.date_to, currency)
+        sales_rows = self.repo.tax_by_type_sales(
+            period.date_from, period.date_to, currency
+        )
+        purch_rows = self.repo.tax_by_type_purchases(
+            period.date_from, period.date_to, currency
+        )
 
         return TaxReportResponse(
             period=period,
@@ -315,7 +347,6 @@ class ReportsService:
             ],
         )
 
-
     # Aged Receivables
 
     def get_aged_receivables(self, currency: str) -> AgedReceivablesSummaryResponse:
@@ -324,7 +355,9 @@ class ReportsService:
         flat_rows = self.repo.aged_receivables_summary(currency)
 
         # Pivot: customer_name → {bucket: Decimal}
-        pivot: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
+        pivot: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: _ZERO)
+        )
         for row in flat_rows:
             pivot[row.customer_name][row.bucket] += Decimal(str(row.amount))
 
@@ -333,24 +366,29 @@ class ReportsService:
 
         for cname in sorted(pivot):
             buckets = pivot[cname]
-            cur   = buckets.get("current", _ZERO)
-            b130  = buckets.get("1_30",    _ZERO)
-            b3160 = buckets.get("31_60",   _ZERO)
-            b6190 = buckets.get("61_90",   _ZERO)
-            b90p  = buckets.get("90_plus", _ZERO)
+            cur = buckets.get("current", _ZERO)
+            b130 = buckets.get("1_30", _ZERO)
+            b3160 = buckets.get("31_60", _ZERO)
+            b6190 = buckets.get("61_90", _ZERO)
+            b90p = buckets.get("90_plus", _ZERO)
             row_total = cur + b130 + b3160 + b6190 + b90p
-            customers.append(AgedReceivableRow(
-                customer_name=cname,
-                current=cur,
-                days_1_30=b130,
-                days_31_60=b3160,
-                days_61_90=b6190,
-                days_90_plus=b90p,
-                total=row_total,
-            ))
+            customers.append(
+                AgedReceivableRow(
+                    customer_name=cname,
+                    current=cur,
+                    days_1_30=b130,
+                    days_31_60=b3160,
+                    days_61_90=b6190,
+                    days_90_plus=b90p,
+                    total=row_total,
+                )
+            )
             for k, v in [
-                ("current", cur), ("1_30", b130), ("31_60", b3160),
-                ("61_90", b6190), ("90_plus", b90p),
+                ("current", cur),
+                ("1_30", b130),
+                ("31_60", b3160),
+                ("61_90", b6190),
+                ("90_plus", b90p),
             ]:
                 totals_d[k] += v
 
@@ -370,7 +408,7 @@ class ReportsService:
             currency, offset=params.offset, limit=params.fetch_limit
         )
         has_next = len(rows) > params.per_page
-        items_raw = rows[:params.per_page]
+        items_raw = rows[: params.per_page]
         items = [
             AgedReceivableDetailRow(
                 id=r.id,
@@ -402,7 +440,6 @@ class ReportsService:
             items=items,
             metadata=metadata,
         )
-        
 
     # Aged Payables
 
@@ -412,7 +449,9 @@ class ReportsService:
         flat_rows = self.repo.aged_payables_summary(currency)
 
         # Pivot: vendor_name → {bucket: Decimal}
-        pivot: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
+        pivot: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: _ZERO)
+        )
         for row in flat_rows:
             pivot[row.vendor_name][row.bucket] += Decimal(str(row.amount))
 
@@ -421,24 +460,29 @@ class ReportsService:
 
         for vname in sorted(pivot):
             buckets = pivot[vname]
-            cur   = buckets.get("current", _ZERO)
-            b130  = buckets.get("1_30",    _ZERO)
-            b3160 = buckets.get("31_60",   _ZERO)
-            b6190 = buckets.get("61_90",   _ZERO)
-            b90p  = buckets.get("90_plus", _ZERO)
+            cur = buckets.get("current", _ZERO)
+            b130 = buckets.get("1_30", _ZERO)
+            b3160 = buckets.get("31_60", _ZERO)
+            b6190 = buckets.get("61_90", _ZERO)
+            b90p = buckets.get("90_plus", _ZERO)
             row_total = cur + b130 + b3160 + b6190 + b90p
-            vendors.append(AgedPayableRow(
-                vendor_name=vname,
-                current=cur,
-                days_1_30=b130,
-                days_31_60=b3160,
-                days_61_90=b6190,
-                days_90_plus=b90p,
-                total=row_total,
-            ))
+            vendors.append(
+                AgedPayableRow(
+                    vendor_name=vname,
+                    current=cur,
+                    days_1_30=b130,
+                    days_31_60=b3160,
+                    days_61_90=b6190,
+                    days_90_plus=b90p,
+                    total=row_total,
+                )
+            )
             for k, v in [
-                ("current", cur), ("1_30", b130), ("31_60", b3160),
-                ("61_90", b6190), ("90_plus", b90p),
+                ("current", cur),
+                ("1_30", b130),
+                ("31_60", b3160),
+                ("61_90", b6190),
+                ("90_plus", b90p),
             ]:
                 totals_d[k] += v
 
@@ -458,7 +502,7 @@ class ReportsService:
             currency, offset=params.offset, limit=params.fetch_limit
         )
         has_next = len(rows) > params.per_page
-        items_raw = rows[:params.per_page]
+        items_raw = rows[: params.per_page]
         items = [
             AgedPayableDetailRow(
                 source_id=r.source_id,

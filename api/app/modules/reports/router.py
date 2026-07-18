@@ -29,12 +29,12 @@ from app.modules.reports.schemas import (
     AgedPayablesSummaryResponse,
     AgedReceivablesDetailResponse,
     AgedReceivablesSummaryResponse,
+    PurchasesLedgerEntry,
     PurchasesReportSummaryResponse,
     PurchasesSourceCounts,
-    SalesReportSummaryResponse,
     SalesLedgerEntry,
+    SalesReportSummaryResponse,
     SalesStatusCounts,
-    PurchasesLedgerEntry,
     TaxReportResponse,
 )
 from app.modules.statements.schemas import RangePreset, ResolvedPeriod
@@ -67,19 +67,25 @@ CurrencyParam = Annotated[
 ]
 SearchParam = Annotated[
     str | None,
-    Query(max_length=200, description="Substring match on entity name or document reference"),
+    Query(
+        max_length=200,
+        description="Substring match on entity name or document reference",
+    ),
 ]
 PageParam = Annotated[int, Query(ge=1, le=1000, description="Page number")]
 PerPageParam = Annotated[int, Query(ge=1, le=100, description="Items per page")]
 WithTotalParam = Annotated[
     bool,
-    Query(alias="withTotal", description="Also compute total/total_pages (extra COUNT)"),
+    Query(
+        alias="withTotal", description="Also compute total/total_pages (extra COUNT)"
+    ),
 ]
 
 
 # ---------------------------------------------------------------------------
 # Sales: Summary
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/sales",
@@ -109,6 +115,7 @@ def get_sales_summary(
 # ---------------------------------------------------------------------------
 # Sales: Ledger
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/sales/ledger",
@@ -190,6 +197,7 @@ def export_sales(
 # Purchases: Summary
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/purchases",
     response_model=PurchasesReportSummaryResponse,
@@ -213,6 +221,7 @@ def get_purchases_summary(
 # ---------------------------------------------------------------------------
 # Purchases: Ledger
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/purchases/ledger",
@@ -292,6 +301,7 @@ def export_purchases(
 # Tax Report
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/taxes",
     response_model=TaxReportResponse,
@@ -341,6 +351,7 @@ def export_taxes(
 # Aged Receivables
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/aged-receivables",
     response_model=AgedReceivablesSummaryResponse,
@@ -381,6 +392,7 @@ def list_aged_receivables_detail(
 # ---------------------------------------------------------------------------
 # Aged Payables
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/aged-payables",

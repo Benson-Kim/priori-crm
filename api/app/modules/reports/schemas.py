@@ -18,24 +18,28 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-# Import period infrastructure — never redefine
-from app.modules.statements.schemas import RangePreset, ResolvedPeriod
-from app.constants.enums import Currency
 from app.common.pagination import PaginationMetadata
+from app.constants.enums import Currency
 
+# Import period infrastructure — never redefine
+from app.modules.statements.schemas import ResolvedPeriod
 
 # Shared base
 
+
 class ReportBase(BaseModel):
     """Shared period and currency context in every report response."""
+
     period: ResolvedPeriod
     currency: Currency
 
 
 # Sales Report Schemas
 
+
 class SalesSummaryMetrics(BaseModel):
     """Top-line sales metrics for summary MetricCards."""
+
     subtotal: Decimal = Field(
         description="Pre-tax gross line totals before document-level discounts"
     )
@@ -46,7 +50,9 @@ class SalesSummaryMetrics(BaseModel):
         description="Net revenue after discount, pre-tax (SUM of total_due - tax_total)"
     )
     tax_collected: Decimal = Field(description="Sum of Invoice.tax_total")
-    total_invoiced: Decimal = Field(description="Sum of Invoice.total_due (tax-inclusive)")
+    total_invoiced: Decimal = Field(
+        description="Sum of Invoice.total_due (tax-inclusive)"
+    )
     invoice_count: int
     outstanding_balance: Decimal = Field(
         description="Sum of balance_due for SENT/PARTIAL/OVERDUE invoices"
@@ -70,6 +76,7 @@ class RevenueByCategory(BaseModel):
 
 class SalesReportSummaryResponse(ReportBase):
     """Sales report overview: metrics + breakdowns."""
+
     metrics: SalesSummaryMetrics
     revenue_by_customer: list[RevenueByCustomer]
     revenue_by_category: list[RevenueByCategory]
@@ -77,6 +84,7 @@ class SalesReportSummaryResponse(ReportBase):
 
 class SalesLedgerEntry(BaseModel):
     """One invoice row in the sales ledger."""
+
     id: UUID
     customer_name: str
     reference: str
@@ -84,7 +92,9 @@ class SalesLedgerEntry(BaseModel):
     date: date
     status: str
     currency: str
-    subtotal: Decimal = Field(description="Invoice.subtotal — pre-tax gross of line items")
+    subtotal: Decimal = Field(
+        description="Invoice.subtotal — pre-tax gross of line items"
+    )
     discount: Decimal = Field(description="Document-level discount applied")
     net_revenue: Decimal = Field(description="subtotal - discount (pre-tax net)")
     amount: Decimal = Field(description="Invoice.total_due (tax-inclusive)")
@@ -94,6 +104,7 @@ class SalesLedgerEntry(BaseModel):
 
 class SalesStatusCounts(BaseModel):
     """Per-status counts for the sales filter tabs (recognized statuses only)."""
+
     all: int
     sent: int = 0
     partial: int = 0
@@ -103,8 +114,10 @@ class SalesStatusCounts(BaseModel):
 
 # Purchases Report Schemas
 
+
 class PurchasesSummaryMetrics(BaseModel):
     """Top-line purchases metrics for summary MetricCards."""
+
     expense_spend: Decimal = Field(
         description="Pre-tax expense spend (SUM ExpenseLineItem.line_total)"
     )
@@ -129,12 +142,14 @@ class SpendByVendor(BaseModel):
 
 class PurchasesReportSummaryResponse(ReportBase):
     """Purchases report overview: metrics + top vendor breakdown."""
+
     metrics: PurchasesSummaryMetrics
     spend_by_vendor: list[SpendByVendor]
 
 
 class PurchasesLedgerEntry(BaseModel):
     """One row in the combined expenses + POs ledger."""
+
     source_id: UUID
     source_type: Literal["expense", "purchase_order"]
     entity_name: str
@@ -153,6 +168,7 @@ class PurchasesLedgerEntry(BaseModel):
 
 class PurchasesSourceCounts(BaseModel):
     """Per-source counts for the purchases filter tabs."""
+
     all: int
     expense: int
     purchase_order: int
@@ -160,14 +176,14 @@ class PurchasesSourceCounts(BaseModel):
 
 # Tax Report Schemas
 
+
 class TaxSummaryMetrics(BaseModel):
     """VAT position summary."""
+
     vat_collected: Decimal = Field(
         description="Sales VAT collected (SUM Invoice.tax_total)"
     )
-    vat_paid: Decimal = Field(
-        description="Purchase VAT input tax (expenses + POs)"
-    )
+    vat_paid: Decimal = Field(description="Purchase VAT input tax (expenses + POs)")
     net_vat: Decimal = Field(
         description="vat_collected - vat_paid. Positive = payable to KRA."
     )
@@ -175,16 +191,18 @@ class TaxSummaryMetrics(BaseModel):
 
 class TaxByTypeRow(BaseModel):
     """Tax amount for one tax_type (vat_16, vat_8, etc.)."""
+
     tax_type: str
     tax_amount: Decimal
     document_count: int = Field(
         default=0,
-        description="Only populated for sales breakdown (invoice-level distinct count)"
+        description="Only populated for sales breakdown (invoice-level distinct count)",
     )
 
 
 class TaxReportResponse(ReportBase):
     """Tax report: VAT position + per-type breakdowns for sales and purchases."""
+
     metrics: TaxSummaryMetrics
     sales_by_tax_type: list[TaxByTypeRow]
     purchases_by_tax_type: list[TaxByTypeRow]
@@ -192,12 +210,14 @@ class TaxReportResponse(ReportBase):
 
 # Aged Receivables Schemas
 
+
 class AgingBuckets(BaseModel):
     """Balance split across the five standard aging buckets.
 
     Industry standard: Current (not yet due), 1-30, 31-60, 61-90, 90+ days.
     All major accounting systems (QuickBooks, Xero, Sage) use this structure.
     """
+
     current: Decimal = Decimal("0.00")
     days_1_30: Decimal = Decimal("0.00")
     days_31_60: Decimal = Decimal("0.00")
@@ -225,6 +245,7 @@ class AgingBuckets(BaseModel):
 
 class AgedReceivableRow(BaseModel):
     """One customer row in the aged AR summary grid."""
+
     customer_name: str
     current: Decimal
     days_1_30: Decimal
@@ -240,6 +261,7 @@ class AgedReceivablesSummaryResponse(BaseModel):
     Point-in-time snapshot: as_of_date is today UTC.
     No date range filter — aging is always computed as of today.
     """
+
     currency: str
     as_of_date: date
     totals: AgingBuckets
@@ -248,6 +270,7 @@ class AgedReceivablesSummaryResponse(BaseModel):
 
 class AgedReceivableDetailRow(BaseModel):
     """One invoice row in the aged AR detail table."""
+
     id: UUID
     customer_name: str
     reference: str
@@ -268,6 +291,7 @@ class AgedReceivableDetailRow(BaseModel):
 
 class AgedReceivablesDetailResponse(BaseModel):
     """Paginated aged AR invoice rows."""
+
     currency: str
     as_of_date: date
     items: list[AgedReceivableDetailRow]
@@ -276,8 +300,10 @@ class AgedReceivablesDetailResponse(BaseModel):
 
 # Aged Payables Schemas
 
+
 class AgedPayableRow(BaseModel):
     """One vendor row in the aged AP summary grid."""
+
     vendor_name: str
     current: Decimal
     days_1_30: Decimal
@@ -293,6 +319,7 @@ class AgedPayablesSummaryResponse(BaseModel):
     Expenses: bucketed by due_date.
     POs (SENT + unpaid): always in 'current' bucket — PurchaseOrder has no due_date.
     """
+
     currency: str
     as_of_date: date
     totals: AgingBuckets
@@ -301,6 +328,7 @@ class AgedPayablesSummaryResponse(BaseModel):
 
 class AgedPayableDetailRow(BaseModel):
     """One expense or PO row in the aged AP detail table."""
+
     source_id: UUID
     source_type: Literal["expense", "purchase_order"]
     vendor_name: str
@@ -320,6 +348,7 @@ class AgedPayableDetailRow(BaseModel):
 
 class AgedPayablesDetailResponse(BaseModel):
     """Paginated aged AP rows (expenses + POs combined)."""
+
     currency: str
     as_of_date: date
     items: list[AgedPayableDetailRow]
