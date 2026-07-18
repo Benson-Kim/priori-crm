@@ -692,6 +692,199 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
+    def export_sales_report(self, rows: list, currency: str) -> bytes:
+        """Export sales ledger rows to .xlsx bytes.
+
+        Column headers include the currency label (e.g. "Amount (KES)") so
+        exported files are self-describing when the user selects non-KES.
+        Rows are SalesLedgerEntry Pydantic objects (attribute access).
+        """
+        cur = currency.upper()
+        headers = [
+            "Date",
+            "Reference",
+            "Invoice #",
+            "Customer",
+            "Status",
+            f"Subtotal ({cur})",
+            f"Discount ({cur})",
+            f"Net Revenue ({cur})",
+            f"Tax ({cur})",
+            f"Total ({cur})",
+            f"Balance Due ({cur})",
+        ]
+
+        def row_fn(r):
+            return [
+                getattr(r, "date", None),
+                getattr(r, "reference", ""),
+                getattr(r, "number", ""),
+                getattr(r, "customer_name", ""),
+                getattr(r, "status", ""),
+                getattr(r, "subtotal", Decimal("0")),
+                getattr(r, "discount", Decimal("0")),
+                getattr(r, "net_revenue", Decimal("0")),
+                getattr(r, "tax", Decimal("0")),
+                getattr(r, "amount", Decimal("0")),
+                getattr(r, "balance_due", Decimal("0")),
+            ]
+
+        # Money columns: Subtotal(6), Discount(7), Net Revenue(8), Tax(9), Total(10), Balance(11)
+        money_cols = [6, 7, 8, 9, 10, 11]
+        date_cols = [1]
+
+        wb = self._build_workbook(
+            sheet_name="Sales",
+            headers=headers,
+            records=rows,
+            row_fn=row_fn,
+            money_cols=money_cols,
+            date_cols=date_cols,
+        )
+        return self._to_bytes(wb)
+
+    def export_purchases_report(self, rows: list, currency: str) -> bytes:
+        """Export purchases ledger rows (expenses + POs combined) to .xlsx bytes."""
+        cur = currency.upper()
+        headers = [
+            "Date",
+            "Reference",
+            "#",
+            "Vendor",
+            "Type",
+            "Status",
+            f"Amount ({cur})",
+            f"Tax ({cur})",
+            f"Balance Due ({cur})",
+        ]
+
+        def row_fn(r):
+            source_type = getattr(r, "source_type", "")
+            type_label = "Expense" if source_type == "expense" else "Purchase Order"
+            return [
+                getattr(r, "entry_date", None),
+                getattr(r, "reference", ""),
+                getattr(r, "number", ""),
+                getattr(r, "entity_name", ""),
+                type_label,
+                getattr(r, "status", ""),
+                getattr(r, "amount", Decimal("0")),
+                getattr(r, "tax", Decimal("0")),
+                getattr(r, "balance_due", Decimal("0")),
+            ]
+
+        money_cols = [7, 8, 9]
+        date_cols = [1]
+
+        wb = self._build_workbook(
+            sheet_name="Purchases",
+            headers=headers,
+            records=rows,
+            row_fn=row_fn,
+            money_cols=money_cols,
+            date_cols=date_cols,
+        )
+        return self._to_bytes(wb)
+
+    def export_tax_report(self, report, currency: str = "KES") -> bytes:
+        """Export tax report to .xlsx with three sheets.
+
+        Sheet 1: VAT Summary (Collected, Paid, Net Position)
+        Sheet 2: Sales by Tax Type
+        Sheet 3: Purchases by Tax Type
+
+        tax_type labels: vat_16 → "16% VAT", vat_8 → "8% VAT",
+        vat_0 → "0% VAT (Zero-rated)", exempt → "Exempt", no_tax → "No Tax"
+        """
+        cur = currency.upper()
+
+        _TAX_LABELS = {
+            "vat_16": "16% VAT",
+            "vat_8": "8% VAT",
+            "vat_0": "0% VAT (Zero-rated)",
+            "exempt": "Exempt",
+            "no_tax": "No Tax",
+        }
+
+        wb = Workbook()
+
+        # ── Sheet 1: VAT Summary ─────────────────────────────────────────────
+        ws1 = wb.active
+        ws1.title = "VAT Summary"
+
+        metrics = getattr(report, "metrics", report)
+        vat_collected = float(getattr(metrics, "vat_collected", 0) or 0)
+        vat_paid = float(getattr(metrics, "vat_paid", 0) or 0)
+        net_vat = float(getattr(metrics, "net_vat", 0) or 0)
+
+        summary_data = [
+            ("VAT Collected (Sales)", vat_collected),
+            ("VAT Paid (Purchases)", vat_paid),
+            ("Net VAT Position", net_vat),
+        ]
+
+        for row_idx, (label, value) in enumerate(summary_data, 1):
+            lbl_cell = ws1.cell(row=row_idx, column=1, value=label)
+            lbl_cell.font = Font(name="Calibri", bold=True, size=10)
+            val_cell = ws1.cell(row=row_idx, column=2, value=value)
+            val_cell.number_format = _MONEY_FORMAT
+            val_cell.alignment = Alignment(horizontal="right")
+            val_cell.font = Font(name="Calibri", size=10)
+
+        note = ws1.cell(row=5, column=1, value=f"Currency: {cur}")
+        note.font = Font(name="Calibri", italic=True, size=9, color="817D7D")
+
+        ws1.column_dimensions["A"].width = 28
+        ws1.column_dimensions["B"].width = 16
+
+        # ── Sheet 2: Sales by Tax Type ───────────────────────────────────────
+        ws2 = wb.create_sheet("Sales by Tax Type")
+        s_headers = [f"Tax Type", f"Tax Amount ({cur})", "Invoice Count"]
+        for col_idx, header in enumerate(s_headers, 1):
+            cell = ws2.cell(row=1, column=col_idx, value=header)
+            cell.font = _HEADER_FONT
+            cell.fill = _HEADER_FILL
+            cell.alignment = _HEADER_ALIGN
+
+        sales_rows = getattr(report, "sales_by_tax_type", [])
+        for row_idx, r in enumerate(sales_rows, 2):
+            tax_type = getattr(r, "tax_type", "")
+            label = _TAX_LABELS.get(str(tax_type), str(tax_type))
+            ws2.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
+            amt_cell = ws2.cell(row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0))
+            amt_cell.number_format = _MONEY_FORMAT
+            amt_cell.font = _BODY_FONT
+            ws2.cell(row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)).font = _BODY_FONT
+
+        ws2.freeze_panes = "A2"
+        for col, width in {"A": 25, "B": 18, "C": 15}.items():
+            ws2.column_dimensions[col].width = width
+
+        # ── Sheet 3: Purchases by Tax Type ───────────────────────────────────
+        ws3 = wb.create_sheet("Purchases by Tax Type")
+        p_headers = ["Tax Type", f"Tax Amount ({cur})"]
+        for col_idx, header in enumerate(p_headers, 1):
+            cell = ws3.cell(row=1, column=col_idx, value=header)
+            cell.font = _HEADER_FONT
+            cell.fill = _HEADER_FILL
+            cell.alignment = _HEADER_ALIGN
+
+        purch_rows = getattr(report, "purchases_by_tax_type", [])
+        for row_idx, r in enumerate(purch_rows, 2):
+            tax_type = getattr(r, "tax_type", "")
+            label = _TAX_LABELS.get(str(tax_type), str(tax_type))
+            ws3.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
+            amt_cell = ws3.cell(row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0))
+            amt_cell.number_format = _MONEY_FORMAT
+            amt_cell.font = _BODY_FONT
+
+        ws3.freeze_panes = "A2"
+        for col, width in {"A": 25, "B": 18}.items():
+            ws3.column_dimensions[col].width = width
+
+        logger.info("Built tax report Excel workbook (3 sheets)")
+        return self._to_bytes(wb)
+
     # private implementation
 
     def _build_workbook(

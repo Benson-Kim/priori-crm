@@ -192,3 +192,13 @@ def get_dashboard_service(db: DbSession, current_user: CurrentUser):
 DashboardServiceDep = Annotated[
     "DashboardService", Depends(get_dashboard_service)  # noqa: F821
 ]
+
+
+def get_reports_service(db: DbSession, current_user: CurrentUser):
+    """Provide a ReportsService scoped to the current request and acting user."""
+    from app.modules.reports.service import ReportsService
+
+    return ReportsService(db, current_user=current_user)
+
+
+ReportsServiceDep = Annotated["ReportsService", Depends(get_reports_service)]  # noqa: F821
