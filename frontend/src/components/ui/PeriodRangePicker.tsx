@@ -1,4 +1,5 @@
 import { Select } from "@/components/ui/Select";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { DATE_RANGE_OPTIONS } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import {
@@ -39,34 +40,32 @@ export function PeriodRangePicker({
                <div className="flex flex-wrap items-center gap-2">
                     {range === "custom" && (
                          <div className="flex flex-wrap items-center gap-2">
-                              <input
-                                   type="date"
-                                   aria-label="Custom range start date"
-                                   value={dateFrom ?? ""}
-                                   max={dateTo}
-                                   onChange={(e) =>
+                              <CalendarPicker
+                                   value={dateFrom}
+                                   onChange={(d) =>
                                         onPeriodChange({
                                              range,
-                                             dateFrom: e.target.value || undefined,
+                                             dateFrom: d || undefined,
                                              dateTo,
                                         })
                                    }
-                                   className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-base text-gray-900"
+                                   max={dateTo}
+                                   placeholder="From date"
+                                   aria-label="Custom range start date"
                               />
                               <span className="text-gray-500">to</span>
-                              <input
-                                   type="date"
-                                   aria-label="Custom range end date"
-                                   value={dateTo ?? ""}
-                                   min={dateFrom}
-                                   onChange={(e) =>
+                              <CalendarPicker
+                                   value={dateTo}
+                                   onChange={(d) =>
                                         onPeriodChange({
                                              range,
                                              dateFrom,
-                                             dateTo: e.target.value || undefined,
+                                             dateTo: d || undefined,
                                         })
                                    }
-                                   className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-base text-gray-900"
+                                   min={dateFrom}
+                                   placeholder="To date"
+                                   aria-label="Custom range end date"
                               />
                          </div>
                     )}
