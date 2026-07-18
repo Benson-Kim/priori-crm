@@ -839,7 +839,7 @@ class ExcelExporter:
 
         # ── Sheet 2: Sales by Tax Type ───────────────────────────────────────
         ws2 = wb.create_sheet("Sales by Tax Type")
-        s_headers = [f"Tax Type", f"Tax Amount ({cur})", "Invoice Count"]
+        s_headers = ["Tax Type", f"Tax Amount ({cur})", "Invoice Count"]
         for col_idx, header in enumerate(s_headers, 1):
             cell = ws2.cell(row=1, column=col_idx, value=header)
             cell.font = _HEADER_FONT
@@ -851,10 +851,14 @@ class ExcelExporter:
             tax_type = getattr(r, "tax_type", "")
             label = _TAX_LABELS.get(str(tax_type), str(tax_type))
             ws2.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
-            amt_cell = ws2.cell(row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0))
+            amt_cell = ws2.cell(
+                row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
+            )
             amt_cell.number_format = _MONEY_FORMAT
             amt_cell.font = _BODY_FONT
-            ws2.cell(row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)).font = _BODY_FONT
+            ws2.cell(
+                row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)
+            ).font = _BODY_FONT
 
         ws2.freeze_panes = "A2"
         for col, width in {"A": 25, "B": 18, "C": 15}.items():
@@ -874,7 +878,9 @@ class ExcelExporter:
             tax_type = getattr(r, "tax_type", "")
             label = _TAX_LABELS.get(str(tax_type), str(tax_type))
             ws3.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
-            amt_cell = ws3.cell(row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0))
+            amt_cell = ws3.cell(
+                row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
+            )
             amt_cell.number_format = _MONEY_FORMAT
             amt_cell.font = _BODY_FONT
 

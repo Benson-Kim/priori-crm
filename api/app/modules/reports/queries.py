@@ -60,6 +60,10 @@ from sqlalchemy.orm import Session
 from app.common.exceptions import DatabaseException
 from app.common.search import build_search_clause
 from app.constants.enums import PurchaseOrderStatus
+from app.modules.customers.models import Customer
+from app.modules.expenses.models import Expense, ExpenseLineItem
+from app.modules.invoices.models import Invoice, InvoiceLineItem
+from app.modules.purchase_orders.models import PurchaseOrder
 
 # Single source of truth — import, never redefine
 from app.modules.statements.queries import (
@@ -67,11 +71,6 @@ from app.modules.statements.queries import (
     RECOGNIZED_INVOICE_STATUSES,
     customer_display_name,
 )
-
-from app.modules.customers.models import Customer
-from app.modules.expenses.models import Expense, ExpenseLineItem
-from app.modules.invoices.models import Invoice, InvoiceLineItem
-from app.modules.purchase_orders.models import PurchaseOrder, PurchaseOrderLineItem
 from app.modules.vendors.models import Vendor
 
 logger = logging.getLogger(__name__)
@@ -83,8 +82,8 @@ RECOGNIZED_PO_STATUSES: Final[tuple[PurchaseOrderStatus, ...]] = (
 )
 
 
-
 # Shared period-filter condition lists (mirrors StatementsRepository pattern)
+
 
 def _invoice_conds(date_from: date, date_to: date, currency: str) -> list:
     """Invoice recognition predicates — mirrors StatementsRepository._invoice_conds."""
@@ -118,28 +117,31 @@ def _po_conds(date_from: date, date_to: date, currency: str) -> list:
 
 # Data containers (frozen dataclasses — immutable, hashable)
 
+
 @dataclass(frozen=True)
 class SalesSummary:
     """Aggregated sales metrics for one reporting window."""
-    subtotal: Decimal           # SUM(Invoice.subtotal) — gross of discount, pre-tax
-    discount_total: Decimal     # subtotal - net_revenue (derived)
-    net_revenue: Decimal        # SUM(total_due - tax_total) — post-discount, pre-tax
-    tax_collected: Decimal      # SUM(Invoice.tax_total)
-    total_invoiced: Decimal     # SUM(Invoice.total_due) — tax-inclusive
+
+    subtotal: Decimal  # SUM(Invoice.subtotal) — gross of discount, pre-tax
+    discount_total: Decimal  # subtotal - net_revenue (derived)
+    net_revenue: Decimal  # SUM(total_due - tax_total) — post-discount, pre-tax
+    tax_collected: Decimal  # SUM(Invoice.tax_total)
+    total_invoiced: Decimal  # SUM(Invoice.total_due) — tax-inclusive
     invoice_count: int
     outstanding_balance: Decimal  # SUM(balance_due) for SENT/PARTIAL/OVERDUE
-    overdue_balance: Decimal      # SUM(balance_due) for OVERDUE only
+    overdue_balance: Decimal  # SUM(balance_due) for OVERDUE only
 
 
 @dataclass(frozen=True)
 class PurchasesSummary:
     """Aggregated purchases metrics for one reporting window."""
-    expense_spend: Decimal    # SUM(ExpenseLineItem.line_total) — pre-tax
-    po_spend: Decimal         # SUM(PurchaseOrder.subtotal) — pre-tax
-    total_spend: Decimal      # expense_spend + po_spend
-    expense_tax: Decimal      # SUM(Expense.tax_total)
-    po_tax: Decimal           # SUM(PurchaseOrder.tax_total)
-    total_tax: Decimal        # expense_tax + po_tax
+
+    expense_spend: Decimal  # SUM(ExpenseLineItem.line_total) — pre-tax
+    po_spend: Decimal  # SUM(PurchaseOrder.subtotal) — pre-tax
+    total_spend: Decimal  # expense_spend + po_spend
+    expense_tax: Decimal  # SUM(Expense.tax_total)
+    po_tax: Decimal  # SUM(PurchaseOrder.tax_total)
+    total_tax: Decimal  # expense_tax + po_tax
     expense_count: int
     po_count: int
     outstanding_balance: Decimal  # SUM(balance_due) for unpaid expenses + POs
@@ -148,12 +150,14 @@ class PurchasesSummary:
 @dataclass(frozen=True)
 class TaxSummary:
     """VAT position for one reporting window."""
+
     vat_collected: Decimal  # sales VAT
-    vat_paid: Decimal       # purchase VAT (expenses + POs)
-    net_vat: Decimal        # vat_collected - vat_paid (positive = owed to KRA)
+    vat_paid: Decimal  # purchase VAT (expenses + POs)
+    net_vat: Decimal  # vat_collected - vat_paid (positive = owed to KRA)
 
 
 # ReportsRepository
+
 
 class ReportsRepository:
     """Read-side aggregate and ledger queries for the reports module.
@@ -164,7 +168,6 @@ class ReportsRepository:
 
     def __init__(self, db: Session) -> None:
         self._db = db
-
 
     # Sales: Summary
 
@@ -184,20 +187,28 @@ class ReportsRepository:
         try:
             doc_stmt = (
                 select(
-                    func.coalesce(func.sum(Invoice.subtotal), Decimal("0")).label("subtotal"),
+                    func.coalesce(func.sum(Invoice.subtotal), Decimal("0")).label(
+                        "subtotal"
+                    ),
                     func.coalesce(
                         func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
                     ).label("net_revenue"),
-                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label("tax"),
-                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label("total"),
+                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
+                        "tax"
+                    ),
+                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label(
+                        "total"
+                    ),
                     func.count(Invoice.id).label("count"),
                     func.coalesce(
                         func.sum(Invoice.balance_due).filter(
-                            Invoice.status.in_([
-                                InvoiceStatus.SENT,
-                                InvoiceStatus.PARTIAL,
-                                InvoiceStatus.OVERDUE,
-                            ])
+                            Invoice.status.in_(
+                                [
+                                    InvoiceStatus.SENT,
+                                    InvoiceStatus.PARTIAL,
+                                    InvoiceStatus.OVERDUE,
+                                ]
+                            )
                         ),
                         Decimal("0"),
                     ).label("outstanding"),
@@ -229,7 +240,6 @@ class ReportsRepository:
         except SQLAlchemyError as exc:
             logger.exception("Database error in sales_summary")
             raise DatabaseException("Failed to calculate sales summary") from exc
-
 
     # Sales: Breakdowns
 
@@ -288,7 +298,6 @@ class ReportsRepository:
             logger.exception("Database error in revenue_by_category")
             raise DatabaseException("Failed to aggregate revenue by category") from exc
 
-    
     # Sales: Ledger
 
     def sales_ledger(
@@ -328,7 +337,9 @@ class ReportsRepository:
                     Invoice.currency.label("currency"),
                     Invoice.subtotal.label("subtotal"),
                     # discount = subtotal - (total_due - tax_total), all stored columns
-                    (Invoice.subtotal - (Invoice.total_due - Invoice.tax_total)).label("discount"),
+                    (Invoice.subtotal - (Invoice.total_due - Invoice.tax_total)).label(
+                        "discount"
+                    ),
                     (Invoice.total_due - Invoice.tax_total).label("net_revenue"),
                     Invoice.total_due.label("amount"),
                     Invoice.tax_total.label("tax"),
@@ -399,7 +410,6 @@ class ReportsRepository:
             logger.exception("Database error in sales_status_counts")
             raise DatabaseException("Failed to count sales by status") from exc
 
-
     # Purchases: Summary
 
     def purchases_summary(
@@ -412,22 +422,20 @@ class ReportsRepository:
             # Expense line totals (pre-tax)
             exp_spend_stmt = (
                 select(
-                    func.coalesce(
-                        func.sum(ExpenseLineItem.line_total), Decimal("0")
-                    )
+                    func.coalesce(func.sum(ExpenseLineItem.line_total), Decimal("0"))
                 )
                 .select_from(ExpenseLineItem)
                 .join(Expense, ExpenseLineItem.expense_id == Expense.id)
                 .where(*exp_conds)
             )
-            expense_spend = (
-                self._db.execute(exp_spend_stmt).scalar() or Decimal("0")
-            )
+            expense_spend = self._db.execute(exp_spend_stmt).scalar() or Decimal("0")
 
             # Expense doc-level: tax, count, outstanding
             exp_meta_stmt = (
                 select(
-                    func.coalesce(func.sum(Expense.tax_total), Decimal("0")).label("tax"),
+                    func.coalesce(func.sum(Expense.tax_total), Decimal("0")).label(
+                        "tax"
+                    ),
                     func.count(Expense.id).label("cnt"),
                     func.coalesce(
                         func.sum(Expense.balance_due).filter(
@@ -443,11 +451,7 @@ class ReportsRepository:
 
             # PO subtotals (pre-tax; PO.subtotal = stored Σ line_total)
             po_spend_stmt = (
-                select(
-                    func.coalesce(
-                        func.sum(PurchaseOrder.subtotal), Decimal("0")
-                    )
-                )
+                select(func.coalesce(func.sum(PurchaseOrder.subtotal), Decimal("0")))
                 .select_from(PurchaseOrder)
                 .where(*po_conds)
             )
@@ -495,7 +499,6 @@ class ReportsRepository:
             logger.exception("Database error in purchases_summary")
             raise DatabaseException("Failed to calculate purchases summary") from exc
 
-
     # Purchases: Breakdowns
 
     def spend_by_vendor(
@@ -524,9 +527,9 @@ class ReportsRepository:
             po_branch = (
                 select(
                     Vendor.vendor_name.label("vendor_name"),
-                    func.coalesce(
-                        func.sum(PurchaseOrder.subtotal), Decimal("0")
-                    ).label("amount"),
+                    func.coalesce(func.sum(PurchaseOrder.subtotal), Decimal("0")).label(
+                        "amount"
+                    ),
                 )
                 .select_from(PurchaseOrder)
                 .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
@@ -549,7 +552,6 @@ class ReportsRepository:
         except SQLAlchemyError as exc:
             logger.exception("Database error in spend_by_vendor")
             raise DatabaseException("Failed to aggregate spend by vendor") from exc
-
 
     # Purchases: Ledger (union_all of expenses + POs)
 
@@ -592,7 +594,7 @@ class ReportsRepository:
                     Expense.expense_date.label("entry_date"),
                     Expense.status.label("status"),
                     Expense.currency.label("currency"),
-                    Expense.total_due.label("amount"),   # Expense uses total_due ✓
+                    Expense.total_due.label("amount"),  # Expense uses total_due ✓
                     Expense.tax_total.label("tax"),
                     Expense.balance_due.label("balance_due"),
                 )
@@ -623,7 +625,9 @@ class ReportsRepository:
                     PurchaseOrder.order_date.label("entry_date"),
                     PurchaseOrder.status.label("status"),
                     PurchaseOrder.currency.label("currency"),
-                    PurchaseOrder.total.label("amount"),   # PO uses .total NOT .total_due ✓
+                    PurchaseOrder.total.label(
+                        "amount"
+                    ),  # PO uses .total NOT .total_due ✓
                     PurchaseOrder.tax_total.label("tax"),
                     PurchaseOrder.balance_due.label("balance_due"),
                 )
@@ -699,9 +703,7 @@ class ReportsRepository:
                 date_from, date_to, currency, source=source, search=search
             )
             return int(
-                self._db.execute(
-                    select(func.count()).select_from(sub)
-                ).scalar() or 0
+                self._db.execute(select(func.count()).select_from(sub)).scalar() or 0
             )
         except SQLAlchemyError as exc:
             logger.exception("Database error in purchases_ledger_total")
@@ -731,12 +733,9 @@ class ReportsRepository:
             logger.exception("Database error in purchases_source_counts")
             raise DatabaseException("Failed to count purchases by source") from exc
 
-
     # Tax Report
 
-    def tax_summary(
-        self, date_from: date, date_to: date, currency: str
-    ) -> TaxSummary:
+    def tax_summary(self, date_from: date, date_to: date, currency: str) -> TaxSummary:
         """VAT collected (sales), VAT paid (purchases), net VAT position."""
         inv_conds = _invoice_conds(date_from, date_to, currency)
         exp_conds = _expense_conds(date_from, date_to, currency)
@@ -744,21 +743,15 @@ class ReportsRepository:
         try:
             # Sales VAT: SUM(Invoice.tax_total) — no join needed, stored field
             sales_vat_stmt = (
-                select(
-                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0"))
-                )
+                select(func.coalesce(func.sum(Invoice.tax_total), Decimal("0")))
                 .select_from(Invoice)
                 .where(*inv_conds)
             )
-            vat_collected = (
-                self._db.execute(sales_vat_stmt).scalar() or Decimal("0")
-            )
+            vat_collected = self._db.execute(sales_vat_stmt).scalar() or Decimal("0")
 
             # Purchase VAT (expenses)
             exp_vat_stmt = (
-                select(
-                    func.coalesce(func.sum(Expense.tax_total), Decimal("0"))
-                )
+                select(func.coalesce(func.sum(Expense.tax_total), Decimal("0")))
                 .select_from(Expense)
                 .where(*exp_conds)
             )
@@ -766,9 +759,7 @@ class ReportsRepository:
 
             # Purchase VAT (POs)
             po_vat_stmt = (
-                select(
-                    func.coalesce(func.sum(PurchaseOrder.tax_total), Decimal("0"))
-                )
+                select(func.coalesce(func.sum(PurchaseOrder.tax_total), Decimal("0")))
                 .select_from(PurchaseOrder)
                 .where(*po_conds)
             )
@@ -786,9 +777,7 @@ class ReportsRepository:
             logger.exception("Database error in tax_summary")
             raise DatabaseException("Failed to calculate tax summary") from exc
 
-    def tax_by_type_sales(
-        self, date_from: date, date_to: date, currency: str
-    ) -> list:
+    def tax_by_type_sales(self, date_from: date, date_to: date, currency: str) -> list:
         """Sales VAT breakdown by tax_type (from invoice line items)."""
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
@@ -879,7 +868,6 @@ class ReportsRepository:
             logger.exception("Database error in tax_by_type_purchases")
             raise DatabaseException("Failed to aggregate purchase tax by type") from exc
 
-
     # Aged Receivables
 
     def aged_receivables_summary(self, currency: str) -> list:
@@ -907,18 +895,20 @@ class ReportsRepository:
                 select(
                     entity.label("customer_name"),
                     bucket,
-                    func.coalesce(
-                        func.sum(Invoice.balance_due), Decimal("0")
-                    ).label("amount"),
+                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
                 )
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(
-                    Invoice.status.in_([
-                        InvoiceStatus.SENT,
-                        InvoiceStatus.PARTIAL,
-                        InvoiceStatus.OVERDUE,
-                    ]),
+                    Invoice.status.in_(
+                        [
+                            InvoiceStatus.SENT,
+                            InvoiceStatus.PARTIAL,
+                            InvoiceStatus.OVERDUE,
+                        ]
+                    ),
                     Invoice.balance_due > 0,
                     Invoice.currency == currency,
                 )
@@ -951,17 +941,19 @@ class ReportsRepository:
             stmt = (
                 select(
                     bucket,
-                    func.coalesce(
-                        func.sum(Invoice.balance_due), Decimal("0")
-                    ).label("amount"),
+                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
                 )
                 .select_from(Invoice)
                 .where(
-                    Invoice.status.in_([
-                        InvoiceStatus.SENT,
-                        InvoiceStatus.PARTIAL,
-                        InvoiceStatus.OVERDUE,
-                    ]),
+                    Invoice.status.in_(
+                        [
+                            InvoiceStatus.SENT,
+                            InvoiceStatus.PARTIAL,
+                            InvoiceStatus.OVERDUE,
+                        ]
+                    ),
                     Invoice.balance_due > 0,
                     Invoice.currency == currency,
                 )
@@ -1017,11 +1009,13 @@ class ReportsRepository:
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(
-                    Invoice.status.in_([
-                        InvoiceStatus.SENT,
-                        InvoiceStatus.PARTIAL,
-                        InvoiceStatus.OVERDUE,
-                    ]),
+                    Invoice.status.in_(
+                        [
+                            InvoiceStatus.SENT,
+                            InvoiceStatus.PARTIAL,
+                            InvoiceStatus.OVERDUE,
+                        ]
+                    ),
                     Invoice.balance_due > 0,
                     Invoice.currency == currency,
                 )
@@ -1033,7 +1027,6 @@ class ReportsRepository:
         except SQLAlchemyError as exc:
             logger.exception("Database error in aged_receivables_detail")
             raise DatabaseException("Failed to load aged receivables detail") from exc
-
 
     # Aged Payables
 
@@ -1059,9 +1052,9 @@ class ReportsRepository:
             select(
                 Vendor.vendor_name.label("vendor_name"),
                 exp_bucket.label("bucket"),
-                func.coalesce(
-                    func.sum(Expense.balance_due), Decimal("0")
-                ).label("amount"),
+                func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
+                    "amount"
+                ),
             )
             .select_from(Expense)
             .join(Vendor, Expense.vendor_id == Vendor.id)
@@ -1078,9 +1071,9 @@ class ReportsRepository:
             select(
                 Vendor.vendor_name.label("vendor_name"),
                 literal("current").label("bucket"),
-                func.coalesce(
-                    func.sum(PurchaseOrder.balance_due), Decimal("0")
-                ).label("amount"),
+                func.coalesce(func.sum(PurchaseOrder.balance_due), Decimal("0")).label(
+                    "amount"
+                ),
             )
             .select_from(PurchaseOrder)
             .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
@@ -1127,9 +1120,9 @@ class ReportsRepository:
         exp_branch = (
             select(
                 exp_bucket.label("bucket"),
-                func.coalesce(
-                    func.sum(Expense.balance_due), Decimal("0")
-                ).label("amount"),
+                func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
+                    "amount"
+                ),
             )
             .select_from(Expense)
             .where(
@@ -1142,9 +1135,9 @@ class ReportsRepository:
         po_branch = (
             select(
                 literal("current").label("bucket"),
-                func.coalesce(
-                    func.sum(PurchaseOrder.balance_due), Decimal("0")
-                ).label("amount"),
+                func.coalesce(func.sum(PurchaseOrder.balance_due), Decimal("0")).label(
+                    "amount"
+                ),
             )
             .select_from(PurchaseOrder)
             .where(
@@ -1156,13 +1149,10 @@ class ReportsRepository:
 
         try:
             combined = union_all(exp_branch, po_branch).subquery("payables_totals")
-            stmt = (
-                select(
-                    combined.c.bucket,
-                    func.sum(combined.c.amount).label("amount"),
-                )
-                .group_by(combined.c.bucket)
-            )
+            stmt = select(
+                combined.c.bucket,
+                func.sum(combined.c.amount).label("amount"),
+            ).group_by(combined.c.bucket)
             rows = self._db.execute(stmt).all()
             return {row.bucket: Decimal(str(row.amount)) for row in rows}
         except SQLAlchemyError as exc:
