@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -517,11 +518,12 @@ export function RecordPaymentModal({
 
                 <div className="space-y-2">
                     <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
-                    <Input
+                    <CalendarPicker
                         id="payment-date"
-                        type="date"
+                        variant="form"
                         value={paymentDate}
-                        onChange={(e) => setPaymentDate(e.target.value)}
+                        onChange={(d) => setPaymentDate(d)}
+                        aria-label="Payment date"
                     />
                 </div>
 

@@ -1,5 +1,6 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
@@ -269,13 +270,14 @@ export function ExpenseEditor({
                 >
                   Expense Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="expense-date"
-                  type="date"
+                  variant="form"
                   value={expenseDate}
-                  onChange={(e) => handleExpenseDateChange(e.target.value)}
+                  onChange={(d) => handleExpenseDateChange(d)}
                   disabled={restrictedMode}
                   error={errors.transactionDate}
+                  aria-label="Expense date"
                 />
 
                 {/* Due Date */}
@@ -286,14 +288,15 @@ export function ExpenseEditor({
                 >
                   Due Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="due-date"
-                  type="date"
+                  variant="form"
                   value={dueDate}
                   min={expenseDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(d) => setDueDate(d)}
                   disabled={restrictedMode}
                   error={errors.dueDate}
+                  aria-label="Due date"
                 />
 
                 {/* Currency */}

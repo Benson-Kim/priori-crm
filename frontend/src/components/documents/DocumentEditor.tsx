@@ -7,6 +7,7 @@
  * Open/Closed: extend via `type` prop — never duplicate this component.
  */
 
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { CustomerSelector } from "@/components/modals/CustomerSelector";
 import { Button } from "@/components/ui/Button";
 import {
@@ -376,13 +377,14 @@ export function DocumentEditor({
                 >
                   Transaction Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="transaction-date"
-                  type="date"
+                  variant="form"
                   value={transactionDate}
-                  onChange={(e) => setTransactionDate(e.target.value)}
+                  onChange={(d) => setTransactionDate(d)}
                   disabled={restrictedMode}
                   error={errors.transactionDate}
+                  aria-label="Transaction date"
                 />
 
                 {/* Due Date */}
@@ -392,13 +394,14 @@ export function DocumentEditor({
                 >
                   Due Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="due-date"
-                  type="date"
+                  variant="form"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(d) => setDueDate(d)}
                   disabled={restrictedMode}
                   error={errors.dueDate}
+                  aria-label="Due date"
                 />
 
                 {/* RFQ/RFP Number */}
