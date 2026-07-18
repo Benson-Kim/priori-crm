@@ -1,5 +1,6 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Input } from "@/components/ui/Input";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -522,13 +523,14 @@ export function PurchaseOrderEditor({
                 >
                   Order Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="order-date"
-                  type="date"
+                  variant="form"
                   value={orderDate}
-                  onChange={(e) => setOrderDate(e.target.value)}
+                  onChange={(d) => setOrderDate(d)}
                   disabled={restrictedMode}
                   error={errors.orderDate}
+                  aria-label="Order date"
                 />
 
                 {/* Delivery Date (optional) */}
@@ -538,14 +540,15 @@ export function PurchaseOrderEditor({
                 >
                   Delivery Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="delivery-date"
-                  type="date"
+                  variant="form"
                   value={deliveryDate}
                   min={orderDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  onChange={(d) => setDeliveryDate(d)}
                   disabled={restrictedMode}
                   error={errors.deliveryDate}
+                  aria-label="Delivery date"
                 />
 
 
