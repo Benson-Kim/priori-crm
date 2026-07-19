@@ -17,26 +17,11 @@
  */
 
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
-import { getTodayString, toISODateString } from "@/lib/dateUtils";
+import { currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, today, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
-export type ReportPeriodMode = "month" | "quarter" | "year" | "custom";
-
-export interface ReportPeriodFilter {
-  mode: ReportPeriodMode;
-  year: number;
-  /** 1-12; required for mode=month */
-  month?: number;
-  /** 1-4; required for mode=quarter */
-  quarter?: number;
-  /** YYYY-MM-DD; required for mode=custom */
-  customFrom?: string;
-  /** YYYY-MM-DD; required for mode=custom */
-  customTo?: string;
-}
 
 interface ReportPeriodPickerProps {
   value: ReportPeriodFilter;
@@ -44,108 +29,6 @@ interface ReportPeriodPickerProps {
   className?: string;
 }
 
-const today = getTodayString();
-const currentYear = new Date().getUTCFullYear();
-const MIN_YEAR = currentYear - 5;
-
-const MONTH_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const MODE_LABELS: Record<ReportPeriodMode, string> = {
-  month: "Month",
-  quarter: "Quarter",
-  year: "Year",
-  custom: "Custom",
-};
-
-// Utility exports
-
-export function resolveReportPeriod(filter: ReportPeriodFilter): {
-  dateFrom: string | undefined;
-  dateTo: string | undefined;
-} {
-  const y = filter.year;
-
-  if (filter.mode === "month" && filter.month != null) {
-    const m = filter.month;
-    const firstDay = new Date(Date.UTC(y, m - 1, 1));
-    const lastDay = new Date(Date.UTC(y, m, 0));
-    const dateFrom = toISODateString(firstDay);
-    const rawTo = toISODateString(lastDay);
-    return { dateFrom, dateTo: rawTo > today ? today : rawTo };
-  }
-
-  if (filter.mode === "quarter" && filter.quarter != null) {
-    const startMonth = (filter.quarter - 1) * 3;
-    const firstDay = new Date(Date.UTC(y, startMonth, 1));
-    const lastDay = new Date(Date.UTC(y, startMonth + 3, 0));
-    const dateFrom = toISODateString(firstDay);
-    const rawTo = toISODateString(lastDay);
-    return { dateFrom, dateTo: rawTo > today ? today : rawTo };
-  }
-
-  if (filter.mode === "year") {
-    const dateFrom = `${y}-01-01`;
-    const rawTo = `${y}-12-31`;
-    return { dateFrom, dateTo: rawTo > today ? today : rawTo };
-  }
-
-  if (filter.mode === "custom") {
-    return { dateFrom: filter.customFrom, dateTo: filter.customTo };
-  }
-
-  return { dateFrom: undefined, dateTo: undefined };
-}
-
-export function isReportPeriodReady(filter: ReportPeriodFilter): boolean {
-  const { dateFrom, dateTo } = resolveReportPeriod(filter);
-  return !!(dateFrom && dateTo && dateFrom <= dateTo);
-}
-
-export function buildReportPeriodParams(
-  filter: ReportPeriodFilter,
-  currency: string
-): Record<string, string | number | boolean | undefined> {
-  const { dateFrom, dateTo } = resolveReportPeriod(filter);
-  return { range: "custom", dateFrom, dateTo, currency };
-}
-
-export function defaultReportPeriod(): ReportPeriodFilter {
-  const now = new Date();
-  return {
-    mode: "month",
-    year: now.getUTCFullYear(),
-    month: now.getUTCMonth() + 1,
-  };
-}
-
-// Label helper
-
-function formatIsoShort(iso: string): string {
-  const [, m, d] = iso.split("-").map(Number);
-  return `${MONTH_SHORT[m - 1]} ${d}`;
-}
-
-function periodLabel(filter: ReportPeriodFilter): string {
-  if (filter.mode === "month" && filter.month != null) {
-    return `${MONTH_SHORT[filter.month - 1]} ${filter.year}`;
-  }
-  if (filter.mode === "quarter" && filter.quarter != null) {
-    return `Q${filter.quarter} ${filter.year}`;
-  }
-  if (filter.mode === "year") {
-    return String(filter.year);
-  }
-  if (filter.mode === "custom") {
-    if (filter.customFrom && filter.customTo) {
-      return `${formatIsoShort(filter.customFrom)} – ${formatIsoShort(filter.customTo)}`;
-    }
-    return "Select range";
-  }
-  return "Select period";
-}
 
 // Component 
 
@@ -158,12 +41,23 @@ export function ReportPeriodPicker({
   const [panelYear, setPanelYear] = useState(value.year);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 320 });
 
   const open = () => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setCoords({ top: rect.bottom + 4, left: rect.left });
+    const gutter = 8;
+    const width = Math.min(320, window.innerWidth - gutter * 2);
+    let left = rect.left;
+
+    if (left + width > window.innerWidth - gutter) {
+      left = rect.right - width;
+    }
+    left = Math.max(
+      gutter,
+      Math.min(left, window.innerWidth - width - gutter)
+    );
+    setCoords({ top: rect.bottom + 4, left, width, });
     setPanelYear(value.year);
     setIsOpen(true);
   };
@@ -212,7 +106,7 @@ export function ReportPeriodPicker({
   const prevYear = () => {
     const y = Math.max(MIN_YEAR, panelYear - 1);
     setPanelYear(y);
-    if (value.mode !== "custom" && value.mode !== "custom") {
+    if (value.mode !== "custom") {
       onChange({ ...value, year: y });
     }
   };
@@ -266,7 +160,7 @@ export function ReportPeriodPicker({
         <div
           ref={panelRef}
           className="fixed z-50 bg-white shadow-xl border border-gray-200 rounded-2xl p-4 w-80 animate-in fade-in slide-in-from-top-1 duration-150"
-          style={{ top: coords.top, left: coords.left }}
+          style={{ top: coords.top, left: coords.left, width: coords.width, }}
         >
           {/* Mode tabs */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4">

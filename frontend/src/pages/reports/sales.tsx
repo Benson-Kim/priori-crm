@@ -10,42 +10,38 @@
  * No charts. MetricCards + sortable Tables + Pagination.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  defaultReportPeriod,
-  getSalesReport,
-  getSalesLedger,
-  getSalesCounts,
-  exportSalesReport,
-  getAgedReceivables,
-  isReportPeriodReady,
-  buildReportPeriodParams,
-  AGING_BUCKET_LABELS,
-  AGING_BUCKET_ORDER,
-  formatDaysOverdue,
-  type ReportPeriodFilter,
-  type SalesReportSummaryResponse,
-  type SalesLedgerEntry,
-  type SalesStatusCounts,
-  type AgedReceivablesSummaryResponse,
-  type AgedReceivableRow,
-} from "@/services/reportsApi";
-import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
-import { MetricCard } from "@/components/ui/MetricCard";
-import { Table } from "@/components/ui/Table";
-import { FilterTabs } from "@/components/ui/FilterTabs";
-import { SearchInput } from "@/components/ui/SearchInput";
-import { Pagination } from "@/components/ui/Pagination";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
-import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/Button";
+import { FilterTabs } from "@/components/ui/FilterTabs";
 import { InlineSelect } from "@/components/ui/InlineSelect";
-import { useTableSort } from "@/hooks/useTableSort";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { Pagination } from "@/components/ui/Pagination";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { Table } from "@/components/ui/Table";
 import { useAgedReport } from "@/hooks/useAgedReport";
 import { useDebounce } from "@/hooks/useDebounce";
-import { formatCurrency, formatDisplayDate } from "@/lib/utils";
+import { useTableSort } from "@/hooks/useTableSort";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
+import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
+import {
+  AGING_BUCKET_LABELS,
+  AGING_BUCKET_ORDER,
+  exportSalesReport,
+  getAgedReceivables,
+  getSalesCounts,
+  getSalesLedger,
+  getSalesReport,
+  type AgedReceivableRow,
+  type AgedReceivablesSummaryResponse,
+  type SalesLedgerEntry,
+  type SalesReportSummaryResponse,
+  type SalesStatusCounts,
+} from "@/services/reportsApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 type ActiveTab = "summary" | "ledger" | "aged";
 
@@ -81,7 +77,6 @@ export default function SalesReportPage() {
     data: agedData,
     isLoading: agedLoading,
     error: agedError,
-    currency: agedCurrency,
     setCurrency: setAgedCurrency,
   } = useAgedReport<AgedReceivablesSummaryResponse>({
     fetcher: getAgedReceivables,
@@ -214,58 +209,58 @@ export default function SalesReportPage() {
       {/* Summary tab */}
       {activeTab === "summary" && (
         summaryLoading ? <LoadingState message="Loading sales summary..." className="h-64" /> :
-        summaryError ? (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {summaryError}
-          </div>
-        ) :
-        summary ? (
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard label="Net Revenue" value={fmt(summary.metrics.net_revenue)} change={null} />
-              <MetricCard label="Tax Collected" value={fmt(summary.metrics.tax_collected)} change={null} />
-              <MetricCard label="Total Invoiced" value={fmt(summary.metrics.total_invoiced)} change={null} />
-              <MetricCard label="Invoice Count" value={String(summary.metrics.invoice_count)} change={null} />
-              <MetricCard label="Outstanding" value={fmt(summary.metrics.outstanding_balance)} change={null} />
-              <MetricCard label="Overdue" value={fmt(summary.metrics.overdue_balance)} change={null} />
-              <MetricCard label="Gross Subtotal" value={fmt(summary.metrics.subtotal)} change={null} />
-              <MetricCard label="Discounts" value={fmt(summary.metrics.discount_total)} change={null} />
+          summaryError ? (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              {summaryError}
             </div>
+          ) :
+            summary ? (
+              <div className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard label="Net Revenue" value={fmt(summary.metrics.net_revenue)} change={null} />
+                  <MetricCard label="Tax Collected" value={fmt(summary.metrics.tax_collected)} change={null} />
+                  <MetricCard label="Total Invoiced" value={fmt(summary.metrics.total_invoiced)} change={null} />
+                  <MetricCard label="Invoice Count" value={String(summary.metrics.invoice_count)} change={null} />
+                  <MetricCard label="Outstanding" value={fmt(summary.metrics.outstanding_balance)} change={null} />
+                  <MetricCard label="Overdue" value={fmt(summary.metrics.overdue_balance)} change={null} />
+                  <MetricCard label="Gross Subtotal" value={fmt(summary.metrics.subtotal)} change={null} />
+                  <MetricCard label="Discounts" value={fmt(summary.metrics.discount_total)} change={null} />
+                </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
-                <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Top Customers by Revenue</h3>
-                <div className="overflow-x-auto rounded-b-lg border border-white">
-                  <Table
-                    columns={[
-                      { key: "customer_name", header: "Customer" },
-                      { key: "invoice_count", header: "Invoices", className: "text-right" },
-                      { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
-                    ]}
-                    data={summary.revenue_by_customer}
-                    rowKey={(r) => r.customer_name}
-                    emptyMessage="No data for this period."
-                  />
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
+                    <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Top Customers by Revenue</h3>
+                    <div className="overflow-x-auto rounded-b-lg border border-white">
+                      <Table
+                        columns={[
+                          { key: "customer_name", header: "Customer" },
+                          { key: "invoice_count", header: "Invoices", className: "text-right" },
+                          { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
+                        ]}
+                        data={summary.revenue_by_customer}
+                        rowKey={(r) => r.customer_name}
+                        emptyMessage="No data for this period."
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
+                    <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Revenue by Category</h3>
+                    <div className="overflow-x-auto rounded-b-lg border border-white">
+                      <Table
+                        columns={[
+                          { key: "category", header: "Category" },
+                          { key: "document_count", header: "Invoices", className: "text-right" },
+                          { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
+                        ]}
+                        data={summary.revenue_by_category}
+                        rowKey={(r) => r.category}
+                        emptyMessage="No data for this period."
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
-                <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Revenue by Category</h3>
-                <div className="overflow-x-auto rounded-b-lg border border-white">
-                  <Table
-                    columns={[
-                      { key: "category", header: "Category" },
-                      { key: "document_count", header: "Invoices", className: "text-right" },
-                      { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
-                    ]}
-                    data={summary.revenue_by_category}
-                    rowKey={(r) => r.category}
-                    emptyMessage="No data for this period."
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null
+            ) : null
       )}
 
       {/* Ledger tab */}
@@ -284,12 +279,17 @@ export default function SalesReportPage() {
                 activeTab={statusFilter}
                 onTabChange={(k) => setStatusFilter(k)}
               />
-              <SearchInput
-                placeholder="Search customer, reference..."
-                value={search}
-                onSearchChange={setSearch}
-                className="w-full sm:w-70"
-              />
+              <div className="flex flex-col xl:flex-row items-center gap-4">
+                <SearchInput
+                  placeholder="Search customer, reference..."
+                  value={search}
+                  onSearchChange={setSearch}
+                  className="w-full sm:w-70"
+                />
+                <Button variant="outline" onClick={handleExport} disabled={isExporting}>
+                  {isExporting ? "Exporting..." : "Export Excel"}
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-b-lg border border-white">
