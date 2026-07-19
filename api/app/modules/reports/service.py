@@ -91,6 +91,7 @@ class ReportsService:
             ),
             revenue_by_customer=[
                 RevenueByCustomer(
+                    customer_id=r.customer_id,
                     customer_name=r.customer_name,
                     invoice_count=r.invoice_count,
                     amount=Decimal(str(r.amount)),
@@ -156,6 +157,38 @@ class ReportsService:
             for r in rows
         ]
         return PaginatedResponse.create_from_window(entries, params, total=total)
+
+    def export_sales_ledger(
+        self,
+        period: ResolvedPeriod,
+        currency: Currency,
+    ) -> list[SalesLedgerEntry]:
+        """All rows for Excel export — bypasses PaginationParams validation."""
+        rows = self.repo.sales_ledger(
+            period.date_from,
+            period.date_to,
+            currency,
+            offset=0,
+            limit=100_000,
+        )
+        return [
+            SalesLedgerEntry(
+                id=r.id,
+                customer_name=r.customer_name,
+                reference=r.reference,
+                number=r.number,
+                date=r.date,
+                status=r.status,
+                currency=r.currency,
+                subtotal=Decimal(str(r.subtotal)),
+                discount=Decimal(str(r.discount)),
+                net_revenue=Decimal(str(r.net_revenue)),
+                amount=Decimal(str(r.amount)),
+                tax=Decimal(str(r.tax)),
+                balance_due=Decimal(str(r.balance_due)),
+            )
+            for r in rows
+        ]
 
     def get_sales_ledger_total(
         self,
@@ -272,6 +305,37 @@ class ReportsService:
             for r in rows
         ]
         return PaginatedResponse.create_from_window(entries, params, total=total)
+
+    def export_purchases_ledger(
+        self,
+        period: ResolvedPeriod,
+        currency: Currency,
+    ) -> list[PurchasesLedgerEntry]:
+        """All rows for Excel export — bypasses PaginationParams validation."""
+        rows = self.repo.purchases_ledger(
+            period.date_from,
+            period.date_to,
+            currency,
+            offset=0,
+            limit=100_000,
+        )
+        return [
+            PurchasesLedgerEntry(
+                source_id=r.source_id,
+                source_type=r.source_type,
+                entity_name=r.entity_name,
+                reference=r.reference,
+                number=r.number,
+                category=r.category,
+                entry_date=r.entry_date,
+                status=r.status,
+                currency=r.currency,
+                amount=Decimal(str(r.amount)),
+                tax=Decimal(str(r.tax)),
+                balance_due=Decimal(str(r.balance_due)),
+            )
+            for r in rows
+        ]
 
     def get_purchases_ledger_total(
         self,

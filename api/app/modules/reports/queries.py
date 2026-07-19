@@ -246,16 +246,20 @@ class ReportsRepository:
     def revenue_by_customer(
         self, date_from: date, date_to: date, currency: str, *, limit: int = 10
     ) -> list:
-        """Top N customers by net revenue (total_due - tax_total), post-discount."""
+        """Top N customers by net revenue (total_due - tax_total), post-discount.
+
+        Groups by Customer.id alongside the display name so two customers
+        that share a name remain separate rows.
+        """
         inv_conds = _invoice_conds(date_from, date_to, currency)
         entity = customer_display_name()
         try:
-            # Net revenue per invoice = total_due - tax_total (stored columns, no @property)
             amount = func.coalesce(
                 func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
             ).label("amount")
             stmt = (
                 select(
+                    Customer.id.label("customer_id"),
                     entity.label("customer_name"),
                     func.count(Invoice.id).label("invoice_count"),
                     amount,
@@ -263,7 +267,7 @@ class ReportsRepository:
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(*inv_conds)
-                .group_by(entity)
+                .group_by(Customer.id, entity)
                 .order_by(amount.desc())
                 .limit(limit)
             )
@@ -275,12 +279,21 @@ class ReportsRepository:
     def revenue_by_category(
         self, date_from: date, date_to: date, currency: str
     ) -> list:
-        """Revenue grouped by item_name (account/product category)."""
+        """Revenue grouped by item_name (account/product category).
+
+        Allocates document-level discounts proportionally so that the
+        category breakdown reconciles with the summary's net revenue.
+        For each line: net_amount = line_total * (total_due - tax_total) / subtotal.
+        When subtotal is 0 the line contributes 0.
+        """
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
-            amount = func.coalesce(
-                func.sum(InvoiceLineItem.line_total), Decimal("0")
-            ).label("amount")
+            net_line = (
+                InvoiceLineItem.line_total
+                * (Invoice.total_due - Invoice.tax_total)
+                / func.nullif(Invoice.subtotal, 0)
+            )
+            amount = func.coalesce(func.sum(net_line), Decimal("0")).label("amount")
             stmt = (
                 select(
                     InvoiceLineItem.item_name.label("category"),
@@ -431,6 +444,11 @@ class ReportsRepository:
             expense_spend = self._db.execute(exp_spend_stmt).scalar() or Decimal("0")
 
             # Expense doc-level: tax, count, outstanding
+            # Outstanding uses PENDING/OVERDUE + balance_due > 0 (matching
+            # aged-payables) to exclude paid expenses with negative balance
+            # from vendor credits / overpayments.
+            from app.constants.enums import ExpenseStatus
+
             exp_meta_stmt = (
                 select(
                     func.coalesce(func.sum(Expense.tax_total), Decimal("0")).label(
@@ -439,7 +457,10 @@ class ReportsRepository:
                     func.count(Expense.id).label("cnt"),
                     func.coalesce(
                         func.sum(Expense.balance_due).filter(
-                            Expense.status.in_(RECOGNIZED_EXPENSE_STATUSES)
+                            Expense.status.in_(
+                                [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]
+                            ),
+                            Expense.balance_due > 0,
                         ),
                         Decimal("0"),
                     ).label("outstanding"),
@@ -778,23 +799,65 @@ class ReportsRepository:
             raise DatabaseException("Failed to calculate tax summary") from exc
 
     def tax_by_type_sales(self, date_from: date, date_to: date, currency: str) -> list:
-        """Sales VAT breakdown by tax_type (from invoice line items)."""
+        """Sales VAT breakdown by tax_type.
+
+        Two branches:
+        1. Line-item tax: for invoices where vat_enabled=False (per-line tax).
+        2. Document-level VAT: for invoices where vat_enabled=True, line items
+           are neutralized to tax_type=no_tax/tax_amount=0. Map Invoice.vat_rate
+           to a tax_type string (same CASE logic as the PO branch in purchases).
+        UNION ALL then re-aggregate to merge any overlapping tax_type keys.
+        """
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
-            amount = func.coalesce(
-                func.sum(InvoiceLineItem.tax_amount), Decimal("0")
-            ).label("tax_amount")
-            stmt = (
+            # Branch 1: line-item tax (non-document-level invoices)
+            line_branch = (
                 select(
                     InvoiceLineItem.tax_type.label("tax_type"),
                     func.count(func.distinct(Invoice.id)).label("document_count"),
-                    amount,
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.tax_amount), Decimal("0")
+                    ).label("tax_amount"),
                 )
                 .select_from(InvoiceLineItem)
                 .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
-                .where(*inv_conds)
+                .where(*inv_conds, Invoice.vat_enabled.is_(False))
                 .group_by(InvoiceLineItem.tax_type)
-                .order_by(amount.desc())
+            )
+
+            # Branch 2: document-level VAT invoices
+            inv_tax_type = case(
+                (Invoice.vat_rate == Decimal("0.1600"), "vat_16"),
+                (Invoice.vat_rate == Decimal("0.0800"), "vat_8"),
+                (Invoice.vat_rate == Decimal("0.0000"), "vat_0"),
+                else_="no_tax",
+            )
+            doc_branch = (
+                select(
+                    inv_tax_type.label("tax_type"),
+                    func.count(Invoice.id).label("document_count"),
+                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
+                        "tax_amount"
+                    ),
+                )
+                .select_from(Invoice)
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(True),
+                    Invoice.tax_total > 0,
+                )
+                .group_by(inv_tax_type)
+            )
+
+            combined = union_all(line_branch, doc_branch).subquery("sales_tax_by_type")
+            stmt = (
+                select(
+                    combined.c.tax_type,
+                    func.sum(combined.c.document_count).label("document_count"),
+                    func.sum(combined.c.tax_amount).label("tax_amount"),
+                )
+                .group_by(combined.c.tax_type)
+                .order_by(func.sum(combined.c.tax_amount).desc())
             )
             return list(self._db.execute(stmt).all())
         except SQLAlchemyError as exc:
