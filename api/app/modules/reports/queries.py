@@ -17,13 +17,9 @@ Invoice.discount_value is a @property, NOT a stored column; never reference
 it in SQL. The discount is derived as: subtotal - (total_due - tax_total).
 
 Tax: SUM(Invoice.tax_total) for sales; SUM(Expense.tax_total) + SUM(PO.tax_total)
-for purchases. Document-level totals avoid an extra join to line items.
-For per-type breakdown on sales: invoice line-item tax_amount is used.
-For per-type breakdown on purchases:
-  - Expenses: ExpenseLineItem.tax_amount grouped by tax_type
-  - POs: PurchaseOrder.tax_total mapped to TaxType via vat_rate CASE expression.
-    PO line items always have tax_type=no_tax/tax_amount=0 by design
-    (neutralize_line_tax() in financial.py). Document-level tax_total is correct.
+for purchases. Per-type breakdowns retain both the classification and explicit
+rate so line-level and document-level VAT reconcile without treating a custom
+positive rate as no-tax. Zero-rated documents remain visible with amount zero.
 
 Purchases ledger: union_all of expenses and POs, mirroring the cashflow
 module's pattern. All pagination (OFFSET/LIMIT) and ordering happen in SQL.
@@ -48,10 +44,11 @@ Read-only: this module never flushes or commits.
 """
 
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import Select, case, func, literal, select, union_all
 from sqlalchemy.exc import SQLAlchemyError
@@ -59,7 +56,12 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import DatabaseException
 from app.common.search import build_search_clause
-from app.constants.enums import PurchaseOrderStatus
+from app.constants.enums import (
+    ExpenseStatus,
+    InvoiceStatus,
+    PurchaseOrderStatus,
+    TaxType,
+)
 from app.modules.customers.models import Customer
 from app.modules.expenses.models import Expense, ExpenseLineItem
 from app.modules.invoices.models import Invoice, InvoiceLineItem
@@ -80,6 +82,60 @@ RECOGNIZED_PO_STATUSES: Final[tuple[PurchaseOrderStatus, ...]] = (
     PurchaseOrderStatus.SENT,
     PurchaseOrderStatus.PAID,
 )
+
+OUTSTANDING_INVOICE_STATUSES: Final[tuple[InvoiceStatus, ...]] = (
+    InvoiceStatus.SENT,
+    InvoiceStatus.PARTIAL,
+    InvoiceStatus.OVERDUE,
+)
+OUTSTANDING_EXPENSE_STATUSES: Final[tuple[ExpenseStatus, ...]] = (
+    ExpenseStatus.PENDING,
+    ExpenseStatus.OVERDUE,
+)
+OUTSTANDING_PO_STATUSES: Final[tuple[PurchaseOrderStatus, ...]] = (
+    PurchaseOrderStatus.SENT,
+)
+
+
+def _invoice_outstanding_conds() -> list[Any]:
+    return [
+        Invoice.status.in_(OUTSTANDING_INVOICE_STATUSES),
+        Invoice.balance_due > 0,
+    ]
+
+
+def _expense_outstanding_conds() -> list[Any]:
+    return [
+        Expense.status.in_(OUTSTANDING_EXPENSE_STATUSES),
+        Expense.balance_due > 0,
+    ]
+
+
+def _po_outstanding_conds() -> list[Any]:
+    return [
+        PurchaseOrder.status.in_(OUTSTANDING_PO_STATUSES),
+        PurchaseOrder.balance_due > 0,
+    ]
+
+
+def _line_tax_rate(tax_type_column: Any) -> Any:
+    """Map a line tax classification to its explicit rate, when applicable."""
+    return case(
+        (tax_type_column == TaxType.VAT_16, Decimal("0.1600")),
+        (tax_type_column == TaxType.VAT_8, Decimal("0.0800")),
+        (tax_type_column == TaxType.VAT_0, Decimal("0.0000")),
+        else_=None,
+    )
+
+
+def _document_tax_type(vat_rate_column: Any) -> Any:
+    """Classify document-level VAT without mislabelling custom rates as no-tax."""
+    return case(
+        (vat_rate_column == Decimal("0.1600"), TaxType.VAT_16.value),
+        (vat_rate_column == Decimal("0.0800"), TaxType.VAT_8.value),
+        (vat_rate_column == Decimal("0.0000"), TaxType.VAT_0.value),
+        else_="vat_custom",
+    )
 
 
 # Shared period-filter condition lists (mirrors StatementsRepository pattern)
@@ -181,7 +237,6 @@ class ReportsRepository:
         equals subtotal - discount (net of document-level discounts, pre-tax).
         Invoice.discount_value is a @property not a column — never used in SQL.
         """
-        from app.constants.enums import InvoiceStatus
 
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
@@ -202,19 +257,14 @@ class ReportsRepository:
                     func.count(Invoice.id).label("count"),
                     func.coalesce(
                         func.sum(Invoice.balance_due).filter(
-                            Invoice.status.in_(
-                                [
-                                    InvoiceStatus.SENT,
-                                    InvoiceStatus.PARTIAL,
-                                    InvoiceStatus.OVERDUE,
-                                ]
-                            )
+                            *_invoice_outstanding_conds()
                         ),
                         Decimal("0"),
                     ).label("outstanding"),
                     func.coalesce(
                         func.sum(Invoice.balance_due).filter(
-                            Invoice.status == InvoiceStatus.OVERDUE
+                            Invoice.status == InvoiceStatus.OVERDUE,
+                            Invoice.balance_due > 0,
                         ),
                         Decimal("0"),
                     ).label("overdue"),
@@ -313,7 +363,7 @@ class ReportsRepository:
 
     # Sales: Ledger
 
-    def sales_ledger(
+    def _sales_ledger_statement(
         self,
         date_from: date,
         date_to: date,
@@ -321,9 +371,7 @@ class ReportsRepository:
         *,
         search: str | None = None,
         status: str | None = None,
-        offset: int = 0,
-        limit: int = 11,
-    ) -> list:
+    ) -> Select:
         """Paginated list of recognized invoices. Fetch `per_page + 1` for sentinel."""
         entity = customer_display_name()
         conds = _invoice_conds(date_from, date_to, currency)
@@ -338,8 +386,7 @@ class ReportsRepository:
             )
             if clause is not None:
                 conds.append(clause)
-        try:
-            stmt = (
+            return (
                 select(
                     Invoice.id.label("id"),
                     entity.label("customer_name"),
@@ -362,6 +409,25 @@ class ReportsRepository:
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(*conds)
                 .order_by(Invoice.transaction_date.desc(), Invoice.id.desc())
+            )
+
+    def sales_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        offset: int = 0,
+        limit: int = 11,
+    ) -> list:
+        """Paginated list of recognized invoices. Fetch `per_page + 1` for sentinel."""
+        try:
+            stmt = (
+                self._sales_ledger_statement(
+                    date_from, date_to, currency, search=search, status=status
+                )
                 .offset(offset)
                 .limit(limit)
             )
@@ -369,6 +435,25 @@ class ReportsRepository:
         except SQLAlchemyError as exc:
             logger.exception("Database error in sales_ledger")
             raise DatabaseException("Failed to load sales ledger") from exc
+
+    def iter_sales_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every matching sales row in deterministic order."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            stmt = self._sales_ledger_statement(date_from, date_to, currency)
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming sales_ledger")
+            raise DatabaseException("Failed to export sales ledger") from exc
 
     def sales_ledger_total(
         self,
@@ -443,11 +528,8 @@ class ReportsRepository:
             )
             expense_spend = self._db.execute(exp_spend_stmt).scalar() or Decimal("0")
 
-            # Expense doc-level: tax, count, outstanding
-            # Outstanding uses PENDING/OVERDUE + balance_due > 0 (matching
-            # aged-payables) to exclude paid expenses with negative balance
-            # from vendor credits / overpayments.
-            from app.constants.enums import ExpenseStatus
+            # Expense doc-level: tax, count, outstanding. The open-balance
+            # predicate is shared with aged payables so credits never reduce AP.
 
             exp_meta_stmt = (
                 select(
@@ -457,10 +539,7 @@ class ReportsRepository:
                     func.count(Expense.id).label("cnt"),
                     func.coalesce(
                         func.sum(Expense.balance_due).filter(
-                            Expense.status.in_(
-                                [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]
-                            ),
-                            Expense.balance_due > 0,
+                            *_expense_outstanding_conds()
                         ),
                         Decimal("0"),
                     ).label("outstanding"),
@@ -487,7 +566,7 @@ class ReportsRepository:
                     func.count(PurchaseOrder.id).label("cnt"),
                     func.coalesce(
                         func.sum(PurchaseOrder.balance_due).filter(
-                            PurchaseOrder.status == PurchaseOrderStatus.SENT
+                            *_po_outstanding_conds()
                         ),
                         Decimal("0"),
                     ).label("outstanding"),
@@ -541,12 +620,13 @@ class ReportsRepository:
                 .join(Expense, ExpenseLineItem.expense_id == Expense.id)
                 .join(Vendor, Expense.vendor_id == Vendor.id)
                 .where(*exp_conds)
-                .group_by(Vendor.vendor_name)
+                .group_by(Vendor.id, Vendor.vendor_name)
             )
 
             # PO branch: vendor → PO subtotal sum
             po_branch = (
                 select(
+                    Vendor.id.label("vendor_id"),
                     Vendor.vendor_name.label("vendor_name"),
                     func.coalesce(func.sum(PurchaseOrder.subtotal), Decimal("0")).label(
                         "amount"
@@ -555,7 +635,7 @@ class ReportsRepository:
                 .select_from(PurchaseOrder)
                 .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
                 .where(*po_conds)
-                .group_by(Vendor.vendor_name)
+                .group_by(Vendor.id, Vendor.vendor_name)
             )
 
             # UNION ALL then re-aggregate
@@ -565,7 +645,7 @@ class ReportsRepository:
                     combined.c.vendor_name,
                     func.sum(combined.c.amount).label("amount"),
                 )
-                .group_by(combined.c.vendor_name)
+                .group_by(combined.c.vendor_id, combined.c.vendor_name)
                 .order_by(func.sum(combined.c.amount).desc())
                 .limit(limit)
             )
@@ -682,6 +762,20 @@ class ReportsRepository:
         sel = branches[0] if len(branches) == 1 else union_all(*branches)
         return sel.subquery("purchase_entries")
 
+    def _purchases_ledger_statement(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        source: str = "all",
+        search: str | None = None,
+    ) -> Select:
+        sub = self._purchases_subquery(
+            date_from, date_to, currency, source=source, search=search
+        )
+        return select(sub).order_by(sub.c.entry_date.desc(), sub.c.source_id.desc())
+
     def purchases_ledger(
         self,
         date_from: date,
@@ -693,14 +787,12 @@ class ReportsRepository:
         offset: int = 0,
         limit: int = 11,
     ) -> list:
-        """One over-fetched page of the purchases ledger. Stable sort: date DESC, id DESC."""
+        """Return one over-fetched purchases page in stable date/ID order."""
         try:
-            sub = self._purchases_subquery(
-                date_from, date_to, currency, source=source, search=search
-            )
             stmt = (
-                select(sub)
-                .order_by(sub.c.entry_date.desc(), sub.c.source_id.desc())
+                self._purchases_ledger_statement(
+                    date_from, date_to, currency, source=source, search=search
+                )
                 .offset(offset)
                 .limit(limit)
             )
@@ -708,6 +800,25 @@ class ReportsRepository:
         except SQLAlchemyError as exc:
             logger.exception("Database error in purchases_ledger")
             raise DatabaseException("Failed to load purchases ledger") from exc
+
+    def iter_purchases_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every matching purchase row in deterministic order."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            stmt = self._purchases_ledger_statement(date_from, date_to, currency)
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming purchases_ledger")
+            raise DatabaseException("Failed to export purchases ledger") from exc
 
     def purchases_ledger_total(
         self,
@@ -801,19 +912,17 @@ class ReportsRepository:
     def tax_by_type_sales(self, date_from: date, date_to: date, currency: str) -> list:
         """Sales VAT breakdown by tax_type.
 
-        Two branches:
-        1. Line-item tax: for invoices where vat_enabled=False (per-line tax).
-        2. Document-level VAT: for invoices where vat_enabled=True, line items
-           are neutralized to tax_type=no_tax/tax_amount=0. Map Invoice.vat_rate
-           to a tax_type string (same CASE logic as the PO branch in purchases).
-        UNION ALL then re-aggregate to merge any overlapping tax_type keys.
+        Document-level VAT participates even when its amount is zero, so a
+        zero-rated invoice remains visible. Rates outside the known enum are
+        classified as ``vat_custom`` rather than being mislabeled ``no_tax``.
         """
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
-            # Branch 1: line-item tax (non-document-level invoices)
+            line_tax_rate = _line_tax_rate(InvoiceLineItem.tax_type)
             line_branch = (
                 select(
                     InvoiceLineItem.tax_type.label("tax_type"),
+                    line_tax_rate.label("tax_rate"),
                     func.count(func.distinct(Invoice.id)).label("document_count"),
                     func.coalesce(
                         func.sum(InvoiceLineItem.tax_amount), Decimal("0")
@@ -822,19 +931,14 @@ class ReportsRepository:
                 .select_from(InvoiceLineItem)
                 .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
                 .where(*inv_conds, Invoice.vat_enabled.is_(False))
-                .group_by(InvoiceLineItem.tax_type)
+                .group_by(InvoiceLineItem.tax_type, line_tax_rate)
             )
 
-            # Branch 2: document-level VAT invoices
-            inv_tax_type = case(
-                (Invoice.vat_rate == Decimal("0.1600"), "vat_16"),
-                (Invoice.vat_rate == Decimal("0.0800"), "vat_8"),
-                (Invoice.vat_rate == Decimal("0.0000"), "vat_0"),
-                else_="no_tax",
-            )
+            inv_tax_type = _document_tax_type(Invoice.vat_rate)
             doc_branch = (
                 select(
                     inv_tax_type.label("tax_type"),
+                    Invoice.vat_rate.label("tax_rate"),
                     func.count(Invoice.id).label("document_count"),
                     func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
                         "tax_amount"
@@ -845,18 +949,23 @@ class ReportsRepository:
                     *inv_conds,
                     Invoice.vat_enabled.is_(True),
                 )
-                .group_by(inv_tax_type)
+                .group_by(inv_tax_type, Invoice.vat_rate)
             )
 
             combined = union_all(line_branch, doc_branch).subquery("sales_tax_by_type")
             stmt = (
                 select(
                     combined.c.tax_type,
+                    combined.c.tax_rate,
                     func.sum(combined.c.document_count).label("document_count"),
                     func.sum(combined.c.tax_amount).label("tax_amount"),
                 )
-                .group_by(combined.c.tax_type)
-                .order_by(func.sum(combined.c.tax_amount).desc())
+                .group_by(combined.c.tax_type, combined.c.tax_rate)
+                .order_by(
+                    func.sum(combined.c.tax_amount).desc(),
+                    combined.c.tax_type.asc(),
+                    combined.c.tax_rate.asc().nulls_last(),
+                )
             )
             return list(self._db.execute(stmt).all())
         except SQLAlchemyError as exc:
@@ -866,21 +975,16 @@ class ReportsRepository:
     def tax_by_type_purchases(
         self, date_from: date, date_to: date, currency: str
     ) -> list:
-        """Purchase VAT breakdown by tax_type.
-
-        Expenses: ExpenseLineItem.tax_amount grouped by line-level tax_type.
-        POs: PurchaseOrder.tax_total mapped to TaxType via vat_rate CASE expression.
-        PO line items always have tax_type=no_tax/tax_amount=0 by design
-        (neutralize_line_tax in financial.py). Use document-level tax_total instead.
-        vat_rate is stored as a fraction (e.g. 0.1600 for 16%).
-        """
+        """Purchase VAT breakdown by tax_type and rate."""
         exp_conds = _expense_conds(date_from, date_to, currency)
         po_conds = _po_conds(date_from, date_to, currency)
         try:
-            # Expense branch: per-line tax_type grouping (correct for expenses)
+            expense_tax_rate = _line_tax_rate(ExpenseLineItem.tax_type)
             exp_branch = (
                 select(
                     ExpenseLineItem.tax_type.label("tax_type"),
+                    expense_tax_rate.label("tax_rate"),
+                    func.count(func.distinct(Expense.id)).label("document_count"),
                     func.coalesce(
                         func.sum(ExpenseLineItem.tax_amount), Decimal("0")
                     ).label("tax_amount"),
@@ -888,38 +992,41 @@ class ReportsRepository:
                 .select_from(ExpenseLineItem)
                 .join(Expense, ExpenseLineItem.expense_id == Expense.id)
                 .where(*exp_conds)
-                .group_by(ExpenseLineItem.tax_type)
+                .group_by(ExpenseLineItem.tax_type, expense_tax_rate)
             )
 
             # PO branch: document-level tax, mapped to TaxType via vat_rate.
             # Include zero-rated POs so the breakdown keeps the document
             # even though its tax amount is zero.
-            po_tax_type = case(
-                (PurchaseOrder.vat_rate == Decimal("0.1600"), "vat_16"),
-                (PurchaseOrder.vat_rate == Decimal("0.0800"), "vat_8"),
-                (PurchaseOrder.vat_rate == Decimal("0.0000"), "vat_0"),
-                else_="no_tax",
-            )
+            po_tax_type = _document_tax_type(PurchaseOrder.vat_rate)
             po_branch = (
                 select(
                     po_tax_type.label("tax_type"),
+                    PurchaseOrder.vat_rate.label("tax_rate"),
+                    func.count(func.distinct(PurchaseOrder.id)).label("document_count"),
                     func.coalesce(
                         func.sum(PurchaseOrder.tax_total), Decimal("0")
                     ).label("tax_amount"),
                 )
                 .select_from(PurchaseOrder)
                 .where(*po_conds, PurchaseOrder.vat_enabled.is_(True))
-                .group_by(po_tax_type)
+                .group_by(po_tax_type, PurchaseOrder.vat_rate)
             )
 
             combined = union_all(exp_branch, po_branch).subquery("purchase_tax_by_type")
             stmt = (
                 select(
                     combined.c.tax_type,
+                    combined.c.tax_rate,
+                    func.sum(combined.c.document_count).label("document_count"),
                     func.sum(combined.c.tax_amount).label("tax_amount"),
                 )
-                .group_by(combined.c.tax_type)
-                .order_by(func.sum(combined.c.tax_amount).desc())
+                .group_by(combined.c.tax_type, combined.c.tax_rate)
+                .order_by(
+                    func.sum(combined.c.tax_amount).desc(),
+                    combined.c.tax_type.asc(),
+                    combined.c.tax_rate.asc().nulls_last(),
+                )
             )
             return list(self._db.execute(stmt).all())
         except SQLAlchemyError as exc:
@@ -936,7 +1043,6 @@ class ReportsRepository:
         computation is done server-side at query time.
         Only outstanding invoices: SENT / PARTIAL / OVERDUE with balance_due > 0.
         """
-        from app.constants.enums import InvoiceStatus
 
         entity = customer_display_name()
         days_late = func.current_date() - Invoice.due_date
@@ -951,6 +1057,7 @@ class ReportsRepository:
         try:
             stmt = (
                 select(
+                    Customer.id.label("customer_id"),
                     entity.label("customer_name"),
                     bucket,
                     func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
@@ -960,18 +1067,11 @@ class ReportsRepository:
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(
-                    Invoice.status.in_(
-                        [
-                            InvoiceStatus.SENT,
-                            InvoiceStatus.PARTIAL,
-                            InvoiceStatus.OVERDUE,
-                        ]
-                    ),
-                    Invoice.balance_due > 0,
+                    *_invoice_outstanding_conds(),
                     Invoice.currency == currency,
                 )
-                .group_by(entity, bucket)
-                .order_by(entity.asc(), bucket.asc())
+                .group_by(Customer.id, entity, bucket)
+                .order_by(entity.asc(), Customer.id.asc(), bucket.asc())
             )
             return list(self._db.execute(stmt).all())
         except SQLAlchemyError as exc:
@@ -984,7 +1084,6 @@ class ReportsRepository:
         Used for the MetricCards at the top of the Aged Receivables tab.
         Returns {bucket_key: Decimal}.
         """
-        from app.constants.enums import InvoiceStatus
 
         days_late = func.current_date() - Invoice.due_date
         bucket = case(
@@ -1005,14 +1104,7 @@ class ReportsRepository:
                 )
                 .select_from(Invoice)
                 .where(
-                    Invoice.status.in_(
-                        [
-                            InvoiceStatus.SENT,
-                            InvoiceStatus.PARTIAL,
-                            InvoiceStatus.OVERDUE,
-                        ]
-                    ),
-                    Invoice.balance_due > 0,
+                    *_invoice_outstanding_conds(),
                     Invoice.currency == currency,
                 )
                 .group_by(bucket)
@@ -1036,7 +1128,6 @@ class ReportsRepository:
         sentinel pagination (no COUNT needed).
         days_overdue: negative = not yet due; 0 = due today; positive = overdue.
         """
-        from app.constants.enums import InvoiceStatus
 
         entity = customer_display_name()
         days_late = func.current_date() - Invoice.due_date
@@ -1067,14 +1158,7 @@ class ReportsRepository:
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
                 .where(
-                    Invoice.status.in_(
-                        [
-                            InvoiceStatus.SENT,
-                            InvoiceStatus.PARTIAL,
-                            InvoiceStatus.OVERDUE,
-                        ]
-                    ),
-                    Invoice.balance_due > 0,
+                    *_invoice_outstanding_conds(),
                     Invoice.currency == currency,
                 )
                 .order_by(Invoice.due_date.asc(), Invoice.id.desc())
@@ -1093,9 +1177,8 @@ class ReportsRepository:
 
         Expenses: buckets by due_date.
         POs: always "current" — PurchaseOrder has no due_date field.
-        Returns rows with columns: vendor_name, bucket, amount.
+        Returns rows with columns: vendor_id, vendor_name, bucket, amount.
         """
-        from app.constants.enums import ExpenseStatus, PurchaseOrderStatus
 
         # Expense branch: bucket by due_date
         exp_days_late = func.current_date() - Expense.due_date
@@ -1117,16 +1200,16 @@ class ReportsRepository:
             .select_from(Expense)
             .join(Vendor, Expense.vendor_id == Vendor.id)
             .where(
-                Expense.status.in_([ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]),
-                Expense.balance_due > 0,
+                *_expense_outstanding_conds(),
                 Expense.currency == currency,
             )
-            .group_by(Vendor.vendor_name, exp_bucket)
+            .group_by(Vendor.vendor_id, Vendor.vendor_name, exp_bucket)
         )
 
         # PO branch: always "current" (no due_date on PurchaseOrder)
         po_branch = (
             select(
+                Vendor.vendor_id.label("vendor_id"),
                 Vendor.vendor_name.label("vendor_name"),
                 literal("current").label("bucket"),
                 func.coalesce(func.sum(PurchaseOrder.balance_due), Decimal("0")).label(
@@ -1136,23 +1219,29 @@ class ReportsRepository:
             .select_from(PurchaseOrder)
             .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
             .where(
-                PurchaseOrder.status == PurchaseOrderStatus.SENT,
-                PurchaseOrder.balance_due > 0,
+                *_po_outstanding_conds(),
                 PurchaseOrder.currency == currency,
             )
-            .group_by(Vendor.vendor_name)
+            .group_by(Vendor.vendor_id, Vendor.vendor_name)
         )
 
         try:
             combined = union_all(exp_branch, po_branch).subquery("payables_flat")
             stmt = (
                 select(
+                    combined.c.vendor_id,
                     combined.c.vendor_name,
                     combined.c.bucket,
                     func.sum(combined.c.amount).label("amount"),
                 )
-                .group_by(combined.c.vendor_name, combined.c.bucket)
-                .order_by(combined.c.vendor_name.asc(), combined.c.bucket.asc())
+                .group_by(
+                    combined.c.vendor_id, combined.c.vendor_name, combined.c.bucket
+                )
+                .order_by(
+                    combined.c.vendor_name.asc(),
+                    combined.c.vendor_id.asc(),
+                    combined.c.bucket.asc(),
+                )
             )
             return list(self._db.execute(stmt).all())
         except SQLAlchemyError as exc:
@@ -1165,7 +1254,6 @@ class ReportsRepository:
         Used for the 5 MetricCards on the Aged Payables tab.
         Returns {bucket_key: Decimal}.
         """
-        from app.constants.enums import ExpenseStatus, PurchaseOrderStatus
 
         exp_days_late = func.current_date() - Expense.due_date
         exp_bucket = case(
@@ -1184,8 +1272,7 @@ class ReportsRepository:
             )
             .select_from(Expense)
             .where(
-                Expense.status.in_([ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]),
-                Expense.balance_due > 0,
+                *_expense_outstanding_conds(),
                 Expense.currency == currency,
             )
             .group_by(exp_bucket)
@@ -1199,8 +1286,7 @@ class ReportsRepository:
             )
             .select_from(PurchaseOrder)
             .where(
-                PurchaseOrder.status == PurchaseOrderStatus.SENT,
-                PurchaseOrder.balance_due > 0,
+                *_po_outstanding_conds(),
                 PurchaseOrder.currency == currency,
             )
         )
@@ -1231,7 +1317,6 @@ class ReportsRepository:
              days_overdue = 0.
         Ordered oldest-due first.
         """
-        from app.constants.enums import ExpenseStatus, PurchaseOrderStatus
 
         exp_days_late = func.current_date() - Expense.due_date
         exp_bucket = case(
@@ -1261,8 +1346,7 @@ class ReportsRepository:
             .select_from(Expense)
             .join(Vendor, Expense.vendor_id == Vendor.id)
             .where(
-                Expense.status.in_([ExpenseStatus.PENDING, ExpenseStatus.OVERDUE]),
-                Expense.balance_due > 0,
+                *_expense_outstanding_conds(),
                 Expense.currency == currency,
             )
         )
@@ -1286,8 +1370,7 @@ class ReportsRepository:
             .select_from(PurchaseOrder)
             .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
             .where(
-                PurchaseOrder.status == PurchaseOrderStatus.SENT,
-                PurchaseOrder.balance_due > 0,
+                *_po_outstanding_conds(),
                 PurchaseOrder.currency == currency,
             )
         )

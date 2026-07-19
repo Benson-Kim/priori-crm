@@ -77,6 +77,7 @@ export default function PurchasesReportPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const {
     data: agedData,
@@ -159,10 +160,11 @@ export default function PurchasesReportPage() {
     if (!isReportPeriodReady(period)) return;
     setLedgerError(null);
     setIsExporting(true);
+    setExportError(null);
     try {
       await exportPurchasesReport(period, currency);
     } catch (err: unknown) {
-      setLedgerError(
+      setExportError(
         err instanceof Error ? err.message : "Failed to export purchases report"
       );
     } finally {
@@ -223,11 +225,14 @@ export default function PurchasesReportPage() {
               aria-label="Currency"
             />
           </div>
-
         </div>
-
-
       </div>
+
+      {exportError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          {exportError}
+        </div>
+      )}
 
       {/* Summary tab */}
       {activeTab === "summary" && (
@@ -265,7 +270,7 @@ export default function PurchasesReportPage() {
                         },
                       ]}
                       data={summary.spend_by_vendor}
-                      rowKey={(r) => (r as { vendor_name: string }).vendor_name}
+                      rowKey={(r) => (r as { vendor_name: string }).vendor_id}
                       emptyMessage="No vendor data for this period."
                     />
                   </div>
@@ -443,7 +448,7 @@ export default function PurchasesReportPage() {
                       { key: "total", header: `Total (${currency})`, sortKey: "total", className: "text-right font-semibold", render: (r) => fmt((r as AgedPayableRow).total) },
                     ]}
                     data={sortedAged as unknown as AgedPayableRow[]}
-                    rowKey={(r) => (r as AgedPayableRow).vendor_name}
+                    rowKey={(r) => (r as AgedPayableRow).vendor_id}
                     sortable
                     sortKey={agedSortKey ?? undefined}
                     sortDirection={agedSortDir}

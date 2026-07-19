@@ -72,6 +72,7 @@ export default function SalesReportPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const {
     data: agedData,
@@ -155,10 +156,11 @@ export default function SalesReportPage() {
     setLedgerError(null);
     if (!isReportPeriodReady(period)) return;
     setIsExporting(true);
+    setExportError(null);
     try {
       await exportSalesReport(period, currency);
     } catch (err: unknown) {
-      setLedgerError(
+      setExportError(
         err instanceof Error ? err.message : "Failed to export sales report"
       );
     } finally {
@@ -210,6 +212,12 @@ export default function SalesReportPage() {
           />
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          {exportError}
+        </div>
+      )}
 
       {/* Summary tab */}
       {activeTab === "summary" && (
@@ -391,7 +399,7 @@ export default function SalesReportPage() {
                       { key: "total", header: `Total (${currency})`, sortKey: "total", className: "text-right font-semibold", render: (r) => fmt((r as AgedReceivableRow).total) },
                     ]}
                     data={sortedAged as unknown as AgedReceivableRow[]}
-                    rowKey={(r) => (r as AgedReceivableRow).customer_name}
+                    rowKey={(r) => (r as AgedReceivableRow).customer_id}
                     sortable
                     sortKey={agedSortKey ?? undefined}
                     sortDirection={agedSortDir}

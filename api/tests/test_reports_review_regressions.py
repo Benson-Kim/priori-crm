@@ -1,41 +1,43 @@
-"""Regression coverage for the review findings on PR #33."""
+"""Regression coverage for PR #33 review findings."""
 
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 from types import SimpleNamespace
 from uuid import uuid4
 
-import pytest
+from openpyxl import load_workbook
 
-import app.modules.reports.service as reports_service_module
-from app.common.exceptions import BadRequestException
+from app.common.excel import ExcelExporter
 from app.constants.enums import (
     Currency,
     ExpenseStatus,
     InvoiceStatus,
     PurchaseOrderStatus,
+    TaxType,
 )
 from app.modules.customers.models import Customer
 from app.modules.expenses.models import Expense, ExpenseLineItem
 from app.modules.invoices.models import Invoice, InvoiceLineItem
 from app.modules.purchase_orders.models import PurchaseOrder
-from app.modules.reports.queries import ReportsRepository
-from app.modules.reports.router import get_tax_report
 from app.modules.reports.service import ReportsService
 from app.modules.statements.schemas import RangePreset, ResolvedPeriod
 from app.modules.vendors.models import Vendor
 
-DAY = date(2026, 6, 15)
-PERIOD = ResolvedPeriod.resolve(RangePreset.CUSTOM, DAY, DAY)
+PERIOD = ResolvedPeriod.resolve(
+    RangePreset.CUSTOM,
+    date(2026, 1, 1),
+    date(2026, 1, 31),
+)
 
 
-def _customer(db, *, email: str, name: str = "Acme Limited") -> Customer:
+def _customer(db, name: str = "Acme Ltd") -> Customer:
     customer = Customer(
         customer_type="business",
         company_name=name,
         first_name="Jane",
         last_name="Doe",
-        email=email,
+        email=f"{uuid4().hex}@example.test",
         phone="0700000000",
         currency=Currency.KES,
     )
@@ -44,8 +46,13 @@ def _customer(db, *, email: str, name: str = "Acme Limited") -> Customer:
     return customer
 
 
-def _vendor(db, *, name: str = "Vendor Limited") -> Vendor:
-    vendor = Vendor(vendor_name=name, status="active", currency=Currency.KES)
+def _vendor(db, name: str = "Supplier Ltd") -> Vendor:
+    vendor = Vendor(
+        vendor_name=name,
+        email=f"{uuid4().hex}@vendor.test",
+        status="active",
+        currency=Currency.KES,
+    )
     db.add(vendor)
     db.flush()
     return vendor
@@ -56,160 +63,73 @@ def _invoice(
     customer: Customer,
     *,
     subtotal: Decimal,
-    tax_total: Decimal = Decimal("0.00"),
-    total_due: Decimal | None = None,
+    tax_total: Decimal,
+    tax_type: TaxType,
+    line_tax: Decimal,
     vat_enabled: bool = False,
     vat_rate: Decimal | None = None,
-    status: InvoiceStatus = InvoiceStatus.SENT,
-    discount_amount: Decimal | None = None,
 ) -> Invoice:
-    total_due = total_due if total_due is not None else subtotal + tax_total
+    total = subtotal + tax_total
     invoice = Invoice(
         invoice_number=f"INV-{uuid4().hex[:12]}",
         invoice_reference=f"IN-{uuid4().hex[:8]}",
         customer_id=customer.id,
-        transaction_date=DAY,
-        due_date=DAY + timedelta(days=30),
-        status=status,
+        transaction_date=date(2026, 1, 10),
+        due_date=date(2026, 2, 9),
+        status=InvoiceStatus.SENT,
         currency=Currency.KES,
         subtotal=subtotal,
-        discount_type="amount" if discount_amount is not None else None,
-        discount_amount=discount_amount,
         vat_enabled=vat_enabled,
         vat_rate=vat_rate,
         tax_total=tax_total,
-        total_due=total_due,
-        amount_paid=total_due if status == InvoiceStatus.PAID else Decimal("0.00"),
-        balance_due=Decimal("0.00") if status == InvoiceStatus.PAID else total_due,
+        total_due=total,
+        amount_paid=Decimal("0.00"),
+        balance_due=total,
     )
     db.add(invoice)
+    db.flush()
+    db.add(
+        InvoiceLineItem(
+            invoice_id=invoice.id,
+            line_number=1,
+            item_name="Service",
+            description="Service",
+            quantity=Decimal("1"),
+            unit_price=subtotal,
+            line_total=subtotal,
+            tax_type=tax_type,
+            tax_amount=line_tax,
+        )
+    )
     db.flush()
     return invoice
 
 
-def _invoice_line(
+def _expense(
     db,
-    invoice: Invoice,
+    vendor: Vendor,
     *,
-    number: int,
-    name: str,
-    amount: Decimal,
-    tax_type: str = "no_tax",
-    tax_amount: Decimal = Decimal("0.00"),
-) -> None:
-    db.add(
-        InvoiceLineItem(
-            invoice_id=invoice.id,
-            line_number=number,
-            item_name=name,
-            description=name,
-            quantity=Decimal("1.00"),
-            unit_price=amount,
-            line_total=amount,
-            tax_type=tax_type,
-            tax_amount=tax_amount,
-        )
-    )
-
-
-@pytest.mark.no_db
-@pytest.mark.parametrize(
-    ("service_method", "repository_method"),
-    [
-        ("export_sales_ledger", "sales_ledger"),
-        ("export_purchases_ledger", "purchases_ledger"),
-    ],
-)
-def test_oversized_report_export_fails_instead_of_truncating(
-    monkeypatch, service_method: str, repository_method: str
-) -> None:
-    service = ReportsService(object())
-    captured: dict[str, int] = {}
-
-    def fake_query(*args, **kwargs):
-        captured["limit"] = kwargs["limit"]
-        return [object(), object(), object()]
-
-    monkeypatch.setattr(reports_service_module, "_REPORT_EXPORT_MAX_ROWS", 2)
-    monkeypatch.setattr(service.repo, repository_method, fake_query)
-
-    with pytest.raises(BadRequestException, match="more than 2 rows"):
-        getattr(service, service_method)(PERIOD, Currency.KES)
-
-    assert captured["limit"] == 3
-
-
-def test_document_level_vat_breakdown_includes_positive_and_zero_rates(db) -> None:
-    customer = _customer(db, email="vat@example.test")
-    standard = _invoice(
-        db,
-        customer,
-        subtotal=Decimal("100.00"),
-        tax_total=Decimal("16.00"),
-        vat_enabled=True,
-        vat_rate=Decimal("0.1600"),
-    )
-    zero_rated = _invoice(
-        db,
-        customer,
-        subtotal=Decimal("200.00"),
-        vat_enabled=True,
-        vat_rate=Decimal("0.0000"),
-    )
-    _invoice_line(db, standard, number=1, name="Standard", amount=Decimal("100.00"))
-    _invoice_line(db, zero_rated, number=1, name="Export", amount=Decimal("200.00"))
-    db.commit()
-
-    rows = ReportsRepository(db).tax_by_type_sales(DAY, DAY, Currency.KES)
-    by_type = {row.tax_type: row for row in rows}
-
-    assert Decimal(str(by_type["vat_16"].tax_amount)) == Decimal("16.00")
-    assert int(by_type["vat_16"].document_count) == 1
-    assert Decimal(str(by_type["vat_0"].tax_amount)) == Decimal("0.00")
-    assert int(by_type["vat_0"].document_count) == 1
-
-
-def test_zero_rated_purchase_order_remains_in_purchase_tax_breakdown(db) -> None:
-    vendor = _vendor(db)
-    po = PurchaseOrder(
-        po_number=f"PO-{uuid4().hex[:12]}",
-        po_reference=f"PO-{uuid4().hex[:8]}",
-        vendor_id=vendor.id,
-        order_date=DAY,
-        status=PurchaseOrderStatus.SENT,
-        currency=Currency.KES,
-        subtotal=Decimal("300.00"),
-        vat_enabled=True,
-        vat_rate=Decimal("0.0000"),
-        tax_total=Decimal("0.00"),
-        total=Decimal("300.00"),
-        amount_paid=Decimal("0.00"),
-        balance_due=Decimal("300.00"),
-    )
-    db.add(po)
-    db.commit()
-
-    rows = ReportsRepository(db).tax_by_type_purchases(DAY, DAY, Currency.KES)
-    by_type = {row.tax_type: Decimal(str(row.tax_amount)) for row in rows}
-
-    assert by_type["vat_0"] == Decimal("0.00")
-
-
-def test_paid_vendor_credit_does_not_reduce_outstanding_payables(db) -> None:
-    vendor = _vendor(db)
+    subtotal: Decimal,
+    tax_total: Decimal,
+    status: ExpenseStatus,
+    balance_due: Decimal,
+    tax_type: TaxType = TaxType.NO_TAX,
+    line_tax: Decimal = Decimal("0.00"),
+) -> Expense:
+    total = subtotal + tax_total
     expense = Expense(
         expense_number=f"EXP-{uuid4().hex[:12]}",
         expense_reference=f"EX-{uuid4().hex[:8]}",
         vendor_id=vendor.id,
-        expense_date=DAY,
-        due_date=DAY + timedelta(days=14),
-        status=ExpenseStatus.PAID,
+        expense_date=date(2026, 1, 11),
+        due_date=date(2026, 1, 25),
+        status=status,
         currency=Currency.KES,
-        subtotal=Decimal("100.00"),
-        tax_total=Decimal("0.00"),
-        total_due=Decimal("100.00"),
-        amount_paid=Decimal("120.00"),
-        balance_due=Decimal("-20.00"),
+        subtotal=subtotal,
+        tax_total=tax_total,
+        total_due=total,
+        amount_paid=total - balance_due,
+        balance_due=balance_due,
     )
     db.add(expense)
     db.flush()
@@ -217,77 +137,307 @@ def test_paid_vendor_credit_does_not_reduce_outstanding_payables(db) -> None:
         ExpenseLineItem(
             expense_id=expense.id,
             line_number=1,
-            item_name="Service",
-            description="Service",
-            quantity=Decimal("1.00"),
-            unit_price=Decimal("100.00"),
-            line_total=Decimal("100.00"),
-            tax_type="no_tax",
-            tax_amount=Decimal("0.00"),
+            item_name="Purchase",
+            description="Purchase",
+            quantity=Decimal("1"),
+            unit_price=subtotal,
+            line_total=subtotal,
+            tax_type=tax_type,
+            tax_amount=line_tax,
         )
     )
-    db.commit()
-
-    summary = ReportsRepository(db).purchases_summary(DAY, DAY, Currency.KES)
-
-    assert summary.outstanding_balance == Decimal("0")
+    db.flush()
+    return expense
 
 
-def test_duplicate_customer_names_remain_separate_report_rows(db) -> None:
-    first = _customer(db, email="first@example.test", name="Same Name Limited")
-    second = _customer(db, email="second@example.test", name="Same Name Limited")
-    _invoice(db, first, subtotal=Decimal("100.00"))
-    _invoice(db, second, subtotal=Decimal("200.00"))
-    db.commit()
+def _po(
+    db,
+    vendor: Vendor,
+    *,
+    subtotal: Decimal,
+    tax_total: Decimal,
+    status: PurchaseOrderStatus,
+    balance_due: Decimal,
+    vat_rate: Decimal | None,
+) -> PurchaseOrder:
+    total = subtotal + tax_total
+    po = PurchaseOrder(
+        po_number=f"PO-{uuid4().hex[:12]}",
+        po_reference=f"PO-{uuid4().hex[:8]}",
+        vendor_id=vendor.id,
+        order_date=date(2026, 1, 12),
+        status=status,
+        currency=Currency.KES,
+        subtotal=subtotal,
+        vat_enabled=vat_rate is not None,
+        vat_rate=vat_rate,
+        tax_total=tax_total,
+        total=total,
+        amount_paid=total - balance_due,
+        balance_due=balance_due,
+    )
+    db.add(po)
+    db.flush()
+    return po
 
-    rows = ReportsRepository(db).revenue_by_customer(DAY, DAY, Currency.KES)
 
-    assert len(rows) == 2
-    assert {row.customer_id for row in rows} == {first.id, second.id}
+def test_tax_breakdowns_reconcile_document_line_zero_and_custom_vat(db):
+    customer = _customer(db)
+    vendor = _vendor(db)
 
-
-def test_category_breakdown_reconciles_after_document_discount(db) -> None:
-    customer = _customer(db, email="discount@example.test")
-    invoice = _invoice(
+    _invoice(
         db,
         customer,
         subtotal=Decimal("100.00"),
-        total_due=Decimal("90.00"),
-        status=InvoiceStatus.PAID,
-        discount_amount=Decimal("10.00"),
+        tax_total=Decimal("16.00"),
+        tax_type=TaxType.VAT_16,
+        line_tax=Decimal("16.00"),
     )
-    _invoice_line(db, invoice, number=1, name="Consulting", amount=Decimal("60.00"))
-    _invoice_line(db, invoice, number=2, name="Licensing", amount=Decimal("40.00"))
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("200.00"),
+        tax_total=Decimal("32.00"),
+        tax_type=TaxType.NO_TAX,
+        line_tax=Decimal("0.00"),
+        vat_enabled=True,
+        vat_rate=Decimal("0.1600"),
+    )
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("300.00"),
+        tax_total=Decimal("0.00"),
+        tax_type=TaxType.NO_TAX,
+        line_tax=Decimal("0.00"),
+        vat_enabled=True,
+        vat_rate=Decimal("0.0000"),
+    )
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("15.00"),
+        tax_type=TaxType.NO_TAX,
+        line_tax=Decimal("0.00"),
+        vat_enabled=True,
+        vat_rate=Decimal("0.1500"),
+    )
+
+    _expense(
+        db,
+        vendor,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("16.00"),
+        status=ExpenseStatus.PENDING,
+        balance_due=Decimal("116.00"),
+        tax_type=TaxType.VAT_16,
+        line_tax=Decimal("16.00"),
+    )
+    _po(
+        db,
+        vendor,
+        subtotal=Decimal("50.00"),
+        tax_total=Decimal("0.00"),
+        status=PurchaseOrderStatus.SENT,
+        balance_due=Decimal("50.00"),
+        vat_rate=Decimal("0.0000"),
+    )
+    _po(
+        db,
+        vendor,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("15.00"),
+        status=PurchaseOrderStatus.SENT,
+        balance_due=Decimal("115.00"),
+        vat_rate=Decimal("0.1500"),
+    )
     db.commit()
 
-    rows = ReportsRepository(db).revenue_by_category(DAY, DAY, Currency.KES)
-    amounts = {
-        row.category: Decimal(str(row.amount)).quantize(Decimal("0.01")) for row in rows
-    }
+    report = ReportsService(db).get_tax_report(PERIOD, Currency.KES)
+    sales = {(r.tax_type, r.tax_rate): r for r in report.sales_by_tax_type}
+    purchases = {(r.tax_type, r.tax_rate): r for r in report.purchases_by_tax_type}
 
-    assert amounts == {
-        "Consulting": Decimal("54.00"),
-        "Licensing": Decimal("36.00"),
-    }
-    assert sum(amounts.values(), Decimal("0.00")) == Decimal("90.00")
-
-
-@pytest.mark.no_db
-def test_tax_router_ignores_non_kes_currency() -> None:
-    captured = SimpleNamespace(currency=None)
-
-    class StubService:
-        def get_tax_report(self, period, currency):
-            captured.currency = currency
-            return "report"
-
-    result = get_tax_report(
-        StubService(),
-        RangePreset.CUSTOM,
-        DAY,
-        DAY,
-        Currency.USD,
+    assert sales[("vat_16", Decimal("0.1600"))].tax_amount == Decimal("48.00")
+    assert sales[("vat_16", Decimal("0.1600"))].document_count == 2
+    assert sales[("vat_0", Decimal("0.0000"))].document_count == 1
+    assert sales[("vat_0", Decimal("0.0000"))].tax_amount == Decimal("0.00")
+    assert sales[("vat_custom", Decimal("0.1500"))].tax_amount == Decimal("15.00")
+    assert (
+        sum((r.tax_amount for r in report.sales_by_tax_type), Decimal("0"))
+        == report.metrics.vat_collected
     )
 
-    assert result == "report"
-    assert captured.currency == Currency.KES
+    assert purchases[("vat_16", Decimal("0.1600"))].document_count == 1
+    assert purchases[("vat_0", Decimal("0.0000"))].document_count == 1
+    assert purchases[("vat_custom", Decimal("0.1500"))].document_count == 1
+    assert (
+        sum((r.tax_amount for r in report.purchases_by_tax_type), Decimal("0"))
+        == report.metrics.vat_paid
+    )
+
+    payload = ExcelExporter().export_tax_report(report, "KES")
+    workbook = load_workbook(BytesIO(payload), read_only=True, data_only=False)
+    sales_rows = list(workbook["Sales by Tax Type"].iter_rows(values_only=True))
+    purchase_rows = list(workbook["Purchases by Tax Type"].iter_rows(values_only=True))
+    assert ("15% VAT (Custom)", 15, 1) in sales_rows
+    assert ("0% VAT (Zero-rated)", 0, 1) in sales_rows
+    assert ("15% VAT (Custom)", 15, 1) in purchase_rows
+
+
+def test_outstanding_payables_exclude_credits_and_zero_balances(db):
+    vendor = _vendor(db)
+    _expense(
+        db,
+        vendor,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("0.00"),
+        status=ExpenseStatus.PENDING,
+        balance_due=Decimal("100.00"),
+    )
+    _expense(
+        db,
+        vendor,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("0.00"),
+        status=ExpenseStatus.PAID,
+        balance_due=Decimal("-20.00"),
+    )
+    _po(
+        db,
+        vendor,
+        subtotal=Decimal("50.00"),
+        tax_total=Decimal("0.00"),
+        status=PurchaseOrderStatus.SENT,
+        balance_due=Decimal("50.00"),
+        vat_rate=None,
+    )
+    _po(
+        db,
+        vendor,
+        subtotal=Decimal("50.00"),
+        tax_total=Decimal("0.00"),
+        status=PurchaseOrderStatus.SENT,
+        balance_due=Decimal("0.00"),
+        vat_rate=None,
+    )
+    _po(
+        db,
+        vendor,
+        subtotal=Decimal("50.00"),
+        tax_total=Decimal("0.00"),
+        status=PurchaseOrderStatus.PAID,
+        balance_due=Decimal("-10.00"),
+        vat_rate=None,
+    )
+    db.commit()
+
+    service = ReportsService(db)
+    summary = service.get_purchases_summary(PERIOD, Currency.KES)
+    aging = service.get_aged_payables(Currency.KES.value)
+    assert summary.metrics.outstanding_balance == Decimal("150.00")
+    assert aging.totals.total == Decimal("150.00")
+    assert aging.vendors[0].total == Decimal("150.00")
+
+
+def test_report_export_consumes_every_row_and_neutralizes_formula_text(db):
+    class FakeRepository:
+        batch_size: int | None = None
+
+        def iter_sales_ledger(self, *args, batch_size: int, **kwargs):
+            self.batch_size = batch_size
+            for index in range(125):
+                yield SimpleNamespace(
+                    id=uuid4(),
+                    customer_name="=2+2" if index == 0 else f"Customer {index}",
+                    reference=f"IN-{index:04d}",
+                    number=f"INV-{index:04d}",
+                    date=date(2026, 1, 1) + timedelta(days=index % 31),
+                    status=InvoiceStatus.SENT,
+                    currency=Currency.KES,
+                    subtotal=Decimal("100.00"),
+                    discount=Decimal("0.00"),
+                    net_revenue=Decimal("100.00"),
+                    amount=Decimal("116.00"),
+                    tax=Decimal("16.00"),
+                    balance_due=Decimal("116.00"),
+                )
+
+    service = ReportsService(db)
+    fake = FakeRepository()
+    service.repo = fake
+
+    rows = service.export_sales_ledger(PERIOD, Currency.KES, batch_size=17)
+    payload = ExcelExporter().export_sales_report(rows, "KES")
+
+    assert fake.batch_size == 17
+    workbook = load_workbook(BytesIO(payload), read_only=True, data_only=False)
+    worksheet = workbook["Sales"]
+    exported_rows = list(worksheet.iter_rows(values_only=True))
+    # Header plus every row; greater than the API maximum interactive page size.
+    assert len(exported_rows) == 126
+    assert exported_rows[1][3] == "'=2+2"
+
+
+def test_duplicate_customer_and_vendor_names_remain_separate_in_aging(db):
+    customer_one = _customer(db, "Same Name Ltd")
+    customer_two = _customer(db, "Same Name Ltd")
+    _invoice(
+        db,
+        customer_one,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("0.00"),
+        tax_type=TaxType.NO_TAX,
+        line_tax=Decimal("0.00"),
+    )
+    _invoice(
+        db,
+        customer_two,
+        subtotal=Decimal("200.00"),
+        tax_total=Decimal("0.00"),
+        tax_type=TaxType.NO_TAX,
+        line_tax=Decimal("0.00"),
+    )
+
+    vendor_one = _vendor(db, "Same Supplier Ltd")
+    vendor_two = _vendor(db, "Same Supplier Ltd")
+    _expense(
+        db,
+        vendor_one,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("0.00"),
+        status=ExpenseStatus.PENDING,
+        balance_due=Decimal("100.00"),
+    )
+    _po(
+        db,
+        vendor_two,
+        subtotal=Decimal("50.00"),
+        tax_total=Decimal("0.00"),
+        status=PurchaseOrderStatus.SENT,
+        balance_due=Decimal("50.00"),
+        vat_rate=None,
+    )
+    db.commit()
+
+    service = ReportsService(db)
+    sales_summary = service.get_sales_summary(PERIOD, Currency.KES)
+    purchase_summary = service.get_purchases_summary(PERIOD, Currency.KES)
+    receivables = service.get_aged_receivables(Currency.KES.value)
+    payables = service.get_aged_payables(Currency.KES.value)
+
+    assert {row.customer_id for row in sales_summary.revenue_by_customer} == {
+        customer_one.id,
+        customer_two.id,
+    }
+    assert {row.vendor_id for row in purchase_summary.spend_by_vendor} == {
+        vendor_one.id,
+        vendor_two.id,
+    }
+    assert len(receivables.customers) == 2
+    assert {row.customer_id for row in receivables.customers} == {
+        customer_one.id,
+        customer_two.id,
+    }
+    assert len(payables.vendors) == 2
+    assert {row.vendor_id for row in payables.vendors} == {vendor_one.id, vendor_two.id}

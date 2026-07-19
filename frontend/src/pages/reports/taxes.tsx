@@ -11,9 +11,10 @@
 
 import {
   exportTaxReport,
+  formatTaxTypeLabel,
   getTaxReport,
-  TAX_TYPE_LABELS,
-  type TaxReportResponse,
+  type TaxByTypeRow,
+  type TaxReportResponse
 } from "@/services/reportsApi";
 import { useEffect, useState } from "react";
 
@@ -32,6 +33,7 @@ export default function TaxReportPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReportPeriodReady(period)) return;
@@ -54,10 +56,11 @@ export default function TaxReportPage() {
   const handleExport = async () => {
     if (!isReportPeriodReady(period)) return;
     setIsExporting(true);
+    setExportError(null);
     try {
       await exportTaxReport(period);
-    } catch {
-      // silent
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : "Failed to export tax report");
     } finally {
       setIsExporting(false);
     }
@@ -66,15 +69,15 @@ export default function TaxReportPage() {
   const salesRows = data?.sales_by_tax_type ?? [];
   const purchasesRows = data?.purchases_by_tax_type ?? [];
 
-  type TaxRow = { tax_type: string; tax_amount: string; document_count: number; label: string };
+  type TaxRow = TaxByTypeRow & { label: string };
 
   const salesData: TaxRow[] = salesRows.map((r) => ({
     ...r,
-    label: TAX_TYPE_LABELS[r.tax_type] ?? r.tax_type,
+    label: formatTaxTypeLabel(r),
   }));
   const purchasesData: TaxRow[] = purchasesRows.map((r) => ({
     ...r,
-    label: TAX_TYPE_LABELS[r.tax_type] ?? r.tax_type,
+    label: formatTaxTypeLabel(r),
   }));
 
   const { sortedData: sortedSales, sortKey: sSortKey, sortDirection: sSortDir, handleSort: sHandleSort } =
@@ -85,7 +88,25 @@ export default function TaxReportPage() {
   const fmt = (v: string | undefined) => formatCurrency(Number(v ?? 0), "KES");
 
   const netVat = Number(data?.metrics.net_vat ?? 0);
-  const netVatPositive = netVat > 0;
+  const netVatStatus = netVat > 0 ? "payable" : netVat < 0 ? "credit" : "balanced";
+  const netVatClass =
+    netVatStatus === "payable"
+      ? "border-amber-200 bg-amber-50"
+      : netVatStatus === "credit"
+        ? "border-emerald-200 bg-emerald-50"
+        : "border-gray-200 bg-gray-50";
+  const netVatBadgeClass =
+    netVatStatus === "payable"
+      ? "bg-amber-100 text-amber-700"
+      : netVatStatus === "credit"
+        ? "bg-emerald-100 text-emerald-700"
+        : "bg-gray-200 text-gray-700";
+  const netVatLabel =
+    netVatStatus === "payable"
+      ? "Payable to KRA"
+      : netVatStatus === "credit"
+        ? "Excess input VAT"
+        : "Balanced";
 
   return (
     <div className="flex flex-col space-y-6">
@@ -107,9 +128,9 @@ export default function TaxReportPage() {
         </Button>
       </div>
 
-      {error && (
+      {(error || exportError) && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
+          {error ?? exportError}
         </div>
       )}
 
@@ -130,10 +151,10 @@ export default function TaxReportPage() {
               change={null}
             />
             <div
-              className={`relative flex flex-col justify-between rounded-2xl border px-6 py-3 ${netVatPositive
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-emerald-200 bg-emerald-50"
-                }`}
+              className={[
+                "relative flex flex-col justify-between rounded-2xl border px-6 py-3",
+                netVatClass,
+              ].join(" ")}
             >
               <p className="text-gray-500 text-[18px] py-3">Net VAT Position</p>
               <div className="py-3 flex items-center justify-between gap-3">
@@ -141,12 +162,11 @@ export default function TaxReportPage() {
                   {fmt(data.metrics.net_vat)}
                 </p>
                 <span
-                  className={`text-sm font-semibold px-2 py-1 rounded-full ${netVatPositive
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-emerald-100 text-emerald-700"
-                    }`}
+                  className={
+                    `text-sm font-semibold px-2 py-1 rounded-full ${netVatBadgeClass}`
+                  }
                 >
-                  {netVatPositive ? "Payable to KRA" : "Credit"}
+                  {netVatLabel}
                 </span>
               </div>
             </div>
@@ -175,7 +195,7 @@ export default function TaxReportPage() {
                   },
                 ]}
                 data={sortedSales}
-                rowKey={(r) => r.tax_type}
+                rowKey={(r) => `${r.tax_type}:${r.tax_rate ?? ""}`}
                 sortable
                 sortKey={sSortKey ?? undefined}
                 sortDirection={sSortDir}
@@ -199,9 +219,16 @@ export default function TaxReportPage() {
                     className: "text-right",
                     render: (r) => fmt(r.tax_amount),
                   },
+                  {
+                    key: "document_count",
+                    header: "Documents",
+                    sortKey: "document_count",
+                    className: "text-right",
+                    render: (r) => r.document_count,
+                  },
                 ]}
                 data={sortedPurchases}
-                rowKey={(r) => r.tax_type}
+                rowKey={(r) => `${r.tax_type}:${r.tax_rate ?? ""}`}
                 sortable
                 sortKey={pSortKey ?? undefined}
                 sortDirection={pSortDir}
