@@ -9,8 +9,10 @@ Read-only: never flushes or commits.
 
 import logging
 from collections import defaultdict
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -175,34 +177,31 @@ class ReportsService:
         self,
         period: ResolvedPeriod,
         currency: Currency,
-    ) -> list[SalesLedgerEntry]:
-        """Build a complete bounded sales export or fail explicitly."""
-        rows = self.repo.sales_ledger(
+        *,
+        batch_size: int,
+    ) -> Iterator[SalesLedgerEntry]:
+        """Yield the complete sales ledger without pagination or truncation."""
+        for row in self.repo.iter_sales_ledger(
             period.date_from,
             period.date_to,
             currency,
-            offset=0,
-            limit=_REPORT_EXPORT_MAX_ROWS + 1,
-        )
-        rows = _require_complete_export(rows, "Sales")
-        return [
-            SalesLedgerEntry(
-                id=r.id,
-                customer_name=r.customer_name,
-                reference=r.reference,
-                number=r.number,
-                date=r.date,
-                status=r.status,
-                currency=r.currency,
-                subtotal=Decimal(str(r.subtotal)),
-                discount=Decimal(str(r.discount)),
-                net_revenue=Decimal(str(r.net_revenue)),
-                amount=Decimal(str(r.amount)),
-                tax=Decimal(str(r.tax)),
-                balance_due=Decimal(str(r.balance_due)),
+            batch_size=batch_size,
+        ):
+            yield SalesLedgerEntry(
+                id=row.id,
+                customer_name=row.customer_name,
+                reference=row.reference,
+                number=row.number,
+                date=row.date,
+                status=row.status,
+                currency=row.currency,
+                subtotal=Decimal(str(row.subtotal)),
+                discount=Decimal(str(row.discount)),
+                net_revenue=Decimal(str(row.net_revenue)),
+                amount=Decimal(str(row.amount)),
+                tax=Decimal(str(row.tax)),
+                balance_due=Decimal(str(row.balance_due)),
             )
-            for r in rows
-        ]
 
     def get_sales_ledger_total(
         self,
@@ -264,6 +263,7 @@ class ReportsService:
             ),
             spend_by_vendor=[
                 SpendByVendor(
+                    vendor_id=r.vendor_id,
                     vendor_name=r.vendor_name,
                     amount=Decimal(str(r.amount)),
                 )
@@ -324,33 +324,30 @@ class ReportsService:
         self,
         period: ResolvedPeriod,
         currency: Currency,
-    ) -> list[PurchasesLedgerEntry]:
-        """Build a complete bounded purchases export or fail explicitly."""
-        rows = self.repo.purchases_ledger(
+        *,
+        batch_size: int,
+    ) -> Iterator[PurchasesLedgerEntry]:
+        """Yield the complete purchases ledger without pagination or truncation."""
+        for row in self.repo.iter_purchases_ledger(
             period.date_from,
             period.date_to,
             currency,
-            offset=0,
-            limit=_REPORT_EXPORT_MAX_ROWS + 1,
-        )
-        rows = _require_complete_export(rows, "Purchases")
-        return [
-            PurchasesLedgerEntry(
-                source_id=r.source_id,
-                source_type=r.source_type,
-                entity_name=r.entity_name,
-                reference=r.reference,
-                number=r.number,
-                category=r.category,
-                entry_date=r.entry_date,
-                status=r.status,
-                currency=r.currency,
-                amount=Decimal(str(r.amount)),
-                tax=Decimal(str(r.tax)),
-                balance_due=Decimal(str(r.balance_due)),
+            batch_size=batch_size,
+        ):
+            yield PurchasesLedgerEntry(
+                source_id=row.source_id,
+                source_type=row.source_type,
+                entity_name=row.entity_name,
+                reference=row.reference,
+                number=row.number,
+                category=row.category,
+                entry_date=row.entry_date,
+                status=row.status,
+                currency=row.currency,
+                amount=Decimal(str(row.amount)),
+                tax=Decimal(str(row.tax)),
+                balance_due=Decimal(str(row.balance_due)),
             )
-            for r in rows
-        ]
 
     def get_purchases_ledger_total(
         self,
@@ -411,6 +408,9 @@ class ReportsService:
             sales_by_tax_type=[
                 TaxByTypeRow(
                     tax_type=r.tax_type,
+                    tax_rate=(
+                        Decimal(str(r.tax_rate)) if r.tax_rate is not None else None
+                    ),
                     tax_amount=Decimal(str(r.tax_amount)),
                     document_count=int(r.document_count),
                 )
@@ -419,8 +419,11 @@ class ReportsService:
             purchases_by_tax_type=[
                 TaxByTypeRow(
                     tax_type=r.tax_type,
+                    tax_rate=(
+                        Decimal(str(r.tax_rate)) if r.tax_rate is not None else None
+                    ),
                     tax_amount=Decimal(str(r.tax_amount)),
-                    document_count=0,
+                    document_count=int(r.document_count),
                 )
                 for r in purch_rows
             ],
@@ -433,18 +436,24 @@ class ReportsService:
         today = datetime.now(UTC).date()
         flat_rows = self.repo.aged_receivables_summary(currency)
 
-        # Pivot: customer_name → {bucket: Decimal}
-        pivot: dict[str, dict[str, Decimal]] = defaultdict(
+        # Pivot by stable identity; duplicate display names without separate rows
+        pivot: dict[UUID, dict[str, Decimal]] = defaultdict(
             lambda: defaultdict(lambda: _ZERO)
         )
+        names: dict[UUID, str] = {}
         for row in flat_rows:
-            pivot[row.customer_name][row.bucket] += Decimal(str(row.amount))
+            customer_id = row.customer_id
+            names[customer_id] = row.customer_name
+            pivot[customer_id][row.bucket] += Decimal(str(row.amount))
 
         totals_d: dict[str, Decimal] = defaultdict(lambda: _ZERO)
         customers: list[AgedReceivableRow] = []
 
-        for cname in sorted(pivot):
-            buckets = pivot[cname]
+        ordered_ids = sorted(
+            pivot, key=lambda value: (names[value].casefold(), str(value))
+        )
+        for customer_id in ordered_ids:
+            buckets = pivot[customer_id]
             cur = buckets.get("current", _ZERO)
             b130 = buckets.get("1_30", _ZERO)
             b3160 = buckets.get("31_60", _ZERO)
@@ -453,7 +462,8 @@ class ReportsService:
             row_total = cur + b130 + b3160 + b6190 + b90p
             customers.append(
                 AgedReceivableRow(
-                    customer_name=cname,
+                    customer_id=customer_id,
+                    customer_name=names[customer_id],
                     current=cur,
                     days_1_30=b130,
                     days_31_60=b3160,
@@ -527,18 +537,24 @@ class ReportsService:
         today = datetime.now(UTC).date()
         flat_rows = self.repo.aged_payables_summary(currency)
 
-        # Pivot: vendor_name → {bucket: Decimal}
-        pivot: dict[str, dict[str, Decimal]] = defaultdict(
+        # Pivot by stable vendor identity (avoid duplicate rows from name changes)
+        pivot: dict[UUID, dict[str, Decimal]] = defaultdict(
             lambda: defaultdict(lambda: _ZERO)
         )
+        names: dict[UUID, str] = {}
         for row in flat_rows:
-            pivot[row.vendor_name][row.bucket] += Decimal(str(row.amount))
+            vendor_id = row.vendor_id
+            names[vendor_id] = row.vendor_name
+            pivot[vendor_id][row.bucket] += Decimal(str(row.amount))
 
         totals_d: dict[str, Decimal] = defaultdict(lambda: _ZERO)
         vendors: list[AgedPayableRow] = []
 
-        for vname in sorted(pivot):
-            buckets = pivot[vname]
+        ordered_ids = sorted(
+            pivot, key=lambda value: (names[value].casefold(), str(value))
+        )
+        for vendor_id in ordered_ids:
+            buckets = pivot[vendor_id]
             cur = buckets.get("current", _ZERO)
             b130 = buckets.get("1_30", _ZERO)
             b3160 = buckets.get("31_60", _ZERO)
@@ -547,7 +563,8 @@ class ReportsService:
             row_total = cur + b130 + b3160 + b6190 + b90p
             vendors.append(
                 AgedPayableRow(
-                    vendor_name=vname,
+                    vendor_id=vendor_id,
+                    vendor_name=names[vendor_id],
                     current=cur,
                     days_1_30=b130,
                     days_31_60=b3160,

@@ -20,8 +20,6 @@ from pydantic import BaseModel, Field
 
 from app.common.pagination import PaginationMetadata
 from app.constants.enums import Currency
-
-# Import period infrastructure — never redefine
 from app.modules.statements.schemas import ResolvedPeriod
 
 # Shared base
@@ -139,6 +137,7 @@ class PurchasesSummaryMetrics(BaseModel):
 
 
 class SpendByVendor(BaseModel):
+    vendor_id: UUID
     vendor_name: str
     amount: Decimal
 
@@ -193,13 +192,17 @@ class TaxSummaryMetrics(BaseModel):
 
 
 class TaxByTypeRow(BaseModel):
-    """Tax amount for one tax_type (vat_16, vat_8, etc.)."""
+    """Tax amount for one explicit type/rate combination."""
 
     tax_type: str
+    tax_rate: Decimal | None = Field(
+        default=None,
+        description="Rate as a fraction; null for exempt/no-tax classifications",
+    )
     tax_amount: Decimal
     document_count: int = Field(
         default=0,
-        description="Only populated for sales breakdown (invoice-level distinct count)",
+        description="Distinct source-document count for this type/rate combination",
     )
 
 
@@ -249,6 +252,7 @@ class AgingBuckets(BaseModel):
 class AgedReceivableRow(BaseModel):
     """One customer row in the aged AR summary grid."""
 
+    customer_id: UUID
     customer_name: str
     current: Decimal
     days_1_30: Decimal
@@ -307,6 +311,7 @@ class AgedReceivablesDetailResponse(BaseModel):
 class AgedPayableRow(BaseModel):
     """One vendor row in the aged AP summary grid."""
 
+    vendor_id: UUID
     vendor_name: str
     current: Decimal
     days_1_30: Decimal

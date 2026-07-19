@@ -110,6 +110,7 @@ export interface PurchasesSummaryMetrics {
 }
 
 export interface SpendByVendor {
+  vendor_id: string;
   vendor_name: string;
   amount: string;
 }
@@ -152,6 +153,7 @@ export interface TaxSummaryMetrics {
 
 export interface TaxByTypeRow {
   tax_type: string;
+  tax_rate: string | null;
   tax_amount: string;
   document_count: number;
 }
@@ -176,6 +178,7 @@ export interface AgingBuckets {
 }
 
 export interface AgedReceivableRow {
+  customer_id: string;
   customer_name: string;
   current: string;
   days_1_30: string;
@@ -215,6 +218,7 @@ export interface AgedReceivablesDetailResponse {
 }
 
 export interface AgedPayableRow {
+  vendor_id: string;
   vendor_name: string;
   current: string;
   days_1_30: string;
@@ -245,9 +249,9 @@ export interface ResolvedPeriod {
 
 export const AGING_BUCKET_LABELS: Record<string, string> = {
   current: "Current",
-  "1_30": "1–30 days",
-  "31_60": "31–60 days",
-  "61_90": "61–90 days",
+  "1_30": "1-30 days",
+  "31_60": "31-60 days",
+  "61_90": "61-90 days",
   "90_plus": "90+ days",
 };
 
@@ -275,9 +279,20 @@ export const TAX_TYPE_LABELS: Record<string, string> = {
   vat_16: "16% VAT",
   vat_8: "8% VAT",
   vat_0: "0% VAT (Zero-rated)",
+  vat_custom: "Custom VAT",
   exempt: "Exempt",
   no_tax: "No Tax",
 };
+
+export function formatTaxTypeLabel(row: TaxByTypeRow): string {
+  if (row.tax_type !== "vat_custom") {
+    return TAX_TYPE_LABELS[row.tax_type] ?? row.tax_type;
+  }
+  const rate = (Number(row.tax_rate ?? 0) * 100)
+    .toFixed(4)
+    .replace(/\.?0+$/, "");
+  return `${rate}% VAT (Custom)`;
+}
 
 // Sales API
 

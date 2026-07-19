@@ -7,10 +7,13 @@ spreadsheet formatting behind it.
 
 import io
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -26,6 +29,36 @@ _DATE_FORMAT = "DD MMM YYYY"
 _THIN_BORDER = Border(
     bottom=Side(style="thin", color="E5E7EB"),
 )
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _excel_value(value: Any) -> Any:
+    """Coerce a value for Excel and neutralize formula-like user text."""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date, datetime)):
+        return value
+    if value is None:
+        return ""
+    text = str(value)
+    if text.lstrip().startswith(_FORMULA_PREFIXES):
+        return f"'{text}"
+    return text
+
+
+def _tax_type_label(tax_type: str, tax_rate: Any) -> str:
+    labels = {
+        "vat_16": "16% VAT",
+        "vat_8": "8% VAT",
+        "vat_0": "0% VAT (Zero-rated)",
+        "exempt": "Exempt",
+        "no_tax": "No Tax",
+    }
+    if tax_type != "vat_custom":
+        return labels.get(tax_type, tax_type)
+    percentage = Decimal(str(tax_rate or 0)) * Decimal("100")
+    rate_text = format(percentage.normalize(), "f")
+    return f"{rate_text}% VAT (Custom)"
 
 
 class ExcelExporter:
@@ -692,7 +725,7 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
-    def export_sales_report(self, rows: list, currency: str) -> bytes:
+    def export_sales_report(self, rows: Iterable[Any], currency: str) -> bytes:
         """Export sales ledger rows to .xlsx bytes.
 
         Column headers include the currency label (e.g. "Amount (KES)") so
@@ -733,17 +766,17 @@ class ExcelExporter:
         money_cols = [6, 7, 8, 9, 10, 11]
         date_cols = [1]
 
-        wb = self._build_workbook(
+        return self._build_streaming_workbook(
             sheet_name="Sales",
             headers=headers,
             records=rows,
             row_fn=row_fn,
             money_cols=money_cols,
             date_cols=date_cols,
+            column_widths=[15, 18, 18, 32, 14, 18, 18, 18, 18, 18, 18],
         )
-        return self._to_bytes(wb)
 
-    def export_purchases_report(self, rows: list, currency: str) -> bytes:
+    def export_purchases_report(self, rows: Iterable[Any], currency: str) -> bytes:
         """Export purchases ledger rows (expenses + POs combined) to .xlsx bytes."""
         cur = currency.upper()
         headers = [
@@ -776,15 +809,15 @@ class ExcelExporter:
         money_cols = [7, 8, 9]
         date_cols = [1]
 
-        wb = self._build_workbook(
+        return self._build_streaming_workbook(
             sheet_name="Purchases",
             headers=headers,
             records=rows,
             row_fn=row_fn,
             money_cols=money_cols,
             date_cols=date_cols,
+            column_widths=[15, 18, 18, 32, 18, 14, 18, 18, 18],
         )
-        return self._to_bytes(wb)
 
     def export_tax_report(self, report, currency: str = "KES") -> bytes:
         """Export tax report to .xlsx with three sheets.
@@ -798,17 +831,9 @@ class ExcelExporter:
         """
         cur = currency.upper()
 
-        _TAX_LABELS = {
-            "vat_16": "16% VAT",
-            "vat_8": "8% VAT",
-            "vat_0": "0% VAT (Zero-rated)",
-            "exempt": "Exempt",
-            "no_tax": "No Tax",
-        }
-
         wb = Workbook()
 
-        # ── Sheet 1: VAT Summary ─────────────────────────────────────────────
+        # Sheet 1: VAT Summary
         ws1 = wb.active
         ws1.title = "VAT Summary"
 
@@ -848,8 +873,8 @@ class ExcelExporter:
 
         sales_rows = getattr(report, "sales_by_tax_type", [])
         for row_idx, r in enumerate(sales_rows, 2):
-            tax_type = getattr(r, "tax_type", "")
-            label = _TAX_LABELS.get(str(tax_type), str(tax_type))
+            tax_type = str(getattr(r, "tax_type", ""))
+            label = _tax_type_label(tax_type, getattr(r, "tax_rate", None))
             ws2.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
             amt_cell = ws2.cell(
                 row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
@@ -864,9 +889,9 @@ class ExcelExporter:
         for col, width in {"A": 25, "B": 18, "C": 15}.items():
             ws2.column_dimensions[col].width = width
 
-        # ── Sheet 3: Purchases by Tax Type ───────────────────────────────────
+        # Sheet 3: Purchases by Tax Type
         ws3 = wb.create_sheet("Purchases by Tax Type")
-        p_headers = ["Tax Type", f"Tax Amount ({cur})"]
+        p_headers = ["Tax Type", f"Tax Amount ({cur})", "Document Count"]
         for col_idx, header in enumerate(p_headers, 1):
             cell = ws3.cell(row=1, column=col_idx, value=header)
             cell.font = _HEADER_FONT
@@ -875,23 +900,74 @@ class ExcelExporter:
 
         purch_rows = getattr(report, "purchases_by_tax_type", [])
         for row_idx, r in enumerate(purch_rows, 2):
-            tax_type = getattr(r, "tax_type", "")
-            label = _TAX_LABELS.get(str(tax_type), str(tax_type))
+            tax_type = str(getattr(r, "tax_type", ""))
+            label = _tax_type_label(tax_type, getattr(r, "tax_rate", None))
             ws3.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
             amt_cell = ws3.cell(
                 row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
             )
             amt_cell.number_format = _MONEY_FORMAT
             amt_cell.font = _BODY_FONT
+            ws3.cell(
+                row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)
+            ).font = _BODY_FONT
 
         ws3.freeze_panes = "A2"
-        for col, width in {"A": 25, "B": 18}.items():
+        for col, width in {"A": 25, "B": 18, "C": 18}.items():
             ws3.column_dimensions[col].width = width
 
         logger.info("Built tax report Excel workbook (3 sheets)")
         return self._to_bytes(wb)
 
     # private implementation
+    def _build_streaming_workbook(
+        self,
+        *,
+        sheet_name: str,
+        headers: list[str],
+        records: Iterable[Any],
+        row_fn: Any,
+        money_cols: list[int],
+        date_cols: list[int],
+        column_widths: list[int],
+    ) -> bytes:
+        """Build a write-only workbook from an iterable without materializing rows."""
+        wb = Workbook(write_only=True)
+        ws = wb.create_sheet(sheet_name)
+        ws.freeze_panes = "A2"
+
+        for col_idx, width in enumerate(column_widths, 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+        header_cells = []
+        for header in headers:
+            cell = WriteOnlyCell(ws, value=_excel_value(header))
+            cell.font = _HEADER_FONT
+            cell.fill = _HEADER_FILL
+            cell.alignment = _HEADER_ALIGN
+            header_cells.append(cell)
+        ws.append(header_cells)
+
+        count = 0
+        for record in records:
+            count += 1
+            cells = []
+            for col_idx, value in enumerate(row_fn(record), 1):
+                cell = WriteOnlyCell(ws, value=_excel_value(value))
+                cell.font = _BODY_FONT
+                cell.border = _THIN_BORDER
+                if col_idx in money_cols:
+                    cell.number_format = _MONEY_FORMAT
+                    cell.alignment = Alignment(horizontal="right")
+                elif col_idx in date_cols:
+                    cell.number_format = _DATE_FORMAT
+                cells.append(cell)
+            ws.append(cells)
+
+        logger.info(
+            "Built streaming Excel sheet '%s' with %d records", sheet_name, count
+        )
+        return self._to_bytes(wb)
 
     def _build_workbook(
         self,
@@ -922,12 +998,7 @@ class ExcelExporter:
                 cell.font = _BODY_FONT
                 cell.border = _THIN_BORDER
 
-                if isinstance(value, Decimal):
-                    cell.value = float(value)
-                elif isinstance(value, (date, datetime)):
-                    cell.value = value
-                else:
-                    cell.value = str(value) if value is not None else ""
+                cell.value = _excel_value(value)
 
                 if col_idx in money_cols:
                     cell.number_format = _MONEY_FORMAT

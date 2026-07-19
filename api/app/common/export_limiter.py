@@ -42,9 +42,18 @@ def _limiter() -> anyio.CapacityLimiter:
     return anyio.CapacityLimiter(settings.EXPORT_MAX_CONCURRENCY)
 
 
-def _reject_if_saturated(limiter: anyio.CapacityLimiter) -> None:
-    """Raise 503 if no export slot is free, instead of queueing."""
-    if limiter.available_tokens < 1:
+async def run_export[T](fn: Callable[..., T], *args: object) -> T:
+    """Run a blocking export generator under the concurrency cap, off-thread.
+
+    ``acquire_nowait`` makes rejection atomic with slot acquisition. A separate
+    availability check followed by ``async with`` has a race in which multiple
+    callers can observe the last free token and then queue behind one another.
+    """
+    limiter = _limiter()
+    borrower = object()
+    try:
+        limiter.acquire_on_behalf_of_nowait(borrower)
+    except anyio.WouldBlock as exc:
         logger.warning(
             "Export rejected: at capacity (%d concurrent)",
             int(limiter.total_tokens),
@@ -54,18 +63,9 @@ def _reject_if_saturated(limiter: anyio.CapacityLimiter) -> None:
                 "The server is busy generating exports. Please retry in a few seconds."
             ),
             retry_after=_RETRY_AFTER_SECONDS,
-        )
+        ) from exc
 
-
-async def run_export[T](fn: Callable[..., T], *args: object) -> T:
-    """Run a blocking export generator under the concurrency cap, off-thread.
-
-    Acquires a limiter slot without waiting: if the process is already at
-    ``EXPORT_MAX_CONCURRENCY`` in-flight generations, raises
-    ``ServiceUnavailableException`` rather than blocking a request worker.
-    Otherwise runs ``fn(*args)`` in a worker thread and releases the slot.
-    """
-    limiter = _limiter()
-    _reject_if_saturated(limiter)
-    async with limiter:
+    try:
         return await anyio.to_thread.run_sync(fn, *args)
+    finally:
+        limiter.release_on_behalf_of(borrower)

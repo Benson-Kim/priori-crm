@@ -22,8 +22,10 @@ from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import ReportsServiceDep
 from app.common.excel import ExcelExporter
+from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import Currency
+from app.lib.config import settings
 from app.modules.reports.schemas import (
     AgedPayablesDetailResponse,
     AgedPayablesSummaryResponse,
@@ -168,7 +170,7 @@ def get_sales_counts(
     description="Download the full sales ledger (no pagination) as .xlsx.",
     response_class=StreamingResponse,
 )
-def export_sales(
+async def export_sales(
     service: ReportsServiceDep,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
@@ -176,9 +178,16 @@ def export_sales(
     currency: CurrencyParam = Currency.KES,
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    entries = service.export_sales_ledger(period, currency)
-    xlsx_bytes = _exporter.export_sales_report(entries, str(currency))
+
+    def build_export() -> bytes:
+        rows = service.export_sales_ledger(
+            period, currency, batch_size=settings.BATCH_SIZE
+        )
+        return _exporter.export_sales_report(rows, str(currency))
+
+    xlsx_bytes = await run_export(build_export)
     filename = f"sales-report-{period.date_from}-{period.date_to}.xlsx"
+
     return StreamingResponse(
         BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -267,7 +276,7 @@ def get_purchases_counts(
     summary="Export purchases ledger to Excel",
     response_class=StreamingResponse,
 )
-def export_purchases(
+async def export_purchases(
     service: ReportsServiceDep,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
@@ -275,8 +284,14 @@ def export_purchases(
     currency: CurrencyParam = Currency.KES,
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    entries = service.export_purchases_ledger(period, currency)
-    xlsx_bytes = _exporter.export_purchases_report(entries, str(currency))
+
+    def build_export() -> bytes:
+        rows = service.export_purchases_ledger(
+            period, currency, batch_size=settings.BATCH_SIZE
+        )
+        return _exporter.export_purchases_report(rows, str(currency))
+
+    xlsx_bytes = await run_export(build_export)
     filename = f"purchases-report-{period.date_from}-{period.date_to}.xlsx"
     return StreamingResponse(
         BytesIO(xlsx_bytes),
@@ -317,7 +332,7 @@ def get_tax_report(
     summary="Export tax report to Excel",
     response_class=StreamingResponse,
 )
-def export_taxes(
+async def export_taxes(
     service: ReportsServiceDep,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
@@ -326,7 +341,7 @@ def export_taxes(
     # Tax report always KES
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
     report = service.get_tax_report(period, Currency.KES)
-    xlsx_bytes = _exporter.export_tax_report(report, currency="KES")
+    xlsx_bytes = await run_export(_exporter.export_tax_report, report, "KES")
     filename = f"tax-report-{period.date_from}-{period.date_to}.xlsx"
     return StreamingResponse(
         BytesIO(xlsx_bytes),
