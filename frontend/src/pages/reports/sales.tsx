@@ -152,11 +152,16 @@ export default function SalesReportPage() {
   );
 
   const handleExport = async () => {
+    setLedgerError(null);
     if (!isReportPeriodReady(period)) return;
     setIsExporting(true);
     try {
       await exportSalesReport(period, currency);
-    } catch { /* silent */ } finally {
+    } catch (err: unknown) {
+      setLedgerError(
+        err instanceof Error ? err.message : "Failed to export sales report"
+      );
+    } finally {
       setIsExporting(false);
     }
   };
@@ -238,7 +243,7 @@ export default function SalesReportPage() {
                           { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
                         ]}
                         data={summary.revenue_by_customer}
-                        rowKey={(r) => r.customer_name}
+                        rowKey={(r) => r.customer_id}
                         emptyMessage="No data for this period."
                       />
                     </div>

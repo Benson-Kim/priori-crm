@@ -10,12 +10,9 @@
  */
 
 import {
-  defaultReportPeriod,
   exportTaxReport,
   getTaxReport,
-  isReportPeriodReady,
   TAX_TYPE_LABELS,
-  type ReportPeriodFilter,
   type TaxReportResponse,
 } from "@/services/reportsApi";
 import { useEffect, useState } from "react";
@@ -26,7 +23,7 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Table } from "@/components/ui/Table";
 import { useTableSort } from "@/hooks/useTableSort";
-import { buildReportPeriodParams } from "@/lib/reportUtils";
+import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
 import { formatCurrency } from "@/lib/utils";
 
 export default function TaxReportPage() {
@@ -133,11 +130,10 @@ export default function TaxReportPage() {
               change={null}
             />
             <div
-              className={`relative flex flex-col justify-between rounded-2xl border px-6 py-3 ${
-                netVatPositive
+              className={`relative flex flex-col justify-between rounded-2xl border px-6 py-3 ${netVatPositive
                   ? "border-amber-200 bg-amber-50"
                   : "border-emerald-200 bg-emerald-50"
-              }`}
+                }`}
             >
               <p className="text-gray-500 text-[18px] py-3">Net VAT Position</p>
               <div className="py-3 flex items-center justify-between gap-3">
@@ -145,11 +141,10 @@ export default function TaxReportPage() {
                   {fmt(data.metrics.net_vat)}
                 </p>
                 <span
-                  className={`text-sm font-semibold px-2 py-1 rounded-full ${
-                    netVatPositive
+                  className={`text-sm font-semibold px-2 py-1 rounded-full ${netVatPositive
                       ? "bg-amber-100 text-amber-700"
                       : "bg-emerald-100 text-emerald-700"
-                  }`}
+                    }`}
                 >
                   {netVatPositive ? "Payable to KRA" : "Credit"}
                 </span>
