@@ -149,7 +149,7 @@ export default function PurchasesReportPage() {
   }, [periodKey, sourceFilter, debouncedSearch, perPage]);
 
   const { sortedData: sortedLedger, sortKey, sortDirection, handleSort } =
-    useTableSort(ledger as unknown as Record<string, unknown>[]);
+    useTableSort(ledger);
 
   const fmt = useCallback(
     (v: string | number | undefined) => formatCurrency(Number(v ?? 0), currency),
@@ -189,7 +189,7 @@ export default function PurchasesReportPage() {
     { key: "purchase_order", label: "Purchase Orders", count: counts?.purchase_order },
   ], [counts]);
 
-  const agedVendors = (agedData?.vendors ?? []) as unknown as Record<string, unknown>[];
+  const agedVendors = agedData?.vendors ?? [];
   const {
     sortedData: sortedAged,
     sortKey: agedSortKey,
@@ -270,7 +270,7 @@ export default function PurchasesReportPage() {
                         },
                       ]}
                       data={summary.spend_by_vendor}
-                      rowKey={(r) => (r as { vendor_name: string }).vendor_id}
+                      rowKey={(row) => row.vendor_id}
                       emptyMessage="No vendor data for this period."
                     />
                   </div>
@@ -318,7 +318,7 @@ export default function PurchasesReportPage() {
                       key: "entry_date",
                       header: "Date",
                       sortKey: "entry_date",
-                      render: (r) => formatDisplayDate((r as PurchasesLedgerEntry).entry_date),
+                      render: (r) => formatDisplayDate(r.entry_date),
                     },
                     { key: "reference", header: "Reference" },
                     { key: "entity_name", header: "Vendor", sortKey: "entity_name" },
@@ -326,10 +326,9 @@ export default function PurchasesReportPage() {
                       key: "source_type",
                       header: "Type",
                       render: (r) => {
-                        const entry = r as PurchasesLedgerEntry;
                         return (
                           <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full capitalize">
-                            {entry.source_type === "purchase_order" ? "PO" : "Expense"}
+                            {r.source_type === "purchase_order" ? "PO" : "Expense"}
                           </span>
                         );
                       },
@@ -338,10 +337,9 @@ export default function PurchasesReportPage() {
                       key: "status",
                       header: "Status",
                       render: (r) => {
-                        const entry = r as PurchasesLedgerEntry;
                         return (
-                          <Badge variant={entry.status as BadgeVariant}>
-                            {entry.status}
+                          <Badge variant={r.status as BadgeVariant}>
+                            {r.status}
                           </Badge>
                         );
                       },
@@ -351,26 +349,26 @@ export default function PurchasesReportPage() {
                       header: `Total (${currency})`,
                       sortKey: "amount",
                       className: "text-right",
-                      render: (r) => fmt((r as PurchasesLedgerEntry).amount),
+                      render: (r) => fmt(r.amount),
                     },
                     {
                       key: "tax",
                       header: `Tax (${currency})`,
                       sortKey: "tax",
                       className: "text-right",
-                      render: (r) => fmt((r as PurchasesLedgerEntry).tax),
+                      render: (r) => fmt(r.tax),
                     },
                     {
                       key: "balance_due",
                       header: `Balance (${currency})`,
                       sortKey: "balance_due",
                       className: "text-right",
-                      render: (r) => fmt((r as PurchasesLedgerEntry).balance_due),
+                      render: (r) => fmt(r.balance_due),
                     },
                   ]}
-                  data={sortedLedger as unknown as PurchasesLedgerEntry[]}
-                  rowKey={(r) => (r as PurchasesLedgerEntry).source_id}
-                  onRowClick={(r) => handleLedgerRowClick(r as PurchasesLedgerEntry)}
+                  data={sortedLedger}
+                  rowKey={(r) => r.source_id}
+                  onRowClick={handleLedgerRowClick}
                   sortable
                   sortKey={sortKey ?? undefined}
                   sortDirection={sortDirection}
@@ -447,7 +445,7 @@ export default function PurchasesReportPage() {
                       { key: "days_90_plus", header: "90+ days", sortKey: "days_90_plus", className: "text-right", render: (r) => fmt((r as AgedPayableRow).days_90_plus) },
                       { key: "total", header: `Total (${currency})`, sortKey: "total", className: "text-right font-semibold", render: (r) => fmt((r as AgedPayableRow).total) },
                     ]}
-                    data={sortedAged as unknown as AgedPayableRow[]}
+                    data={sortedAged}
                     rowKey={(r) => (r as AgedPayableRow).vendor_id}
                     sortable
                     sortKey={agedSortKey ?? undefined}

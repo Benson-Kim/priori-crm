@@ -611,6 +611,7 @@ class ReportsRepository:
             # Expense branch: vendor → pre-tax line total sum
             exp_branch = (
                 select(
+                    Vendor.id.label("vendor_id"),
                     Vendor.vendor_name.label("vendor_name"),
                     func.coalesce(
                         func.sum(ExpenseLineItem.line_total), Decimal("0")
@@ -642,6 +643,7 @@ class ReportsRepository:
             combined = union_all(exp_branch, po_branch).subquery("vendor_spend")
             stmt = (
                 select(
+                    combined.c.vendor_id,
                     combined.c.vendor_name,
                     func.sum(combined.c.amount).label("amount"),
                 )
