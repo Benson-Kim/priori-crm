@@ -9,25 +9,24 @@
  * No charts -- MetricCards and sortable Tables only.
  */
 
-import { useEffect, useState } from "react";
 import {
   defaultReportPeriod,
-  getTaxReport,
   exportTaxReport,
+  getTaxReport,
   isReportPeriodReady,
+  TAX_TYPE_LABELS,
   type ReportPeriodFilter,
   type TaxReportResponse,
-  TAX_TYPE_LABELS,
 } from "@/services/reportsApi";
-import {
-  ReportPeriodPicker,
-  buildReportPeriodParams,
-} from "@/components/ui/ReportPeriodPicker";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/Button";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Table } from "@/components/ui/Table";
 import { useTableSort } from "@/hooks/useTableSort";
-import { LoadingState } from "@/components/ui/LoadingState";
-import { Button } from "@/components/ui/Button";
+import { buildReportPeriodParams } from "@/lib/reportUtils";
 import { formatCurrency } from "@/lib/utils";
 
 export default function TaxReportPage() {

@@ -9,18 +9,19 @@
  * Period: always sends range=custom + dateFrom + dateTo (from ReportPeriodPicker).
  */
 
-import {
-  buildReportPeriodParams,
-  type ReportPeriodFilter,
-} from "@/components/ui/ReportPeriodPicker";
+// import {
+//   buildReportPeriodParams,
+//   type ReportPeriodFilter,
+// } from "@/components/ui/ReportPeriodPicker";
 import { apiDownload, apiGet } from "@/lib/api";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
+import { buildReportPeriodParams, type ReportPeriodFilter } from "@/lib/reportUtils";
 import type { PaginatedApiResponse } from "@/lib/types";
 import { saveBlob } from "@/lib/utils";
 
 //  Re-export period types so pages only import from one place
-export { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady } from "@/components/ui/ReportPeriodPicker";
-export type { ReportPeriodFilter };
+// export { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady } from "@/components/ui/ReportPeriodPicker";
+// export type { ReportPeriodFilter };
 
 // Shared period resolver
 

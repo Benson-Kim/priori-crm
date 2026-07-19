@@ -30,24 +30,21 @@ import { useAgedReport } from "@/hooks/useAgedReport";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useTableSort } from "@/hooks/useTableSort";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
+import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 import {
   AGING_BUCKET_LABELS,
   AGING_BUCKET_ORDER,
-  buildReportPeriodParams,
-  defaultReportPeriod,
   exportPurchasesReport,
   getAgedPayables,
   getPurchasesCounts,
   getPurchasesLedger,
   getPurchasesReport,
-  isReportPeriodReady,
   type AgedPayableRow,
   type AgedPayablesSummaryResponse,
   type PurchasesLedgerEntry,
   type PurchasesReportSummaryResponse,
   type PurchasesSourceCounts,
-  type ReportPeriodFilter,
 } from "@/services/reportsApi";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
