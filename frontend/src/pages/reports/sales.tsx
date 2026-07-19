@@ -145,7 +145,7 @@ export default function SalesReportPage() {
     setPage(1);
   }, [periodKey, statusFilter, debouncedSearch, perPage]);
 
-  const { sortedData: sortedLedger, sortKey, sortDirection, handleSort } = useTableSort(ledger as unknown as Record<string, unknown>[]);
+  const { sortedData: sortedLedger, sortKey, sortDirection, handleSort } = useTableSort(ledger);
 
   const fmt = useCallback(
     (v: string | number | undefined) => formatCurrency(Number(v ?? 0), currency),
@@ -176,7 +176,7 @@ export default function SalesReportPage() {
     { key: "overdue", label: "Overdue", count: counts?.overdue },
   ], [counts]);
 
-  const agedCustomers = (agedData?.customers ?? []) as unknown as Record<string, unknown>[];
+  const agedCustomers = agedData?.customers ?? [];
   const {
     sortedData: sortedAged,
     sortKey: agedSortKey,
@@ -311,25 +311,24 @@ export default function SalesReportPage() {
               ) : (
                 <Table
                   columns={[
-                    { key: "date", header: "Date", sortKey: "date", render: (r) => formatDisplayDate((r as SalesLedgerEntry).date) },
+                    { key: "date", header: "Date", sortKey: "date", render: (r) => formatDisplayDate(r.date) },
                     { key: "reference", header: "Reference" },
                     { key: "customer_name", header: "Customer", sortKey: "customer_name" },
                     {
                       key: "status",
                       header: "Status",
                       render: (r) => {
-                        const entry = r as SalesLedgerEntry;
-                        return <Badge variant={entry.status as BadgeVariant}>{entry.status}</Badge>;
+                        return <Badge variant={r.status as BadgeVariant}>{r.status}</Badge>;
                       },
                     },
-                    { key: "net_revenue", header: `Net Revenue (${currency})`, sortKey: "net_revenue", className: "text-right", render: (r) => fmt((r as SalesLedgerEntry).net_revenue) },
-                    { key: "tax", header: `Tax (${currency})`, sortKey: "tax", className: "text-right", render: (r) => fmt((r as SalesLedgerEntry).tax) },
-                    { key: "amount", header: `Total (${currency})`, sortKey: "amount", className: "text-right", render: (r) => fmt((r as SalesLedgerEntry).amount) },
-                    { key: "balance_due", header: `Balance (${currency})`, sortKey: "balance_due", className: "text-right", render: (r) => fmt((r as SalesLedgerEntry).balance_due) },
+                    { key: "net_revenue", header: `Net Revenue (${currency})`, sortKey: "net_revenue", className: "text-right", render: (r) => fmt(r.net_revenue) },
+                    { key: "tax", header: `Tax (${currency})`, sortKey: "tax", className: "text-right", render: (r) => fmt(r.tax) },
+                    { key: "amount", header: `Total (${currency})`, sortKey: "amount", className: "text-right", render: (r) => fmt(r.amount) },
+                    { key: "balance_due", header: `Balance (${currency})`, sortKey: "balance_due", className: "text-right", render: (r) => fmt(r.balance_due) },
                   ]}
-                  data={sortedLedger as unknown as SalesLedgerEntry[]}
-                  rowKey={(r) => (r as SalesLedgerEntry).id}
-                  onRowClick={(r) => navigate(`/invoices/${(r as SalesLedgerEntry).id}`)}
+                  data={sortedLedger}
+                  rowKey={(r) => r.id}
+                  onRowClick={(r) => navigate(`/invoices/${r.id}`)}
                   sortable
                   sortKey={sortKey ?? undefined}
                   sortDirection={sortDirection}

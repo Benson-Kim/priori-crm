@@ -50,7 +50,7 @@ function smartCompare(a: unknown, b: unknown): number {
   return sa.localeCompare(sb, undefined, { sensitivity: "base" });
 }
 
-export function useTableSort<T extends Record<string, unknown>>(
+export function useTableSort<T extends object>(
   data: T[],
   initialKey: string | null = null,
   initialDirection: SortDirection = "desc"
@@ -67,8 +67,8 @@ export function useTableSort<T extends Record<string, unknown>>(
     if (!sortKey) return data;
 
     return [...data].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const av = sortKey in a ? a[sortKey as keyof T] : undefined;
+      const bv = sortKey in b ? b[sortKey as keyof T] : undefined;
       const cmp = smartCompare(av, bv);
       return sortDirection === "asc" ? cmp : -cmp;
     });
