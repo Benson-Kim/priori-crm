@@ -844,7 +844,6 @@ class ReportsRepository:
                 .where(
                     *inv_conds,
                     Invoice.vat_enabled.is_(True),
-                    Invoice.tax_total > 0,
                 )
                 .group_by(inv_tax_type)
             )
@@ -893,8 +892,8 @@ class ReportsRepository:
             )
 
             # PO branch: document-level tax, mapped to TaxType via vat_rate.
-            # Only POs with vat_enabled=True and tax_total > 0 carry real VAT.
-            # vat_rate = 0.1600 → vat_16; 0.0800 → vat_8; 0.0000 → vat_0; else → no_tax
+            # Include zero-rated POs so the breakdown keeps the document
+            # even though its tax amount is zero.
             po_tax_type = case(
                 (PurchaseOrder.vat_rate == Decimal("0.1600"), "vat_16"),
                 (PurchaseOrder.vat_rate == Decimal("0.0800"), "vat_8"),
@@ -909,11 +908,7 @@ class ReportsRepository:
                     ).label("tax_amount"),
                 )
                 .select_from(PurchaseOrder)
-                .where(
-                    *po_conds,
-                    PurchaseOrder.vat_enabled.is_(True),
-                    PurchaseOrder.tax_total > 0,
-                )
+                .where(*po_conds, PurchaseOrder.vat_enabled.is_(True))
                 .group_by(po_tax_type)
             )
 

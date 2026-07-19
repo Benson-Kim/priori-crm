@@ -51,6 +51,7 @@ export interface SalesSummaryMetrics {
 }
 
 export interface RevenueByCustomer {
+  customer_id: string;
   customer_name: string;
   invoice_count: number;
   amount: string;

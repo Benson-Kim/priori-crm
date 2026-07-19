@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.common.exceptions import BadRequestException
 from app.common.pagination import (
     PaginatedResponse,
     PaginationMetadata,
@@ -52,6 +53,18 @@ from app.modules.statements.schemas import ResolvedPeriod
 logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0.00")
+_REPORT_EXPORT_MAX_ROWS = 100_000
+
+
+def _require_complete_export(rows: list, report_name: str) -> list:
+    """Reject an oversized export instead of returning a partial workbook."""
+    if len(rows) > _REPORT_EXPORT_MAX_ROWS:
+        raise BadRequestException(
+            f"{report_name} report has more than "
+            f"{_REPORT_EXPORT_MAX_ROWS:,} rows; narrow the reporting period "
+            "before exporting"
+        )
+    return rows
 
 
 class ReportsService:
@@ -163,14 +176,15 @@ class ReportsService:
         period: ResolvedPeriod,
         currency: Currency,
     ) -> list[SalesLedgerEntry]:
-        """All rows for Excel export — bypasses PaginationParams validation."""
+        """Build a complete bounded sales export or fail explicitly."""
         rows = self.repo.sales_ledger(
             period.date_from,
             period.date_to,
             currency,
             offset=0,
-            limit=100_000,
+            limit=_REPORT_EXPORT_MAX_ROWS + 1,
         )
+        rows = _require_complete_export(rows, "Sales")
         return [
             SalesLedgerEntry(
                 id=r.id,
@@ -311,14 +325,15 @@ class ReportsService:
         period: ResolvedPeriod,
         currency: Currency,
     ) -> list[PurchasesLedgerEntry]:
-        """All rows for Excel export — bypasses PaginationParams validation."""
+        """Build a complete bounded purchases export or fail explicitly."""
         rows = self.repo.purchases_ledger(
             period.date_from,
             period.date_to,
             currency,
             offset=0,
-            limit=100_000,
+            limit=_REPORT_EXPORT_MAX_ROWS + 1,
         )
+        rows = _require_complete_export(rows, "Purchases")
         return [
             PurchasesLedgerEntry(
                 source_id=r.source_id,

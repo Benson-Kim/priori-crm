@@ -63,8 +63,7 @@ class SalesSummaryMetrics(BaseModel):
 
 
 class RevenueByCustomer(BaseModel):
-    customer_id: UUID | None = Field(
-        default=None,
+    customer_id: UUID = Field(
         description="Stable customer ID for row keys (avoids merging duplicate names)",
     )
     customer_name: str

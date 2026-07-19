@@ -157,10 +157,15 @@ export default function PurchasesReportPage() {
 
   const handleExport = async () => {
     if (!isReportPeriodReady(period)) return;
+    setLedgerError(null);
     setIsExporting(true);
     try {
       await exportPurchasesReport(period, currency);
-    } catch { /* silent */ } finally {
+    } catch (err: unknown) {
+      setLedgerError(
+        err instanceof Error ? err.message : "Failed to export purchases report"
+      );
+    } finally {
       setIsExporting(false);
     }
   };
