@@ -236,6 +236,7 @@ export function CalendarPicker({
       {isOpen && createPortal(
         <div
           ref={panelRef}
+          data-calendar-picker-panel
           className="fixed z-50 bg-white shadow-xl border border-gray-200 rounded-2xl p-4 w-72 animate-in fade-in slide-in-from-top-1 duration-150"
           style={{ top: coords.top, left: coords.left }}
         >

@@ -68,9 +68,11 @@ export function ReportPeriodPicker({
   useEffect(() => {
     if (!isOpen) return;
     function handleDown(e: MouseEvent) {
+      const target = e.target as Node;
       if (
-        triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
-        panelRef.current && !panelRef.current.contains(e.target as Node)
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        panelRef.current && !panelRef.current.contains(target) &&
+        !(target instanceof Element && target.closest("[data-calendar-picker-panel]"))
       ) close();
     }
     function handleScroll(e: Event) {

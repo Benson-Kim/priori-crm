@@ -45,9 +45,8 @@ router = APIRouter()
 
 _exporter = ExcelExporter()
 
-# ---------------------------------------------------------------------------
+
 # Shared query-parameter annotations (mirrors statements router)
-# ---------------------------------------------------------------------------
 
 RangeParam = Annotated[
     RangePreset,
@@ -82,9 +81,7 @@ WithTotalParam = Annotated[
 ]
 
 
-# ---------------------------------------------------------------------------
 # Sales: Summary
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -112,9 +109,7 @@ def get_sales_summary(
     return service.get_sales_summary(period, currency)
 
 
-# ---------------------------------------------------------------------------
 # Sales: Ledger
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -181,10 +176,8 @@ def export_sales(
     currency: CurrencyParam = Currency.KES,
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    # Fetch all rows (large limit; export has no pagination)
-    params = PaginationParams(page=1, per_page=10000, with_total=False)
-    result = service.list_sales_ledger(period, currency, params)
-    xlsx_bytes = _exporter.export_sales_report(result.items, str(currency))
+    entries = service.export_sales_ledger(period, currency)
+    xlsx_bytes = _exporter.export_sales_report(entries, str(currency))
     filename = f"sales-report-{period.date_from}-{period.date_to}.xlsx"
     return StreamingResponse(
         BytesIO(xlsx_bytes),
@@ -193,9 +186,7 @@ def export_sales(
     )
 
 
-# ---------------------------------------------------------------------------
 # Purchases: Summary
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -218,9 +209,7 @@ def get_purchases_summary(
     return service.get_purchases_summary(period, currency)
 
 
-# ---------------------------------------------------------------------------
 # Purchases: Ledger
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -286,9 +275,8 @@ def export_purchases(
     currency: CurrencyParam = Currency.KES,
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    params = PaginationParams(page=1, per_page=10000, with_total=False)
-    result = service.list_purchases_ledger(period, currency, params)
-    xlsx_bytes = _exporter.export_purchases_report(result.items, str(currency))
+    entries = service.export_purchases_ledger(period, currency)
+    xlsx_bytes = _exporter.export_purchases_report(entries, str(currency))
     filename = f"purchases-report-{period.date_from}-{period.date_to}.xlsx"
     return StreamingResponse(
         BytesIO(xlsx_bytes),
@@ -297,9 +285,7 @@ def export_purchases(
     )
 
 
-# ---------------------------------------------------------------------------
 # Tax Report
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -320,8 +306,10 @@ def get_tax_report(
     date_to: DateToParam = None,
     currency: CurrencyParam = Currency.KES,
 ) -> TaxReportResponse:
+    # VAT is a KES obligation in Kenya — always report in KES regardless of
+    # the query parameter, matching the export endpoint and frontend usage.
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    return service.get_tax_report(period, currency)
+    return service.get_tax_report(period, Currency.KES)
 
 
 @router.get(
@@ -347,9 +335,7 @@ def export_taxes(
     )
 
 
-# ---------------------------------------------------------------------------
 # Aged Receivables
-# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -389,9 +375,7 @@ def list_aged_receivables_detail(
     return service.list_aged_receivables_detail(str(currency), params)
 
 
-# ---------------------------------------------------------------------------
 # Aged Payables
-# ---------------------------------------------------------------------------
 
 
 @router.get(
