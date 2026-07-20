@@ -5,10 +5,12 @@ Single source of truth for tax rates and discount logic used across
 the Invoices, Quotes, and Expenses modules. Any future tax type must be added here only.
 """
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol, runtime_checkable
 
+from app.common.exceptions import BadRequestException
 from app.constants.enums import DiscountType, TaxType
 
 # Money Rounding Policy
@@ -44,13 +46,66 @@ class LineItemInput(Protocol):
 # Tax Rates
 
 
+@dataclass(frozen=True)
+class TaxRateRule:
+    """Effective-dated tax-treatment rule retained for historical validation."""
+
+    jurisdiction: str
+    treatment: TaxType
+    rate: Decimal
+    effective_from: date
+    effective_to: date | None
+    active: bool
+
+
+KENYA_TAX_RATE_RULES: tuple[TaxRateRule, ...] = (
+    TaxRateRule("KE", TaxType.VAT_16, Decimal("0.16"), date.min, None, True),
+    TaxRateRule(
+        "KE",
+        TaxType.VAT_8,
+        Decimal("0.08"),
+        date.min,
+        date(2023, 6, 30),
+        False,
+    ),
+    TaxRateRule("KE", TaxType.VAT_0, Decimal("0.00"), date.min, None, True),
+    TaxRateRule("KE", TaxType.EXEMPT, Decimal("0.00"), date.min, None, True),
+    TaxRateRule("KE", TaxType.NO_TAX, Decimal("0.00"), date.min, None, True),
+)
+
+
 TAX_RATES: dict[TaxType, Decimal] = {
-    TaxType.VAT_16: Decimal("0.16"),
-    TaxType.VAT_8: Decimal("0.08"),
-    TaxType.VAT_0: Decimal("0.00"),
-    TaxType.EXEMPT: Decimal("0.00"),
-    TaxType.NO_TAX: Decimal("0.00"),
+    rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES if rule.active
 }
+
+
+def validate_tax_treatment_for_date(tax_type: TaxType | str, tax_point: date) -> None:
+    """Reject a treatment that was not effective on the document tax point."""
+    treatment = TaxType(tax_type)
+    matching = [
+        rule
+        for rule in KENYA_TAX_RATE_RULES
+        if rule.treatment == treatment
+        and rule.effective_from <= tax_point
+        and (rule.effective_to is None or tax_point <= rule.effective_to)
+    ]
+    if not matching:
+        raise BadRequestException(
+            detail=(
+                f"Tax treatment '{treatment.value}' is not valid on "
+                f"{tax_point.isoformat()}"
+            ),
+            field="tax_type",
+        )
+
+
+def validate_document_vat_rate_for_date(
+    vat_rate: Decimal | None,
+    tax_point: date,
+) -> None:
+    """Apply the immediate 8% retirement boundary to document-level VAT."""
+    if vat_rate is not None and Decimal(str(vat_rate)) == Decimal("0.08"):
+        validate_tax_treatment_for_date(TaxType.VAT_8, tax_point)
 
 
 def get_tax_rate(tax_type: TaxType) -> Decimal:
@@ -94,7 +149,9 @@ def calculate_line_item(
 # Line Item Builders
 
 
-def build_line_items(raw_items: list[Any]) -> list[dict]:
+def build_line_items(
+    raw_items: list[Any], *, tax_point_date: date | None = None
+) -> list[dict]:
     """
     Build calculated line-item dicts from a list of inputs.
 
@@ -130,7 +187,9 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
 
         quantity = _get("quantity")
         unit_price = _get("unit_price")
-        tax_type = _get("tax_type")
+        tax_type = TaxType(_get("tax_type"))
+        if tax_point_date:
+            validate_tax_treatment_for_date(tax_type, tax_point_date)
 
         line_total, tax_amount = calculate_line_item(quantity, unit_price, tax_type)
         result.append(

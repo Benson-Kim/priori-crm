@@ -116,10 +116,10 @@ class ExpenseService(BaseDocumentService):
 
     @staticmethod
     def _build_line_items(
-        raw_items: list[ExpenseLineItemCreate],
+        raw_items: list[ExpenseLineItemCreate], *, tax_point_date: date
     ) -> list[dict]:
         """Delegate to the shared build_line_items helper in common/financial.py."""
-        return build_line_items(raw_items)
+        return build_line_items(raw_items, tax_point_date=tax_point_date)
 
     @staticmethod
     def _sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
@@ -169,7 +169,9 @@ class ExpenseService(BaseDocumentService):
         expense_currency = vendor.currency or data.currency
 
         # Calculate outside retry loop — deterministic, no DB writes
-        line_items_data = self._build_line_items(data.line_items)
+        line_items_data = self._build_line_items(
+            data.line_items, tax_point_date=data.expense_date
+        )
         subtotal, tax_total = self._sum_line_totals(line_items_data)
         total_due = subtotal + tax_total
 
@@ -441,7 +443,9 @@ class ExpenseService(BaseDocumentService):
             # Convert raw dicts back to ExpenseLineItemCreate for type safety
             raw_items: list[dict] = update_data.pop("line_items")
             typed_items = [ExpenseLineItemCreate(**item) for item in raw_items]
-            line_items_data = self._build_line_items(typed_items)
+            line_items_data = self._build_line_items(
+                typed_items, tax_point_date=new_expense_date
+            )
 
             subtotal, tax_total = self._sum_line_totals(line_items_data)
             total_due = subtotal + tax_total

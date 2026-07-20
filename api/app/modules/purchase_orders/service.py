@@ -38,6 +38,7 @@ from app.common.financial import (
     build_line_items,
     calculate_subtotal_vat,
     sum_line_totals,
+    validate_document_vat_rate_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import (
@@ -190,9 +191,11 @@ class PurchaseOrderService(BaseDocumentService):
     @staticmethod
     def _build_line_items(
         raw_items: list[PurchaseOrderLineItemCreate],
+        *,
+        tax_point_date,
     ) -> list[dict]:
         """Delegate to the shared build_line_items helper (no local calc)."""
-        return build_line_items(raw_items)
+        return build_line_items(raw_items, tax_point_date=tax_point_date)
 
     @staticmethod
     def _sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
@@ -284,12 +287,15 @@ class PurchaseOrderService(BaseDocumentService):
             _profile = OwnerService(self._db).get_or_create()
             vat_enabled = bool(_profile.vat_enabled) and _profile.vat_rate is not None
             vat_rate = Decimal(str(_profile.vat_rate)) if vat_enabled else None
+            validate_document_vat_rate_for_date(vat_rate, data.order_date)
         vat_compliance_ref = data.vat_compliance_ref
         if vat_compliance_ref is None:
             vat_compliance_ref = self._owner_vat_compliance_ref()
 
         # Deterministic, no DB writes — computed once outside the retry loop.
-        line_items_data = self._strip_line_tax(self._build_line_items(data.line_items))
+        line_items_data = self._strip_line_tax(
+            self._build_line_items(data.line_items, tax_point_date=data.order_date)
+        )
         subtotal, _line_tax = self._sum_line_totals(line_items_data)
         tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
         total = subtotal + tax_total
