@@ -853,12 +853,18 @@ class ExcelExporter:
             column_widths=[15, 18, 18, 32, 18, 14, 18, 18, 18],
         )
 
-    def export_tax_report(self, report, currency: str = "KES") -> bytes:
-        """Export a VAT reconciliation estimate report to .xlsx with three sheets.
+    def export_tax_report(
+        self,
+        report,
+        currency: str = "KES",
+        excluded_transactions: Iterable[Any] = (),
+    ) -> bytes:
+        """Export a VAT estimate plus a disclosed exclusion appendix when partial.
 
-        Sheet 1: VAT Summary (Collected, Paid, Net Position)
-        Sheet 2: VAT Estimate (Output, input estimate, net estimate)
-        Sheet 3: Expense VAT by Tax Type
+        Sheet 1: VAT Estimate summary and completeness warning
+        Sheet 2: Sales VAT by type
+        Sheet 3: Expense VAT by type
+        Sheet 4 (partial only): excluded foreign-currency VAT transactions
 
         tax_type labels: vat_16 → "16% VAT", vat_8 → "8% VAT",
         vat_0 → "0% VAT (Zero-rated)", exempt → "Exempt", no_tax → "No Tax"
@@ -876,12 +882,28 @@ class ExcelExporter:
         input_vat = float(getattr(metrics, "input_vat_estimate", 0) or 0)
         net_vat = float(getattr(metrics, "net_vat_estimate", 0) or 0)
 
-        warning = getattr(
+        filing_warning = getattr(
             report,
             "filing_warning",
             "VAT reconciliation estimate only; confirm against KRA source records.",
         )
-        ws1.merge_cells("A1:B2")
+        completeness = getattr(report, "completeness", None)
+        completeness_status = getattr(completeness, "status", "complete")
+        excluded_count = int(getattr(completeness, "excluded_document_count", 0) or 0)
+        excluded_currencies = list(
+            getattr(completeness, "excluded_currencies", []) or []
+        )
+        is_partial = completeness_status == "partial"
+        warning = filing_warning
+        if is_partial:
+            warning = (
+                "PARTIAL VAT RECONCILIATION. KES transactions are shown, but "
+                f"{excluded_count} foreign-currency VAT document(s) are excluded. "
+                "Do not use the net estimate for filing. "
+                f"{filing_warning}"
+            )
+
+        ws1.merge_cells("A1:B3")
         warning_cell = _write_safe_cell(ws1, row=1, column=1, value=warning)
         warning_cell.font = Font(name="Calibri", bold=True, size=10, color="9C2A2A")
         warning_cell.alignment = Alignment(wrap_text=True, vertical="top")
@@ -889,10 +911,15 @@ class ExcelExporter:
         summary_data = [
             ("Output VAT (Sales)", vat_collected),
             ("Potential Input VAT (Eligible Expenses Not Yet Verified)", input_vat),
-            ("Net VAT Estimate", net_vat),
+            (
+                "Net VAT Estimate - KES Documents Only"
+                if is_partial
+                else "Net VAT Estimate",
+                net_vat,
+            ),
         ]
 
-        for row_idx, (label, value) in enumerate(summary_data, 4):
+        for row_idx, (label, value) in enumerate(summary_data, 5):
             lbl_cell = ws1.cell(row=row_idx, column=1, value=label)
             lbl_cell.font = Font(name="Calibri", bold=True, size=10)
             val_cell = ws1.cell(row=row_idx, column=2, value=value)
@@ -900,11 +927,22 @@ class ExcelExporter:
             val_cell.alignment = Alignment(horizontal="right")
             val_cell.font = Font(name="Calibri", size=10)
 
-        note = ws1.cell(row=8, column=1, value=f"Currency: {cur}")
+        completeness_rows = [
+            ("Completeness", completeness_status.title()),
+            ("Excluded documents", excluded_count),
+            ("Excluded currencies", ", ".join(excluded_currencies) or "None"),
+        ]
+        for row_idx, (label, value) in enumerate(completeness_rows, 9):
+            ws1.cell(row=row_idx, column=1, value=label).font = Font(
+                name="Calibri", bold=True, size=10
+            )
+            _write_safe_cell(ws1, row=row_idx, column=2, value=value).font = _BODY_FONT
+
+        note = ws1.cell(row=13, column=1, value=f"Currency: {cur}")
         note.font = Font(name="Calibri", italic=True, size=9, color="817D7D")
 
-        ws1.column_dimensions["A"].width = 28
-        ws1.column_dimensions["B"].width = 16
+        ws1.column_dimensions["A"].width = 54
+        ws1.column_dimensions["B"].width = 24
 
         # Sheet 2: Sales by Tax Type
         ws2 = wb.create_sheet("Sales by Tax Type")
@@ -961,7 +999,54 @@ class ExcelExporter:
         for col, width in {"A": 25, "B": 18, "C": 18}.items():
             ws3.column_dimensions[col].width = width
 
-        logger.info("Built tax report Excel workbook (3 sheets)")
+        if is_partial:
+            ws4 = wb.create_sheet("Excluded Transactions")
+            headers = [
+                "Document Type",
+                "Reference",
+                "Number",
+                "Date",
+                "Original Currency",
+                "Original Amount",
+                "Original VAT Amount",
+                "Exclusion Reason",
+            ]
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws4.cell(row=1, column=col_idx, value=header)
+                cell.font = _HEADER_FONT
+                cell.fill = _HEADER_FILL
+                cell.alignment = _HEADER_ALIGN
+
+            for row_idx, transaction in enumerate(excluded_transactions, 2):
+                values = [
+                    getattr(transaction, "document_type", ""),
+                    getattr(transaction, "reference", ""),
+                    getattr(transaction, "number", ""),
+                    getattr(transaction, "transaction_date", None),
+                    getattr(transaction, "currency", ""),
+                    getattr(transaction, "original_amount", Decimal("0")),
+                    getattr(transaction, "original_vat_amount", Decimal("0")),
+                    getattr(transaction, "reason", ""),
+                ]
+                for col_idx, value in enumerate(values, 1):
+                    cell = _write_safe_cell(
+                        ws4, row=row_idx, column=col_idx, value=value
+                    )
+                    cell.font = _BODY_FONT
+                    cell.border = _THIN_BORDER
+                    if col_idx == 4:
+                        cell.number_format = _DATE_FORMAT
+                    elif col_idx in (6, 7):
+                        cell.number_format = _MONEY_FORMAT
+
+            ws4.freeze_panes = "A2"
+            widths = [18, 20, 20, 15, 18, 18, 20, 54]
+            for col_idx, width in enumerate(widths, 1):
+                ws4.column_dimensions[get_column_letter(col_idx)].width = width
+
+        logger.info(
+            "Built tax report Excel workbook (%d sheets)", 4 if is_partial else 3
+        )
         return self._to_bytes(wb)
 
     # private implementation

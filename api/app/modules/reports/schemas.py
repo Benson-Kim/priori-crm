@@ -219,12 +219,36 @@ class TaxByTypeRow(BaseModel):
     )
 
 
+class ReportCompleteness(BaseModel):
+    """Whether the estimate covers every VAT document in the requested period."""
+
+    status: Literal["complete", "partial"]
+    excluded_document_count: int = Field(default=0, ge=0)
+    excluded_currencies: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class ExcludedTaxTransaction(BaseModel):
+    """One foreign-currency VAT document awaiting tax-point KES evidence."""
+
+    document_id: UUID
+    document_type: Literal["invoice", "expense"]
+    reference: str
+    number: str
+    transaction_date: date
+    currency: str
+    original_amount: Decimal
+    original_vat_amount: Decimal
+    reason: str
+
+
 class TaxReportResponse(ReportBase):
     """Tax report: VAT position + per-type breakdowns for sales and purchases."""
 
     report_label: Literal["VAT reconciliation estimate"] = VAT_RECONCILIATION_LABEL
     filing_warning: str = VAT_FILING_WARNING
     limitations: list[str] = Field(default_factory=list)
+    completeness: ReportCompleteness
     metrics: TaxSummaryMetrics
     sales_by_tax_type: list[TaxByTypeRow]
     purchases_by_tax_type: list[TaxByTypeRow]

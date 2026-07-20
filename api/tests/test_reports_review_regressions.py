@@ -6,9 +6,12 @@ from io import BytesIO
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from openpyxl import load_workbook
 
 from app.common.excel import ExcelExporter
+from app.common.exceptions import ValidationException
+from app.common.pagination import PaginationParams
 from app.constants.enums import (
     Currency,
     ExpenseStatus,
@@ -70,6 +73,7 @@ def _invoice(
     vat_enabled: bool = False,
     vat_rate: Decimal | None = None,
     transaction_date: date = date(2026, 1, 10),
+    currency: Currency = Currency.KES,
 ) -> Invoice:
     total = subtotal + tax_total
     invoice = Invoice(
@@ -79,7 +83,7 @@ def _invoice(
         transaction_date=transaction_date,
         due_date=transaction_date + timedelta(days=30),
         status=InvoiceStatus.SENT,
-        currency=Currency.KES,
+        currency=currency,
         subtotal=subtotal,
         vat_enabled=vat_enabled,
         vat_rate=vat_rate,
@@ -117,16 +121,18 @@ def _expense(
     balance_due: Decimal,
     tax_type: TaxType = TaxType.NO_TAX,
     line_tax: Decimal = Decimal("0.00"),
+    currency: Currency = Currency.KES,
+    expense_date: date = date(2026, 1, 11),
 ) -> Expense:
     total = subtotal + tax_total
     expense = Expense(
         expense_number=f"EXP-{uuid4().hex[:12]}",
         expense_reference=f"EX-{uuid4().hex[:8]}",
         vendor_id=vendor.id,
-        expense_date=date(2026, 1, 11),
-        due_date=date(2026, 1, 25),
+        expense_date=expense_date,
+        due_date=expense_date + timedelta(days=14),
         status=status,
-        currency=Currency.KES,
+        currency=currency,
         subtotal=subtotal,
         tax_total=tax_total,
         total_due=total,
@@ -297,6 +303,9 @@ def test_empty_report_contracts_expose_zero_values(db):
     assert tax.metrics.input_vat_estimate == Decimal("0.00")
     assert tax.metrics.net_vat_estimate == Decimal("0.00")
     assert tax.report_label == "VAT reconciliation estimate"
+    assert tax.completeness.status == "complete"
+    assert tax.completeness.excluded_document_count == 0
+    assert tax.completeness.excluded_currencies == []
 
     purchases = service.get_purchases_summary(PERIOD, Currency.KES)
     assert purchases.metrics.actual_spend == Decimal("0.00")
@@ -490,3 +499,91 @@ def test_historical_vat_8_invoice_remains_reportable(db):
     historical = rows[("vat_8", Decimal("0.0800"))]
     assert historical.tax_amount == Decimal("8.00")
     assert historical.document_count == 1
+
+
+def test_foreign_currency_vat_returns_partial_kes_report_and_strict_rejects(db):
+    customer = _customer(db, "Mixed Currency Customer")
+    vendor = _vendor(db, "Mixed Currency Vendor")
+
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("16.00"),
+        tax_type=TaxType.VAT_16,
+        line_tax=Decimal("16.00"),
+        currency=Currency.KES,
+    )
+    usd_invoice = _invoice(
+        db,
+        customer,
+        subtotal=Decimal("200.00"),
+        tax_total=Decimal("32.00"),
+        tax_type=TaxType.VAT_16,
+        line_tax=Decimal("32.00"),
+        currency=Currency.USD,
+    )
+    eur_expense = _expense(
+        db,
+        vendor,
+        subtotal=Decimal("300.00"),
+        tax_total=Decimal("48.00"),
+        status=ExpenseStatus.PENDING,
+        balance_due=Decimal("348.00"),
+        tax_type=TaxType.VAT_16,
+        line_tax=Decimal("48.00"),
+        currency=Currency.EUR,
+    )
+    db.commit()
+
+    service = ReportsService(db)
+    report = service.get_tax_report(PERIOD, Currency.KES)
+
+    assert report.metrics.vat_collected == Decimal("16.00")
+    assert report.metrics.input_vat_estimate == Decimal("0.00")
+    assert report.metrics.net_vat_estimate == Decimal("16.00")
+    assert report.completeness.status == "partial"
+    assert report.completeness.excluded_document_count == 2
+    assert report.completeness.excluded_currencies == ["EUR", "USD"]
+    assert report.completeness.reasons == [
+        "Historical KES tax-point conversion values are not stored"
+    ]
+
+    excluded = service.list_excluded_tax_transactions(
+        PERIOD,
+        PaginationParams(page=1, per_page=10, with_total=True),
+    )
+    assert excluded.metadata.total == 2
+    assert {row.document_id for row in excluded.items} == {
+        usd_invoice.id,
+        eur_expense.id,
+    }
+
+    with pytest.raises(ValidationException) as exc_info:
+        service.get_tax_report(PERIOD, Currency.KES, strict=True)
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.extra["errors"][0]["excluded_document_count"] == 2
+
+    payload = ExcelExporter().export_tax_report(
+        report,
+        "KES",
+        service.iter_excluded_tax_transactions(PERIOD, batch_size=10),
+    )
+    workbook = load_workbook(BytesIO(payload), read_only=True, data_only=False)
+    assert "Excluded Transactions" in workbook.sheetnames
+    warning = workbook["VAT Estimate"]["A1"].value
+    assert "PARTIAL VAT RECONCILIATION" in warning
+    assert "KES Documents Only" in workbook["VAT Estimate"]["A7"].value
+
+    excluded_rows = list(workbook["Excluded Transactions"].iter_rows(values_only=True))
+    assert excluded_rows[0][:5] == (
+        "Document Type",
+        "Reference",
+        "Number",
+        "Date",
+        "Original Currency",
+    )
+    assert {row[1] for row in excluded_rows[1:]} == {
+        usd_invoice.invoice_reference,
+        eur_expense.expense_reference,
+    }

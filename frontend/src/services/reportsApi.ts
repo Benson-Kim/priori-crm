@@ -145,12 +145,35 @@ export interface TaxByTypeRow {
   document_count: number;
 }
 
+export interface ReportCompleteness {
+  status: "complete" | "partial";
+  excluded_document_count: number;
+  excluded_currencies: string[];
+  reasons: string[];
+}
+
+export interface ExcludedTaxTransaction {
+  document_id: string;
+  document_type: "invoice" | "expense";
+  reference: string;
+  number: string;
+  transaction_date: string;
+  currency: string;
+  original_amount: string;
+  original_vat_amount: string;
+  reason: string;
+}
+
+export type ExcludedTaxTransactionsResponse =
+  PaginatedApiResponse<ExcludedTaxTransaction>;
+
 export interface TaxReportResponse {
   period: ResolvedPeriod;
   currency: string;
   report_label: "VAT reconciliation estimate";
   filing_warning: string;
   limitations: string[];
+  completeness: ReportCompleteness;
   metrics: TaxSummaryMetrics;
   sales_by_tax_type: TaxByTypeRow[];
   purchases_by_tax_type: TaxByTypeRow[];
@@ -381,16 +404,44 @@ export async function exportPurchasesReport(
 
 // Tax API
 
-export function getTaxReport(period: ReportPeriodFilter) {
-  // Tax report always KES
-  return apiGet<TaxReportResponse>("reports/taxes", periodParams(period, "KES"));
+export function getTaxReport(
+  period: ReportPeriodFilter,
+  options: { strict?: boolean } = {}
+) {
+  return apiGet<TaxReportResponse>("reports/taxes", {
+    ...periodParams(period, "KES"),
+    strict: options.strict ?? false,
+  });
 }
 
-export async function exportTaxReport(period: ReportPeriodFilter) {
-  const blob = await apiDownload("reports/taxes/export", periodParams(period, "KES"));
-  const p = buildReportPeriodParams(period, "KES");
-  saveBlob(blob, `tax-report-${p.dateFrom}-${p.dateTo}.xlsx`);
+export function getExcludedTaxTransactions(
+  period: ReportPeriodFilter,
+  page = 1,
+  perPage = 25
+) {
+  return apiGet<ExcludedTaxTransactionsResponse>("reports/taxes/excluded", {
+    ...periodParams(period, "KES"),
+    page,
+    per_page: perPage,
+  });
 }
+
+export async function exportTaxReport(
+  period: ReportPeriodFilter,
+  options: { strict?: boolean; partial?: boolean } = {}
+) {
+  const blob = await apiDownload("reports/taxes/export", {
+    ...periodParams(period, "KES"),
+    strict: options.strict ?? false,
+  });
+  const p = buildReportPeriodParams(period, "KES");
+  const prefix = options.partial ? "partial-" : "";
+  saveBlob(
+    blob,
+    `${prefix}vat-reconciliation-estimate-${p.dateFrom}-${p.dateTo}.xlsx`
+  );
+}
+
 
 // Aged AR/AP API
 

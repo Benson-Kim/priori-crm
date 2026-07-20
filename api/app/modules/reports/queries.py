@@ -836,15 +836,8 @@ class ReportsRepository:
 
     # Tax Report
 
-    def foreign_currency_vat_currencies(
-        self, date_from: date, date_to: date
-    ) -> list[str]:
-        """Currencies requiring historical KES tax-point conversion data.
-
-        The current transaction model has no immutable KES tax-point values.
-        Returning these currencies lets the service fail explicitly rather than
-        silently dropping foreign-currency VAT documents from a KES estimate.
-        """
+    def _foreign_currency_vat_subquery(self, date_from: date, date_to: date):
+        """Build one row per unsupported foreign-currency VAT document."""
         vat_types = (TaxType.VAT_16, TaxType.VAT_8, TaxType.VAT_0)
         invoice_line_vat = exists(
             select(1).where(
@@ -858,7 +851,16 @@ class ReportsRepository:
                 ExpenseLineItem.tax_type.in_(vat_types),
             )
         )
-        invoice_stmt = select(Invoice.currency).where(
+        invoice_stmt = select(
+            Invoice.id.label("document_id"),
+            literal("invoice").label("document_type"),
+            Invoice.invoice_reference.label("reference"),
+            Invoice.invoice_number.label("number"),
+            Invoice.transaction_date.label("transaction_date"),
+            Invoice.currency.label("currency"),
+            Invoice.total_due.label("original_amount"),
+            Invoice.tax_total.label("original_vat_amount"),
+        ).where(
             Invoice.status.in_(RECOGNIZED_INVOICE_STATUSES),
             Invoice.transaction_date.between(date_from, date_to),
             Invoice.currency != Currency.KES,
@@ -868,19 +870,104 @@ class ReportsRepository:
                 invoice_line_vat,
             ),
         )
-        expense_stmt = select(Expense.currency).where(
+        expense_stmt = select(
+            Expense.id.label("document_id"),
+            literal("expense").label("document_type"),
+            Expense.expense_reference.label("reference"),
+            Expense.expense_number.label("number"),
+            Expense.expense_date.label("transaction_date"),
+            Expense.currency.label("currency"),
+            Expense.total_due.label("original_amount"),
+            Expense.tax_total.label("original_vat_amount"),
+        ).where(
             Expense.status.in_(RECOGNIZED_EXPENSE_STATUSES),
             Expense.expense_date.between(date_from, date_to),
             Expense.currency != Currency.KES,
             or_(Expense.tax_total != 0, expense_line_vat),
         )
+        return union_all(invoice_stmt, expense_stmt).subquery(
+            "foreign_currency_vat_documents"
+        )
+
+    def foreign_currency_vat_summary(
+        self, date_from: date, date_to: date
+    ) -> tuple[int, list[str]]:
+        """Return the excluded document count and affected currencies."""
         try:
-            currencies = set(self._db.execute(invoice_stmt).scalars())
-            currencies.update(self._db.execute(expense_stmt).scalars())
-            return sorted(str(currency) for currency in currencies)
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            rows = self._db.execute(
+                select(
+                    sub.c.currency,
+                    func.count().label("document_count"),
+                ).group_by(sub.c.currency)
+            ).all()
+            return (
+                sum(int(row.document_count) for row in rows),
+                sorted(str(row.currency) for row in rows),
+            )
         except SQLAlchemyError as exc:
-            logger.exception("Database error detecting foreign-currency VAT")
-            raise DatabaseException("Failed to validate VAT report currencies") from exc
+            logger.exception("Database error summarizing foreign-currency VAT")
+            raise DatabaseException(
+                "Failed to summarize excluded VAT transactions"
+            ) from exc
+
+    def foreign_currency_vat_currencies(
+        self, date_from: date, date_to: date
+    ) -> list[str]:
+        """Compatibility wrapper returning only affected currencies."""
+        _, currencies = self.foreign_currency_vat_summary(date_from, date_to)
+        return currencies
+
+    def foreign_currency_vat_transactions(
+        self,
+        date_from: date,
+        date_to: date,
+        *,
+        offset: int = 0,
+        limit: int = 26,
+    ) -> list:
+        """Return a deterministic page of unsupported VAT documents."""
+        try:
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            stmt = (
+                select(sub)
+                .order_by(
+                    sub.c.transaction_date.desc(),
+                    sub.c.document_type.asc(),
+                    sub.c.document_id.desc(),
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error listing excluded VAT transactions")
+            raise DatabaseException("Failed to load excluded VAT transactions") from exc
+
+    def iter_foreign_currency_vat_transactions(
+        self,
+        date_from: date,
+        date_to: date,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every unsupported VAT document for the Excel appendix."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            stmt = select(sub).order_by(
+                sub.c.transaction_date.desc(),
+                sub.c.document_type.asc(),
+                sub.c.document_id.desc(),
+            )
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming excluded VAT transactions")
+            raise DatabaseException(
+                "Failed to export excluded VAT transactions"
+            ) from exc
 
     def tax_summary(self, date_from: date, date_to: date, currency: str) -> TaxSummary:
         """Output VAT less expense-only input-VAT estimate."""

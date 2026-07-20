@@ -32,6 +32,7 @@ from app.modules.reports.schemas import (
     AgedPayablesSummaryResponse,
     AgedReceivablesDetailResponse,
     AgedReceivablesSummaryResponse,
+    ExcludedTaxTransaction,
     PurchasesLedgerEntry,
     PurchasesReportSummaryResponse,
     PurchasesSourceCounts,
@@ -80,6 +81,15 @@ WithTotalParam = Annotated[
     bool,
     Query(
         alias="withTotal", description="Also compute total/total_pages (extra COUNT)"
+    ),
+]
+StrictTaxParam = Annotated[
+    bool,
+    Query(
+        description=(
+            "Reject partial VAT reconciliations when unsupported foreign-currency "
+            "documents are present"
+        )
     ),
 ]
 
@@ -311,9 +321,11 @@ async def export_purchases(
     description=(
         "A KES VAT reconciliation estimate, not a VAT return or filing-ready "
         "output. Confirm against eTIMS, customs records, credit/debit notes, "
-        "and the KRA auto-populated return. Foreign-currency VAT is rejected "
-        "until immutable KES tax-point conversion values are stored."
+        "and the KRA auto-populated return. By default, unsupported foreign-"
+        "currency VAT documents are excluded and disclosed as a partial result; "
+        "strict=true rejects an incomplete reconciliation with HTTP 422."
     ),
+    responses={422: {"description": "Strict reconciliation is incomplete"}},
 )
 def get_tax_report(
     service: ReportsServiceDep,
@@ -321,11 +333,34 @@ def get_tax_report(
     date_from: DateFromParam = None,
     date_to: DateToParam = None,
     currency: CurrencyParam = Currency.KES,
+    strict: StrictTaxParam = False,
 ) -> TaxReportResponse:
     # VAT is a KES obligation in Kenya — always report in KES regardless of
     # the query parameter, matching the export endpoint and frontend usage.
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    return service.get_tax_report(period, Currency.KES)
+    return service.get_tax_report(period, Currency.KES, strict=strict)
+
+
+@router.get(
+    "/taxes/excluded",
+    response_model=PaginatedResponse[ExcludedTaxTransaction],
+    summary="List transactions excluded from the VAT reconciliation estimate",
+    description=(
+        "Paginated foreign-currency VAT documents excluded because immutable KES "
+        "tax-point conversion evidence is unavailable."
+    ),
+)
+def list_excluded_tax_transactions(
+    service: ReportsServiceDep,
+    range_preset: RangeParam = RangePreset.THIS_MONTH,
+    date_from: DateFromParam = None,
+    date_to: DateToParam = None,
+    page: PageParam = 1,
+    per_page: PerPageParam = 25,
+) -> PaginatedResponse[ExcludedTaxTransaction]:
+    period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
+    params = PaginationParams(page=page, per_page=per_page, with_total=True)
+    return service.list_excluded_tax_transactions(period, params)
 
 
 @router.get(
@@ -338,12 +373,29 @@ async def export_taxes(
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
     date_to: DateToParam = None,
+    strict: StrictTaxParam = False,
 ) -> StreamingResponse:
-    # Tax report always KES
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
-    report = service.get_tax_report(period, Currency.KES)
-    xlsx_bytes = await run_export(_exporter.export_tax_report, report, "KES")
-    filename = f"vat-reconciliation-estimate-{period.date_from}-{period.date_to}.xlsx"
+
+    def build_export() -> tuple[bytes, str]:
+        report = service.get_tax_report(period, Currency.KES, strict=strict)
+        excluded_rows = (
+            service.iter_excluded_tax_transactions(
+                period, batch_size=settings.BATCH_SIZE
+            )
+            if report.completeness.status == "partial"
+            else ()
+        )
+        return (
+            _exporter.export_tax_report(report, "KES", excluded_rows),
+            report.completeness.status,
+        )
+
+    xlsx_bytes, completeness_status = await run_export(build_export)
+    prefix = "partial-" if completeness_status == "partial" else ""
+    filename = (
+        f"{prefix}vat-reconciliation-estimate-{period.date_from}-{period.date_to}.xlsx"
+    )
     return StreamingResponse(
         BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

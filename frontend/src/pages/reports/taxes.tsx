@@ -11,28 +11,41 @@
 import {
   exportTaxReport,
   formatTaxTypeLabel,
+  getExcludedTaxTransactions,
   getTaxReport,
+  type ExcludedTaxTransaction,
+  type ExcludedTaxTransactionsResponse,
   type TaxByTypeRow,
   type TaxReportResponse
 } from "@/services/reportsApi";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { Pagination } from "@/components/ui/Pagination";
 import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Table } from "@/components/ui/Table";
 import { useTableSort } from "@/hooks/useTableSort";
 import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 
 export default function TaxReportPage() {
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<ReportPeriodFilter>(defaultReportPeriod);
   const [data, setData] = useState<TaxReportResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [excluded, setExcluded] =
+    useState<ExcludedTaxTransactionsResponse | null>(null);
+  const [excludedPage, setExcludedPage] = useState(1);
+  const [excludedPerPage, setExcludedPerPage] = useState(10);
+  const [excludedLoading, setExcludedLoading] = useState(false);
+  const [excludedError, setExcludedError] = useState<string | null>(null);
+  const periodKey = JSON.stringify(buildReportPeriodParams(period, "KES"));
 
   useEffect(() => {
     if (!isReportPeriodReady(period)) return;
@@ -40,6 +53,7 @@ export default function TaxReportPage() {
     let cancelled = false;
     setIsLoading(true);
     setError(null);
+    setData(null);
 
     getTaxReport(period)
       .then((res) => { if (!cancelled) setData(res); })
@@ -50,14 +64,48 @@ export default function TaxReportPage() {
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [JSON.stringify(buildReportPeriodParams(period, "KES"))]);
+  }, [periodKey]);
+
+  useEffect(() => {
+    setExcludedPage(1);
+  }, [periodKey]);
+
+  useEffect(() => {
+    if (data?.completeness.status !== "partial") {
+      setExcluded(null);
+      setExcludedError(null);
+      return;
+    }
+    let cancelled = false;
+    setExcludedLoading(true);
+    setExcludedError(null);
+    getExcludedTaxTransactions(period, excludedPage, excludedPerPage)
+      .then((response) => {
+        if (!cancelled) setExcluded(response);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setExcludedError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load excluded transactions"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setExcludedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [data?.completeness.status, periodKey, excludedPage, excludedPerPage]);
 
   const handleExport = async () => {
     if (!isReportPeriodReady(period)) return;
     setIsExporting(true);
     setExportError(null);
     try {
-      await exportTaxReport(period);
+      await exportTaxReport(period, {
+        partial: data?.completeness.status === "partial",
+      });
     } catch (err: unknown) {
       setExportError(err instanceof Error ? err.message : "Failed to export tax report");
     } finally {
@@ -135,6 +183,96 @@ export default function TaxReportPage() {
         </p>
       </div>
 
+      {data?.completeness.status === "partial" && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">
+          <p className="font-semibold">Partial VAT reconciliation</p>
+          <p className="mt-1 text-sm">
+            KES transactions are shown, but {data.completeness.excluded_document_count}{" "}
+            foreign-currency VAT document(s) are excluded because historical KES
+            tax-point conversion values are unavailable. Do not use the net estimate
+            for filing.
+          </p>
+          <p className="mt-2 text-xs">
+            Affected currencies: {data.completeness.excluded_currencies.join(", ")}
+          </p>
+        </div>
+      )}
+
+      {excludedError && (
+        <div className="p-4 bg-error-50 border border-red-200 rounded-lg text-error-600">
+          {excludedError}
+        </div>
+      )}
+
+      {data?.completeness.status === "partial" && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
+          <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">
+            Excluded Transactions
+          </h3>
+          <p className="pb-3 text-sm text-content-secondary">
+            Open a document to add the missing historical KES conversion evidence.
+          </p>
+          {excludedLoading ? (
+            <LoadingState message="Loading excluded transactions..." className="h-40" />
+          ) : (
+            <>
+              <Table
+                columns={[
+                  { key: "document_type", header: "Type" },
+                  { key: "reference", header: "Reference" },
+                  { key: "number", header: "Number" },
+                  {
+                    key: "transaction_date",
+                    header: "Date",
+                    render: (row) => formatDisplayDate(row.transaction_date),
+                  },
+                  { key: "currency", header: "Currency" },
+                  {
+                    key: "original_amount",
+                    header: "Original Amount",
+                    className: "text-right",
+                    render: (row) =>
+                      formatCurrency(Number(row.original_amount), row.currency),
+                  },
+                  {
+                    key: "original_vat_amount",
+                    header: "Original VAT",
+                    className: "text-right",
+                    render: (row) =>
+                      formatCurrency(Number(row.original_vat_amount), row.currency),
+                  },
+                  { key: "reason", header: "Reason" },
+                ]}
+                data={excluded?.items ?? []}
+                rowKey={(row) => `${row.document_type}:${row.document_id}`}
+                onRowClick={(row: ExcludedTaxTransaction) =>
+                  navigate(
+                    row.document_type === "invoice"
+                      ? `/invoices/${row.document_id}`
+                      : `/expenses/${row.document_id}`
+                  )
+                }
+                emptyMessage="No excluded transactions."
+              />
+              {(excluded?.metadata.total_pages ?? 0) > 1 && (
+                <div className="mt-4">
+                  <Pagination
+                    currentPage={excludedPage}
+                    totalPages={excluded?.metadata.total_pages ?? 1}
+                    perPage={excludedPerPage}
+                    onPageChange={setExcludedPage}
+                    onPerPageChange={(value) => {
+                      setExcludedPerPage(value);
+                      setExcludedPage(1);
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {(error || exportError) && (
         <div className="p-4 bg-error-50 border border-red-200 rounded-lg text-error-600">
           {error ?? exportError}
@@ -163,7 +301,11 @@ export default function TaxReportPage() {
                 netVatClass,
               ].join(" ")}
             >
-              <p className="text-gray-500 text-[18px] py-3">Net VAT Estimate</p>
+              <p className="text-gray-500 text-[18px] py-3">
+                {data.completeness.status === "partial"
+                  ? "Net VAT Estimate - KES documents only"
+                  : "Net VAT Estimate"}
+              </p>
               <div className="py-3 flex items-center justify-between gap-3">
                 <p className="font-bold text-gray-800 text-2xl">
                   {fmt(data.metrics.net_vat_estimate)}
