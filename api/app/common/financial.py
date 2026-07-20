@@ -73,9 +73,9 @@ KENYA_TAX_RATE_RULES: tuple[TaxRateRule, ...] = (
     TaxRateRule("KE", TaxType.NO_TAX, Decimal("0.00"), date.min, None, True),
 )
 
-
+# Arithmetic registry: retired treatments remain calculable for historical records.
 TAX_RATES: dict[TaxType, Decimal] = {
-    rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES if rule.active
+    rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES
 }
 
 

@@ -245,15 +245,13 @@ export default function PurchasesReportPage() {
             summary ? (
               <div className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <MetricCard label="Total Spend" value={fmt(summary.metrics.total_spend)} change={null} />
-                  <MetricCard label="Expense Spend" value={fmt(summary.metrics.expense_spend)} change={null} />
-                  <MetricCard label="PO Spend" value={fmt(summary.metrics.po_spend)} change={null} />
-                  <MetricCard label="Total Tax Paid" value={fmt(summary.metrics.total_tax)} change={null} />
-                  <MetricCard label="Expense Tax" value={fmt(summary.metrics.expense_tax)} change={null} />
-                  <MetricCard label="PO Tax" value={fmt(summary.metrics.po_tax)} change={null} />
+                  <MetricCard label="Actual Spend" value={fmt(summary.metrics.actual_spend)} change={null} />
+                  <MetricCard label="PO Commitments" value={fmt(summary.metrics.po_commitments)} change={null} />
+                  <MetricCard label="Potential Input VAT" value={fmt(summary.metrics.input_vat_estimate)} change={null} />
+                  <MetricCard label="Tax in PO Commitments" value={fmt(summary.metrics.po_commitment_tax)} change={null} />
                   <MetricCard label="Expenses" value={String(summary.metrics.expense_count)} change={null} />
-                  <MetricCard label="Purchase Orders" value={String(summary.metrics.po_count)} change={null} />
-                  <MetricCard label="Outstanding Balance" value={fmt(summary.metrics.outstanding_balance)} change={null} />
+                  <MetricCard label="PO Commitment Count" value={String(summary.metrics.po_commitment_count)} change={null} />
+                  <MetricCard label="Outstanding Payables" value={fmt(summary.metrics.outstanding_payables)} change={null} />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">

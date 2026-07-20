@@ -10,7 +10,7 @@ Read-only: never flushes or commits.
 import logging
 from collections import defaultdict
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -25,6 +25,8 @@ from app.common.pagination import (
 from app.constants.enums import Currency
 from app.modules.reports.queries import ReportsRepository
 from app.modules.reports.schemas import (
+    VAT_FILING_WARNING,
+    VAT_RECONCILIATION_LABEL,
     # Sales
     AgedPayableDetailRow,
     AgedPayableRow,
@@ -251,15 +253,13 @@ class ReportsService:
             period=period,
             currency=currency,
             metrics=PurchasesSummaryMetrics(
-                expense_spend=summary.expense_spend,
-                po_spend=summary.po_spend,
-                total_spend=summary.total_spend,
-                expense_tax=summary.expense_tax,
-                po_tax=summary.po_tax,
-                total_tax=summary.total_tax,
+                actual_spend=summary.actual_spend,
+                po_commitments=summary.po_commitments,
+                input_vat_estimate=summary.input_vat_estimate,
+                po_commitment_tax=summary.po_commitment_tax,
                 expense_count=summary.expense_count,
-                po_count=summary.po_count,
-                outstanding_balance=summary.outstanding_balance,
+                po_commitment_count=summary.po_commitment_count,
+                outstanding_payables=summary.outstanding_payables,
             ),
             spend_by_vendor=[
                 SpendByVendor(
@@ -388,7 +388,19 @@ class ReportsService:
     def get_tax_report(
         self, period: ResolvedPeriod, currency: Currency
     ) -> TaxReportResponse:
-        """VAT position + per-type breakdowns for sales and purchases."""
+        """Build a KES VAT reconciliation estimate or fail on missing FX evidence."""
+        foreign_currencies = self.repo.foreign_currency_vat_currencies(
+            period.date_from, period.date_to
+        )
+        if foreign_currencies:
+            raise BadRequestException(
+                detail=(
+                    "Foreign-currency VAT documents cannot be included safely because "
+                    "immutable KES tax-point conversion values are not stored. "
+                    f"Affected currencies: {', '.join(foreign_currencies)}."
+                ),
+                field="currency",
+            )
         tax_s = self.repo.tax_summary(period.date_from, period.date_to, currency)
         sales_rows = self.repo.tax_by_type_sales(
             period.date_from, period.date_to, currency
@@ -400,10 +412,24 @@ class ReportsService:
         return TaxReportResponse(
             period=period,
             currency=currency,
+            report_label=VAT_RECONCILIATION_LABEL,
+            filing_warning=VAT_FILING_WARNING,
+            limitations=[
+                "No eTIMS or customs-record matching is performed.",
+                "Expense VAT is not evidence-qualified for input-tax eligibility.",
+                (
+                    "Foreign-currency VAT requires persisted KES tax-point "
+                    "conversion data."
+                ),
+                (
+                    "Credit/debit notes, reverse VAT, withholding VAT, and "
+                    "apportionment are not reconciled."
+                ),
+            ],
             metrics=TaxSummaryMetrics(
                 vat_collected=tax_s.vat_collected,
-                vat_paid=tax_s.vat_paid,
-                net_vat=tax_s.net_vat,
+                input_vat_estimate=tax_s.input_vat_estimate,
+                net_vat_estimate=tax_s.net_vat_estimate,
             ),
             sales_by_tax_type=[
                 TaxByTypeRow(
@@ -431,10 +457,11 @@ class ReportsService:
 
     # Aged Receivables
 
-    def get_aged_receivables(self, currency: str) -> AgedReceivablesSummaryResponse:
+    def get_aged_receivables(
+        self, currency: str, as_of_date: date
+    ) -> AgedReceivablesSummaryResponse:
         """Pivot flat query rows into per-customer aging grid."""
-        today = datetime.now(UTC).date()
-        flat_rows = self.repo.aged_receivables_summary(currency)
+        flat_rows = self.repo.aged_receivables_summary(currency, as_of_date)
 
         # Pivot by stable identity; duplicate display names without separate rows
         pivot: dict[UUID, dict[str, Decimal]] = defaultdict(
@@ -483,18 +510,17 @@ class ReportsService:
 
         return AgedReceivablesSummaryResponse(
             currency=currency,
-            as_of_date=today,
+            as_of_date=as_of_date,
             totals=AgingBuckets.from_bucket_dict(dict(totals_d)),
             customers=customers,
         )
 
     def list_aged_receivables_detail(
-        self, currency: str, params: PaginationParams
+        self, currency: str, as_of_date: date, params: PaginationParams
     ) -> AgedReceivablesDetailResponse:
         """Paginated invoice-level aged AR rows."""
-        today = datetime.now(UTC).date()
         rows = self.repo.aged_receivables_detail(
-            currency, offset=params.offset, limit=params.fetch_limit
+            currency, as_of_date, offset=params.offset, limit=params.fetch_limit
         )
         has_next = len(rows) > params.per_page
         items_raw = rows[: params.per_page]
@@ -525,17 +551,18 @@ class ReportsService:
         )
         return AgedReceivablesDetailResponse(
             currency=currency,
-            as_of_date=today,
+            as_of_date=as_of_date,
             items=items,
             metadata=metadata,
         )
 
     # Aged Payables
 
-    def get_aged_payables(self, currency: str) -> AgedPayablesSummaryResponse:
+    def get_aged_payables(
+        self, currency: str, as_of_date: date
+    ) -> AgedPayablesSummaryResponse:
         """Pivot flat query rows into per-vendor aging grid."""
-        today = datetime.now(UTC).date()
-        flat_rows = self.repo.aged_payables_summary(currency)
+        flat_rows = self.repo.aged_payables_summary(currency, as_of_date)
 
         # Pivot by stable vendor identity (avoid duplicate rows from name changes)
         pivot: dict[UUID, dict[str, Decimal]] = defaultdict(
@@ -584,18 +611,17 @@ class ReportsService:
 
         return AgedPayablesSummaryResponse(
             currency=currency,
-            as_of_date=today,
+            as_of_date=as_of_date,
             totals=AgingBuckets.from_bucket_dict(dict(totals_d)),
             vendors=vendors,
         )
 
     def list_aged_payables_detail(
-        self, currency: str, params: PaginationParams
+        self, currency: str, as_of_date: date, params: PaginationParams
     ) -> AgedPayablesDetailResponse:
-        """Paginated combined expense + PO aged AP rows."""
-        today = datetime.now(UTC).date()
+        """Paginated expense aged AP rows."""
         rows = self.repo.aged_payables_detail(
-            currency, offset=params.offset, limit=params.fetch_limit
+            currency, as_of_date, offset=params.offset, limit=params.fetch_limit
         )
         has_next = len(rows) > params.per_page
         items_raw = rows[: params.per_page]
@@ -627,7 +653,7 @@ class ReportsService:
         )
         return AgedPayablesDetailResponse(
             currency=currency,
-            as_of_date=today,
+            as_of_date=as_of_date,
             items=items,
             metadata=metadata,
         )

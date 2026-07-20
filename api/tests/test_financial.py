@@ -8,6 +8,9 @@ check_is_overdue, calculate_days_overdue.
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
+from app.common.exceptions import BadRequestException
 from app.common.financial import (
     TAX_RATES,
     calculate_days_overdue,
@@ -15,6 +18,7 @@ from app.common.financial import (
     calculate_line_item,
     check_is_overdue,
     get_tax_rate,
+    validate_tax_treatment_for_date,
 )
 from app.constants.enums import DiscountType, TaxType
 
@@ -43,6 +47,20 @@ class TestGetTaxRate:
         """Every TaxType member must have a rate in TAX_RATES."""
         for member in TaxType:
             assert member in TAX_RATES, f"Missing rate for {member}"
+
+
+class TestEffectiveDatedTaxTreatment:
+    """Eligibility is date-aware while the arithmetic engine stays historical."""
+
+    def test_vat_8_is_valid_on_last_historical_day(self):
+        validate_tax_treatment_for_date(TaxType.VAT_8, date(2023, 6, 30))
+
+    def test_vat_8_is_rejected_on_first_retired_day(self):
+        with pytest.raises(BadRequestException):
+            validate_tax_treatment_for_date(TaxType.VAT_8, date(2023, 7, 1))
+
+    def test_current_rates_remain_valid(self):
+        validate_tax_treatment_for_date(TaxType.VAT_16, date(2026, 1, 1))
 
 
 # calculate_line_item

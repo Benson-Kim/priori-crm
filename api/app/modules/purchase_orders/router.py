@@ -2,7 +2,7 @@
 Purchase Order API endpoints — Purchases module.
 
 CRUD (create / get / get-by-number / update / delete), the totals-preview
-endpoint, and the list view (list / counts / Excel export), send, cancel, PDF,
+endpoint, and the list view (list / counts / Excel export), send, PDF,
 and per-PO document attachments (upload / list / download / delete).
 
 """
@@ -107,7 +107,7 @@ def list_purchase_orders(
     per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
     filter_status: Annotated[
         str | None,
-        Query(alias="status", description="draft | sent | billed | canceled"),
+        Query(alias="status", description="draft | sent | billed"),
     ] = None,
     vendor_id: Annotated[
         UUID | None,
@@ -327,6 +327,13 @@ async def export_purchase_order_payments_to_excel(
 def calculate_purchase_order_totals(
     line_items: list[PurchaseOrderLineItemCreate],
     service: PurchaseOrderServiceDep,
+    order_date: Annotated[
+        date,
+        Query(
+            alias="orderDate",
+            description="Tax-point date used to validate the selected VAT treatment",
+        ),
+    ],
     vat_enabled: Annotated[
         bool,
         Query(alias="vatEnabled", description="Enable PO-level VAT on the subtotal"),
@@ -359,7 +366,10 @@ def calculate_purchase_order_totals(
         )
 
     return service.calculate_totals(
-        line_items, vat_enabled=vat_enabled, vat_rate=vat_rate
+        line_items,
+        tax_point_date=order_date,
+        vat_enabled=vat_enabled,
+        vat_rate=vat_rate,
     )
 
 
@@ -593,7 +603,7 @@ def get_purchase_order(
     summary="Update purchase order",
     description=(
         "Update a purchase order. Only DRAFT purchase orders are editable; "
-        "SENT / BILLED / CANCELED are read-only. currency is locked after the "
+        "SENT / BILLED are read-only. currency is locked after the "
         "first save. Supplying lineItems replaces the full set. Pass "
         "expectedVersion (from your last GET) for optimistic-lock protection."
     ),
@@ -801,7 +811,7 @@ def list_purchase_order_documents(
         "validated (type allow-list, max size, magic-byte content sniff) and "
         "written to object storage, then its metadata is persisted. "
         "Attachments can be added from the View screen at any status "
-        "(including SENT / BILLED / CANCELED) and do not re-open edit mode. "
+        "(including SENT / BILLED) and do not re-open edit mode. "
         "source must be 'form', 'view' or 'payment_modal' (proof-of-payment "
         "uploaded in the Record Payment modal). storage_key is never returned."
     ),
