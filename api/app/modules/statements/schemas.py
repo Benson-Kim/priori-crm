@@ -6,13 +6,13 @@ as revenue / expense and how amounts are measured).
 
 Period semantics
 ----------------
-All period presets resolve against *today in UTC* to a closed
+All period presets resolve against the configured organization-local date to a closed
 ``[date_from, date_to]`` window. Every window also carries the
 immediately preceding window of equal length, used for the overview
 deltas, so comparisons are deterministic for any window shape.
 """
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
@@ -21,6 +21,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.common.exceptions import BadRequestException
+from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency
 
 #: Upper bound for a custom reporting window. Bounds the cost of the
@@ -60,13 +61,13 @@ class ResolvedPeriod(BaseModel):
         date_to: date | None = None,
         today: date | None = None,
     ) -> "ResolvedPeriod":
-        """Resolve a preset (or custom dates) into concrete UTC windows.
+        """Resolve a preset (or custom dates) into concrete accounting windows.
 
         Raises BadRequestException (400) for invalid custom ranges or for
         dates supplied alongside a non-custom preset, so behaviour is
         explicit rather than silently ignoring input.
         """
-        today = today or datetime.now(UTC).date()
+        today = today or reporting_date()
 
         if preset is RangePreset.CUSTOM:
             if date_from is None or date_to is None:

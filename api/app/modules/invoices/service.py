@@ -24,6 +24,7 @@ from app.common.financial import (
     calculate_subtotal_vat,
     neutralize_line_tax,
     sum_line_totals,
+    validate_document_vat_rate_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DiscountType, InvoiceStatus, TaxType
@@ -153,8 +154,12 @@ class InvoiceService(BaseDocumentService):
             data.vat_rate,
             fields_sent={"vat_enabled", "vat_rate"} & data.model_fields_set,
         )
+        validate_document_vat_rate_for_date(vat_rate, data.transaction_date)
 
-        line_items_data = build_line_items(data.line_items)
+        line_items_data = build_line_items(
+            data.line_items, tax_point_date=data.transaction_date
+        )
+
         if vat_enabled:
             # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
             neutralize_line_tax(line_items_data)
@@ -457,6 +462,14 @@ class InvoiceService(BaseDocumentService):
             update_data.get("vat_enabled", invoice.vat_enabled)
         )
         effective_vat_rate = update_data.get("vat_rate", invoice.vat_rate)
+        effective_transaction_date = update_data.get(
+            "transaction_date", invoice.transaction_date
+        )
+
+        validate_document_vat_rate_for_date(
+            effective_vat_rate, effective_transaction_date
+        )
+
         if effective_vat_enabled and effective_vat_rate is None:
             raise BadRequestException(
                 detail="vat_rate is required when vat_enabled is true",
@@ -470,7 +483,9 @@ class InvoiceService(BaseDocumentService):
             ).delete()
 
             line_items_raw: list[dict] = update_data.pop("line_items")
-            line_items_data = build_line_items(line_items_raw)
+            line_items_data = build_line_items(
+                line_items_raw, tax_point_date=effective_transaction_date
+            )
             if effective_vat_enabled:
                 # Document-level VAT replaces per-line tax (mirrors POs).
                 neutralize_line_tax(line_items_data)
