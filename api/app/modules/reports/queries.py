@@ -1193,6 +1193,7 @@ class ReportsRepository:
         )
         exp_branch = (
             select(
+                Vendor.id.label("vendor_id"),
                 Vendor.vendor_name.label("vendor_name"),
                 exp_bucket.label("bucket"),
                 func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
