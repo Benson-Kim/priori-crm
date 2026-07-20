@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 REPORT_VIEW_ROLES = PRIVILEGED_ROLES
 REPORT_EXPORT_ROLES = PRIVILEGED_ROLES
 _REPORT_AUDIT_NAMESPACE = uuid.UUID("1d859bbe-b71b-4b37-9ab7-b6dc8eb81e68")
-_FILTER_KEYS = ("status", "source", "page", "per_page", "withTotal")
+_FILTER_KEYS = ("status", "source", "strict", "page", "per_page", "withTotal")
 
 
 def _report_type(path: str) -> str:

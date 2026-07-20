@@ -16,7 +16,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.common.exceptions import BadRequestException
+from app.common.exceptions import BadRequestException, ValidationException
 from app.common.pagination import (
     PaginatedResponse,
     PaginationMetadata,
@@ -37,10 +37,12 @@ from app.modules.reports.schemas import (
     AgedReceivablesDetailResponse,
     AgedReceivablesSummaryResponse,
     AgingBuckets,
+    ExcludedTaxTransaction,
     PurchasesLedgerEntry,
     PurchasesReportSummaryResponse,
     PurchasesSourceCounts,
     PurchasesSummaryMetrics,
+    ReportCompleteness,
     RevenueByCategory,
     RevenueByCustomer,
     SalesLedgerEntry,
@@ -58,6 +60,9 @@ logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0.00")
 _REPORT_EXPORT_MAX_ROWS = 100_000
+_MISSING_TAX_POINT_FX_REASON = (
+    "Historical KES tax-point conversion values are not stored"
+)
 
 
 def _require_complete_export(rows: list, report_name: str) -> list:
@@ -386,20 +391,29 @@ class ReportsService:
     # Tax Report
 
     def get_tax_report(
-        self, period: ResolvedPeriod, currency: Currency
+        self,
+        period: ResolvedPeriod,
+        currency: Currency,
+        *,
+        strict: bool = False,
     ) -> TaxReportResponse:
-        """Build a KES VAT reconciliation estimate or fail on missing FX evidence."""
-        foreign_currencies = self.repo.foreign_currency_vat_currencies(
+        """Build the supported KES estimate and disclose unsupported documents."""
+        excluded_count, excluded_currencies = self.repo.foreign_currency_vat_summary(
             period.date_from, period.date_to
         )
-        if foreign_currencies:
-            raise BadRequestException(
+        if strict and excluded_count:
+            raise ValidationException(
                 detail=(
-                    "Foreign-currency VAT documents cannot be included safely because "
-                    "immutable KES tax-point conversion values are not stored. "
-                    f"Affected currencies: {', '.join(foreign_currencies)}."
+                    "Strict VAT reconciliation requires every foreign-currency VAT "
+                    "document to have immutable KES tax-point conversion evidence."
                 ),
-                field="currency",
+                errors=[
+                    {
+                        "reason": "missing_tax_point_fx",
+                        "excluded_document_count": excluded_count,
+                        "excluded_currencies": excluded_currencies,
+                    }
+                ],
             )
         tax_s = self.repo.tax_summary(period.date_from, period.date_to, currency)
         sales_rows = self.repo.tax_by_type_sales(
@@ -414,12 +428,18 @@ class ReportsService:
             currency=currency,
             report_label=VAT_RECONCILIATION_LABEL,
             filing_warning=VAT_FILING_WARNING,
+            completeness=ReportCompleteness(
+                status="partial" if excluded_count else "complete",
+                excluded_document_count=excluded_count,
+                excluded_currencies=excluded_currencies,
+                reasons=([_MISSING_TAX_POINT_FX_REASON] if excluded_count else []),
+            ),
             limitations=[
                 "No eTIMS or customs-record matching is performed.",
                 "Expense VAT is not evidence-qualified for input-tax eligibility.",
                 (
-                    "Foreign-currency VAT requires persisted KES tax-point "
-                    "conversion data."
+                    "Foreign-currency VAT without persisted KES tax-point values is "
+                    "excluded, disclosed, and available through the excluded-items view."
                 ),
                 (
                     "Credit/debit notes, reverse VAT, withholding VAT, and "
@@ -454,6 +474,52 @@ class ReportsService:
                 for r in purch_rows
             ],
         )
+
+    @staticmethod
+    def _excluded_tax_transaction(row) -> ExcludedTaxTransaction:
+        return ExcludedTaxTransaction(
+            document_id=row.document_id,
+            document_type=row.document_type,
+            reference=row.reference,
+            number=row.number,
+            transaction_date=row.transaction_date,
+            currency=str(row.currency),
+            original_amount=Decimal(str(row.original_amount)),
+            original_vat_amount=Decimal(str(row.original_vat_amount)),
+            reason=_MISSING_TAX_POINT_FX_REASON,
+        )
+
+    def list_excluded_tax_transactions(
+        self,
+        period: ResolvedPeriod,
+        params: PaginationParams,
+    ) -> PaginatedResponse[ExcludedTaxTransaction]:
+        """Paginate unsupported foreign-currency VAT documents for review."""
+        total, _ = self.repo.foreign_currency_vat_summary(
+            period.date_from, period.date_to
+        )
+        rows = self.repo.foreign_currency_vat_transactions(
+            period.date_from,
+            period.date_to,
+            offset=params.offset,
+            limit=params.fetch_limit,
+        )
+        items = [self._excluded_tax_transaction(row) for row in rows]
+        return PaginatedResponse.create_from_window(items, params, total=total)
+
+    def iter_excluded_tax_transactions(
+        self,
+        period: ResolvedPeriod,
+        *,
+        batch_size: int,
+    ) -> Iterator[ExcludedTaxTransaction]:
+        """Stream unsupported VAT documents for the workbook appendix."""
+        for row in self.repo.iter_foreign_currency_vat_transactions(
+            period.date_from,
+            period.date_to,
+            batch_size=batch_size,
+        ):
+            yield self._excluded_tax_transaction(row)
 
     # Aged Receivables
 
