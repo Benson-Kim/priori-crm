@@ -1,10 +1,9 @@
 /**
  * Tax Report page -- /reports/taxes
  *
- * Displays VAT collected vs VAT paid (input tax), net VAT position,
- * and per-type breakdowns for sales and purchases.
+ * Displays output VAT, an expense-based input-VAT estimate, and type breakdowns.
  *
- * ALWAYS KES -- VAT is a KES obligation in Kenya.
+ * ALWAYS KES. This is not represented as a filing-ready VAT return.
  * No currency selector on this page.
  * No charts -- MetricCards and sortable Tables only.
  */
@@ -87,26 +86,26 @@ export default function TaxReportPage() {
 
   const fmt = (v: string | undefined) => formatCurrency(Number(v ?? 0), "KES");
 
-  const netVat = Number(data?.metrics.net_vat ?? 0);
-  const netVatStatus = netVat > 0 ? "payable" : netVat < 0 ? "credit" : "balanced";
+  const netVat = Number(data?.metrics.net_vat_estimate ?? 0);
+  const netVatStatus = netVat > 0 ? "output-exceeds-input" : netVat < 0 ? "input-exceeds-output" : "balanced";
   const netVatClass =
-    netVatStatus === "payable"
+    netVatStatus === "output-exceeds-input"
       ? "border-amber-200 bg-amber-50"
-      : netVatStatus === "credit"
+      : netVatStatus === "input-exceeds-output"
         ? "border-emerald-200 bg-emerald-50"
         : "border-gray-200 bg-gray-50";
   const netVatBadgeClass =
-    netVatStatus === "payable"
+    netVatStatus === "output-exceeds-input"
       ? "bg-amber-100 text-amber-700"
-      : netVatStatus === "credit"
+      : netVatStatus === "input-exceeds-output"
         ? "bg-emerald-100 text-emerald-700"
         : "bg-gray-200 text-gray-700";
   const netVatLabel =
-    netVatStatus === "payable"
-      ? "Payable to KRA"
-      : netVatStatus === "credit"
-        ? "Excess input VAT"
-        : "Balanced";
+    netVatStatus === "output-exceeds-input"
+      ? "Output exceeds input estimate"
+      : netVatStatus === "input-exceeds-output"
+        ? "Input estimate exceeds output"
+        : "Estimated balance is zero";
 
   return (
     <div className="flex flex-col space-y-6">
@@ -128,8 +127,16 @@ export default function TaxReportPage() {
         </Button>
       </div>
 
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+        <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
+        <p className="mt-1 text-sm">
+          {data?.filing_warning ??
+            "Confirm against eTIMS, customs, credit/debit notes, and the KRA auto-populated return before filing."}
+        </p>
+      </div>
+
       {(error || exportError) && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-error-50 border border-red-200 rounded-lg text-error-600">
           {error ?? exportError}
         </div>
       )}
@@ -146,8 +153,8 @@ export default function TaxReportPage() {
               change={null}
             />
             <MetricCard
-              label="VAT Paid (Purchases)"
-              value={fmt(data.metrics.vat_paid)}
+              label="Potential Input VAT (Expenses)"
+              value={fmt(data.metrics.input_vat_estimate)}
               change={null}
             />
             <div
@@ -156,10 +163,10 @@ export default function TaxReportPage() {
                 netVatClass,
               ].join(" ")}
             >
-              <p className="text-gray-500 text-[18px] py-3">Net VAT Position</p>
+              <p className="text-gray-500 text-[18px] py-3">Net VAT Estimate</p>
               <div className="py-3 flex items-center justify-between gap-3">
                 <p className="font-bold text-gray-800 text-2xl">
-                  {fmt(data.metrics.net_vat)}
+                  {fmt(data.metrics.net_vat_estimate)}
                 </p>
                 <span
                   className={
@@ -207,7 +214,7 @@ export default function TaxReportPage() {
 
           {/* Purchases by Tax Type */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
-            <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Purchases VAT by Type</h3>
+            <h3 className="font-bold py-3 leading-6 text-lg text-gray-900">Expense VAT by Type</h3>
             <div className="overflow-x-auto rounded-b-lg border border-white">
               <Table
                 columns={[

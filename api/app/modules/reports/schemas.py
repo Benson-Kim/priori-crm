@@ -117,22 +117,24 @@ class SalesStatusCounts(BaseModel):
 
 
 class PurchasesSummaryMetrics(BaseModel):
-    """Top-line purchases metrics for summary MetricCards."""
+    """Actual expense metrics plus separately identified PO commitments."""
 
-    expense_spend: Decimal = Field(
-        description="Pre-tax expense spend (SUM ExpenseLineItem.line_total)"
+    actual_spend: Decimal = Field(
+        description="Pre-tax actual spend from expense records only"
     )
-    po_spend: Decimal = Field(
-        description="Pre-tax PO spend (SUM PurchaseOrder.subtotal)"
+    po_commitments: Decimal = Field(
+        description="Pre-tax issued/paid PO commitments; not actual spend or AP"
     )
-    total_spend: Decimal = Field(description="expense_spend + po_spend")
-    expense_tax: Decimal
-    po_tax: Decimal
-    total_tax: Decimal = Field(description="expense_tax + po_tax")
+    input_vat_estimate: Decimal = Field(
+        description="Expense VAT before invoice/customs eligibility reconciliation"
+    )
+    po_commitment_tax: Decimal = Field(
+        description="Tax embedded in PO commitments; never deductible input VAT"
+    )
     expense_count: int
-    po_count: int
-    outstanding_balance: Decimal = Field(
-        description="Combined unpaid balance (expenses + sent POs)"
+    po_commitment_count: int
+    outstanding_payables: Decimal = Field(
+        description="Positive unpaid expense balances only; excludes POs"
     )
 
 
@@ -178,16 +180,27 @@ class PurchasesSourceCounts(BaseModel):
 
 # Tax Report Schemas
 
+VAT_RECONCILIATION_LABEL: Literal["VAT reconciliation estimate"] = (
+    "VAT reconciliation estimate"
+)
+VAT_FILING_WARNING = (
+    "This estimate is not a VAT return or filing-ready output. Confirm it against "
+    "eTIMS records, customs records, credit and debit notes, and the KRA "
+    "auto-populated return before filing."
+)
+
 
 class TaxSummaryMetrics(BaseModel):
-    """VAT position summary."""
+    """Estimated VAT position before KRA evidence reconciliation."""
 
     vat_collected: Decimal = Field(
         description="Sales VAT collected (SUM Invoice.tax_total)"
     )
-    vat_paid: Decimal = Field(description="Purchase VAT input tax (expenses + POs)")
-    net_vat: Decimal = Field(
-        description="vat_collected - vat_paid. Positive = payable to KRA."
+    input_vat_estimate: Decimal = Field(
+        description="VAT from expense records only, before evidence eligibility review"
+    )
+    net_vat_estimate: Decimal = Field(
+        description="vat_collected - input_vat_estimate; reconciliation estimate only"
     )
 
 
@@ -209,6 +222,9 @@ class TaxByTypeRow(BaseModel):
 class TaxReportResponse(ReportBase):
     """Tax report: VAT position + per-type breakdowns for sales and purchases."""
 
+    report_label: Literal["VAT reconciliation estimate"] = VAT_RECONCILIATION_LABEL
+    filing_warning: str = VAT_FILING_WARNING
+    limitations: list[str] = Field(default_factory=list)
     metrics: TaxSummaryMetrics
     sales_by_tax_type: list[TaxByTypeRow]
     purchases_by_tax_type: list[TaxByTypeRow]
@@ -324,8 +340,7 @@ class AgedPayableRow(BaseModel):
 class AgedPayablesSummaryResponse(BaseModel):
     """Aged payables: totals header + per-vendor breakdown.
 
-    Expenses: bucketed by due_date.
-    POs (SENT + unpaid): always in 'current' bucket — PurchaseOrder has no due_date.
+    xpense payables only, bucketed by due_date. Purchase orders are commitments.
     """
 
     currency: str
@@ -343,9 +358,7 @@ class AgedPayableDetailRow(BaseModel):
     reference: str
     number: str
     entry_date: date
-    due_date: date = Field(
-        description="For POs: same as order_date (display anchor only, not a payment due date)"
-    )
+    due_date: date
     status: str
     total_due: Decimal
     amount_paid: Decimal

@@ -29,6 +29,7 @@ PERIOD = ResolvedPeriod.resolve(
     date(2026, 1, 1),
     date(2026, 1, 31),
 )
+AS_OF_DATE = date(2026, 1, 31)
 
 
 def _customer(db, name: str = "Acme Ltd") -> Customer:
@@ -68,14 +69,15 @@ def _invoice(
     line_tax: Decimal,
     vat_enabled: bool = False,
     vat_rate: Decimal | None = None,
+    transaction_date: date = date(2026, 1, 10),
 ) -> Invoice:
     total = subtotal + tax_total
     invoice = Invoice(
         invoice_number=f"INV-{uuid4().hex[:12]}",
         invoice_reference=f"IN-{uuid4().hex[:8]}",
         customer_id=customer.id,
-        transaction_date=date(2026, 1, 10),
-        due_date=date(2026, 2, 9),
+        transaction_date=transaction_date,
+        due_date=transaction_date + timedelta(days=30),
         status=InvoiceStatus.SENT,
         currency=Currency.KES,
         subtotal=subtotal,
@@ -269,20 +271,41 @@ def test_tax_breakdowns_reconcile_document_line_zero_and_custom_vat(db):
     )
 
     assert purchases[("vat_16", Decimal("0.1600"))].document_count == 1
-    assert purchases[("vat_0", Decimal("0.0000"))].document_count == 1
-    assert purchases[("vat_custom", Decimal("0.1500"))].document_count == 1
+    assert ("vat_0", Decimal("0.0000")) not in purchases
+    assert ("vat_custom", Decimal("0.1500")) not in purchases
     assert (
         sum((r.tax_amount for r in report.purchases_by_tax_type), Decimal("0"))
-        == report.metrics.vat_paid
+        == report.metrics.input_vat_estimate
     )
+    assert report.metrics.input_vat_estimate == Decimal("16.00")
+    assert report.metrics.net_vat_estimate == Decimal("47.00")
 
     payload = ExcelExporter().export_tax_report(report, "KES")
     workbook = load_workbook(BytesIO(payload), read_only=True, data_only=False)
     sales_rows = list(workbook["Sales by Tax Type"].iter_rows(values_only=True))
-    purchase_rows = list(workbook["Purchases by Tax Type"].iter_rows(values_only=True))
+    purchase_rows = list(workbook["Expense VAT by Type"].iter_rows(values_only=True))
     assert ("15% VAT (Custom)", 15, 1) in sales_rows
     assert ("0% VAT (Zero-rated)", 0, 1) in sales_rows
-    assert ("15% VAT (Custom)", 15, 1) in purchase_rows
+    assert ("16% VAT", 16, 1) in purchase_rows
+
+
+def test_empty_report_contracts_expose_zero_values(db):
+    service = ReportsService(db)
+
+    tax = service.get_tax_report(PERIOD, Currency.KES)
+    assert tax.metrics.vat_collected == Decimal("0.00")
+    assert tax.metrics.input_vat_estimate == Decimal("0.00")
+    assert tax.metrics.net_vat_estimate == Decimal("0.00")
+    assert tax.report_label == "VAT reconciliation estimate"
+
+    purchases = service.get_purchases_summary(PERIOD, Currency.KES)
+    assert purchases.metrics.actual_spend == Decimal("0.00")
+    assert purchases.metrics.po_commitments == Decimal("0.00")
+    assert purchases.metrics.input_vat_estimate == Decimal("0.00")
+    assert purchases.metrics.po_commitment_tax == Decimal("0.00")
+    assert purchases.metrics.expense_count == 0
+    assert purchases.metrics.po_commitment_count == 0
+    assert purchases.metrics.outstanding_payables == Decimal("0.00")
 
 
 def test_outstanding_payables_exclude_credits_and_zero_balances(db):
@@ -334,10 +357,12 @@ def test_outstanding_payables_exclude_credits_and_zero_balances(db):
 
     service = ReportsService(db)
     summary = service.get_purchases_summary(PERIOD, Currency.KES)
-    aging = service.get_aged_payables(Currency.KES.value)
-    assert summary.metrics.outstanding_balance == Decimal("150.00")
-    assert aging.totals.total == Decimal("150.00")
-    assert aging.vendors[0].total == Decimal("150.00")
+    aging = service.get_aged_payables(Currency.KES.value, AS_OF_DATE)
+    assert summary.metrics.actual_spend == Decimal("200.00")
+    assert summary.metrics.po_commitments == Decimal("150.00")
+    assert summary.metrics.outstanding_payables == Decimal("100.00")
+    assert aging.totals.total == Decimal("100.00")
+    assert aging.vendors[0].total == Decimal("100.00")
 
 
 def test_report_export_consumes_every_row_and_neutralizes_formula_text(db):
@@ -409,22 +434,21 @@ def test_duplicate_customer_and_vendor_names_remain_separate_in_aging(db):
         status=ExpenseStatus.PENDING,
         balance_due=Decimal("100.00"),
     )
-    _po(
+    _expense(
         db,
         vendor_two,
         subtotal=Decimal("50.00"),
         tax_total=Decimal("0.00"),
-        status=PurchaseOrderStatus.SENT,
+        status=ExpenseStatus.PENDING,
         balance_due=Decimal("50.00"),
-        vat_rate=None,
     )
     db.commit()
 
     service = ReportsService(db)
     sales_summary = service.get_sales_summary(PERIOD, Currency.KES)
     purchase_summary = service.get_purchases_summary(PERIOD, Currency.KES)
-    receivables = service.get_aged_receivables(Currency.KES.value)
-    payables = service.get_aged_payables(Currency.KES.value)
+    receivables = service.get_aged_receivables(Currency.KES.value, AS_OF_DATE)
+    payables = service.get_aged_payables(Currency.KES.value, AS_OF_DATE)
 
     assert {row.customer_id for row in sales_summary.revenue_by_customer} == {
         customer_one.id,
@@ -441,3 +465,28 @@ def test_duplicate_customer_and_vendor_names_remain_separate_in_aging(db):
     }
     assert len(payables.vendors) == 2
     assert {row.vendor_id for row in payables.vendors} == {vendor_one.id, vendor_two.id}
+
+
+def test_historical_vat_8_invoice_remains_reportable(db):
+    customer = _customer(db, "Historical Customer")
+    historical_period = ResolvedPeriod.resolve(
+        RangePreset.CUSTOM,
+        date(2023, 6, 1),
+        date(2023, 6, 30),
+    )
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("100.00"),
+        tax_total=Decimal("8.00"),
+        tax_type=TaxType.VAT_8,
+        line_tax=Decimal("8.00"),
+        transaction_date=date(2023, 6, 30),
+    )
+    db.commit()
+
+    report = ReportsService(db).get_tax_report(historical_period, Currency.KES)
+    rows = {(row.tax_type, row.tax_rate): row for row in report.sales_by_tax_type}
+    historical = rows[("vat_8", Decimal("0.0800"))]
+    assert historical.tax_amount == Decimal("8.00")
+    assert historical.document_count == 1

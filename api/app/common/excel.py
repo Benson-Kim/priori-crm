@@ -827,7 +827,7 @@ class ExcelExporter:
 
         def row_fn(r):
             source_type = getattr(r, "source_type", "")
-            type_label = "Expense" if source_type == "expense" else "Purchase Order"
+            type_label = "Expense" if source_type == "expense" else "PO Commitment"
             return [
                 getattr(r, "entry_date", None),
                 getattr(r, "reference", ""),
@@ -854,11 +854,11 @@ class ExcelExporter:
         )
 
     def export_tax_report(self, report, currency: str = "KES") -> bytes:
-        """Export tax report to .xlsx with three sheets.
+        """Export a VAT reconciliation estimate report to .xlsx with three sheets.
 
         Sheet 1: VAT Summary (Collected, Paid, Net Position)
-        Sheet 2: Sales by Tax Type
-        Sheet 3: Purchases by Tax Type
+        Sheet 2: VAT Estimate (Output, input estimate, net estimate)
+        Sheet 3: Expense VAT by Tax Type
 
         tax_type labels: vat_16 → "16% VAT", vat_8 → "8% VAT",
         vat_0 → "0% VAT (Zero-rated)", exempt → "Exempt", no_tax → "No Tax"
@@ -869,20 +869,30 @@ class ExcelExporter:
 
         # Sheet 1: VAT Summary
         ws1 = wb.active
-        ws1.title = "VAT Summary"
+        ws1.title = "VAT Estimate"
 
         metrics = getattr(report, "metrics", report)
         vat_collected = float(getattr(metrics, "vat_collected", 0) or 0)
-        vat_paid = float(getattr(metrics, "vat_paid", 0) or 0)
-        net_vat = float(getattr(metrics, "net_vat", 0) or 0)
+        input_vat = float(getattr(metrics, "input_vat_estimate", 0) or 0)
+        net_vat = float(getattr(metrics, "net_vat_estimate", 0) or 0)
+
+        warning = getattr(
+            report,
+            "filing_warning",
+            "VAT reconciliation estimate only; confirm against KRA source records.",
+        )
+        ws1.merge_cells("A1:B2")
+        warning_cell = _write_safe_cell(ws1, row=1, column=1, value=warning)
+        warning_cell.font = Font(name="Calibri", bold=True, size=10, color="9C2A2A")
+        warning_cell.alignment = Alignment(wrap_text=True, vertical="top")
 
         summary_data = [
-            ("VAT Collected (Sales)", vat_collected),
-            ("VAT Paid (Purchases)", vat_paid),
-            ("Net VAT Position", net_vat),
+            ("Output VAT (Sales)", vat_collected),
+            ("Potential Input VAT (Eligible Expenses Not Yet Verified)", input_vat),
+            ("Net VAT Estimate", net_vat),
         ]
 
-        for row_idx, (label, value) in enumerate(summary_data, 1):
+        for row_idx, (label, value) in enumerate(summary_data, 4):
             lbl_cell = ws1.cell(row=row_idx, column=1, value=label)
             lbl_cell.font = Font(name="Calibri", bold=True, size=10)
             val_cell = ws1.cell(row=row_idx, column=2, value=value)
@@ -890,13 +900,13 @@ class ExcelExporter:
             val_cell.alignment = Alignment(horizontal="right")
             val_cell.font = Font(name="Calibri", size=10)
 
-        note = ws1.cell(row=5, column=1, value=f"Currency: {cur}")
+        note = ws1.cell(row=8, column=1, value=f"Currency: {cur}")
         note.font = Font(name="Calibri", italic=True, size=9, color="817D7D")
 
         ws1.column_dimensions["A"].width = 28
         ws1.column_dimensions["B"].width = 16
 
-        # ── Sheet 2: Sales by Tax Type ───────────────────────────────────────
+        # Sheet 2: Sales by Tax Type
         ws2 = wb.create_sheet("Sales by Tax Type")
         s_headers = ["Tax Type", f"Tax Amount ({cur})", "Invoice Count"]
         for col_idx, header in enumerate(s_headers, 1):
@@ -923,8 +933,9 @@ class ExcelExporter:
         for col, width in {"A": 25, "B": 18, "C": 15}.items():
             ws2.column_dimensions[col].width = width
 
-        # Sheet 3: Purchases by Tax Type
-        ws3 = wb.create_sheet("Purchases by Tax Type")
+        # Sheet 3: Expense VAT by Tax Type
+
+        ws3 = wb.create_sheet("Expense VAT by Type")
         p_headers = ["Tax Type", f"Tax Amount ({cur})", "Document Count"]
         for col_idx, header in enumerate(p_headers, 1):
             cell = ws3.cell(row=1, column=col_idx, value=header)

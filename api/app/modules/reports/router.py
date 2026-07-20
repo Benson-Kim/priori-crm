@@ -24,6 +24,7 @@ from app.common.dependencies import ReportsServiceDep
 from app.common.excel import ExcelExporter
 from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency
 from app.lib.config import settings
 from app.modules.reports.schemas import (
@@ -203,8 +204,8 @@ async def export_sales(
     response_model=PurchasesReportSummaryResponse,
     summary="Purchases report summary",
     description=(
-        "Expense and PO spend, tax, counts and outstanding balances. "
-        "Includes top-vendor breakdown."
+        "Actual expense spend, expense-only outstanding payables, and potential "
+        "input VAT. Purchase orders are shown separately as commitments."
     ),
 )
 def get_purchases_summary(
@@ -306,12 +307,12 @@ async def export_purchases(
 @router.get(
     "/taxes",
     response_model=TaxReportResponse,
-    summary="Tax (VAT) report",
+    summary="Tax (VAT) reconciliation estimate",
     description=(
-        "VAT collected on sales vs VAT paid on purchases. Net VAT position "
-        "(positive = payable to KRA, negative = credit). Always in KES "
-        "(VAT is a KES obligation in Kenya). Per-type breakdowns for sales "
-        "and purchases."
+        "A KES VAT reconciliation estimate, not a VAT return or filing-ready "
+        "output. Confirm against eTIMS, customs records, credit/debit notes, "
+        "and the KRA auto-populated return. Foreign-currency VAT is rejected "
+        "until immutable KES tax-point conversion values are stored."
     ),
 )
 def get_tax_report(
@@ -329,7 +330,7 @@ def get_tax_report(
 
 @router.get(
     "/taxes/export",
-    summary="Export tax report to Excel",
+    summary="Export VAT reconciliation estimate to Excel",
     response_class=StreamingResponse,
 )
 async def export_taxes(
@@ -342,7 +343,7 @@ async def export_taxes(
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
     report = service.get_tax_report(period, Currency.KES)
     xlsx_bytes = await run_export(_exporter.export_tax_report, report, "KES")
-    filename = f"tax-report-{period.date_from}-{period.date_to}.xlsx"
+    filename = f"vat-reconciliation-estimate-{period.date_from}-{period.date_to}.xlsx"
     return StreamingResponse(
         BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -368,7 +369,8 @@ def get_aged_receivables(
     service: ReportsServiceDep,
     currency: CurrencyParam = Currency.KES,
 ) -> AgedReceivablesSummaryResponse:
-    return service.get_aged_receivables(str(currency))
+    as_of_date = reporting_date()
+    return service.get_aged_receivables(str(currency), as_of_date)
 
 
 @router.get(
@@ -386,8 +388,9 @@ def list_aged_receivables_detail(
     page: PageParam = 1,
     per_page: PerPageParam = 25,
 ) -> AgedReceivablesDetailResponse:
+    as_of_date = reporting_date()
     params = PaginationParams(page=page, per_page=per_page, with_total=False)
-    return service.list_aged_receivables_detail(str(currency), params)
+    return service.list_aged_receivables_detail(str(currency), as_of_date, params)
 
 
 # Aged Payables
@@ -400,7 +403,6 @@ def list_aged_receivables_detail(
     description=(
         "Outstanding payable balances grouped by vendor and aging bucket. "
         "Expenses: bucketed by due_date. "
-        "POs (SENT + unpaid): always in 'Current' bucket (no due_date on PO model). "
         "Point-in-time: no date range filter."
     ),
 )
@@ -408,14 +410,15 @@ def get_aged_payables(
     service: ReportsServiceDep,
     currency: CurrencyParam = Currency.KES,
 ) -> AgedPayablesSummaryResponse:
-    return service.get_aged_payables(str(currency))
+    as_of_date = reporting_date()
+    return service.get_aged_payables(str(currency), as_of_date)
 
 
 @router.get(
     "/aged-payables/detail",
     response_model=AgedPayablesDetailResponse,
     summary="Aged payables detail",
-    description="Individual outstanding expense + PO rows with bucket and days overdue.",
+    description="Individual outstanding expense rows with bucket and days overdue.",
 )
 def list_aged_payables_detail(
     service: ReportsServiceDep,
@@ -423,5 +426,6 @@ def list_aged_payables_detail(
     page: PageParam = 1,
     per_page: PerPageParam = 25,
 ) -> AgedPayablesDetailResponse:
+    as_of_date = reporting_date()
     params = PaginationParams(page=page, per_page=per_page, with_total=False)
-    return service.list_aged_payables_detail(str(currency), params)
+    return service.list_aged_payables_detail(str(currency), as_of_date, params)

@@ -87,15 +87,13 @@ export interface SalesStatusCounts {
 // Purchases schemas
 
 export interface PurchasesSummaryMetrics {
-  expense_spend: string;
-  po_spend: string;
-  total_spend: string;
-  expense_tax: string;
-  po_tax: string;
-  total_tax: string;
+  actual_spend: string;
+  po_commitments: string;
+  input_vat_estimate: string;
+  po_commitment_tax: string;
   expense_count: number;
-  po_count: number;
-  outstanding_balance: string;
+  po_commitment_count: number;
+  outstanding_payables: string;
 }
 
 export interface SpendByVendor {
@@ -136,8 +134,8 @@ export interface PurchasesSourceCounts {
 
 export interface TaxSummaryMetrics {
   vat_collected: string;
-  vat_paid: string;
-  net_vat: string;
+  input_vat_estimate: string;
+  net_vat_estimate: string;
 }
 
 export interface TaxByTypeRow {
@@ -150,6 +148,9 @@ export interface TaxByTypeRow {
 export interface TaxReportResponse {
   period: ResolvedPeriod;
   currency: string;
+  report_label: "VAT reconciliation estimate";
+  filing_warning: string;
+  limitations: string[];
   metrics: TaxSummaryMetrics;
   sales_by_tax_type: TaxByTypeRow[];
   purchases_by_tax_type: TaxByTypeRow[];
