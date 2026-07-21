@@ -26,8 +26,10 @@ from app.common.financial import (
     neutralize_line_tax,
     sum_line_totals,
     validate_document_vat_rate_for_date,
+    validate_line_item_treatments_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, QuoteStatus, TaxType
 from app.modules.quotes.models import Quote, QuoteLineItem
 from app.modules.quotes.queries import (
@@ -393,7 +395,7 @@ class QuoteService(BaseDocumentService):
         self,
         quote_id: uuid.UUID,
         data: QuoteUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Quote:
         """
         Update an existing quote with optimistic locking.
@@ -403,17 +405,15 @@ class QuoteService(BaseDocumentService):
         - SENT: Limited editing (no customer/amount changes)
         - APPROVED/INVOICED/EXPIRED: Read-only (no edits)
         """
+        # Lock the row before checking status to serialize with transitions
+        assert_version(self._db, Quote, quote_id, expected_version)
+
         quote = self.get_by_id(quote_id)
 
         if not quote.is_editable:
             raise BadRequestException(
                 detail=f"Cannot edit quote in {quote.status} status", field="status"
             )
-
-        # Atomic optimistic-lock guard: locks the row and compares the version,
-        # replacing the previous non-atomic Python compare that allowed silent
-        # last-write-wins
-        assert_version(self._db, Quote, quote_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True, mode="python")
 
@@ -458,6 +458,11 @@ class QuoteService(BaseDocumentService):
             raise BadRequestException(
                 detail="vat_rate is required when vat_enabled is true",
                 field="vat_rate",
+            )
+
+        if "transaction_date" in update_data and "line_items" not in update_data:
+            validate_line_item_treatments_for_date(
+                quote.line_items, effective_transaction_date
             )
 
         # Handle line items update (replace all)
@@ -702,8 +707,6 @@ class QuoteService(BaseDocumentService):
 
         invoice number generation is delegated to InvoiceService.
         """
-        from app.constants.enums import InvoiceStatus
-        from app.modules.invoices.models import Invoice, InvoiceLineItem
         from app.modules.invoices.service import InvoiceService
 
         # Lock the bare row; lazyload('*') keeps the FOR UPDATE off the
@@ -739,61 +742,60 @@ class QuoteService(BaseDocumentService):
                     field="status",
                 )
 
+        from app.modules.invoices.schemas import InvoiceCreate
+
         try:
-            sp = self._db.begin_nested()
-            invoice_svc = InvoiceService(self._db)
-            invoice_number = invoice_svc.generate_invoice_number()
-            invoice_reference = invoice_svc.generate_invoice_reference()
+            with self._db.begin_nested():
+                invoice_svc = InvoiceService(self._db)
 
-            invoice = Invoice(
-                invoice_number=invoice_number,
-                invoice_reference=invoice_reference,
-                customer_id=quote.customer_id,
-                transaction_date=date.today(),
-                due_date=quote.due_date,
-                currency=quote.currency,
-                status=InvoiceStatus.DRAFT,
-                subtotal=quote.subtotal,
-                discount_type=quote.discount_type,
-                discount_amount=quote.discount_amount,
-                discount_percentage=quote.discount_percentage,
-                tax_total=quote.tax_total,
-                total_due=quote.total_due,
-                amount_paid=Decimal("0.00"),
-                balance_due=quote.total_due,
-                rfq_number=quote.rfq_rfp_number,
-                notes=quote.notes,
-                created_by=user_id,
-            )
-            self._db.add(invoice)
-            self._db.flush()
-
-            for quote_item in quote.line_items:
-                self._db.add(
-                    InvoiceLineItem(
-                        invoice_id=invoice.id,
-                        line_number=quote_item.line_number,
-                        item_name=quote_item.item_name,
-                        description=quote_item.description,
-                        quantity=quote_item.quantity,
-                        unit_price=quote_item.unit_price,
-                        line_total=quote_item.line_total,
-                        tax_type=quote_item.tax_type,
-                        tax_amount=quote_item.tax_amount,
+                new_transaction_date = reporting_date()
+                if quote.due_date < new_transaction_date:
+                    raise BadRequestException(
+                        detail="The quote due_date is before the new invoice date.",
+                        field="due_date",
                     )
+
+                payload = InvoiceCreate(
+                    customer_id=quote.customer_id,
+                    transaction_date=new_transaction_date,
+                    due_date=quote.due_date,
+                    currency=quote.currency,
+                    line_items=[
+                        {
+                            "item_name": item.item_name,
+                            "description": item.description,
+                            "quantity": item.quantity,
+                            "unit_price": item.unit_price,
+                            "tax_type": item.tax_type,
+                        }
+                        for item in quote.line_items
+                    ],
+                    discount_type=quote.discount_type,
+                    discount_amount=quote.discount_amount,
+                    discount_percentage=quote.discount_percentage,
+                    vat_enabled=quote.vat_enabled,
+                    vat_rate=quote.vat_rate,
+                    rfq_number=quote.rfq_rfp_number,
+                    notes=quote.notes,
                 )
-            self._db.flush()
 
-            if quote.status == QuoteStatus.SENT:
-                self._transition(quote, QuoteStatus.APPROVED)
-                quote.approved_at = datetime.now(UTC)
-                self._capture_owner_snapshot(quote)
+                try:
+                    invoice = invoice_svc.create(payload, user_id=user_id)
+                except BadRequestException as exc:
+                    raise BadRequestException(
+                        detail=f"Cannot convert quote: {exc.detail}",
+                        field=exc.extra.get("field"),
+                    ) from exc
 
-            self._transition(quote, QuoteStatus.INVOICED)
-            quote.invoiced_at = datetime.now(UTC)
-            quote.related_invoice_id = invoice.id
-            self._db.flush()
-            sp.commit()  # release savepoint — all steps succeeded
+                if quote.status == QuoteStatus.SENT:
+                    self._transition(quote, QuoteStatus.APPROVED)
+                    quote.approved_at = datetime.now(UTC)
+                    self._capture_owner_snapshot(quote)
+
+                self._transition(quote, QuoteStatus.INVOICED)
+                quote.invoiced_at = datetime.now(UTC)
+                quote.related_invoice_id = invoice.id
+                self._db.flush()
 
             logger.info(
                 "Converted quote %s → invoice %s",

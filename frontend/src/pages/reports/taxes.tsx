@@ -9,17 +9,18 @@
  */
 
 import {
-  exportTaxReport,
+  exportTaxes,
   formatTaxTypeLabel,
   getExcludedTaxTransactions,
   getTaxReport,
   type ExcludedTaxTransaction,
-  type ExcludedTaxTransactionsResponse,
   type TaxByTypeRow,
   type TaxReportResponse
 } from "@/services/reportsApi";
-import { useEffect, useState } from "react";
+import type { PaginatedApiResponse } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useReportingDate } from "@/hooks/useReportingDate";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -33,29 +34,42 @@ import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 
 export default function TaxReportPage() {
   const navigate = useNavigate();
-  const [period, setPeriod] = useState<ReportPeriodFilter>(defaultReportPeriod);
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() => defaultReportPeriod(reportingDay));
+  const previousReportingDay = useRef(reportingDay);
   const [data, setData] = useState<TaxReportResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [excluded, setExcluded] =
-    useState<ExcludedTaxTransactionsResponse | null>(null);
+    useState<PaginatedApiResponse<ExcludedTaxTransaction> | null>(null);
   const [excludedPage, setExcludedPage] = useState(1);
   const [excludedPerPage, setExcludedPerPage] = useState(10);
   const [excludedLoading, setExcludedLoading] = useState(false);
   const [excludedError, setExcludedError] = useState<string | null>(null);
-  const periodKey = JSON.stringify(buildReportPeriodParams(period, "KES"));
 
   useEffect(() => {
-    if (!isReportPeriodReady(period)) return;
+    const previousDefault = defaultReportPeriod(previousReportingDay.current);
+    setPeriod((current) =>
+      JSON.stringify(current) === JSON.stringify(previousDefault)
+        ? defaultReportPeriod(reportingDay)
+        : current
+    );
+    previousReportingDay.current = reportingDay;
+  }, [reportingDay]);
+
+  const periodKey = JSON.stringify(buildReportPeriodParams(period, "KES", reportingDay));
+
+  useEffect(() => {
+    if (!isReportPeriodReady(period, reportingDay)) return;
 
     let cancelled = false;
     setIsLoading(true);
     setError(null);
     setData(null);
 
-    getTaxReport(period)
+    getTaxReport(period, { reportingDate: reportingDay })
       .then((res) => { if (!cancelled) setData(res); })
       .catch((err: unknown) => {
         if (!cancelled)
@@ -79,7 +93,7 @@ export default function TaxReportPage() {
     let cancelled = false;
     setExcludedLoading(true);
     setExcludedError(null);
-    getExcludedTaxTransactions(period, excludedPage, excludedPerPage)
+    getExcludedTaxTransactions(period, { cursor: undefined }, excludedPerPage, reportingDay)
       .then((response) => {
         if (!cancelled) setExcluded(response);
       })
@@ -99,12 +113,12 @@ export default function TaxReportPage() {
   }, [data?.completeness.status, periodKey, excludedPage, excludedPerPage]);
 
   const handleExport = async () => {
-    if (!isReportPeriodReady(period)) return;
+    if (!isReportPeriodReady(period, reportingDay)) return;
     setIsExporting(true);
     setExportError(null);
     try {
-      await exportTaxReport(period, {
-        partial: data?.completeness.status === "partial",
+      await exportTaxes(period, {
+        reportingDate: reportingDay,
       });
     } catch (err: unknown) {
       setExportError(err instanceof Error ? err.message : "Failed to export tax report");
@@ -210,7 +224,8 @@ export default function TaxReportPage() {
             Excluded Transactions
           </h3>
           <p className="pb-3 text-sm text-content-secondary">
-            Open a document to add the missing historical KES conversion evidence.
+            Review these source documents and reconcile them externally. Entering
+            historical KES tax-point evidence is not yet supported in the application.
           </p>
           {excludedLoading ? (
             <LoadingState message="Loading excluded transactions..." className="h-40" />

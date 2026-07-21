@@ -14,6 +14,7 @@ from app.constants.settings_defaults import (
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
+from app.lib.config import settings
 from app.modules.owner.schemas import OwnerProfileResponse, OwnerProfileUpdate
 
 router = APIRouter()
@@ -42,6 +43,8 @@ def _to_response(profile) -> OwnerProfileResponse:
         jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
+        reporting_timezone=settings.REPORTING_TIMEZONE,
+        reporting_date=settings.reporting_date.isoformat(),
     )
 
 

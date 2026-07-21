@@ -1,6 +1,6 @@
 // Utility exports
 
-import { getTodayString, toISODateString } from "./dateUtils";
+import { calendarFromIso, getTodayString, toISODateString } from "./dateUtils";
 
 export type ReportPeriodMode = "month" | "quarter" | "year" | "custom";
 
@@ -17,11 +17,13 @@ export interface ReportPeriodFilter {
      customTo?: string;
 }
 
+export function currentYear(reportingDate: string): number {
+     return calendarFromIso(reportingDate).year;
+}
 
-
-export const today = getTodayString();
-export const currentYear = new Date().getUTCFullYear();
-export const MIN_YEAR = currentYear - 5;
+export function MIN_YEAR(reportingDate: string): number {
+     return currentYear(reportingDate) - 5;
+}
 
 export const MONTH_SHORT = [
      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -35,8 +37,7 @@ export const MODE_LABELS: Record<ReportPeriodMode, string> = {
      custom: "Custom",
 };
 
-
-export function resolveReportPeriod(filter: ReportPeriodFilter): {
+export function resolveReportPeriod(filter: ReportPeriodFilter, todayStr: string = getTodayString()): {
      dateFrom: string | undefined;
      dateTo: string | undefined;
 } {
@@ -48,7 +49,7 @@ export function resolveReportPeriod(filter: ReportPeriodFilter): {
           const lastDay = new Date(Date.UTC(y, m, 0));
           const dateFrom = toISODateString(firstDay);
           const rawTo = toISODateString(lastDay);
-          return { dateFrom, dateTo: rawTo > today ? today : rawTo };
+          return { dateFrom, dateTo: rawTo > todayStr ? todayStr : rawTo };
      }
 
      if (filter.mode === "quarter" && filter.quarter != null) {
@@ -57,13 +58,13 @@ export function resolveReportPeriod(filter: ReportPeriodFilter): {
           const lastDay = new Date(Date.UTC(y, startMonth + 3, 0));
           const dateFrom = toISODateString(firstDay);
           const rawTo = toISODateString(lastDay);
-          return { dateFrom, dateTo: rawTo > today ? today : rawTo };
+          return { dateFrom, dateTo: rawTo > todayStr ? todayStr : rawTo };
      }
 
      if (filter.mode === "year") {
           const dateFrom = `${y}-01-01`;
           const rawTo = `${y}-12-31`;
-          return { dateFrom, dateTo: rawTo > today ? today : rawTo };
+          return { dateFrom, dateTo: rawTo > todayStr ? todayStr : rawTo };
      }
 
      if (filter.mode === "custom") {
@@ -73,25 +74,26 @@ export function resolveReportPeriod(filter: ReportPeriodFilter): {
      return { dateFrom: undefined, dateTo: undefined };
 }
 
-export function isReportPeriodReady(filter: ReportPeriodFilter): boolean {
-     const { dateFrom, dateTo } = resolveReportPeriod(filter);
+export function isReportPeriodReady(filter: ReportPeriodFilter, reportingDate: string = getTodayString()): boolean {
+     const { dateFrom, dateTo } = resolveReportPeriod(filter, reportingDate);
      return !!(dateFrom && dateTo && dateFrom <= dateTo);
 }
 
 export function buildReportPeriodParams(
      filter: ReportPeriodFilter,
-     currency: string
+     currency: string,
+     reportingDate: string = getTodayString()
 ): Record<string, string | number | boolean | undefined> {
-     const { dateFrom, dateTo } = resolveReportPeriod(filter);
+     const { dateFrom, dateTo } = resolveReportPeriod(filter, reportingDate);
      return { range: "custom", dateFrom, dateTo, currency };
 }
 
-export function defaultReportPeriod(): ReportPeriodFilter {
-     const now = new Date();
+export function defaultReportPeriod(reportingDate: string = getTodayString()): ReportPeriodFilter {
+     const cal = calendarFromIso(reportingDate);
      return {
           mode: "month",
-          year: now.getUTCFullYear(),
-          month: now.getUTCMonth() + 1,
+          year: cal.year,
+          month: cal.month,
      };
 }
 

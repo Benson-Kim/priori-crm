@@ -8,6 +8,7 @@ import { cn, focusInput, hasErrorInput } from "@/lib/utils";
 interface SelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -62,7 +63,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             )}
 
             {options.map((opt) => (
-              <option key={opt.value} value={opt.value} className="text-gray-900">
+              <option key={opt.value} value={opt.value} disabled={opt.disabled} className={cn("text-gray-900", opt.disabled && "text-gray-400")}>
                 {opt.label}
               </option>
             ))}
