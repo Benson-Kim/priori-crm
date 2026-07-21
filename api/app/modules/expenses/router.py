@@ -344,7 +344,7 @@ def update_expense(
     body: ExpenseUpdate,
     service: ExpenseServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -352,7 +352,7 @@ def update_expense(
                 "If the expense has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> ExpenseResponse:
     expense = service.update(expense_id, body, expected_version)
     return ExpenseResponse.model_validate(expense)

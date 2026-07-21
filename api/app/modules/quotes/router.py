@@ -340,9 +340,9 @@ def update_quote(
     body: QuoteUpdate,
     service: QuoteServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(description="Expected version number for optimistic locking"),
-    ] = None,
+    ],
 ) -> QuoteResponse:
     """Update an existing quote."""
     quote = service.update(quote_id, body, expected_version)

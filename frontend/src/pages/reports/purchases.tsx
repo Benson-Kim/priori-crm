@@ -137,6 +137,7 @@ export default function PurchasesReportPage() {
         search: debouncedSearch || undefined,
         page,
         perPage,
+        withTotal: true,
       }, reportingDay),
       getPurchasesCounts(period, currency, {
         source: sourceFilter === "all" ? undefined : sourceFilter,

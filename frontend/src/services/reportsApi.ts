@@ -339,7 +339,7 @@ export function getSalesLedger(
     search: options.search,
     cursor: options.cursor,
     page: options.page,
-    with_total: options.withTotal,
+    withTotal: options.withTotal,
     per_page: options.perPage,
   });
 }
@@ -412,7 +412,7 @@ export function getPurchasesLedger(
     search: options.search,
     cursor: options.cursor,
     page: options.page,
-    with_total: options.withTotal,
+    withTotal: options.withTotal,
     per_page: options.perPage,
   });
 }
@@ -466,13 +466,13 @@ export function getTaxReport(
 
 export function getExcludedTaxTransactions(
   period: ReportPeriodFilter,
-  options: { strict?: boolean; cursor?: string } = {},
+  options: { strict?: boolean; page?: number } = {},
   perPage = 25,
   reportingDate?: string
 ) {
   return apiGet<PaginatedApiResponse<ExcludedTaxTransaction>>("reports/taxes/excluded", {
     ...periodParams(period, "KES", reportingDate),
-    cursor: options.cursor,
+    page: options.page,
     per_page: perPage,
   });
 }

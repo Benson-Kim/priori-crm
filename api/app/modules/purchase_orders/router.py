@@ -619,7 +619,7 @@ def update_purchase_order(
     body: PurchaseOrderUpdate,
     service: PurchaseOrderServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -627,7 +627,7 @@ def update_purchase_order(
                 "order has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> PurchaseOrderResponse:
     purchase_order = service.update(po_id, body, expected_version)
     emit_event(

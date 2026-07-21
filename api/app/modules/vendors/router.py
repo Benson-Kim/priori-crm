@@ -269,16 +269,16 @@ def update_vendor(
     body: VendorUpdate,
     service: VendorServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
                 "Current version number for optimistic locking. "
-                "If provided and the vendor has been updated since you loaded it, "
+                "If the vendor has been updated since you loaded it, "
                 "the request is rejected with HTTP 409."
             ),
         ),
-    ] = None,
+    ],
 ) -> VendorResponse:
     """Update an existing vendor."""
     vendor = service.update(
