@@ -26,6 +26,8 @@ class _FakeInvoice:
         self.discount_type = None
         self.discount_amount = None
         self.discount_percentage = None
+        self.vat_enabled = False
+        self.vat_rate = None
         self.tax_total = Decimal("16.00")
         self.total_due = Decimal("116.00")
         self.rfq_number = None
@@ -38,29 +40,16 @@ class TestDuplicateInvoiceResponse:
     def test_returns_invoice_duplicate_response_with_ids(self):
         original = _FakeInvoice(invoice_number="INV-0001")
         new_number = "INV-0002"
+        created_invoice = _FakeInvoice(invoice_number=new_number)
 
         db = MagicMock()
-        # The duplicate Invoice created inside the method gets its id assigned
-        # on flush; emulate that by setting the id when add() is called.
-        created: dict = {}
-
-        def _capture_add(obj):
-            # First add() is the duplicate Invoice; give it an id + number.
-            if not created and hasattr(obj, "invoice_number"):
-                obj.id = uuid.uuid4()
-                obj.invoice_number = new_number
-                created["invoice"] = obj
-
-        db.add.side_effect = _capture_add
-
         svc = InvoiceService(db)
         svc.get_by_id = MagicMock(return_value=original)  # type: ignore[method-assign]
-        svc._generate_invoice_number = MagicMock(return_value=new_number)  # type: ignore[method-assign]
-        svc._generate_invoice_reference = MagicMock(return_value="IN-0002")  # type: ignore[method-assign]
+        svc.create = MagicMock(return_value=created_invoice)  # type: ignore[method-assign]
 
         result = svc.duplicate_invoice(original.id)
 
         assert isinstance(result, InvoiceDuplicateResponse)
         assert result.original_invoice_id == original.id
-        assert result.new_invoice_id == created["invoice"].id
+        assert result.new_invoice_id == created_invoice.id
         assert result.new_invoice_number == new_number

@@ -187,12 +187,12 @@ class TestQuoteConvertGuard:
 
         monkeypatch.setattr(
             InvoiceService,
-            "generate_invoice_number",
+            "_generate_invoice_number",
             lambda self: f"INV-CONV-{next(counter):03d}",
         )
         monkeypatch.setattr(
             InvoiceService,
-            "generate_invoice_reference",
+            "_generate_invoice_reference",
             lambda self: f"IN-CONV-{next(counter):04d}",
         )
 
