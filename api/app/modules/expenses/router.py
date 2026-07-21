@@ -201,8 +201,12 @@ def get_expense_statistics(
 )
 def calculate_expense_totals(
     line_items: list[ExpenseLineItemCreate],
+    expense_date: Annotated[
+        date,
+        Query(alias="expenseDate", description="Expense tax-point date"),
+    ],
 ) -> ExpenseCalculationResponse:
-    return ExpenseService.calculate_totals(line_items)
+    return ExpenseService.calculate_totals(line_items, tax_point_date=expense_date)
 
 
 @router.get(

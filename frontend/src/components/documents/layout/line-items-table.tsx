@@ -6,8 +6,8 @@
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { TAX_CATEGORY_OPTIONS, VAT_RATE_OPTIONS } from "@/lib/constants";
-import { formatCurrency } from "@/lib/utils";
+import { TAX_CATEGORY_OPTIONS } from "@/lib/constants";
+import { formatCurrency, getVatRateOptions, lineTaxValidationError } from "@/lib/utils";
 import { Plus, Trash } from "lucide-react";
 import { Fragment } from "react";
 import {
@@ -23,6 +23,7 @@ interface LineItemsTableProps {
     errors: Record<string, string>;
     restrictedMode: boolean;
     enableInlineTax?: boolean;
+    taxPointDate?: string;
     onAddRow: () => void;
     onRemoveRow: (key: string) => void;
     onUpdateRow: (key: string, field: keyof LineItemRow, value: string) => void;
@@ -33,6 +34,7 @@ export function LineItemsTable({
     errors,
     restrictedMode,
     enableInlineTax = false,
+    taxPointDate,
     onAddRow,
     onRemoveRow,
     onUpdateRow,
@@ -57,6 +59,7 @@ export function LineItemsTable({
                             errors={errors}
                             enableInlineTax={enableInlineTax}
                             restrictedMode={restrictedMode}
+                            taxPointDate={taxPointDate}
                             onRemoveRow={onRemoveRow}
                             onUpdateRow={onUpdateRow}
                         />
@@ -80,6 +83,7 @@ interface LineItemRowsProps {
     errors: Record<string, string>;
     restrictedMode: boolean;
     enableInlineTax: boolean;
+    taxPointDate?: string;
     onRemoveRow: (key: string) => void;
     onUpdateRow: (key: string, field: keyof LineItemRow, value: string) => void;
 }
@@ -89,6 +93,7 @@ function LineItemRows({
     errors,
     restrictedMode,
     enableInlineTax,
+    taxPointDate,
     onRemoveRow,
     onUpdateRow,
 }: LineItemRowsProps) {
@@ -96,6 +101,10 @@ function LineItemRows({
     const taxAmount = calcTaxAmount(lineTotal, row.taxType);
     const { category: taxCategory, rate: taxRate, isVat: hasTax } = parseTaxType(row.taxType);
     const hasInlineTax = row.taxType !== "no_tax";
+
+    const taxError = errors[`item_${row.key}_tax`] ?? (
+        hasTax ? lineTaxValidationError(row.taxType, taxPointDate) : undefined
+    );
 
     const handleCategoryChange = (val: string) => {
         if (val === "no_tax" || val === "exempt") {
@@ -207,7 +216,8 @@ function LineItemRows({
                                 value={taxRate}
                                 onChange={(e) => handleRateChange(e.target.value)}
                                 disabled={restrictedMode}
-                                options={VAT_RATE_OPTIONS}
+                                options={getVatRateOptions(taxPointDate, taxRate)}
+                                error={taxError}
                                 wrapperClassName="bg-white"
                             />
                         )}

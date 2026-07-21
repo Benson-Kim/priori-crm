@@ -10,6 +10,7 @@
 import {
   apiDelete,
   apiDownload,
+  apiDownloadWithFilename,
   apiGet,
   apiPost,
   apiPut,
@@ -166,7 +167,7 @@ export function calculateTotals(data: ExpenseLineItemPayload[]) {
 
 /**
  * Download the currently-filtered expenses as an .xlsx workbook. Returns a
- * Blob the caller saves with `saveBlob`
+ * Blob and filename the caller saves with `saveBlob`
  */
 export function exportExpensesExcel(params?: {
   status?: string;
@@ -175,8 +176,9 @@ export function exportExpensesExcel(params?: {
   dateTo?: string;
   isRecurring?: boolean;
   includeLineItems?: boolean;
-}): Promise<Blob> {
+  reportingDate?: string;
+}) {
   const query = params ? createSearchParams(params) : "";
   const path = query ? `expenses/export/excel?${query}` : "expenses/export/excel";
-  return apiDownload(path);
+  return apiDownloadWithFilename(path);
 }

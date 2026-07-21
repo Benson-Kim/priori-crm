@@ -364,7 +364,7 @@ class AgedPayableRow(BaseModel):
 class AgedPayablesSummaryResponse(BaseModel):
     """Aged payables: totals header + per-vendor breakdown.
 
-    xpense payables only, bucketed by due_date. Purchase orders are commitments.
+    Expense payables only, bucketed by due_date. Purchase orders are commitments.
     """
 
     currency: str
@@ -374,10 +374,10 @@ class AgedPayablesSummaryResponse(BaseModel):
 
 
 class AgedPayableDetailRow(BaseModel):
-    """One expense or PO row in the aged AP detail table."""
+    """One expense row in the aged AP detail table."""
 
     source_id: UUID
-    source_type: Literal["expense", "purchase_order"]
+    source_type: Literal["expense"]
     vendor_name: str
     reference: str
     number: str
@@ -392,7 +392,7 @@ class AgedPayableDetailRow(BaseModel):
 
 
 class AgedPayablesDetailResponse(BaseModel):
-    """Paginated aged AP rows (expenses + POs combined)."""
+    """Paginated aged AP rows (expenses only)."""
 
     currency: str
     as_of_date: date

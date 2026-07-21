@@ -46,7 +46,8 @@ import {
   type PurchasesReportSummaryResponse,
   type PurchasesSourceCounts,
 } from "@/services/reportsApi";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 type ActiveTab = "summary" | "ledger" | "aged";
@@ -57,8 +58,10 @@ function agedBucketField(key: string): string {
 
 export default function PurchasesReportPage() {
   const navigate = useNavigate();
+  const reportingDay = useReportingDate();
 
-  const [period, setPeriod] = useState<ReportPeriodFilter>(defaultReportPeriod);
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() => defaultReportPeriod(reportingDay));
+  const previousReportingDay = useRef(reportingDay);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
 
@@ -93,15 +96,25 @@ export default function PurchasesReportPage() {
     setAgedCurrency(currency);
   }, [currency, setAgedCurrency]);
 
-  const periodKey = JSON.stringify(buildReportPeriodParams(period, currency));
+  useEffect(() => {
+    const previousDefault = defaultReportPeriod(previousReportingDay.current);
+    setPeriod((current) =>
+      JSON.stringify(current) === JSON.stringify(previousDefault)
+        ? defaultReportPeriod(reportingDay)
+        : current
+    );
+    previousReportingDay.current = reportingDay;
+  }, [reportingDay]);
+
+  const periodKey = JSON.stringify(buildReportPeriodParams(period, currency, reportingDay));
 
   // Fetch Summary
   useEffect(() => {
-    if (!isReportPeriodReady(period)) return;
+    if (!isReportPeriodReady(period, reportingDay)) return;
     let cancelled = false;
     setSummaryLoading(true);
     setSummaryError(null);
-    getPurchasesReport(period, currency)
+    getPurchasesReport(period, currency, reportingDay)
       .then((res) => { if (!cancelled) setSummary(res); })
       .catch((err: unknown) => {
         if (!cancelled)
@@ -113,20 +126,22 @@ export default function PurchasesReportPage() {
 
   // Fetch Ledger + Counts
   useEffect(() => {
-    if (!isReportPeriodReady(period)) return;
+    if (!isReportPeriodReady(period, reportingDay)) return;
     let cancelled = false;
     setLedgerLoading(true);
     setLedgerError(null);
 
     Promise.all([
       getPurchasesLedger(period, currency, {
-        source: sourceFilter,
+        source: sourceFilter === "all" ? undefined : sourceFilter,
         search: debouncedSearch || undefined,
         page,
         perPage,
-        withTotal: true,
-      }),
-      getPurchasesCounts(period, currency, debouncedSearch || undefined),
+      }, reportingDay),
+      getPurchasesCounts(period, currency, {
+        source: sourceFilter === "all" ? undefined : sourceFilter,
+        search: debouncedSearch || undefined,
+      }, reportingDay),
     ])
       .then(([ledgerRes, countsRes]) => {
         if (!cancelled) {
@@ -142,7 +157,7 @@ export default function PurchasesReportPage() {
       .finally(() => { if (!cancelled) setLedgerLoading(false); });
 
     return () => { cancelled = true; };
-  }, [periodKey, sourceFilter, debouncedSearch, page, perPage]);
+  }, [periodKey, sourceFilter, debouncedSearch, page, perPage, reportingDay]);
 
   useEffect(() => {
     setPage(1);
@@ -157,12 +172,12 @@ export default function PurchasesReportPage() {
   );
 
   const handleExport = async () => {
-    if (!isReportPeriodReady(period)) return;
     setLedgerError(null);
+    if (!isReportPeriodReady(period, reportingDay)) return;
     setIsExporting(true);
     setExportError(null);
     try {
-      await exportPurchasesReport(period, currency);
+      await exportPurchasesReport(period, currency, reportingDay);
     } catch (err: unknown) {
       setExportError(
         err instanceof Error ? err.message : "Failed to export purchases report"

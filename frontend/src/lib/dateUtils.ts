@@ -105,3 +105,146 @@ export function buildStatementParams(periodStart?: string, periodEnd?: string) {
 
   return params;
 }
+
+export interface ReportingCalendar {
+  isoDate: string;
+  year: number;
+  month: number;
+  day: number;
+  quarter: number;
+}
+
+export function calendarFromIso(isoDate: string): ReportingCalendar {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) throw new Error(`Invalid ISO reporting date: ${isoDate}`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return {
+    isoDate,
+    year,
+    month,
+    day,
+    quarter: Math.ceil(month / 3),
+  };
+}
+
+export function reportingDateInTimeZone(
+  timeZone: string,
+  now: Date = new Date()
+): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function localCalendarDate(now: Date = new Date()): string {
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function resolvedReportingDate(
+  configuredTimeZone: string | undefined,
+  serverDate: string | undefined,
+  localFallback?: string,
+  now: Date = new Date()
+): string {
+  if (configuredTimeZone) {
+    try {
+      return reportingDateInTimeZone(configuredTimeZone, now);
+    } catch {
+      // Fall through to the server-provided accounting date. A malformed
+      // timezone must never make report utilities invent another zone.
+    }
+  }
+  return serverDate ?? localFallback ?? localCalendarDate(now);
+}
+
+export function isDateOutOfBounds(
+  iso: string,
+  min?: string,
+  max?: string
+): boolean {
+  return Boolean((min != null && iso < min) || (max != null && iso > max));
+}
+
+export function addIsoDays(iso: string, deltaDays: number): string {
+  const date = new Date(`${iso}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function preferredCalendarFocusDate(
+  visibleDates: readonly string[],
+  selected: string | undefined,
+  today: string,
+  min?: string,
+  max?: string
+): string | undefined {
+  const enabled = visibleDates.filter(
+    (date) => !isDateOutOfBounds(date, min, max)
+  );
+  if (selected && enabled.includes(selected)) return selected;
+  if (enabled.includes(today)) return today;
+  return enabled[0];
+}
+
+export interface FocusTarget {
+  focus: () => void;
+}
+
+export function restoreTriggerFocus(
+  target: FocusTarget | null | undefined,
+  schedule: (callback: () => void) => unknown = (callback) =>
+    requestAnimationFrame(callback)
+): void {
+  if (!target) return;
+  schedule(() => target.focus());
+}
+
+export type CalendarKeyboardIntent =
+  | "move"
+  | "close"
+  | "select"
+  | "leave"
+  | "none";
+
+export function calendarKeyboardIntent(key: string): CalendarKeyboardIntent {
+  if (key === "Escape") return "close";
+  if (key === "Enter" || key === " ") return "select";
+  if (key === "Tab") return "leave";
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) {
+    return "move";
+  }
+  return "none";
+}
+
+export function nextKeyboardDate(
+  iso: string,
+  key: string
+): string | undefined {
+  const deltas: Record<string, number> = {
+    ArrowLeft: -1,
+    ArrowRight: 1,
+    ArrowUp: -7,
+    ArrowDown: 7,
+  };
+  const delta = deltas[key];
+  return delta == null ? undefined : addIsoDays(iso, delta);
+}

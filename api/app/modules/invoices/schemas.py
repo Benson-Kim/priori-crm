@@ -455,7 +455,7 @@ class InvoiceResponse(BaseModel):
     @property
     def is_editable(self) -> bool:
         """Check if invoice can be edited."""
-        return self.status in [InvoiceStatus.DRAFT, InvoiceStatus.SENT]
+        return self.status == InvoiceStatus.DRAFT
 
     @computed_field
     @property

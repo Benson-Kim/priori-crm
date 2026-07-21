@@ -23,9 +23,15 @@
  *   disabled    -- disables the trigger button
  */
 
-import { cn } from "@/lib/utils";
-import { hasErrorInput, focusInput } from "@/lib/utils";
-import { ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import {
+  calendarKeyboardIntent,
+  isDateOutOfBounds,
+  nextKeyboardDate,
+  preferredCalendarFocusDate,
+  restoreTriggerFocus,
+} from "@/lib/dateUtils";
+import { cn, focusInput, hasErrorInput } from "@/lib/utils";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -42,6 +48,7 @@ export interface CalendarPickerProps {
   /** Validation error message (form variant only) */
   error?: string;
   disabled?: boolean;
+  today?: string;
   id?: string;
 }
 
@@ -84,9 +91,11 @@ export function CalendarPicker({
   variant = "toolbar",
   error,
   disabled = false,
+  today: propToday,
   id,
 }: CalendarPickerProps) {
-  const today = todayIso();
+  const todayFallback = todayIso();
+  const today = propToday ?? todayFallback;
 
   const initView = () => {
     if (value) {
@@ -101,9 +110,11 @@ export function CalendarPicker({
   const [viewYear, setViewYear] = useState(initView().viewYear);
   const [viewMonth, setViewMonth] = useState(initView().viewMonth);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [focusDate, setFocusDate] = useState<string | undefined>();
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const open = () => {
     if (disabled || !triggerRef.current) return;
@@ -183,12 +194,63 @@ export function CalendarPicker({
     nextDay++;
   }
 
+  const currCells = cells.filter((c) => c.type === "curr").map((c) => c.iso);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFocusDate(
+        preferredCalendarFocusDate(currCells, value, today, min, max)
+      );
+    }
+  }, [isOpen, viewYear, viewMonth, value, today, min, max]);
+
+  useEffect(() => {
+    if (isOpen && focusDate && gridRef.current) {
+      const btn = gridRef.current.querySelector(
+        `button[data-date="${focusDate}"]`
+      ) as HTMLButtonElement | null;
+      btn?.focus();
+    }
+  }, [isOpen, focusDate]);
+
+  const handlePanelKeyDown = (e: React.KeyboardEvent) => {
+    const intent = calendarKeyboardIntent(e.key);
+    if (intent === "close" || intent === "leave") {
+      if (intent === "close") e.preventDefault();
+      close();
+      if (intent === "close") restoreTriggerFocus(triggerRef.current);
+      return;
+    }
+
+    if (intent === "select" && focusDate) {
+      e.preventDefault();
+      if (!isDateOutOfBounds(focusDate, min, max)) {
+        handleDayClick(focusDate);
+        restoreTriggerFocus(triggerRef.current);
+      }
+      return;
+    }
+
+    if (intent === "move" && focusDate) {
+      e.preventDefault();
+      const next = nextKeyboardDate(focusDate, e.key);
+      if (next) {
+        const [ny, nm] = next.split("-").map(Number);
+        if (nm !== viewMonth || ny !== viewYear) {
+          setViewYear(ny);
+          setViewMonth(nm);
+        }
+        setFocusDate(next);
+      }
+    }
+  };
+
   const displayLabel = value ? formatDisplay(value) : placeholder;
 
   // Trigger styles
   const toolbarTrigger = cn(
-    "flex items-center gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
-    "text-base font-normal leading-6 transition-all cursor-pointer whitespace-nowrap",
+    "flex items-center justify-between gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
+    "text-base w-full font-normal leading-6 transition-all cursor-pointer whitespace-nowrap",
     "hover:border-priori-purple/50",
     value ? "text-gray-900" : "text-gray-400",
     isOpen && "border-priori-purple ring-1 ring-priori-purple/20",
@@ -236,8 +298,12 @@ export function CalendarPicker({
       {isOpen && createPortal(
         <div
           ref={panelRef}
+          role="dialog"
+          aria-label="Calendar picker"
+          tabIndex={-1}
+          onKeyDown={handlePanelKeyDown}
           data-calendar-picker-panel
-          className="fixed z-50 bg-white shadow-xl border border-gray-200 rounded-2xl p-4 w-72 animate-in fade-in slide-in-from-top-1 duration-150"
+          className="fixed z-50 bg-white shadow-xl border border-gray-200 rounded-2xl p-4 w-72 animate-in fade-in slide-in-from-top-1 duration-150 outline-none"
           style={{ top: coords.top, left: coords.left }}
         >
           {/* Month/Year navigation */}
@@ -271,28 +337,40 @@ export function CalendarPicker({
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7">
+          <div ref={gridRef} className="grid grid-cols-7" role="grid">
             {cells.map((cell, i) => {
               const isSelected = value === cell.iso;
               const isToday = cell.iso === today;
-              const outOfBounds =
-                (min != null && cell.iso < min) ||
-                (max != null && cell.iso > max);
+              const outOfBounds = isDateOutOfBounds(cell.iso, min, max);
               const isDisabled = cell.type !== "curr" || outOfBounds;
+              const isFocused = focusDate === cell.iso;
 
               return (
                 <button
                   key={i}
                   type="button"
+                  role="gridcell"
+                  data-date={cell.iso}
                   disabled={isDisabled}
-                  onClick={() => !isDisabled && handleDayClick(cell.iso)}
+                  tabIndex={isFocused ? 0 : -1}
+                  onClick={() => {
+                    if (!isDisabled) {
+                      handleDayClick(cell.iso);
+                      restoreTriggerFocus(triggerRef.current);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (!isDisabled) setFocusDate(cell.iso);
+                  }}
                   className={cn(
-                    "flex items-center justify-center h-8 w-8 mx-auto text-sm rounded-full transition-colors",
+                    "flex items-center justify-center h-8 w-8 mx-auto text-sm rounded-full outline-none",
+                    "ring-2 transition-shadow duration-200",
                     cell.type !== "curr" && "text-gray-300",
                     cell.type === "curr" && !isSelected && !isDisabled && "text-gray-700 hover:bg-priori-purple/10 hover:text-priori-purple cursor-pointer",
                     isToday && !isSelected && "font-semibold text-priori-purple",
                     isSelected && "bg-priori-purple text-white font-semibold hover:bg-priori-purple/90",
-                    isDisabled && cell.type === "curr" && "text-gray-300 cursor-not-allowed"
+                    isDisabled && cell.type === "curr" && "text-gray-300 cursor-not-allowed",
+                    isFocused ? "ring-priori-purple ring-inset" : "ring-transparent"
                   )}
                 >
                   {cell.day}
