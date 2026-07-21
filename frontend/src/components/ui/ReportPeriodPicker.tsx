@@ -17,7 +17,9 @@
  */
 
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
-import { currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, today, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import { calendarFromIso } from "@/lib/dateUtils";
+import { currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -37,6 +39,10 @@ export function ReportPeriodPicker({
   onChange,
   className,
 }: Readonly<ReportPeriodPickerProps>) {
+  const reportingDate = useReportingDate();
+  const currYear = currentYear(reportingDate);
+  const minYear = MIN_YEAR(reportingDate);
+
   const [isOpen, setIsOpen] = useState(false);
   const [panelYear, setPanelYear] = useState(value.year);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -90,13 +96,13 @@ export function ReportPeriodPicker({
   }, [isOpen]);
 
   const handleModeChange = (mode: ReportPeriodMode) => {
-    const now = new Date();
+    const cal = calendarFromIso(reportingDate);
     const year = panelYear;
     if (mode === "month") {
-      onChange({ mode, year, month: now.getUTCMonth() + 1 });
+      onChange({ mode, year, month: cal.month });
       setPanelYear(year);
     } else if (mode === "quarter") {
-      onChange({ mode, year, quarter: Math.ceil((now.getUTCMonth() + 1) / 3) });
+      onChange({ mode, year, quarter: Math.ceil(cal.month / 3) });
     } else if (mode === "year") {
       onChange({ mode, year });
       close();
@@ -106,7 +112,7 @@ export function ReportPeriodPicker({
   };
 
   const prevYear = () => {
-    const y = Math.max(MIN_YEAR, panelYear - 1);
+    const y = Math.max(minYear, panelYear - 1);
     setPanelYear(y);
     if (value.mode !== "custom") {
       onChange({ ...value, year: y });
@@ -114,7 +120,7 @@ export function ReportPeriodPicker({
   };
 
   const nextYear = () => {
-    const y = Math.min(currentYear, panelYear + 1);
+    const y = Math.min(currYear, panelYear + 1);
     setPanelYear(y);
     if (value.mode !== "custom") {
       onChange({ ...value, year: y });
@@ -174,7 +180,7 @@ export function ReportPeriodPicker({
                 className={cn(
                   "flex-1 px-2 py-2 text-sm font-medium transition-colors",
                   value.mode === mode
-                    ? "bg-gray-900 text-white"
+                    ? "bg-priori-purple text-white"
                     : "text-gray-500 hover:bg-gray-100"
                 )}
               >
@@ -189,7 +195,7 @@ export function ReportPeriodPicker({
               <button
                 type="button"
                 onClick={prevYear}
-                disabled={panelYear <= MIN_YEAR}
+                disabled={panelYear <= minYear}
                 className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 disabled:opacity-30 transition-colors"
               >
                 <ChevronLeft size={16} />
@@ -198,7 +204,7 @@ export function ReportPeriodPicker({
               <button
                 type="button"
                 onClick={nextYear}
-                disabled={panelYear >= currentYear}
+                disabled={panelYear >= currYear}
                 className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 disabled:opacity-30 transition-colors"
               >
                 <ChevronRight size={16} />
@@ -212,9 +218,10 @@ export function ReportPeriodPicker({
               {MONTH_SHORT.map((label, i) => {
                 const m = i + 1;
                 const isSelected = value.month === m && value.year === panelYear;
+                const cal = calendarFromIso(reportingDate);
                 const isFuture =
-                  panelYear > currentYear ||
-                  (panelYear === currentYear && m > new Date().getMonth() + 1);
+                  panelYear > currYear ||
+                  (panelYear === currYear && m > cal.month);
                 return (
                   <button
                     key={label}
@@ -242,9 +249,10 @@ export function ReportPeriodPicker({
               {[1, 2, 3, 4].map((q) => {
                 const isSelected = value.quarter === q && value.year === panelYear;
                 const quarterEndMonth = q * 3;
+                const cal = calendarFromIso(reportingDate);
                 const isFuture =
-                  panelYear > currentYear ||
-                  (panelYear === currentYear && quarterEndMonth > new Date().getMonth() + 1);
+                  panelYear > currYear ||
+                  (panelYear === currYear && quarterEndMonth > cal.month);
                 return (
                   <button
                     key={q}
@@ -281,9 +289,11 @@ export function ReportPeriodPicker({
                 <CalendarPicker
                   value={value.customFrom}
                   onChange={(d) => onChange({ ...value, customFrom: d || undefined })}
-                  max={value.customTo ?? today}
+                  max={value.customTo ?? reportingDate}
+                  today={reportingDate}
                   placeholder="mm / dd / yyyy"
                   aria-label="Start date"
+                  className="block w-full"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -295,9 +305,11 @@ export function ReportPeriodPicker({
                     if (value.customFrom && d) close();
                   }}
                   min={value.customFrom}
-                  max={today}
+                  max={reportingDate}
+                  today={reportingDate}
                   placeholder="mm / dd / yyyy"
                   aria-label="End date"
+                  className="block w-full"
                 />
               </div>
             </div>

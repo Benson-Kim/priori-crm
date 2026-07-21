@@ -201,8 +201,12 @@ def get_expense_statistics(
 )
 def calculate_expense_totals(
     line_items: list[ExpenseLineItemCreate],
+    expense_date: Annotated[
+        date,
+        Query(alias="expenseDate", description="Expense tax-point date"),
+    ],
 ) -> ExpenseCalculationResponse:
-    return ExpenseService.calculate_totals(line_items)
+    return ExpenseService.calculate_totals(line_items, tax_point_date=expense_date)
 
 
 @router.get(
@@ -340,7 +344,7 @@ def update_expense(
     body: ExpenseUpdate,
     service: ExpenseServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -348,7 +352,7 @@ def update_expense(
                 "If the expense has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> ExpenseResponse:
     expense = service.update(expense_id, body, expected_version)
     return ExpenseResponse.model_validate(expense)

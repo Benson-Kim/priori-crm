@@ -170,6 +170,7 @@ class TestBalanceNonDrift:
                     )
                 ]
             ),
+            expected_version=invoice.version,
         )
         db.refresh(customer)
         assert customer.balance == Decimal("200.00")

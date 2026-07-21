@@ -335,7 +335,7 @@ class Invoice(Base):
     @property
     def is_editable(self) -> bool:
         """Check if invoice can be edited."""
-        return self.status in [InvoiceStatus.DRAFT, InvoiceStatus.SENT]
+        return self.status == InvoiceStatus.DRAFT
 
     @property
     def is_paid(self) -> bool:

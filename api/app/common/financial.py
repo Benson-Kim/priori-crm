@@ -5,6 +5,7 @@ Single source of truth for tax rates and discount logic used across
 the Invoices, Quotes, and Expenses modules. Any future tax type must be added here only.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -108,6 +109,27 @@ def validate_document_vat_rate_for_date(
         validate_tax_treatment_for_date(TaxType.VAT_8, tax_point)
 
 
+def validate_line_item_treatments_for_date(
+    line_items: Iterable[Any],
+    tax_point: date,
+) -> None:
+    """Validate persisted or incoming line-item treatments for one tax point.
+
+    Date-only document updates do not rebuild line items, so validation must
+    also work against ORM rows. This helper accepts mappings and attribute-based
+    objects and deliberately performs eligibility validation without changing
+    any stored historical rate or amount.
+    """
+    for item in line_items:
+        tax_type = (
+            item.get("tax_type")
+            if isinstance(item, dict)
+            else getattr(item, "tax_type", None)
+        )
+        if tax_type is not None:
+            validate_tax_treatment_for_date(tax_type, tax_point)
+
+
 def get_tax_rate(tax_type: TaxType) -> Decimal:
     """Return the tax rate for a given TaxType.
 
@@ -163,7 +185,6 @@ def build_line_items(
     line_number, item_name, description, quantity, unit_price, line_total,
     tax_type, tax_amount.
     """
-    required_fields = ("item_name", "description", "quantity", "unit_price", "tax_type")
 
     result: list[dict] = []
     for idx, item in enumerate(raw_items, start=1):
@@ -176,18 +197,29 @@ def build_line_items(
             else lambda k, d=None, _it=item: getattr(_it, k, d)
         )
 
+        item_name = _get("item_name")
+        description = _get("description")
+        quantity = _get("quantity")
+        unit_price = _get("unit_price")
+        raw_tax_type = _get("tax_type")
+
         # Validate required fields are present rather than silently coercing a
         # missing value to None (which would TypeError in calculation or
         # persist a NULL).
-        for field in required_fields:
-            if _get(field) is None:
-                raise ValueError(
-                    f"Line item {idx} is missing required field '{field}'."
-                )
+        if item_name is None:
+            raise ValueError(f"Line item {idx} is missing required field 'item_name'.")
+        if description is None:
+            raise ValueError(
+                f"Line item {idx} is missing required field 'description'."
+            )
+        if quantity is None:
+            raise ValueError(f"Line item {idx} is missing required field 'quantity'.")
+        if unit_price is None:
+            raise ValueError(f"Line item {idx} is missing required field 'unit_price'.")
+        if raw_tax_type is None:
+            raise ValueError(f"Line item {idx} is missing required field 'tax_type'.")
 
-        quantity = _get("quantity")
-        unit_price = _get("unit_price")
-        tax_type = TaxType(_get("tax_type"))
+        tax_type = TaxType(raw_tax_type)
         if tax_point_date:
             validate_tax_treatment_for_date(tax_type, tax_point_date)
 
@@ -195,8 +227,8 @@ def build_line_items(
         result.append(
             {
                 "line_number": idx,
-                "item_name": _get("item_name"),
-                "description": _get("description"),
+                "item_name": item_name,
+                "description": description,
                 "quantity": quantity,
                 "unit_price": unit_price,
                 "line_total": line_total,

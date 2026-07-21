@@ -9,20 +9,21 @@
  * Period: always sends range=custom + dateFrom + dateTo (from ReportPeriodPicker).
  */
 
-import { apiDownload, apiGet } from "@/lib/api";
+import { apiDownloadWithFilename, apiGet } from "@/lib/api";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { buildReportPeriodParams, type ReportPeriodFilter } from "@/lib/reportUtils";
 import type { PaginatedApiResponse } from "@/lib/types";
-import { saveBlob } from "@/lib/utils";
+import { chooseDownloadFilename, saveBlob } from "@/lib/utils";
 
 
 // Shared period resolver
 
 function periodParams(
   period: ReportPeriodFilter,
-  currency: string = DEFAULT_CURRENCY
+  currency: string = DEFAULT_CURRENCY,
+  reportingDate?: string
 ): Record<string, string | number | boolean | undefined> {
-  return buildReportPeriodParams(period, currency);
+  return buildReportPeriodParams(period, currency, reportingDate);
 }
 
 
@@ -309,8 +310,14 @@ export function formatTaxTypeLabel(row: TaxByTypeRow): string {
 
 // Sales API
 
-export function getSalesReport(period: ReportPeriodFilter, currency = DEFAULT_CURRENCY) {
-  return apiGet<SalesReportSummaryResponse>("reports/sales", periodParams(period, currency));
+export function getSalesReport(
+  period: ReportPeriodFilter,
+  currency = DEFAULT_CURRENCY,
+  reportingDate?: string
+) {
+  return apiGet<SalesReportSummaryResponse>(
+    "reports/sales", periodParams(period, currency, reportingDate)
+  );
 }
 
 export function getSalesLedger(
@@ -319,41 +326,70 @@ export function getSalesLedger(
   options: {
     status?: string;
     search?: string;
-    page?: number;
     perPage?: number;
+    cursor?: string;
+    page?: number;
     withTotal?: boolean;
-  } = {}
+  } = {},
+  reportingDate?: string
 ) {
-  const { status, search, page = 1, perPage = 10, withTotal = true } = options;
   return apiGet<PaginatedApiResponse<SalesLedgerEntry>>("reports/sales/ledger", {
-    ...periodParams(period, currency),
-    status,
-    search,
-    page,
-    per_page: perPage,
-    withTotal,
+    ...periodParams(period, currency, reportingDate),
+    status: options.status,
+    search: options.search,
+    cursor: options.cursor,
+    page: options.page,
+    withTotal: options.withTotal,
+    per_page: options.perPage,
   });
 }
 
-export function getSalesCounts(period: ReportPeriodFilter, currency = DEFAULT_CURRENCY) {
-  return apiGet<SalesStatusCounts>("reports/sales/counts", periodParams(period, currency));
+export function getSalesCounts(
+  period: ReportPeriodFilter,
+  currency = DEFAULT_CURRENCY,
+  options: {
+    search?: string;
+  } = {},
+  reportingDate?: string
+) {
+  return apiGet<SalesStatusCounts>(
+    "reports/sales/counts",
+    {
+      ...periodParams(period, currency, reportingDate),
+      search: options.search,
+    }
+  );
 }
 
 export async function exportSalesReport(
   period: ReportPeriodFilter,
-  currency = DEFAULT_CURRENCY
+  currency = DEFAULT_CURRENCY,
+  reportingDate?: string
 ) {
-  const blob = await apiDownload("reports/sales/export", periodParams(period, currency));
-  const p = buildReportPeriodParams(period, currency);
-  saveBlob(blob, `sales-report-${p.dateFrom}-${p.dateTo}.xlsx`);
+  const download = await apiDownloadWithFilename(
+    "reports/sales/export",
+    periodParams(period, currency, reportingDate)
+  );
+  const p = buildReportPeriodParams(period, currency, reportingDate);
+  saveBlob(
+    download.blob,
+    chooseDownloadFilename(
+      download.filename,
+      `sales-report-${p.dateFrom}-${p.dateTo}.xlsx`
+    )
+  );
 }
 
 // Purchases API
 
-export function getPurchasesReport(period: ReportPeriodFilter, currency = DEFAULT_CURRENCY) {
+export function getPurchasesReport(
+  period: ReportPeriodFilter,
+  currency = DEFAULT_CURRENCY,
+  reportingDate?: string
+) {
   return apiGet<PurchasesReportSummaryResponse>(
     "reports/purchases",
-    periodParams(period, currency)
+    periodParams(period, currency, reportingDate)
   );
 }
 
@@ -363,82 +399,99 @@ export function getPurchasesLedger(
   options: {
     source?: "all" | "expense" | "purchase_order";
     search?: string;
-    page?: number;
     perPage?: number;
+    cursor?: string;
+    page?: number;
     withTotal?: boolean;
-  } = {}
+  } = {},
+  reportingDate?: string
 ) {
-  const { source = "all", search, page = 1, perPage = 10, withTotal = true } = options;
   return apiGet<PaginatedApiResponse<PurchasesLedgerEntry>>("reports/purchases/ledger", {
-    ...periodParams(period, currency),
-    source,
-    search,
-    page,
-    per_page: perPage,
-    withTotal,
+    ...periodParams(period, currency, reportingDate),
+    source: options.source,
+    search: options.search,
+    cursor: options.cursor,
+    page: options.page,
+    withTotal: options.withTotal,
+    per_page: options.perPage,
   });
 }
 
 export function getPurchasesCounts(
   period: ReportPeriodFilter,
   currency = DEFAULT_CURRENCY,
-  search?: string
+  options: {
+    search?: string;
+    source?: "all" | "expense" | "purchase_order";
+  } = {},
+  reportingDate?: string
 ) {
   return apiGet<PurchasesSourceCounts>("reports/purchases/counts", {
-    ...periodParams(period, currency),
-    search,
+    ...periodParams(period, currency, reportingDate),
+    search: options.search,
+    source: options.source,
   });
 }
 
 export async function exportPurchasesReport(
   period: ReportPeriodFilter,
-  currency = DEFAULT_CURRENCY
+  currency = DEFAULT_CURRENCY,
+  reportingDate?: string
 ) {
-  const blob = await apiDownload(
+  const download = await apiDownloadWithFilename(
     "reports/purchases/export",
-    periodParams(period, currency)
+    periodParams(period, currency, reportingDate)
   );
-  const p = buildReportPeriodParams(period, currency);
-  saveBlob(blob, `purchases-report-${p.dateFrom}-${p.dateTo}.xlsx`);
+  const p = buildReportPeriodParams(period, currency, reportingDate);
+  saveBlob(
+    download.blob,
+    chooseDownloadFilename(
+      download.filename,
+      `purchases-report-${p.dateFrom}-${p.dateTo}.xlsx`
+    )
+  );
 }
 
 // Tax API
 
 export function getTaxReport(
   period: ReportPeriodFilter,
-  options: { strict?: boolean } = {}
+  options: { strict?: boolean; reportingDate?: string } = {}
 ) {
   return apiGet<TaxReportResponse>("reports/taxes", {
-    ...periodParams(period, "KES"),
+    ...periodParams(period, "KES", options.reportingDate),
     strict: options.strict ?? false,
   });
 }
 
 export function getExcludedTaxTransactions(
   period: ReportPeriodFilter,
-  page = 1,
-  perPage = 25
+  options: { strict?: boolean; page?: number } = {},
+  perPage = 25,
+  reportingDate?: string
 ) {
-  return apiGet<ExcludedTaxTransactionsResponse>("reports/taxes/excluded", {
-    ...periodParams(period, "KES"),
-    page,
+  return apiGet<PaginatedApiResponse<ExcludedTaxTransaction>>("reports/taxes/excluded", {
+    ...periodParams(period, "KES", reportingDate),
+    page: options.page,
     per_page: perPage,
   });
 }
 
-export async function exportTaxReport(
+export async function exportTaxes(
   period: ReportPeriodFilter,
-  options: { strict?: boolean; partial?: boolean } = {}
+  options: { strict?: boolean; reportingDate?: string } = {}
 ) {
-  const blob = await apiDownload("reports/taxes/export", {
-    ...periodParams(period, "KES"),
-    strict: options.strict ?? false,
+  const download = await apiDownloadWithFilename("reports/taxes/export", {
+    ...periodParams(period, "KES", options.reportingDate),
+    strict: options.strict,
   });
-  const p = buildReportPeriodParams(period, "KES");
-  const prefix = options.partial ? "partial-" : "";
+  const p = buildReportPeriodParams(period, "KES", options.reportingDate);
   saveBlob(
-    blob,
-    `${prefix}vat-reconciliation-estimate-${p.dateFrom}-${p.dateTo}.xlsx`
+    download.blob,
+    chooseDownloadFilename(
+      download.filename,
+      `vat-reconciliation-estimate-${p.dateFrom}-${p.dateTo}.xlsx`
+    )
   );
 }
 

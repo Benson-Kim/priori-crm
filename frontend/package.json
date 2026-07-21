@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "gen:api": "node -e \"const fs=require('fs');const path=process.env.VITE_OPENAPI_SCHEMA||process.env.VITE_OPENAPI_URL||'openapi.json';if(!fs.existsSync(path)){console.error('\\x1b[31mError: OpenAPI schema file not found at: '+path+'\\x1b[0m');console.error('\\x1b[33mPlease ensure the schema is generated before building.\\x1b[0m');console.error('\\x1b[33mRun the API export script or check your CI/CD pipeline.\\x1b[0m');process.exit(1)}\" && npx -y openapi-typescript@^7 ${VITE_OPENAPI_SCHEMA:-${VITE_OPENAPI_URL:-openapi.json}} -o src/lib/api-schema.d.ts",
+    "gen:api": "node -e \"const fs=require('fs');const cp=require('child_process');const path=process.env.VITE_OPENAPI_SCHEMA||process.env.VITE_OPENAPI_URL||'openapi.json';if(!fs.existsSync(path)){console.error('\\x1b[31mError: OpenAPI schema file not found at: '+path+'\\x1b[0m');console.error('\\x1b[33mPlease ensure the schema is generated before building.\\x1b[0m');console.error('\\x1b[33mRun the API export script or check your CI/CD pipeline.\\x1b[0m');process.exit(1);}cp.execSync('npx -y openapi-typescript@^7 \\\"'+path+'\\\" -o src/lib/api-schema.d.ts', {stdio:'inherit'});\"",
     "prebuild": "npm run gen:api"
   },
   "dependencies": {
