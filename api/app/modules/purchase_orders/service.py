@@ -797,7 +797,7 @@ Best regards,
         self,
         po_id: uuid.UUID,
         data: PurchaseOrderUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> PurchaseOrder:
         """Update a purchase order with optimistic locking.
 

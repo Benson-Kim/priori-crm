@@ -25,8 +25,10 @@ from app.common.financial import (
     neutralize_line_tax,
     sum_line_totals,
     validate_document_vat_rate_for_date,
+    validate_line_item_treatments_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, InvoiceStatus, TaxType
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
 from app.modules.invoices.queries import (
@@ -409,41 +411,39 @@ class InvoiceService(BaseDocumentService):
         self,
         invoice_id: uuid.UUID,
         data: InvoiceUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Invoice:
         """
         Update an existing invoice with optimistic locking.
 
         Editing restrictions based on status:
-        - DRAFT: Full editing allowed
-        - SENT: Limited editing (no customer/amount changes)
-        - PAID/OVERDUE/CANCELED: Read-only (no edits)
+        - DRAFT: Full editing allowed.
+        - SENT/PARTIAL/PAID/OVERDUE/CANCELED: immutable; use corrective documents.
+
+        The version precondition is mandatory: omitting it would allow a
+        concurrent status transition (e.g. mark-as-sent) to race past the
+        editability check.
         """
+        # SELECT ... FOR UPDATE before status check to serialize with
+        # concurrent send/payment/cancel transitions.
+        assert_version(self._db, Invoice, invoice_id, expected_version)
+
         invoice = self.get_by_id(invoice_id)
 
         if not invoice.is_editable:
             raise BadRequestException(
-                detail=f"Cannot edit invoice in {invoice.status} status", field="status"
+                detail=(
+                    f"Cannot edit an issued invoice in '{invoice.status}' status. "
+                    "Issued invoices are immutable; record the correction through "
+                    "a credit/debit note or controlled replacement workflow."
+                ),
+                field="status",
             )
-
-        # Atomic optimistic-lock guard: locks the row and compares the
-        # version under the lock, so concurrent edits conflict instead of
-        # silently overwriting.
-        assert_version(self._db, Invoice, invoice_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True)
 
         if not update_data:
             return invoice  # No updates
-
-        if invoice.status == InvoiceStatus.SENT:
-            restricted_fields = ["customer_id", "transaction_date", "currency"]
-            for field in restricted_fields:
-                if field in update_data:
-                    raise BadRequestException(
-                        detail=f"Cannot change {field} after invoice has been sent",
-                        field=field,
-                    )
 
         if "discount_type" in update_data:
             new_type = update_data["discount_type"]
@@ -474,6 +474,11 @@ class InvoiceService(BaseDocumentService):
             raise BadRequestException(
                 detail="vat_rate is required when vat_enabled is true",
                 field="vat_rate",
+            )
+
+        if "transaction_date" in update_data and "line_items" not in update_data:
+            validate_line_item_treatments_for_date(
+                invoice.line_items, effective_transaction_date
             )
 
         # Handle line items update (replace all)
@@ -823,70 +828,47 @@ class InvoiceService(BaseDocumentService):
         invoice_id: uuid.UUID,
         user_id: uuid.UUID | None = None,
     ) -> InvoiceDuplicateResponse:
-        """Duplicate an existing invoice as a new DRAFT."""
-        try:
-            original = self.get_by_id(invoice_id)
-            from datetime import timedelta
+        """Duplicate through create() so tax eligibility and totals are rebuilt."""
+        from datetime import timedelta
 
-            new_transaction_date = date.today()
-            new_due_date = new_transaction_date + timedelta(days=30)
-
-            def _build() -> InvoiceDuplicateResponse:
-                duplicate = Invoice(
-                    invoice_number=self._generate_invoice_number(),
-                    invoice_reference=self._generate_invoice_reference(),
-                    customer_id=original.customer_id,
-                    transaction_date=new_transaction_date,
-                    due_date=new_due_date,
-                    currency=original.currency,
-                    status=InvoiceStatus.DRAFT,
-                    subtotal=original.subtotal,
-                    discount_type=original.discount_type,
-                    discount_amount=original.discount_amount,
-                    discount_percentage=original.discount_percentage,
-                    tax_total=original.tax_total,
-                    total_due=original.total_due,
-                    amount_paid=Decimal("0.00"),
-                    balance_due=original.total_due,
-                    rfq_number=original.rfq_number,
-                    notes=original.notes,
-                    created_by=user_id,
-                )
-                self._db.add(duplicate)
-                self._db.flush()
-                for orig_item in original.line_items:
-                    self._db.add(
-                        InvoiceLineItem(
-                            invoice_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        )
-                    )
-                self._db.flush()
-                logger.info(
-                    "Duplicated invoice %s → %s",
-                    original.invoice_number,
-                    duplicate.invoice_number,
-                )
-                return InvoiceDuplicateResponse(
-                    original_invoice_id=original.id,
-                    new_invoice_id=duplicate.id,
-                    new_invoice_number=duplicate.invoice_number,
-                )
-
-            return self._with_reference_retry(_build, "invoice")
-
-        except NotFoundException:
-            raise
-        except SQLAlchemyError as e:
-            logger.exception("Error duplicating invoice %s", invoice_id)
-            raise DatabaseException("Failed to duplicate invoice") from e
+        original = self.get_by_id(invoice_id)
+        new_transaction_date = reporting_date()
+        duplicate = self.create(
+            InvoiceCreate(
+                customer_id=original.customer_id,
+                transaction_date=new_transaction_date,
+                due_date=new_transaction_date + timedelta(days=30),
+                currency=original.currency,
+                line_items=[
+                    {
+                        "item_name": item.item_name,
+                        "description": item.description,
+                        "quantity": item.quantity,
+                        "unit_price": item.unit_price,
+                        "tax_type": item.tax_type,
+                    }
+                    for item in original.line_items
+                ],
+                discount_type=original.discount_type,
+                discount_amount=original.discount_amount,
+                discount_percentage=original.discount_percentage,
+                vat_enabled=original.vat_enabled,
+                vat_rate=original.vat_rate,
+                rfq_number=original.rfq_number,
+                notes=original.notes,
+            ),
+            user_id=user_id,
+        )
+        logger.info(
+            "Duplicated invoice %s -> %s",
+            original.invoice_number,
+            duplicate.invoice_number,
+        )
+        return InvoiceDuplicateResponse(
+            original_invoice_id=original.id,
+            new_invoice_id=duplicate.id,
+            new_invoice_number=duplicate.invoice_number,
+        )
 
     def cancel_invoice(self, invoice_id: uuid.UUID) -> Invoice:
         """

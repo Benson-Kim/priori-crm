@@ -246,7 +246,7 @@ class CustomerService(ServiceBase):
         self,
         customer_id: uuid.UUID,
         data: CustomerUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Customer:
         """Update an existing customer with optimistic locking
 

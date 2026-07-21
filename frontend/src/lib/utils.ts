@@ -279,3 +279,106 @@ export function saveBlob(blob: Blob, filename: string): void {
     URL.revokeObjectURL(url);
   }
 }
+
+export function responseFilename(
+  contentDisposition: string | null
+): string | undefined {
+  if (!contentDisposition) return undefined;
+  const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    const value = encoded.replace(/^"|"$/g, "");
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+}
+
+export function chooseDownloadFilename(
+  serverFilename: string | undefined,
+  fallback: string
+): string {
+  return serverFilename?.trim() || fallback;
+}
+
+export interface VatRateOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+export const VAT_8_LAST_VALID_DATE = "2023-06-30";
+
+const CURRENT_VAT_OPTIONS: readonly VatRateOption[] = [
+  { value: "16", label: "16%" },
+  { value: "0", label: "0%" },
+];
+
+const HISTORICAL_VAT_OPTIONS: readonly VatRateOption[] = [
+  { value: "16", label: "16%" },
+  { value: "8", label: "8% (historical)" },
+  { value: "0", label: "0%" },
+];
+
+function normalizedVATRate(rate?: string): string | undefined {
+  if (rate == null || rate.trim() === "") return undefined;
+  const number = Number.parseFloat(rate);
+  return Number.isFinite(number) ? String(Number(number.toFixed(4))) : rate;
+}
+
+export function isVatRateValidForDate(
+  rate: string | number | null | undefined,
+  taxPointDate?: string
+): boolean {
+  if (rate == null || rate === "") return true;
+  const number = typeof rate === "number" ? rate : Number.parseFloat(rate);
+  if (!Number.isFinite(number)) return false;
+  if (number !== 8) return true;
+  return Boolean(taxPointDate && taxPointDate <= VAT_8_LAST_VALID_DATE);
+}
+
+export function vatRateValidationError(
+  rate: string | number | null | undefined,
+  taxPointDate?: string
+): string | undefined {
+  if (rate == null || rate === "") return "Select a VAT rate";
+  const number = typeof rate === "number" ? rate : Number.parseFloat(rate);
+  if (!Number.isFinite(number)) return "Enter a valid VAT rate";
+  if (number === 8 && !isVatRateValidForDate(number, taxPointDate)) {
+    return "8% VAT is historical and is not valid for tax points on or after 1 July 2023";
+  }
+  return undefined;
+}
+
+export function getVatRateOptions(
+  taxPointDate?: string,
+  selectedRate?: string
+): readonly VatRateOption[] {
+  const options = taxPointDate && taxPointDate <= VAT_8_LAST_VALID_DATE
+    ? [...HISTORICAL_VAT_OPTIONS]
+    : [...CURRENT_VAT_OPTIONS];
+  const selected = normalizedVATRate(selectedRate);
+  if (selected == null || options.some((option) => option.value === selected)) {
+    return options;
+  }
+  const number = Number.parseFloat(selected);
+  const label = number === 8
+    ? "8% (not valid for this date)"
+    : `${selected}% (stored rate)`;
+  options.splice(1, 0, {
+    value: selected,
+    label,
+    disabled: true,
+  });
+  return options;
+}
+
+export function lineTaxValidationError(
+  taxType: string,
+  taxPointDate?: string
+): string | undefined {
+  if (taxType !== "vat_8") return undefined;
+  return vatRateValidationError("8", taxPointDate);
+}

@@ -179,7 +179,7 @@ def update_customer(
     body: CustomerUpdate,
     service: CustomerServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -187,7 +187,7 @@ def update_customer(
                 "If the customer has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> CustomerResponse:
     """Update an existing customer with optimistic locking."""
     customer = service.update(customer_id, body, expected_version)

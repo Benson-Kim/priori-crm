@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth-storage";
 import { appConfig } from "@/lib/constants";
 import type { PaginatedApiResponse } from "@/lib/types";
+import { responseFilename } from "@/lib/utils";
 
 export class ApiError extends Error {
   status: number;
@@ -277,14 +278,15 @@ export async function apiUploadPut<T>(path: string, formData: FormData): Promise
   return handleResponse<T>(response);
 }
 
-/**
- * Download a binary resource (PDF, Excel, document) through the shared client
- * so it carries auth and refresh on 401.
- */
-export async function apiDownload(
+export interface DownloadResult {
+  blob: Blob;
+  filename?: string;
+}
+
+export async function apiDownloadWithFilename(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
-): Promise<Blob> {
+): Promise<DownloadResult> {
   const response = await authedFetch(buildUrl(path, params), { method: "GET" });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -293,7 +295,21 @@ export async function apiDownload(
       response.status
     );
   }
-  return response.blob();
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get("Content-Disposition");
+  return { blob, filename: responseFilename(contentDisposition) };
+}
+
+/**
+ * Download a binary resource (PDF, Excel, document) through the shared client
+ * so it carries auth and refresh on 401.
+ */
+export async function apiDownload(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined | null>
+): Promise<Blob> {
+  const { blob } = await apiDownloadWithFilename(path, params);
+  return blob;
 }
 
 export function flattenPaginated<T>(raw: PaginatedApiResponse<T>) {

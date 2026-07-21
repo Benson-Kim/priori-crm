@@ -68,11 +68,7 @@ export const TAX_CATEGORY_OPTIONS = [
   { value: "no_tax", label: "No Tax" },
 ] as const;
 
-export const VAT_RATE_OPTIONS = [
-  { value: "16", label: "16%" },
-  { value: "8", label: "8%" },
-  { value: "0", label: "0%" },
-] as const;
+export { getVatRateOptions } from "./utils";
 
 export const DEFAULT_DUE_DATE_DAYS = 30;
 

@@ -3,16 +3,17 @@ import { Button } from "@/components/ui/Button";
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS } from "@/lib/constants";
 import {
-  addDays,
+  addIsoDays,
   getDefaultDueDate,
   getTodayString,
   isDueDateBeforeTransactionDate,
 } from "@/lib/dateUtils";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, lineTaxValidationError } from "@/lib/utils";
 import { PaperclipIcon, Plus, Save, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";
 import { DocumentOwnerHeader } from "./DocumentOwnerHeader";
 import { LineItemsTable } from "./layout/line-items-table";
@@ -97,12 +98,22 @@ export function ExpenseEditor({
     return initialData?.dueDate ?? getDefaultDueDate(30, now);
   });
 
+  const { profile } = useOwnerProfile();
+  const expenseDateTouched = useRef(false);
+
+  useEffect(() => {
+    const isEditing = !!initialData?.expenseReference;
+    if (isEditing || expenseDateTouched.current || !profile?.reportingDate) return;
+    setExpenseDate(profile.reportingDate);
+    setDueDate(addIsoDays(profile.reportingDate, 30));
+  }, [initialData?.expenseReference, profile?.reportingDate]);
+
   function handleExpenseDateChange(newDate: string) {
     setExpenseDate(newDate);
-
+    expenseDateTouched.current = true;
     // Auto-correct due date if it would become invalid
     if (isDueDateBeforeTransactionDate(dueDate, newDate)) {
-      setDueDate(addDays(newDate, 30));
+      setDueDate(addIsoDays(newDate, 30));
     }
   }
 
@@ -167,12 +178,18 @@ export function ExpenseEditor({
       "Vendor"
     );
 
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
-
     const validItems = lineItems.filter(
       (r) => r.description.trim() || r.itemName.trim()
     );
+
+    for (const item of validItems) {
+      const taxError = lineTaxValidationError(item.taxType, expenseDate);
+      if (taxError) validationErrors[`item_${item.key}_tax`] = taxError;
+    }
+
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
+
 
     const items: ExpenseLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
@@ -278,6 +295,7 @@ export function ExpenseEditor({
                   disabled={restrictedMode}
                   error={errors.transactionDate}
                   aria-label="Expense date"
+                  today={profile?.reportingDate}
                 />
 
                 {/* Due Date */}
@@ -297,6 +315,7 @@ export function ExpenseEditor({
                   disabled={restrictedMode}
                   error={errors.dueDate}
                   aria-label="Due date"
+                  today={profile?.reportingDate}
                 />
 
                 {/* Currency */}
@@ -352,6 +371,8 @@ export function ExpenseEditor({
             lineItems={lineItems}
             errors={errors}
             restrictedMode={restrictedMode}
+            enableInlineTax={true}
+            taxPointDate={expenseDate}
             onAddRow={addRow}
             onRemoveRow={removeRow}
             onUpdateRow={updateRow}
