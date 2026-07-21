@@ -161,8 +161,8 @@ export function downloadExpenseDocument(
  * (the documented POST /expenses/calculate contract), not snake_case keys
  * relying on the backend's populate_by_name fallback.
  */
-export function calculateTotals(data: ExpenseLineItemPayload[]) {
-  return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
+export function calculateTotals(expenseDate: string, data: ExpenseLineItemPayload[]) {
+  return apiPost<ExpenseCalculationResponse>(`expenses/calculate?expenseDate=${expenseDate}`, data);
 }
 
 /**

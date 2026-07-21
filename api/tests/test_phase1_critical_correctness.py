@@ -124,7 +124,7 @@ class TestCustomerOptimisticLocking:
         customer = _customer(db, email="cust-nolock@acme.test")
         service = CustomerService(db)
 
-        service.update(customer.id, CustomerUpdate(city="Nakuru"))
+        service.update(customer.id, CustomerUpdate(city="Nakuru"), expected_version=customer.version)
         assert customer.version == 2
 
     def test_matching_version_succeeds_after_reread(self, db):
@@ -148,7 +148,7 @@ class TestCustomerCurrencyFreeze:
         service = CustomerService(db)
 
         with pytest.raises(BadRequestException):
-            service.update(customer.id, CustomerUpdate(currency=Currency.USD))
+            service.update(customer.id, CustomerUpdate(currency=Currency.USD), expected_version=customer.version)
         assert customer.currency == Currency.KES
 
     def test_currency_change_blocked_with_quotes(self, db):
@@ -157,13 +157,13 @@ class TestCustomerCurrencyFreeze:
         service = CustomerService(db)
 
         with pytest.raises(BadRequestException):
-            service.update(customer.id, CustomerUpdate(currency=Currency.USD))
+            service.update(customer.id, CustomerUpdate(currency=Currency.USD), expected_version=customer.version)
 
     def test_currency_change_allowed_without_documents(self, db):
         customer = _customer(db, email="cur-free@acme.test")
         service = CustomerService(db)
 
-        updated = service.update(customer.id, CustomerUpdate(currency=Currency.USD))
+        updated = service.update(customer.id, CustomerUpdate(currency=Currency.USD), expected_version=customer.version)
         assert updated.currency == Currency.USD
 
     def test_same_currency_noop_allowed_with_documents(self, db):
@@ -173,7 +173,7 @@ class TestCustomerCurrencyFreeze:
 
         updated = service.update(
             customer.id, CustomerUpdate(currency=Currency.KES, city="Kisumu")
-        )
+        , expected_version=customer.version)
         assert updated.city == "Kisumu"
         assert updated.currency == Currency.KES
 

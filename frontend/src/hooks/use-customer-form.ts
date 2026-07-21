@@ -17,6 +17,7 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
     const [isFetching, setIsFetching] = useState(!!customerId);
     const [error, setError] = useState<string | null>(null);
     const [initialData, setInitialData] = useState<Partial<CustomerFormData> | null>(null);
+    const [customerVersion, setCustomerVersion] = useState<number | null>(null);
     const navigate = useNavigate();
 
     const fetchCustomer = useCallback(async () => {
@@ -27,6 +28,7 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
             const data = await getCustomer(customerId);
             // Map backend customer to form data
             const customer = data.customer;
+            setCustomerVersion(customer.version);
             setInitialData({
                 customerType: customer.customer_type,
                 companyName: customer.company_name || "",
@@ -68,7 +70,8 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
 
             if (customerId) {
                 // Update existing customer
-                await updateCustomer(customerId, data);
+                if (customerVersion === null) throw new Error("Customer version missing");
+                await updateCustomer(customerId, customerVersion, data);
             } else {
                 // Create new customer
                 await createCustomer(data);
