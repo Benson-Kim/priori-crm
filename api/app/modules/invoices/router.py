@@ -413,9 +413,9 @@ def update_invoice(
     body: InvoiceUpdate,
     service: InvoiceServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(description="Expected version number for optimistic locking"),
-    ] = None,
+    ],
 ) -> InvoiceResponse:
     """
     Update an existing invoice.

@@ -93,7 +93,7 @@ export default function TaxReportPage() {
     let cancelled = false;
     setExcludedLoading(true);
     setExcludedError(null);
-    getExcludedTaxTransactions(period, { cursor: undefined }, excludedPerPage, reportingDay)
+    getExcludedTaxTransactions(period, { page: excludedPage }, excludedPerPage, reportingDay)
       .then((response) => {
         if (!cancelled) setExcluded(response);
       })

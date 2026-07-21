@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
+from app.common.reporting_time import reporting_date
 from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
     DEFAULT_ORG_JURISDICTION,
@@ -44,7 +45,7 @@ def _to_response(profile) -> OwnerProfileResponse:
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
         reporting_timezone=settings.REPORTING_TIMEZONE,
-        reporting_date=settings.reporting_date.isoformat(),
+        reporting_date=reporting_date().isoformat(),
     )
 
 
