@@ -74,7 +74,9 @@ def test_get_soft_deleted_raises_by_default(db):
 def test_update_changes_persisted_fields(db):
     svc = CustomerService(db)
     c = svc.create(_create_payload(email="upd@acme.com"))
-    updated = svc.update(c.id, CustomerUpdate(first_name="Grace"), expected_version=c.version)
+    updated = svc.update(
+        c.id, CustomerUpdate(first_name="Grace"), expected_version=c.version
+    )
     assert updated.first_name == "Grace"
     assert svc.get_by_id(c.id).first_name == "Grace"
 
