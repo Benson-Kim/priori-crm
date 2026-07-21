@@ -29,6 +29,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
     const [mode, setMode] = useState<'new' | 'edit'>('new');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [vendorVersion, setVendorVersion] = useState<number | null>(null);
 
     // Duplicate email state
     const [emailWarning, setEmailWarning] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
         setIsLoading(true);
         try {
             const data = await getVendor(id);
+            setVendorVersion(data.version);
             reset({
                 vendor_name: data.vendor_name,
                 email: data.email || "",
@@ -146,7 +148,8 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
 
             let savedVendor;
             if (mode === 'edit' && vendorId) {
-                savedVendor = await updateVendor(vendorId, payload);
+                if (vendorVersion === null) throw new Error("Vendor version missing");
+                savedVendor = await updateVendor(vendorId, vendorVersion, payload);
             } else {
                 savedVendor = await createVendor(payload);
             }

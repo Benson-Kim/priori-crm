@@ -69,8 +69,8 @@ export function getVendor(id: string) {
   return apiGet<Vendor>(`vendors/${id}`);
 }
 
-export function updateVendor(id: string, data: Record<string, unknown>) {
-  return apiPut<Vendor>(`vendors/${id}`, data);
+export function updateVendor(id: string, expectedVersion: number, data: Record<string, unknown>) {
+  return apiPut<Vendor>(`vendors/${id}?expectedVersion=${expectedVersion}`, data);
 }
 
 export function getVendorCounts() {
