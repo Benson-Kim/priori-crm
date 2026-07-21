@@ -968,7 +968,6 @@ class VendorService(StateMachineMixin, ServiceBase):
         data: VendorUpdate,
         expected_version: int,
         user_id: uuid.UUID | None = None,
-        
     ) -> Vendor:
         """
         Partial update of a vendor record.
