@@ -1,8 +1,7 @@
 """Reports API endpoints.
 
 Read-only reporting endpoints backing the Sales, Purchases, Tax, and
-Aged AR/AP pages. All endpoints require an authenticated user (via
-ReportsServiceDep). No role guard — any authenticated user may read reports.
+Aged AR/AP pages. Restricted to users with MANAGER or ADMIN roles.
 
 Period semantics: all period endpoints use the same RangePreset and
 ResolvedPeriod infrastructure as the statements module (single source of
@@ -17,7 +16,7 @@ from datetime import date
 from io import BytesIO
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import ReportsServiceDep
@@ -27,6 +26,7 @@ from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency
 from app.lib.config import settings
+from app.modules.reports.audit import authorize_and_audit_report_access
 from app.modules.reports.schemas import (
     AgedPayablesDetailResponse,
     AgedPayablesSummaryResponse,
@@ -45,7 +45,7 @@ from app.modules.statements.schemas import RangePreset, ResolvedPeriod
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(authorize_and_audit_report_access)])
 
 _exporter = ExcelExporter()
 
