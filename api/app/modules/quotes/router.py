@@ -15,6 +15,7 @@ from app.common.dependencies import (
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType
 from app.modules.quotes.schemas import (
     QuoteApproveRequest,
@@ -252,7 +253,7 @@ async def export_quotes_to_excel(
     exporter = ExcelExporter()
     xlsx_bytes = await run_export(exporter.export_quotes, quotes, include_line_items)
 
-    filename = f"Quotes_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Quotes_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

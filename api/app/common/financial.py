@@ -12,6 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from app.common.exceptions import BadRequestException
+from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, TaxType
 
 # Money Rounding Policy
@@ -326,6 +327,8 @@ def check_is_overdue(
     status: str,
     due_date: date,
     terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
+    *,
+    as_of_date: date | None = None,
 ) -> bool:
     """
     Check if a record is overdue/expired based on status and due date.
@@ -335,23 +338,25 @@ def check_is_overdue(
     supply the statuses that can't be overdue/expired (e.g. invoices use
     paid/canceled; quotes use approved/invoiced).
     """
-    from datetime import date as dt_date
 
+    cutoff = as_of_date or reporting_date()
     normalized_terminal = {s.lower() for s in terminal_statuses}
-    return status.lower() not in normalized_terminal and due_date < dt_date.today()
+    return status.lower() not in normalized_terminal and due_date < cutoff
 
 
 def calculate_days_overdue(
     status: str,
     due_date: date,
     terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
+    *,
+    as_of_date: date | None = None,
 ) -> int:
     """
     Calculate the number of days a record is overdue/expired.
     Returns 0 if not overdue.
     """
-    from datetime import date as dt_date
 
-    if not check_is_overdue(status, due_date, terminal_statuses):
+    cutoff = as_of_date or reporting_date()
+    if not check_is_overdue(status, due_date, terminal_statuses, as_of_date=cutoff):
         return 0
-    return (dt_date.today() - due_date).days
+    return (cutoff - due_date).days

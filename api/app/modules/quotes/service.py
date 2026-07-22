@@ -896,7 +896,7 @@ class QuoteService(BaseDocumentService):
         """
         try:
             now = datetime.now(UTC)
-            today = now.date()
+            today = reporting_date(now)
 
             updated = (
                 self._db.query(Quote)

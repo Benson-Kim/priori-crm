@@ -12,6 +12,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.common.financial import check_is_overdue
+from app.common.reporting_time import reporting_date
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -119,7 +121,7 @@ class QuoteCreate(BaseModel):
     )
 
     transaction_date: date = Field(
-        default_factory=date.today,
+        default_factory=reporting_date,
         description="Quote issue date",
         alias="transactionDate",
     )
@@ -425,16 +427,17 @@ class QuoteResponse(BaseModel):
     @property
     def is_expired(self) -> bool:
         """Check if quote is expired."""
-        return (
-            self.status not in [QuoteStatus.APPROVED, QuoteStatus.INVOICED]
-            and self.due_date < date.today()
+        return check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={QuoteStatus.APPROVED, QuoteStatus.INVOICED},
         )
 
     @computed_field
     @property
     def days_until_expiry(self) -> int:
         """Calculate days until expiry (negative if expired)."""
-        return (self.due_date - date.today()).days
+        return (self.due_date - reporting_date()).days
 
     @computed_field
     @property
@@ -474,16 +477,17 @@ class QuoteSummary(BaseModel):
     @property
     def is_expired(self) -> bool:
         """Check if quote is expired."""
-        return (
-            self.status not in [QuoteStatus.APPROVED, QuoteStatus.INVOICED]
-            and self.due_date < date.today()
+        return check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={QuoteStatus.APPROVED, QuoteStatus.INVOICED},
         )
 
     @computed_field
     @property
     def days_until_expiry(self) -> int:
         """Calculate days until expiry (negative if expired)."""
-        return (self.due_date - date.today()).days
+        return (self.due_date - reporting_date()).days
 
     model_config = {"from_attributes": True}
 

@@ -26,6 +26,7 @@ from app.common.dependencies import (
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
 from app.modules.expenses.schemas import (
@@ -267,7 +268,7 @@ async def export_expenses_to_excel(
         exporter.export_expenses, expenses, include_line_items
     )
 
-    filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Expenses_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

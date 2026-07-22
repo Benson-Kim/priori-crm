@@ -248,11 +248,11 @@ export function ReportPeriodPicker({
             <div className="grid grid-cols-4 gap-1.5">
               {[1, 2, 3, 4].map((q) => {
                 const isSelected = value.quarter === q && value.year === panelYear;
-                const quarterEndMonth = q * 3;
                 const cal = calendarFromIso(reportingDate);
+                const quarterStartMonth = (q - 1) * 3 + 1;
                 const isFuture =
                   panelYear > currYear ||
-                  (panelYear === currYear && quarterEndMonth > cal.month);
+                  (panelYear === currYear && quarterStartMonth > cal.month);
                 return (
                   <button
                     key={q}
