@@ -89,8 +89,10 @@ class Settings(BaseSettings):
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
 
     # Exports: cap how many heavy (Excel/PDF) generations run concurrently
-    # per process so a burst cannot exhaust CPU/memory.
+    # per process and reject oversized synchronous report workbooks.
     EXPORT_MAX_CONCURRENCY: int = Field(default=4, ge=1, le=64)
+    REPORT_EXPORT_MAX_ROWS: int = Field(default=100_000, ge=1, le=1_000_000)
+    TAX_REPORT_EXPORT_MAX_ROWS: int = Field(default=10_000, ge=1, le=100_000)
 
     # File Storage
     UPLOAD_DIR: str = "uploads"

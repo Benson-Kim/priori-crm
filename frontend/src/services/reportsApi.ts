@@ -142,6 +142,7 @@ export interface TaxSummaryMetrics {
 export interface TaxByTypeRow {
   tax_type: string;
   tax_rate: string | null;
+  taxable_value: string;
   tax_amount: string;
   document_count: number;
 }
