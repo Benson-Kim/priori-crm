@@ -232,24 +232,17 @@ class TestVatUpdate:
                 expected_version=1,
             )
 
-    def test_historical_po_keeps_recalculating_at_8_percent(self, db):
+    def test_historical_po_rejects_unscoped_8_percent(self, db):
         vendor = _vendor(db)
-        svc = PurchaseOrderService(db)
-        po = svc.create(
-            _create_payload(
-                vendor_id=vendor.id,
-                order_date=HISTORICAL_VAT_8_DATE,
-                vat_enabled=True,
-                vat_rate=VAT_8,
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService(db).create(
+                _create_payload(
+                    vendor_id=vendor.id,
+                    order_date=HISTORICAL_VAT_8_DATE,
+                    vat_enabled=True,
+                    vat_rate=VAT_8,
+                )
             )
-        )
-        svc.update(
-            po.id,
-            PurchaseOrderUpdate(line_items=[_line(quantity=Decimal("3"))]),
-            expected_version=1,
-        )
-        assert po.tax_total == Decimal("24.00")
-        assert po.total == Decimal("324.00")
 
     def test_2026_create_rejects_retired_rate(self, db):
         vendor = _vendor(db)
@@ -263,7 +256,7 @@ class TestVatUpdate:
                 )
             )
 
-    def test_date_change_across_retirement_boundary_revalidates(self, db):
+    def test_historical_update_rejects_unscoped_8_percent(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
         po = svc.create(
@@ -271,13 +264,13 @@ class TestVatUpdate:
                 vendor_id=vendor.id,
                 order_date=HISTORICAL_VAT_8_DATE,
                 vat_enabled=True,
-                vat_rate=VAT_8,
+                vat_rate=VAT_16,
             )
         )
         with pytest.raises(BadRequestException):
             svc.update(
                 po.id,
-                PurchaseOrderUpdate(order_date=date(2023, 7, 1)),
+                PurchaseOrderUpdate(vat_rate=VAT_8),
                 expected_version=1,
             )
 
@@ -348,14 +341,14 @@ class TestOverpaidWithVat:
 
 
 class TestEffectiveDatePreview:
-    def test_historical_preview_accepts_8_percent(self):
-        result = PurchaseOrderService.calculate_totals(
-            [_line()],
-            tax_point_date=HISTORICAL_VAT_8_DATE,
-            vat_enabled=True,
-            vat_rate=VAT_8,
-        )
-        assert result.tax_total == Decimal("16.00")
+    def test_historical_preview_rejects_unscoped_8_percent(self):
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService.calculate_totals(
+                [_line()],
+                tax_point_date=HISTORICAL_VAT_8_DATE,
+                vat_enabled=True,
+                vat_rate=VAT_8,
+            )
 
     def test_2026_preview_rejects_8_percent(self):
         with pytest.raises(BadRequestException):

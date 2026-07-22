@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, ClassVar
 
 from sqlalchemy.exc import IntegrityError
@@ -429,6 +429,9 @@ class BaseDocumentService(
 
     #: Response class returned by calculate_totals (set per service).
     _calculation_response_cls: ClassVar[Any] = None
+    #: Invoice previews allocate document discounts across line-tax bases.
+    #: Quotes retain their existing gross-line-tax preview contract.
+    _discount_line_tax_in_preview: ClassVar[bool] = False
 
     @classmethod
     def calculate_totals(
@@ -439,6 +442,8 @@ class BaseDocumentService(
         discount_percentage: Any = None,
         vat_enabled: bool = False,
         vat_rate: Any = None,
+        *,
+        tax_point_date: date | None = None,
     ) -> Any:
         """Calculate document totals without saving (preview).
 
@@ -451,19 +456,47 @@ class BaseDocumentService(
         discounted subtotal, mirroring the persisted computation.
         """
         from app.common.financial import (
+            allocate_discounted_line_taxes,
             build_line_items,
             calculate_discount,
             calculate_subtotal_vat,
             neutralize_line_tax,
             sum_line_totals,
+            validate_document_vat_rate_for_date,
         )
 
-        built_items = build_line_items(line_items)
+        if tax_point_date is not None:
+            validate_document_vat_rate_for_date(
+                vat_rate if vat_enabled else None,
+                tax_point_date,
+            )
+
+        built_items = build_line_items(
+            line_items,
+            tax_point_date=tax_point_date,
+        )
+        subtotal, tax_total = sum_line_totals(built_items)
+        discount_value = calculate_discount(
+            subtotal, discount_type, discount_amount, discount_percentage
+        )
+
         if vat_enabled:
             neutralize_line_tax(built_items)
-        subtotal, tax_total = sum_line_totals(built_items)
-        calculated_items = [
-            {
+            for item in built_items:
+                item["taxable_value"] = None
+
+            tax_total = calculate_subtotal_vat(
+                subtotal - discount_value, True, vat_rate
+            )
+        elif cls._discount_line_tax_in_preview:
+            allocate_discounted_line_taxes(built_items, discount_value)
+            _, tax_total = sum_line_totals(built_items)
+        else:
+            _, tax_total = sum_line_totals(built_items)
+
+        calculated_items = []
+        for item in built_items:
+            calculated_item = {
                 "item_name": item["item_name"],
                 "description": item["description"],
                 "quantity": float(item["quantity"]),
@@ -472,19 +505,14 @@ class BaseDocumentService(
                 "tax_type": item["tax_type"],
                 "tax_amount": float(item["tax_amount"]),
             }
-            for item in built_items
-        ]
+            if "taxable_value" in item:
+                taxable_value = item["taxable_value"]
+                calculated_item["taxable_value"] = (
+                    float(taxable_value) if taxable_value is not None else None
+                )
+            calculated_items.append(calculated_item)
 
-        discount_value = calculate_discount(
-            subtotal, discount_type, discount_amount, discount_percentage
-        )
-        if vat_enabled:
-            # Document-level VAT is charged once on the discounted base.
-            tax_total = calculate_subtotal_vat(
-                subtotal - discount_value, vat_enabled, vat_rate
-            )
         total_due = subtotal - discount_value + tax_total
-
         return cls._calculation_response_cls(
             subtotal=subtotal,
             discount_value=discount_value,

@@ -119,6 +119,7 @@ export function isVatRateValidForDate(
     rate: string | number | null | undefined,
     _taxPointDate?: string
 ): boolean {
+    void _taxPointDate;
     if (rate == null || rate === "") return true;
     const number = typeof rate === "number" ? rate : Number.parseFloat(rate);
     if (!Number.isFinite(number)) return false;
@@ -142,6 +143,7 @@ export function getVatRateOptions(
     _taxPointDate?: string,
     selectedRate?: string
 ): readonly VatRateOption[] {
+    void _taxPointDate
     const options = DOCUMENT_VAT_OPTIONS.map((option) => ({ ...option }));
     const selected = normalizedVATRate(selectedRate);
     if (selected == null || options.some((option) => option.value === selected)) {
