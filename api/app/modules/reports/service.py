@@ -457,6 +457,7 @@ class ReportsService:
                     tax_rate=(
                         Decimal(str(r.tax_rate)) if r.tax_rate is not None else None
                     ),
+                    taxable_value=Decimal(str(r.taxable_value)),
                     tax_amount=Decimal(str(r.tax_amount)),
                     document_count=int(r.document_count),
                 )
@@ -468,6 +469,7 @@ class ReportsService:
                     tax_rate=(
                         Decimal(str(r.tax_rate)) if r.tax_rate is not None else None
                     ),
+                    taxable_value=Decimal(str(r.taxable_value)),
                     tax_amount=Decimal(str(r.tax_amount)),
                     document_count=int(r.document_count),
                 )
