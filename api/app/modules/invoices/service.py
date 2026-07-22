@@ -832,6 +832,12 @@ class InvoiceService(BaseDocumentService):
         from datetime import timedelta
 
         original = self.get_by_id(invoice_id)
+        if not original.line_items:
+            raise BadRequestException(
+                detail="Cannot duplicate an invoice without line items.",
+                field="line_items",
+            )
+
         new_transaction_date = reporting_date()
         duplicate = self.create(
             InvoiceCreate(

@@ -7,8 +7,12 @@ every call. The service must return a populated InvoiceDuplicateResponse.
 
 import uuid
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
+from app.common.exceptions import BadRequestException
 from app.constants.enums import InvoiceStatus
 from app.modules.invoices.schemas import InvoiceDuplicateResponse
 from app.modules.invoices.service import InvoiceService
@@ -33,7 +37,15 @@ class _FakeInvoice:
         self.rfq_number = None
         self.notes = None
         self.status = InvoiceStatus.PAID
-        self.line_items = []
+        self.line_items = [
+            SimpleNamespace(
+                item_name="Widget",
+                description="A widget",
+                quantity=Decimal("1.00"),
+                unit_price=Decimal("100.00"),
+                tax_type="no_tax",
+            )
+        ]
 
 
 class TestDuplicateInvoiceResponse:
@@ -53,3 +65,16 @@ class TestDuplicateInvoiceResponse:
         assert result.original_invoice_id == original.id
         assert result.new_invoice_id == created_invoice.id
         assert result.new_invoice_number == new_number
+
+    def test_rejects_source_without_line_items(self):
+        original = _FakeInvoice(invoice_number="INV-EMPTY")
+        original.line_items = []
+
+        svc = InvoiceService(MagicMock())
+        svc.get_by_id = MagicMock(return_value=original)  # type: ignore[method-assign]
+        svc.create = MagicMock()  # type: ignore[method-assign]
+
+        with pytest.raises(BadRequestException, match="without line items"):
+            svc.duplicate_invoice(original.id)
+
+        svc.create.assert_not_called()
