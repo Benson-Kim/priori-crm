@@ -376,7 +376,7 @@ const routes = [
                                 handle: {
                                     header: {
                                         title: "Tax Report",
-                                        description: "VAT collected vs paid — net VAT position (KES only).",
+                                        description: "VAT collected vs paid — net VAT position (KES ONLY).",
                                     },
                                 },
                             },

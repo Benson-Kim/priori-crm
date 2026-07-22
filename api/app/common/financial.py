@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from app.common.exceptions import BadRequestException
@@ -47,42 +48,82 @@ class LineItemInput(Protocol):
 # Tax Rates
 
 
+class TaxApplicability(StrEnum):
+    """Business scope required for an effective-dated tax treatment."""
+
+    GENERAL = "general"
+    PETROLEUM = "petroleum"
+
+
 @dataclass(frozen=True)
 class TaxRateRule:
-    """Effective-dated tax-treatment rule retained for historical validation."""
+    """Effective-dated and scoped tax-treatment rule."""
 
     jurisdiction: str
     treatment: TaxType
     rate: Decimal
     effective_from: date
     effective_to: date | None
-    active: bool
+    applicability: TaxApplicability
 
 
 KENYA_TAX_RATE_RULES: tuple[TaxRateRule, ...] = (
-    TaxRateRule("KE", TaxType.VAT_16, Decimal("0.16"), date.min, None, True),
+    TaxRateRule(
+        "KE", TaxType.VAT_16, Decimal("0.16"), date.min, None, TaxApplicability.GENERAL
+    ),
     TaxRateRule(
         "KE",
-        TaxType.VAT_8,
+        TaxType.PETROLEUM_VAT_8,
         Decimal("0.08"),
-        date.min,
+        date(2018, 9, 1),
         date(2023, 6, 30),
-        False,
+        TaxApplicability.PETROLEUM,
     ),
-    TaxRateRule("KE", TaxType.VAT_0, Decimal("0.00"), date.min, None, True),
-    TaxRateRule("KE", TaxType.EXEMPT, Decimal("0.00"), date.min, None, True),
-    TaxRateRule("KE", TaxType.NO_TAX, Decimal("0.00"), date.min, None, True),
+    TaxRateRule(
+        "KE",
+        TaxType.PETROLEUM_VAT_13,
+        Decimal("0.13"),
+        date(2026, 4, 15),
+        date(2026, 4, 15),
+        TaxApplicability.PETROLEUM,
+    ),
+    TaxRateRule(
+        "KE",
+        TaxType.PETROLEUM_VAT_8,
+        Decimal("0.08"),
+        date(2026, 4, 16),
+        date(2026, 10, 14),
+        TaxApplicability.PETROLEUM,
+    ),
+    TaxRateRule(
+        "KE", TaxType.VAT_0, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
+    TaxRateRule(
+        "KE", TaxType.EXEMPT, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
+    TaxRateRule(
+        "KE", TaxType.NO_TAX, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
 )
 
 # Arithmetic registry: retired treatments remain calculable for historical records.
 TAX_RATES: dict[TaxType, Decimal] = {
-    rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES
+    TaxType.VAT_8: Decimal("0.08"),
+    **{rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES},
 }
 
 
 def validate_tax_treatment_for_date(tax_type: TaxType | str, tax_point: date) -> None:
     """Reject a treatment that was not effective on the document tax point."""
     treatment = TaxType(tax_type)
+    if treatment == TaxType.VAT_8:
+        raise BadRequestException(
+            detail=(
+                "Legacy unscoped VAT 8% records are read-only; select a "
+                "petroleum-scoped treatment for a supported tax point"
+            ),
+            field="tax_type",
+        )
     matching = [
         rule
         for rule in KENYA_TAX_RATE_RULES
@@ -104,9 +145,18 @@ def validate_document_vat_rate_for_date(
     vat_rate: Decimal | None,
     tax_point: date,
 ) -> None:
-    """Apply the immediate 8% retirement boundary to document-level VAT."""
-    if vat_rate is not None and Decimal(str(vat_rate)) == Decimal("0.08"):
-        validate_tax_treatment_for_date(TaxType.VAT_8, tax_point)
+    """Reject petroleum rates where the document has no applicability scope."""
+    if vat_rate is None:
+        return
+    normalized_rate = Decimal(str(vat_rate))
+    if normalized_rate in {Decimal("0.08"), Decimal("0.13")}:
+        raise BadRequestException(
+            detail=(
+                "Petroleum VAT rates require a petroleum-scoped line treatment "
+                f"for tax point {tax_point.isoformat()}"
+            ),
+            field="vat_rate",
+        )
 
 
 def validate_line_item_treatments_for_date(

@@ -8,7 +8,8 @@ import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
-import { formatCurrency, lineTaxValidationError, saveBlob, vatRateValidationError } from "@/lib/utils";
+import { lineTaxValidationError, vatRateValidationError } from "@/lib/taxUtils";
+import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
   deletePurchaseOrder,
   downloadPurchaseOrderPdf,

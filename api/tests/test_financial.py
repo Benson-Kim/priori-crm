@@ -13,13 +13,13 @@ import pytest
 from app.common.exceptions import BadRequestException
 from app.common.financial import (
     TAX_RATES,
-    calculate_days_overdue,
     calculate_discount,
     calculate_line_item,
-    check_is_overdue,
     get_tax_rate,
+    validate_document_vat_rate_for_date,
     validate_tax_treatment_for_date,
 )
+from app.common.reporting_time import calculate_days_overdue, check_is_overdue
 from app.constants.enums import DiscountType, TaxType
 
 # get_tax_rate
@@ -33,6 +33,12 @@ class TestGetTaxRate:
 
     def test_vat_8(self):
         assert get_tax_rate(TaxType.VAT_8) == Decimal("0.08")
+
+    def test_petroleum_vat_13(self):
+        assert get_tax_rate(TaxType.PETROLEUM_VAT_13) == Decimal("0.13")
+
+    def test_petroleum_vat_8(self):
+        assert get_tax_rate(TaxType.PETROLEUM_VAT_8) == Decimal("0.08")
 
     def test_vat_0(self):
         assert get_tax_rate(TaxType.VAT_0) == Decimal("0.00")
@@ -52,12 +58,53 @@ class TestGetTaxRate:
 class TestEffectiveDatedTaxTreatment:
     """Eligibility is date-aware while the arithmetic engine stays historical."""
 
-    def test_vat_8_is_valid_on_last_historical_day(self):
-        validate_tax_treatment_for_date(TaxType.VAT_8, date(2023, 6, 30))
-
-    def test_vat_8_is_rejected_on_first_retired_day(self):
+    def test_non_petroleum_item_cannot_use_generic_vat_8(self):
         with pytest.raises(BadRequestException):
-            validate_tax_treatment_for_date(TaxType.VAT_8, date(2023, 7, 1))
+            validate_tax_treatment_for_date(TaxType.VAT_8, date(2023, 6, 30))
+
+    @pytest.mark.parametrize(
+        ("tax_point", "is_valid"),
+        [
+            (date(2018, 8, 31), False),
+            (date(2018, 9, 1), True),
+            (date(2023, 6, 30), True),
+            (date(2023, 7, 1), False),
+            (date(2026, 4, 15), False),
+            (date(2026, 4, 16), True),
+            (date(2026, 10, 14), True),
+            (date(2026, 10, 15), False),
+        ],
+    )
+    def test_petroleum_vat_8_boundaries(self, tax_point: date, is_valid: bool):
+        if is_valid:
+            validate_tax_treatment_for_date(TaxType.PETROLEUM_VAT_8, tax_point)
+            return
+        with pytest.raises(BadRequestException):
+            validate_tax_treatment_for_date(
+                TaxType.PETROLEUM_VAT_8,
+                tax_point,
+            )
+
+    @pytest.mark.parametrize(
+        ("tax_point", "is_valid"),
+        [
+            (date(2026, 4, 14), False),
+            (date(2026, 4, 15), True),
+            (date(2026, 4, 16), False),
+        ],
+    )
+    def test_petroleum_vat_13_boundaries(self, tax_point: date, is_valid: bool):
+        if is_valid:
+            validate_tax_treatment_for_date(TaxType.PETROLEUM_VAT_13, tax_point)
+            return
+        with pytest.raises(BadRequestException):
+            validate_tax_treatment_for_date(TaxType.PETROLEUM_VAT_13, tax_point)
+
+    @pytest.mark.parametrize("rate", [Decimal("0.08"), Decimal("0.13")])
+    def test_document_level_petroleum_rates_require_scope(self, rate: Decimal):
+        with pytest.raises(BadRequestException) as exc_info:
+            validate_document_vat_rate_for_date(rate, date(2026, 4, 16))
+        assert exc_info.value.extra.get("field") == "vat_rate"
 
     def test_current_rates_remain_valid(self):
         validate_tax_treatment_for_date(TaxType.VAT_16, date(2026, 1, 1))
@@ -144,29 +191,37 @@ class TestCalculateDiscount:
 
 # check_is_overdue
 
+ACCOUNTING_DATE = date(2026, 7, 22)
+
 
 class TestCheckIsOverdue:
     """Overdue detection based on status and due date."""
 
     def test_pending_past_due(self):
-        yesterday = date.today() - timedelta(days=1)
-        assert check_is_overdue("pending", yesterday) is True
+        assert check_is_overdue(
+            "pending", ACCOUNTING_DATE - timedelta(days=1), as_of_date=ACCOUNTING_DATE
+        )
 
     def test_pending_not_yet_due(self):
-        tomorrow = date.today() + timedelta(days=1)
-        assert check_is_overdue("pending", tomorrow) is False
+        assert not check_is_overdue(
+            "pending", ACCOUNTING_DATE + timedelta(days=1), as_of_date=ACCOUNTING_DATE
+        )
 
     def test_paid_is_never_overdue(self):
-        yesterday = date.today() - timedelta(days=1)
-        assert check_is_overdue("paid", yesterday) is False
+        assert not check_is_overdue(
+            "paid", ACCOUNTING_DATE - timedelta(days=1), as_of_date=ACCOUNTING_DATE
+        )
 
     def test_canceled_is_never_overdue(self):
-        yesterday = date.today() - timedelta(days=1)
-        assert check_is_overdue("canceled", yesterday) is False
+        assert not check_is_overdue(
+            "canceled", ACCOUNTING_DATE - timedelta(days=1), as_of_date=ACCOUNTING_DATE
+        )
 
     def test_due_today_is_not_overdue(self):
         """Due date == today should NOT be overdue (overdue means past due)."""
-        assert check_is_overdue("pending", date.today()) is False
+        assert not check_is_overdue(
+            "pending", ACCOUNTING_DATE, as_of_date=ACCOUNTING_DATE
+        )
 
 
 # calculate_days_overdue
@@ -176,17 +231,39 @@ class TestCalculateDaysOverdue:
     """Days overdue calculation."""
 
     def test_one_day_overdue(self):
-        yesterday = date.today() - timedelta(days=1)
-        assert calculate_days_overdue("pending", yesterday) == 1
+        assert (
+            calculate_days_overdue(
+                "pending",
+                ACCOUNTING_DATE - timedelta(days=1),
+                as_of_date=ACCOUNTING_DATE,
+            )
+            == 1
+        )
 
     def test_thirty_days_overdue(self):
-        past = date.today() - timedelta(days=30)
-        assert calculate_days_overdue("overdue", past) == 30
+        assert (
+            calculate_days_overdue(
+                "overdue",
+                ACCOUNTING_DATE - timedelta(days=30),
+                as_of_date=ACCOUNTING_DATE,
+            )
+            == 30
+        )
 
     def test_not_overdue_returns_zero(self):
-        tomorrow = date.today() + timedelta(days=1)
-        assert calculate_days_overdue("pending", tomorrow) == 0
+        assert (
+            calculate_days_overdue(
+                "pending",
+                ACCOUNTING_DATE + timedelta(days=1),
+                as_of_date=ACCOUNTING_DATE,
+            )
+            == 0
+        )
 
     def test_paid_returns_zero_even_if_past_due(self):
-        past = date.today() - timedelta(days=10)
-        assert calculate_days_overdue("paid", past) == 0
+        assert (
+            calculate_days_overdue(
+                "paid", ACCOUNTING_DATE - timedelta(days=10), as_of_date=ACCOUNTING_DATE
+            )
+            == 0
+        )

@@ -12,8 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.common.financial import check_is_overdue
-from app.common.reporting_time import reporting_date
+from app.common.reporting_time import check_is_overdue, reporting_date
 from app.constants.enums import (
     Currency,
     DiscountType,

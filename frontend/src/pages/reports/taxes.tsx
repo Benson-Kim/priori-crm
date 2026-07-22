@@ -8,6 +8,8 @@
  * No charts -- MetricCards and sortable Tables only.
  */
 
+import { useReportingDate } from "@/hooks/useReportingDate";
+import type { PaginatedApiResponse } from "@/lib/types";
 import {
   exportTaxes,
   formatTaxTypeLabel,
@@ -17,10 +19,8 @@ import {
   type TaxByTypeRow,
   type TaxReportResponse
 } from "@/services/reportsApi";
-import type { PaginatedApiResponse } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useReportingDate } from "@/hooks/useReportingDate";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -177,30 +177,22 @@ export default function TaxReportPage() {
   return (
     <div className="flex flex-col space-y-6">
       {/* Header controls card */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <ReportPeriodPicker value={period} onChange={setPeriod} />
-          <span className="flex items-center px-3 py-3 gap-2 rounded-lg border border-gray-300 bg-gray-50 text-sm text-content-secondary leading-6">
-            KES only
-          </span>
+      <div className="bg-transparent rounded-2xl border border-transparent py-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
+        <div className="">
+          <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
+          <p className="mt-1 text-sm">
+            {data?.filing_warning ??
+              "Confirm against eTIMS, customs, credit/debit notes, and the KRA auto-populated return before filing."}
+          </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExport}
-          disabled={isExporting || !data}
-        >
-          {isExporting ? "Exporting..." : "Export Excel"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-6">
+          <ReportPeriodPicker value={period} onChange={setPeriod} />
+          <Button variant="outline" onClick={handleExport} disabled={isExporting || !data}>
+            {isExporting ? "Exporting..." : "Export Excel"}
+          </Button>
+        </div>
       </div>
 
-      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
-        <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
-        <p className="mt-1 text-sm">
-          {data?.filing_warning ??
-            "Confirm against eTIMS, customs, credit/debit notes, and the KRA auto-populated return before filing."}
-        </p>
-      </div>
 
       {data?.completeness.status === "partial" && (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">
