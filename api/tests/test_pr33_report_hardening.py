@@ -48,7 +48,7 @@ def _sales_row(index: int) -> SimpleNamespace:
 
 
 def test_export_size_accepts_limit_and_rejects_limit_plus_one(monkeypatch):
-    monkeypatch.setattr(settings, "TAX_REPORT_EXPORT_MAX_ROWS", 2)
+    monkeypatch.setattr(settings, "REPORT_EXPORT_MAX_ROWS", 2)
 
     ReportsService.validate_export_size(2, "Sales")
     with pytest.raises(BadRequestException):
@@ -56,7 +56,7 @@ def test_export_size_accepts_limit_and_rejects_limit_plus_one(monkeypatch):
 
 
 def test_live_sales_export_guard_rejects_rows_beyond_limit(monkeypatch):
-    monkeypatch.setattr(settings, "TAX_REPORT_EXPORT_MAX_ROWS", 2)
+    monkeypatch.setattr(settings, "REPORT_EXPORT_MAX_ROWS", 2)
     service = ReportsService.__new__(ReportsService)
     service.repo = SimpleNamespace(
         iter_sales_ledger=lambda *args, **kwargs: iter(

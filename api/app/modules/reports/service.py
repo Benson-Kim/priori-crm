@@ -81,7 +81,7 @@ class ReportsService:
         max_rows: int | None = None,
     ) -> None:
         """Reject an oversized synchronous export before or during generation."""
-        limit = settings.TAX_REPORT_EXPORT_MAX_ROWS if max_rows is None else max_rows
+        limit = settings.REPORT_EXPORT_MAX_ROWS if max_rows is None else max_rows
         if row_count > limit:
             raise BadRequestException(
                 f"{report_name} report has more than {limit:,} rows; narrow the "
