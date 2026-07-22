@@ -182,6 +182,15 @@ def get_invoice_counts(
 )
 def calculate_invoice_totals(
     line_items: list[InvoiceLineItemCreate],
+    transaction_date: Annotated[
+        date,
+        Query(
+            alias="transactionDate",
+            description=(
+                "Invoice transaction date used as the tax point for VAT validation"
+            ),
+        ),
+    ],
     discount_type: Annotated[str | None, Query()] = None,
     discount_amount: Annotated[float | None, Query()] = None,
     discount_percentage: Annotated[float | None, Query()] = None,
@@ -226,7 +235,13 @@ def calculate_invoice_totals(
     vr = Decimal(str(vat_rate)) if vat_rate is not None else None
 
     return InvoiceService.calculate_totals(
-        line_items, dt, da, dp, vat_enabled=vat_enabled, vat_rate=vr
+        line_items,
+        dt,
+        da,
+        dp,
+        vat_enabled=vat_enabled,
+        vat_rate=vr,
+        tax_point_date=transaction_date,
     )
 
 

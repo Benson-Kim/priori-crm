@@ -396,6 +396,7 @@ def test_empty_report_contracts_expose_zero_values(db):
     assert tax.completeness.status == "complete"
     assert tax.completeness.excluded_document_count == 0
     assert tax.completeness.excluded_currencies == []
+    assert tax.sales_by_tax_type == []
 
     purchases = service.get_purchases_summary(PERIOD, Currency.KES)
     assert purchases.metrics.actual_spend == Decimal("0.00")
