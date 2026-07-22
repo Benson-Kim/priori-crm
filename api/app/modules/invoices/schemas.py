@@ -7,13 +7,17 @@ from uuid import UUID
 from pydantic import (
     BaseModel,
     Field,
+    PrivateAttr,
     computed_field,
     field_validator,
     model_validator,
 )
 
-from app.common.financial import calculate_days_overdue, check_is_overdue
-from app.common.reporting_time import reporting_date
+from app.common.reporting_time import (
+    calculate_days_overdue,
+    check_is_overdue,
+    reporting_date,
+)
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -503,6 +507,8 @@ class InvoiceSummary(BaseModel):
 
     created_at: datetime
 
+    _as_of_date: date = PrivateAttr(default_factory=reporting_date)
+
     @computed_field
     @property
     def is_overdue(self) -> bool:
@@ -511,6 +517,7 @@ class InvoiceSummary(BaseModel):
             self.status,
             self.due_date,
             terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+            as_of_date=self._as_of_date,
         )
 
     @computed_field
@@ -523,6 +530,7 @@ class InvoiceSummary(BaseModel):
             self.status,
             self.due_date,
             terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+            as_of_date=self._as_of_date,
         )
 
     model_config = {"from_attributes": True}

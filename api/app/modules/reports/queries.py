@@ -146,6 +146,8 @@ def _line_tax_rate(tax_type_column: Any) -> Any:
     """Map a line tax classification to its explicit rate, when applicable."""
     return case(
         (tax_type_column == TaxType.VAT_16, Decimal("0.1600")),
+        (tax_type_column == TaxType.PETROLEUM_VAT_13, Decimal("0.1300")),
+        (tax_type_column == TaxType.PETROLEUM_VAT_8, Decimal("0.0800")),
         (tax_type_column == TaxType.VAT_8, Decimal("0.0800")),
         (tax_type_column == TaxType.VAT_0, Decimal("0.0000")),
         else_=None,
@@ -856,7 +858,13 @@ class ReportsRepository:
 
     def _foreign_currency_vat_subquery(self, date_from: date, date_to: date):
         """Build one row per unsupported foreign-currency VAT document."""
-        vat_types = (TaxType.VAT_16, TaxType.VAT_8, TaxType.VAT_0)
+        vat_types = (
+            TaxType.VAT_16,
+            TaxType.PETROLEUM_VAT_13,
+            TaxType.PETROLEUM_VAT_8,
+            TaxType.VAT_8,
+            TaxType.VAT_0,
+        )
         invoice_line_vat = exists(
             select(1).where(
                 InvoiceLineItem.invoice_id == Invoice.id,

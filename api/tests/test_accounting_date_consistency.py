@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-import app.common.financial as financial
+import app.common.reporting_time as accounting_time
 import app.modules.quotes.models as quote_models
 import app.modules.quotes.schemas as quote_schemas
 from app.common.reporting_time import (
@@ -31,16 +31,16 @@ def test_reporting_date_uses_nairobi_day_before_utc_midnight(monkeypatch):
 
 def test_overdue_helpers_use_organization_date(monkeypatch):
     today = date(2026, 7, 22)
-    monkeypatch.setattr(financial, "reporting_date", lambda: today)
+    monkeypatch.setattr(accounting_time, "reporting_date", lambda: today)
 
-    assert financial.check_is_overdue("sent", date(2026, 7, 21))
-    assert not financial.check_is_overdue("sent", today)
-    assert financial.calculate_days_overdue("sent", date(2026, 7, 20)) == 2
+    assert accounting_time.check_is_overdue("sent", date(2026, 7, 21))
+    assert not accounting_time.check_is_overdue("sent", today)
+    assert accounting_time.calculate_days_overdue("sent", date(2026, 7, 20)) == 2
 
 
 def test_invoice_overdue_values_use_organization_date(monkeypatch):
     today = date(2026, 7, 22)
-    monkeypatch.setattr(financial, "reporting_date", lambda: today)
+    monkeypatch.setattr(accounting_time, "reporting_date", lambda: today)
 
     invoice = Invoice(
         status=InvoiceStatus.SENT,
@@ -70,7 +70,7 @@ def test_invoice_overdue_values_use_organization_date(monkeypatch):
 
 def test_quote_expiry_values_use_organization_date(monkeypatch):
     today = date(2026, 7, 22)
-    monkeypatch.setattr(financial, "reporting_date", lambda: today)
+    monkeypatch.setattr(accounting_time, "reporting_date", lambda: today)
     monkeypatch.setattr(quote_models, "reporting_date", lambda: today)
     monkeypatch.setattr(quote_schemas, "reporting_date", lambda: today)
 
