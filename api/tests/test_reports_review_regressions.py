@@ -14,6 +14,7 @@ from app.common.exceptions import ValidationException
 from app.common.pagination import PaginationParams
 from app.constants.enums import (
     Currency,
+    DiscountType,
     ExpenseStatus,
     InvoiceStatus,
     PurchaseOrderStatus,
@@ -297,6 +298,83 @@ def test_tax_breakdowns_reconcile_document_line_zero_and_custom_vat(db):
     assert ("15% VAT (Custom)", 100, 15, 1) in sales_rows
     assert ("0% VAT (Zero-rated)", 300, 0, 1) in sales_rows
     assert ("16% VAT", 100, 16, 1) in purchase_rows
+
+
+def test_line_taxable_values_allocate_invoice_discount_across_tax_types(db):
+    customer = _customer(db, "Discounted mixed tax")
+    invoice = Invoice(
+        invoice_number=f"INV-{uuid4().hex[:12]}",
+        invoice_reference=f"IN-{uuid4().hex[:8]}",
+        customer_id=customer.id,
+        transaction_date=date(2026, 1, 10),
+        due_date=date(2026, 2, 9),
+        status=InvoiceStatus.SENT,
+        currency=Currency.KES,
+        subtotal=Decimal("300.00"),
+        discount_type=DiscountType.PERCENTAGE,
+        discount_percentage=Decimal("20.00"),
+        vat_enabled=False,
+        tax_total=Decimal("32.00"),
+        total_due=Decimal("272.00"),
+        amount_paid=Decimal("0.00"),
+        balance_due=Decimal("272.00"),
+    )
+    db.add(invoice)
+    db.flush()
+    db.add_all(
+        [
+            InvoiceLineItem(
+                invoice_id=invoice.id,
+                line_number=1,
+                item_name="Standard-rated service",
+                description="Standard-rated service",
+                quantity=Decimal("1"),
+                unit_price=Decimal("200.00"),
+                line_total=Decimal("200.00"),
+                tax_type=TaxType.VAT_16,
+                tax_amount=Decimal("32.00"),
+            ),
+            InvoiceLineItem(
+                invoice_id=invoice.id,
+                line_number=2,
+                item_name="Zero-rated service",
+                description="Zero-rated service",
+                quantity=Decimal("1"),
+                unit_price=Decimal("100.00"),
+                line_total=Decimal("100.00"),
+                tax_type=TaxType.VAT_0,
+                tax_amount=Decimal("0.00"),
+            ),
+        ]
+    )
+    db.commit()
+
+    report = ReportsService(db).get_tax_report(PERIOD, Currency.KES)
+    sales = {(row.tax_type, row.tax_rate): row for row in report.sales_by_tax_type}
+
+    assert sales[("vat_16", Decimal("0.1600"))].taxable_value == Decimal("160.00")
+    assert sales[("vat_0", Decimal("0.0000"))].taxable_value == Decimal("80.00")
+    assert sum(
+        (row.taxable_value for row in report.sales_by_tax_type), Decimal("0")
+    ) == (invoice.total_due - invoice.tax_total)
+
+
+def test_zero_subtotal_line_tax_invoice_has_zero_taxable_value(db):
+    customer = _customer(db, "Zero subtotal")
+    _invoice(
+        db,
+        customer,
+        subtotal=Decimal("0.00"),
+        tax_total=Decimal("0.00"),
+        tax_type=TaxType.VAT_0,
+        line_tax=Decimal("0.00"),
+    )
+    db.commit()
+
+    report = ReportsService(db).get_tax_report(PERIOD, Currency.KES)
+    sales = {(row.tax_type, row.tax_rate): row for row in report.sales_by_tax_type}
+
+    assert sales[("vat_0", Decimal("0.0000"))].taxable_value == Decimal("0.00")
 
 
 def test_empty_report_contracts_expose_zero_values(db):
