@@ -1,23 +1,21 @@
 
-import type { components } from "./api-schema";
+import type { components } from "../api-schema";
 
-export type UserRole = components["schemas"]["UserRole"];
-export type CustomerStatus = components["schemas"]["CustomerStatus"];
+export type UserRole = "admin" | "manager" | "member";
+export type CustomerStatus = "active" | "inactive" | "suspended" | "deleted";
 export type CustomerType = components["schemas"]["CustomerType"];
 export type Currency = components["schemas"]["Currency"];
-export type TransactionType = components["schemas"]["TransactionType"];
-export type InvoiceStatus = components["schemas"]["InvoiceStatus"];
-export type PaymentMethod = components["schemas"]["PaymentMethod"];
+export type TransactionType = "sale" | "refund" | "payment" | "adjustment";
+export type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "canceled";
+export type PaymentMethod = "cash" | "bank_transfer" | "check" | "card" | "mobile_money" | "other";
 export type TaxType = components["schemas"]["TaxType"];
 export type DiscountType = components["schemas"]["DiscountType"];
-export type QuoteStatus = components["schemas"]["QuoteStatus"];
-export type VendorStatus = components["schemas"]["VendorStatus"];
-export type PayableTransactionStatus =
-     components["schemas"]["PayableTransactionStatus"];
-export type ExpenseStatus = components["schemas"]["ExpenseStatus"];
-export type DocumentSource = components["schemas"]["DocumentSource"];
-export type PurchaseOrderStatus =
-     components["schemas"]["PurchaseOrderStatus"];
+export type QuoteStatus = "draft" | "sent" | "approved" | "invoiced" | "expired" | "canceled";
+export type VendorStatus = "active" | "inactive" | "suspended" | "deleted";
+export type PayableTransactionStatus = "paid" | "pending" | "overdue";
+export type ExpenseStatus = "pending" | "paid" | "overdue" | "canceled";
+export type DocumentSource = "form" | "view" | "payment_modal" | "upload" | "generated" | "system";
+export type PurchaseOrderStatus = "draft" | "sent" | "paid" | "partially_billed" | "billed" | "closed" | "canceled";
 
 export const userRoleOptions = [
      { value: "admin", label: "Admin" },

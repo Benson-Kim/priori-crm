@@ -147,8 +147,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "items": {
             "items": {
@@ -179,8 +178,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "totals": {
             "$ref": "#/components/schemas/AgingBuckets"
@@ -344,8 +342,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "items": {
             "items": {
@@ -376,8 +373,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customers": {
             "items": {
@@ -1257,12 +1253,10 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_type": {
-            "title": "Customer Type",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerType"
           },
           "email": {
             "title": "Email",
@@ -1308,8 +1302,7 @@
             "title": "Province"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerStatus"
           },
           "updated_at": {
             "format": "date-time",
@@ -1403,6 +1396,17 @@
         "title": "CustomerStatement",
         "type": "object"
       },
+      "CustomerStatus": {
+        "description": "Customer account status.",
+        "enum": [
+          "active",
+          "inactive",
+          "suspended",
+          "deleted"
+        ],
+        "title": "CustomerStatus",
+        "type": "string"
+      },
       "CustomerStatusCounts": {
         "description": "Customer counts by status for dashboard filter tabs.",
         "properties": {
@@ -1449,12 +1453,10 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_type": {
-            "title": "Customer Type",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerType"
           },
           "display_name": {
             "title": "Display Name",
@@ -1474,8 +1476,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerStatus"
           }
         },
         "required": [
@@ -1904,12 +1905,21 @@
         "title": "DiscountType",
         "type": "string"
       },
+      "DocumentSource": {
+        "description": "Upload context for ExpenseDocument.source.",
+        "enum": [
+          "form",
+          "view",
+          "payment_modal"
+        ],
+        "title": "DocumentSource",
+        "type": "string"
+      },
       "ExcludedTaxTransaction": {
         "description": "One foreign-currency VAT document awaiting tax-point KES evidence.",
         "properties": {
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "document_id": {
             "format": "uuid",
@@ -2112,8 +2122,7 @@
             "type": "string"
           },
           "source": {
-            "title": "Source",
-            "type": "string"
+            "$ref": "#/components/schemas/DocumentSource"
           },
           "uploaded_at": {
             "format": "date-time",
@@ -2254,8 +2263,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -2463,8 +2471,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "days_overdue": {
             "readOnly": true,
@@ -2554,8 +2561,7 @@
             "type": "array"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/ExpenseStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -2694,6 +2700,17 @@
         "title": "ExpenseStatisticsResponse",
         "type": "object"
       },
+      "ExpenseStatus": {
+        "description": "Expense lifecycle states.",
+        "enum": [
+          "pending",
+          "paid",
+          "overdue",
+          "canceled"
+        ],
+        "title": "ExpenseStatus",
+        "type": "string"
+      },
       "ExpenseStatusCounts": {
         "description": "Status counts for the filter-tab bar.\nMirrors QuoteStatusCounts / InvoiceStatusCounts pattern.",
         "properties": {
@@ -2740,8 +2757,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "days_overdue": {
             "readOnly": true,
@@ -2781,8 +2797,7 @@
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/ExpenseStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3437,8 +3452,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3518,8 +3532,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer": {
             "$ref": "#/components/schemas/CustomerSummary"
@@ -3562,13 +3575,12 @@
           "discount_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DiscountType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Discount Type"
+            ]
           },
           "due_date": {
             "format": "date",
@@ -3661,8 +3673,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/InvoiceStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3912,6 +3923,19 @@
         "title": "InvoiceStatisticsResponse",
         "type": "object"
       },
+      "InvoiceStatus": {
+        "description": "Invoice lifecycle status with strict state machine.",
+        "enum": [
+          "draft",
+          "sent",
+          "partial",
+          "paid",
+          "overdue",
+          "canceled"
+        ],
+        "title": "InvoiceStatus",
+        "type": "string"
+      },
       "InvoiceStatusCounts": {
         "description": "Invoice counts by status for dashboard.",
         "properties": {
@@ -3968,8 +3992,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_id": {
             "format": "uuid",
@@ -4011,8 +4034,7 @@
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/InvoiceStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5013,8 +5035,7 @@
             "type": "string"
           },
           "payment_method": {
-            "title": "Payment Method",
-            "type": "string"
+            "$ref": "#/components/schemas/PaymentMethod"
           },
           "recorded_by": {
             "anyOf": [
@@ -5315,8 +5336,7 @@
             "type": "string"
           },
           "source": {
-            "title": "Source",
-            "type": "string"
+            "$ref": "#/components/schemas/DocumentSource"
           },
           "uploaded_at": {
             "format": "date-time",
@@ -5489,8 +5509,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5641,8 +5660,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "document_id": {
             "anyOf": [
@@ -5902,8 +5920,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "delivery_date": {
             "anyOf": [
@@ -6008,8 +6025,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/PurchaseOrderStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -6195,6 +6211,16 @@
         "title": "PurchaseOrderSendResponse",
         "type": "object"
       },
+      "PurchaseOrderStatus": {
+        "description": "Purchase Order lifecycle states.\n\nLifecycle: DRAFT -> SENT -> PAID. There are no billed or canceled\nstates for purchase orders.",
+        "enum": [
+          "draft",
+          "sent",
+          "paid"
+        ],
+        "title": "PurchaseOrderStatus",
+        "type": "string"
+      },
       "PurchaseOrderStatusCounts": {
         "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nThe PO lifecycle is DRAFT -> SENT -> PAID, so every status is included\nin ``all``. PAID is reached via record_payment (SENT -> PAID).",
         "properties": {
@@ -6248,8 +6274,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "delivery_date": {
             "anyOf": [
@@ -6286,8 +6311,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/PurchaseOrderStatus"
           },
           "total": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -6466,8 +6490,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "entity_name": {
             "title": "Entity Name",
@@ -7012,8 +7035,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -7113,8 +7135,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer": {
             "$ref": "#/components/schemas/CustomerSummary"
@@ -7157,13 +7178,12 @@
           "discount_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DiscountType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Discount Type"
+            ]
           },
           "due_date": {
             "format": "date",
@@ -7273,8 +7293,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/QuoteStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -7529,6 +7548,18 @@
         "title": "QuoteStatisticsResponse",
         "type": "object"
       },
+      "QuoteStatus": {
+        "description": "Quote status values.",
+        "enum": [
+          "draft",
+          "sent",
+          "approved",
+          "invoiced",
+          "expired"
+        ],
+        "title": "QuoteStatus",
+        "type": "string"
+      },
       "QuoteStatusCounts": {
         "description": "Quote counts by status for dashboard.",
         "properties": {
@@ -7575,8 +7606,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_id": {
             "format": "uuid",
@@ -7618,8 +7648,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/QuoteStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -8047,8 +8076,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_name": {
             "title": "Customer Name",
@@ -8383,7 +8411,7 @@
         "type": "object"
       },
       "TaxByTypeRow": {
-        "description": "Tax amount for one explicit type/rate combination.",
+        "description": "Taxable base and tax amount for one explicit type/rate combination.",
         "properties": {
           "document_count": {
             "default": 0,
@@ -8410,12 +8438,18 @@
             "title": "Tax Rate"
           },
           "tax_type": {
-            "title": "Tax Type",
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "taxable_value": {
+            "description": "Recognized taxable base represented by this classification",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Taxable Value",
             "type": "string"
           }
         },
         "required": [
           "tax_type",
+          "taxable_value",
           "tax_amount"
         ],
         "title": "TaxByTypeRow",
@@ -8515,6 +8549,8 @@
         "enum": [
           "vat_16",
           "vat_8",
+          "petroleum_vat_13",
+          "petroleum_vat_8",
           "vat_0",
           "exempt",
           "no_tax"
@@ -8643,8 +8679,7 @@
             "type": "string"
           },
           "role": {
-            "title": "Role",
-            "type": "string"
+            "$ref": "#/components/schemas/UserRole"
           }
         },
         "required": [
@@ -8657,6 +8692,16 @@
         ],
         "title": "UserResponse",
         "type": "object"
+      },
+      "UserRole": {
+        "description": "Authorization roles for application users.\n\nADMIN can perform any action. MANAGER may perform destructive and\nfinancial operations (hard-delete, record-payment, approve, convert).\nMEMBER may perform ordinary create/update operations only.",
+        "enum": [
+          "admin",
+          "manager",
+          "member"
+        ],
+        "title": "UserRole",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -8803,10 +8848,9 @@
             "type": "integer"
           },
           "currency": {
+            "$ref": "#/components/schemas/Currency",
             "default": "KES",
-            "description": "Display currency (from vendor)",
-            "title": "Currency",
-            "type": "string"
+            "description": "Display currency (from vendor)"
           },
           "items": {
             "items": {
@@ -9100,10 +9144,9 @@
         "description": "Payables summary .",
         "properties": {
           "currency": {
+            "$ref": "#/components/schemas/Currency",
             "default": "KES",
-            "description": "Currency for display (inherited from vendor record)",
-            "title": "Currency",
-            "type": "string"
+            "description": "Currency for display (inherited from vendor record)"
           },
           "overdue_total": {
             "default": "0.00",
@@ -9178,8 +9221,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "display_initials": {
             "description": "Two-letter avatar initials derived from vendor_name",
@@ -9250,8 +9292,7 @@
             "title": "Phone Secondary"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/VendorStatus"
           },
           "tax_id_pin": {
             "anyOf": [
@@ -9490,6 +9531,14 @@
         ],
         "title": "VendorStatementTransaction",
         "type": "object"
+      },
+      "VendorStatus": {
+        "enum": [
+          "active",
+          "inactive"
+        ],
+        "title": "VendorStatus",
+        "type": "string"
       },
       "VendorStatusCounts": {
         "description": "Counts backing the All/Active/Inactive tabs.",
@@ -9854,13 +9903,12 @@
           "currency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Currency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Currency"
+            ]
           },
           "email": {
             "anyOf": [
@@ -9921,8 +9969,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "email": {
             "anyOf": [
@@ -9964,8 +10011,7 @@
             "title": "Phone Primary"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/VendorStatus"
           },
           "vendor_name": {
             "title": "Vendor Name",
