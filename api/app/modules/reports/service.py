@@ -23,6 +23,7 @@ from app.common.pagination import (
     PaginationParams,
 )
 from app.constants.enums import Currency
+from app.lib.config import settings
 from app.modules.reports.queries import ReportsRepository
 from app.modules.reports.schemas import (
     VAT_FILING_WARNING,
@@ -59,21 +60,9 @@ from app.modules.statements.schemas import ResolvedPeriod
 logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0.00")
-_REPORT_EXPORT_MAX_ROWS = 100_000
 _MISSING_TAX_POINT_FX_REASON = (
     "Historical KES tax-point conversion values are not stored"
 )
-
-
-def _require_complete_export(rows: list, report_name: str) -> list:
-    """Reject an oversized export instead of returning a partial workbook."""
-    if len(rows) > _REPORT_EXPORT_MAX_ROWS:
-        raise BadRequestException(
-            f"{report_name} report has more than "
-            f"{_REPORT_EXPORT_MAX_ROWS:,} rows; narrow the reporting period "
-            "before exporting"
-        )
-    return rows
 
 
 class ReportsService:
@@ -83,6 +72,23 @@ class ReportsService:
         self.db = db
         self.current_user = current_user
         self.repo = ReportsRepository(db)
+
+
+    @staticmethod
+    def validate_export_size(
+        row_count: int,
+        report_name: str,
+        *,
+        max_rows: int | None = None,
+    ) -> None:
+        """Reject an oversized synchronous export before or during generation."""
+        limit = settings.REPORT_EXPORT_MAX_ROWS if max_rows is None else max_rows
+        if row_count > limit:
+            raise BadRequestException(
+                f"{report_name} report has more than {limit:,} rows; narrow the "
+                "reporting period before exporting"
+            )
+        
 
     # Sales: Summary
 
@@ -188,12 +194,14 @@ class ReportsService:
         batch_size: int,
     ) -> Iterator[SalesLedgerEntry]:
         """Yield the complete sales ledger without pagination or truncation."""
-        for row in self.repo.iter_sales_ledger(
+        rows = self.repo.iter_sales_ledger(
             period.date_from,
             period.date_to,
             currency,
             batch_size=batch_size,
-        ):
+        )
+        for row_number, row in enumerate(rows, start=1):
+            self.validate_export_size(row_number, "Sales")
             yield SalesLedgerEntry(
                 id=row.id,
                 customer_name=row.customer_name,
@@ -333,12 +341,14 @@ class ReportsService:
         batch_size: int,
     ) -> Iterator[PurchasesLedgerEntry]:
         """Yield the complete purchases ledger without pagination or truncation."""
-        for row in self.repo.iter_purchases_ledger(
+        rows = self.repo.iter_purchases_ledger(
             period.date_from,
             period.date_to,
             currency,
             batch_size=batch_size,
-        ):
+        )
+        for row_number, row in enumerate(rows, start=1):
+            self.validate_export_size(row_number, "Purchases")
             yield PurchasesLedgerEntry(
                 source_id=row.source_id,
                 source_type=row.source_type,
