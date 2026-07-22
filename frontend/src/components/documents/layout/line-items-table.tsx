@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { TAX_CATEGORY_OPTIONS } from "@/lib/constants";
-import { formatCurrency, getVatRateOptions, lineTaxValidationError } from "@/lib/utils";
+import { getLineTaxOptions, lineTaxValidationError } from "@/lib/taxUtils";
+import { formatCurrency, } from "@/lib/utils";
 import { Plus, Trash } from "lucide-react";
 import { Fragment } from "react";
 import {
@@ -99,7 +100,7 @@ function LineItemRows({
 }: LineItemRowsProps) {
     const lineTotal = calcLineTotal(row.quantity, row.unitPrice);
     const taxAmount = calcTaxAmount(lineTotal, row.taxType);
-    const { category: taxCategory, rate: taxRate, isVat: hasTax } = parseTaxType(row.taxType);
+    const { category: taxCategory, isVat: hasTax } = parseTaxType(row.taxType);
     const hasInlineTax = row.taxType !== "no_tax";
 
     const taxError = errors[`item_${row.key}_tax`] ?? (
@@ -115,7 +116,7 @@ function LineItemRows({
     };
 
     const handleRateChange = (val: string) => {
-        onUpdateRow(row.key, "taxType", buildTaxType("vat", val));
+        onUpdateRow(row.key, "taxType", val);
     };
 
     return (
@@ -212,11 +213,11 @@ function LineItemRows({
                     <td className="col-span-1">
                         {hasTax && (
                             <Select
-                                id={taxRate}
-                                value={taxRate}
+                                id={`${row.key}-tax-treatment`}
+                                value={row.taxType}
                                 onChange={(e) => handleRateChange(e.target.value)}
                                 disabled={restrictedMode}
-                                options={getVatRateOptions(taxPointDate, taxRate)}
+                                options={getLineTaxOptions(taxPointDate, row.taxType)}
                                 error={taxError}
                                 wrapperClassName="bg-white"
                             />

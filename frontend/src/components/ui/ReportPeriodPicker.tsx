@@ -19,7 +19,7 @@
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { useReportingDate } from "@/hooks/useReportingDate";
 import { calendarFromIso } from "@/lib/dateUtils";
-import { currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
+import { clampReportPeriodForYear, currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -115,7 +115,7 @@ export function ReportPeriodPicker({
     const y = Math.max(minYear, panelYear - 1);
     setPanelYear(y);
     if (value.mode !== "custom") {
-      onChange({ ...value, year: y });
+      onChange(clampReportPeriodForYear(value, y, reportingDate));
     }
   };
 
@@ -123,7 +123,7 @@ export function ReportPeriodPicker({
     const y = Math.min(currYear, panelYear + 1);
     setPanelYear(y);
     if (value.mode !== "custom") {
-      onChange({ ...value, year: y });
+      onChange(clampReportPeriodForYear(value, y, reportingDate));
     }
   };
 
@@ -248,11 +248,11 @@ export function ReportPeriodPicker({
             <div className="grid grid-cols-4 gap-1.5">
               {[1, 2, 3, 4].map((q) => {
                 const isSelected = value.quarter === q && value.year === panelYear;
-                const quarterEndMonth = q * 3;
                 const cal = calendarFromIso(reportingDate);
+                const quarterStartMonth = (q - 1) * 3 + 1;
                 const isFuture =
                   panelYear > currYear ||
-                  (panelYear === currYear && quarterEndMonth > cal.month);
+                  (panelYear === currYear && quarterStartMonth > cal.month);
                 return (
                   <button
                     key={q}

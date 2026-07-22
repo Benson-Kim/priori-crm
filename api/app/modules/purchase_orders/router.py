@@ -30,6 +30,7 @@ from app.common.analytics import PurchaseOrderEvent, emit_event
 from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
 from app.common.exceptions import BadRequestException
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
 from app.modules.purchase_orders.schemas import (
@@ -241,7 +242,7 @@ async def export_purchase_orders_to_excel(
         exporter.export_purchase_orders, purchase_orders, include_line_items
     )
 
-    filename = f"PurchaseOrders_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"PurchaseOrders_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -296,7 +297,7 @@ async def export_purchase_order_payments_to_excel(
 
     filename = (
         f"PurchaseOrder_{purchase_order.po_reference}_"
-        f"Payments_{date.today().strftime('%Y%m%d')}.xlsx"
+        f"Payments_{reporting_date().strftime('%Y%m%d')}.xlsx"
     )
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),

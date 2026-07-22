@@ -13,7 +13,7 @@ import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import {
   DEFAULT_DUE_DATE_DAYS,
 } from "@/lib/constants";
-import { lineTaxValidationError, vatRateValidationError } from "@/lib/utils";
+import { lineTaxValidationError, vatRateValidationError } from "@/lib/taxUtils";
 import { Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";

@@ -25,6 +25,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from app.common.reporting_time import reporting_date
 from app.common.validators import empty_str_to_none as normalize_empty_str
 from app.constants.enums import Currency, PurchaseOrderStatus, TaxType
 
@@ -383,7 +384,7 @@ class PurchaseOrderCreate(BaseModel):
         description="Vendor this purchase order is raised against — required",
     )
     order_date: date = Field(
-        default_factory=date.today,
+        default_factory=reporting_date,
         alias="orderDate",
         description="Date the purchase order was raised",
     )

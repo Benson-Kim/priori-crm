@@ -28,6 +28,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useAgedReport } from "@/hooks/useAgedReport";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { useTableSort } from "@/hooks/useTableSort";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
 import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
@@ -46,7 +47,6 @@ import {
   type PurchasesReportSummaryResponse,
   type PurchasesSourceCounts,
 } from "@/services/reportsApi";
-import { useReportingDate } from "@/hooks/useReportingDate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -419,7 +419,7 @@ export default function PurchasesReportPage() {
                 </span>
               </p>
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
-                Purchase orders always appear in "Current" -- no payment due date on POs
+                Aged payables include expenses only; purchase orders remain commitments.
               </p>
             </div>
           )}

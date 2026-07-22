@@ -18,6 +18,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
 from app.modules.customers.schemas import (
@@ -142,7 +143,7 @@ def get_customer(
     ]
 
     # Generate current-year statement
-    today = date.today()
+    today = reporting_date()
     try:
         statement = service.generate_statement(
             customer_id,

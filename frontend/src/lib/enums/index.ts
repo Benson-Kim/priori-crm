@@ -71,7 +71,8 @@ export const paymentMethodOptions = [
 
 export const taxTypeOptions = [
      { value: "vat_16", label: "VAT 16%" },
-     { value: "vat_8", label: "VAT 8%" },
+     { value: "petroleum_vat_13", label: "VAT 13% - Petroleum only" },
+     { value: "petroleum_vat_8", label: "VAT 8% - Petroleum only" },
      { value: "vat_0", label: "Zero-rated VAT" },
      { value: "exempt", label: "Exempt" },
      { value: "no_tax", label: "No Tax" },

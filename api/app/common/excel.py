@@ -79,10 +79,13 @@ def _write_safe_cell(ws, *, row: int, column: int, value: Any):
 def _tax_type_label(tax_type: str, tax_rate: Any) -> str:
     labels = {
         "vat_16": "16% VAT",
-        "vat_8": "8% VAT",
+        "vat_8": "8% VAT (Legacy Unscoped)",
+        "petroleum_vat_13": "13% VAT (Petroleum)",
+        "petroleum_vat_8": "8% VAT (Petroleum)",
         "vat_0": "0% VAT (Zero-rated)",
         "exempt": "Exempt",
         "no_tax": "No Tax",
+        "unreconciled_historical": "Historical Stored VAT (Base Unavailable)",
     }
     if tax_type != "vat_custom":
         return labels.get(tax_type, tax_type)
@@ -881,8 +884,8 @@ class ExcelExporter:
         Sheet 3: Expense VAT by type
         Sheet 4 (partial only): excluded foreign-currency VAT transactions
 
-        tax_type labels: vat_16 → "16% VAT", vat_8 → "8% VAT",
-        vat_0 → "0% VAT (Zero-rated)", exempt → "Exempt", no_tax → "No Tax"
+        Scoped petroleum treatments and legacy unscoped VAT are labelled separately. General labels include
+        vat_16 → "16% VAT", vat_0 → "0% VAT (Zero-rated)", exempt → "Exempt", and no_tax → "No Tax".
         """
         cur = currency.upper()
 

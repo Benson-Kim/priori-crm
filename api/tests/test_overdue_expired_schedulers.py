@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.common.financial import check_is_overdue
+from app.common.reporting_time import check_is_overdue, reporting_date
 from app.constants.enums import (
     Currency,
     CustomerStatus,
@@ -36,7 +36,7 @@ def _customer(db, email="sched@acme.test") -> Customer:
 def _invoice(
     db, customer, *, number, status, due_offset_days, balance=Decimal("10.00")
 ):
-    today = date.today()
+    today = reporting_date()
     inv = Invoice(
         invoice_number=number,
         invoice_reference=number.replace("INV", "IN"),
@@ -57,7 +57,7 @@ def _invoice(
 
 
 def _quote(db, customer, *, number, status, due_offset_days):
-    today = date.today()
+    today = reporting_date()
     q = Quote(
         quote_number=number,
         quote_reference=number.replace("QTE", "QT"),
@@ -156,16 +156,38 @@ class TestQuoteExpiredScheduler:
 
 class TestCentralizedPredicate:
     def test_terminal_statuses_are_not_overdue(self):
-        yesterday = date.today() - timedelta(days=1)
+        as_of_date = date(2026, 7, 22)
+        yesterday = as_of_date - timedelta(days=1)
+
         # Invoice terminal set
-        assert check_is_overdue("sent", yesterday, {"paid", "canceled"}) is True
-        assert check_is_overdue("paid", yesterday, {"paid", "canceled"}) is False
-        # Quote terminal set
-        assert check_is_overdue("sent", yesterday, {"approved", "invoiced"}) is True
         assert (
-            check_is_overdue("approved", yesterday, {"approved", "invoiced"}) is False
+            check_is_overdue(
+                "sent", yesterday, {"paid", "canceled"}, as_of_date=as_of_date
+            )
+            is True
+        )
+        assert (
+            check_is_overdue(
+                "paid", yesterday, {"paid", "canceled"}, as_of_date=as_of_date
+            )
+            is False
+        )
+        # Quote terminal set
+        assert (
+            check_is_overdue(
+                "sent", yesterday, {"approved", "invoiced"}, as_of_date=as_of_date
+            )
+            is True
+        )
+        assert (
+            check_is_overdue(
+                "approved", yesterday, {"approved", "invoiced"}, as_of_date=as_of_date
+            )
+            is False
         )
 
     def test_future_due_date_is_not_overdue(self):
-        tomorrow = date.today() + timedelta(days=1)
-        assert check_is_overdue("sent", tomorrow) is False
+        as_of_date = date(2026, 7, 22)
+        tomorrow = as_of_date + timedelta(days=1)
+
+        assert check_is_overdue("sent", tomorrow, as_of_date=as_of_date) is False

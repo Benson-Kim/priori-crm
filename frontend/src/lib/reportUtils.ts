@@ -17,6 +17,33 @@ export interface ReportPeriodFilter {
      customTo?: string;
 }
 
+export function clampReportPeriodForYear(
+     filter: ReportPeriodFilter,
+     year: number,
+     reportingDate: string
+): ReportPeriodFilter {
+     const current = calendarFromIso(reportingDate);
+     if (year !== current.year) return { ...filter, year };
+
+     if (filter.mode === "month") {
+          return {
+               ...filter,
+               year,
+               month: Math.min(filter.month ?? current.month, current.month),
+          };
+     }
+     if (filter.mode === "quarter") {
+          const currentQuarter = Math.ceil(current.month / 3);
+          return {
+               ...filter,
+               year,
+               quarter: Math.min(filter.quarter ?? currentQuarter, currentQuarter),
+          };
+     }
+     return { ...filter, year };
+}
+
+
 export function currentYear(reportingDate: string): number {
      return calendarFromIso(reportingDate).year;
 }

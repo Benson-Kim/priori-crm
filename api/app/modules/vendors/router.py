@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from app.common.dependencies import VendorServiceDep, require_role
 from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
 from app.lib.config import settings
@@ -562,7 +563,7 @@ async def _card_excel(
     xlsx, stem, truncated = await run_export(
         service.build_card_excel, vendor_id, card, start, end, settings.BATCH_SIZE
     )
-    filename = f"{stem}_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"{stem}_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx),
         media_type=_XLSX_MEDIA_TYPE,
@@ -580,7 +581,7 @@ async def _card_pdf(
     pdf, stem, truncated = await run_export(
         service.build_card_pdf, vendor_id, card, start, end, settings.BATCH_SIZE
     )
-    filename = f"{stem}_{date.today().strftime('%Y%m%d')}.pdf"
+    filename = f"{stem}_{reporting_date().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf),
         media_type="application/pdf",

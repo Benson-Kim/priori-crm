@@ -24,6 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import DatabaseException
+from app.common.reporting_time import reporting_date
 from app.common.search import build_search_clause
 from app.constants.enums import ExpenseStatus
 from app.modules.expenses.models import Expense
@@ -95,7 +96,7 @@ class ExpenseStatisticsRepository:
           has not yet run (computed via SQL CASE — no second round-trip).
         """
         try:
-            today = date.today()
+            today = reporting_date()
 
             rows = (
                 self._db.query(
@@ -157,16 +158,15 @@ class ExpenseStatisticsRepository:
         try:
             from datetime import timedelta
 
+            today = reporting_date()
+
             if not date_from and not date_to:
-                today = date.today()
                 date_from = date(today.year, today.month, 1)
                 date_to = (
                     date(today.year, 12, 31)
                     if today.month == 12
                     else date(today.year, today.month + 1, 1) - timedelta(days=1)
                 )
-
-            today = date.today()
 
             agg = (
                 self._db.query(
