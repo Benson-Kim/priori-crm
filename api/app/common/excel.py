@@ -759,8 +759,14 @@ class ExcelExporter:
 
         return self._to_bytes(wb)
 
-    def export_sales_report(self, rows: Iterable[Any], currency: str) -> bytes:
-        """Export sales ledger rows to .xlsx bytes.
+    def export_sales_report(
+        self,
+        rows: Iterable[Any],
+        currency: str,
+        *,
+        destination: str | None = None,
+    ) -> bytes | None:
+        """Export sales ledger rows to bytes or directly to ``destination``.
 
         Column headers include the currency label (e.g. "Amount (KES)") so
         exported files are self-describing when the user selects non-KES.
@@ -808,10 +814,17 @@ class ExcelExporter:
             money_cols=money_cols,
             date_cols=date_cols,
             column_widths=[15, 18, 18, 32, 14, 18, 18, 18, 18, 18, 18],
+            destination=destination,
         )
 
-    def export_purchases_report(self, rows: Iterable[Any], currency: str) -> bytes:
-        """Export purchases ledger rows (expenses + POs combined) to .xlsx bytes."""
+    def export_purchases_report(
+        self,
+        rows: Iterable[Any],
+        currency: str,
+        *,
+        destination: str | None = None,
+    ) -> bytes | None:
+        """Export purchase rows to bytes or directly to ``destination``."""
         cur = currency.upper()
         headers = [
             "Date",
@@ -851,6 +864,7 @@ class ExcelExporter:
             money_cols=money_cols,
             date_cols=date_cols,
             column_widths=[15, 18, 18, 32, 18, 14, 18, 18, 18],
+            destination=destination,
         )
 
     def export_tax_report(
@@ -858,7 +872,8 @@ class ExcelExporter:
         report,
         currency: str = "KES",
         excluded_transactions: Iterable[Any] = (),
-    ) -> bytes:
+        destination: str | None = None,
+    ) -> bytes | None:
         """Export a VAT estimate plus a disclosed exclusion appendix when partial.
 
         Sheet 1: VAT Estimate summary and completeness warning
@@ -946,7 +961,12 @@ class ExcelExporter:
 
         # Sheet 2: Sales by Tax Type
         ws2 = wb.create_sheet("Sales by Tax Type")
-        s_headers = ["Tax Type", f"Tax Amount ({cur})", "Invoice Count"]
+        s_headers = [
+            "Tax Type",
+            f"Taxable Value ({cur})",
+            f"Tax Amount ({cur})",
+            "Invoice Count",
+        ]
         for col_idx, header in enumerate(s_headers, 1):
             cell = ws2.cell(row=1, column=col_idx, value=header)
             cell.font = _HEADER_FONT
@@ -958,23 +978,35 @@ class ExcelExporter:
             tax_type = str(getattr(r, "tax_type", ""))
             label = _tax_type_label(tax_type, getattr(r, "tax_rate", None))
             ws2.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
+            taxable_cell = ws2.cell(
+                row=row_idx,
+                column=2,
+                value=float(getattr(r, "taxable_value", 0) or 0),
+            )
+            taxable_cell.number_format = _MONEY_FORMAT
+            taxable_cell.font = _BODY_FONT
             amt_cell = ws2.cell(
-                row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
+                row=row_idx, column=3, value=float(getattr(r, "tax_amount", 0) or 0)
             )
             amt_cell.number_format = _MONEY_FORMAT
             amt_cell.font = _BODY_FONT
             ws2.cell(
-                row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)
+                row=row_idx, column=4, value=int(getattr(r, "document_count", 0) or 0)
             ).font = _BODY_FONT
 
         ws2.freeze_panes = "A2"
-        for col, width in {"A": 25, "B": 18, "C": 15}.items():
+        for col, width in {"A": 25, "B": 20, "C": 18, "D": 15}.items():
             ws2.column_dimensions[col].width = width
 
         # Sheet 3: Expense VAT by Tax Type
 
         ws3 = wb.create_sheet("Expense VAT by Type")
-        p_headers = ["Tax Type", f"Tax Amount ({cur})", "Document Count"]
+        p_headers = [
+            "Tax Type",
+            f"Taxable Value ({cur})",
+            f"Tax Amount ({cur})",
+            "Document Count",
+        ]
         for col_idx, header in enumerate(p_headers, 1):
             cell = ws3.cell(row=1, column=col_idx, value=header)
             cell.font = _HEADER_FONT
@@ -986,17 +1018,24 @@ class ExcelExporter:
             tax_type = str(getattr(r, "tax_type", ""))
             label = _tax_type_label(tax_type, getattr(r, "tax_rate", None))
             ws3.cell(row=row_idx, column=1, value=label).font = _BODY_FONT
+            taxable_cell = ws3.cell(
+                row=row_idx,
+                column=2,
+                value=float(getattr(r, "taxable_value", 0) or 0),
+            )
+            taxable_cell.number_format = _MONEY_FORMAT
+            taxable_cell.font = _BODY_FONT
             amt_cell = ws3.cell(
-                row=row_idx, column=2, value=float(getattr(r, "tax_amount", 0) or 0)
+                row=row_idx, column=3, value=float(getattr(r, "tax_amount", 0) or 0)
             )
             amt_cell.number_format = _MONEY_FORMAT
             amt_cell.font = _BODY_FONT
             ws3.cell(
-                row=row_idx, column=3, value=int(getattr(r, "document_count", 0) or 0)
+                row=row_idx, column=4, value=int(getattr(r, "document_count", 0) or 0)
             ).font = _BODY_FONT
 
         ws3.freeze_panes = "A2"
-        for col, width in {"A": 25, "B": 18, "C": 18}.items():
+        for col, width in {"A": 25, "B": 20, "C": 18, "D": 18}.items():
             ws3.column_dimensions[col].width = width
 
         if is_partial:
@@ -1047,7 +1086,7 @@ class ExcelExporter:
         logger.info(
             "Built tax report Excel workbook (%d sheets)", 4 if is_partial else 3
         )
-        return self._to_bytes(wb)
+        return self._finish_workbook(wb, destination)
 
     # private implementation
     def _build_streaming_workbook(
@@ -1060,8 +1099,9 @@ class ExcelExporter:
         money_cols: list[int],
         date_cols: list[int],
         column_widths: list[int],
-    ) -> bytes:
-        """Build a write-only workbook from an iterable without materializing rows."""
+        destination: str | None = None,
+    ) -> bytes | None:
+        """Build a write-only workbook without materializing source rows."""
         wb = Workbook(write_only=True)
         ws = wb.create_sheet(sheet_name)
         ws.freeze_panes = "A2"
@@ -1097,7 +1137,7 @@ class ExcelExporter:
         logger.info(
             "Built streaming Excel sheet '%s' with %d records", sheet_name, count
         )
-        return self._to_bytes(wb)
+        return self._finish_workbook(wb, destination)
 
     def _build_workbook(
         self,
@@ -1225,6 +1265,14 @@ class ExcelExporter:
                 row_idx += 1
 
         ws.freeze_panes = "A2"
+
+    @staticmethod
+    def _finish_workbook(wb: Workbook, destination: str | None) -> bytes | None:
+        """Save directly to a file when supplied, preserving byte API compatibility."""
+        if destination is not None:
+            wb.save(destination)
+            return None
+        return ExcelExporter._to_bytes(wb)
 
     @staticmethod
     def _to_bytes(wb: Workbook) -> bytes:

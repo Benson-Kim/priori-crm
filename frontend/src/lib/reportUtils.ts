@@ -88,6 +88,19 @@ export function buildReportPeriodParams(
      return { range: "custom", dateFrom, dateTo, currency };
 }
 
+/** Return the exact sign of a decimal string without float conversion. */
+export function decimalSign(value: string): -1 | 0 | 1 {
+     const normalized = value.trim();
+     if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) {
+          throw new Error(`Invalid decimal value: ${value}`);
+     }
+
+     const negative = normalized.startsWith("-");
+     const digits = normalized.replace(/^[+-]/, "").replace(".", "");
+     if (!/[1-9]/.test(digits)) return 0;
+     return negative ? -1 : 1;
+}
+
 export function defaultReportPeriod(reportingDate: string = getTodayString()): ReportPeriodFilter {
      const cal = calendarFromIso(reportingDate);
      return {

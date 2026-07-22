@@ -205,12 +205,15 @@ class TaxSummaryMetrics(BaseModel):
 
 
 class TaxByTypeRow(BaseModel):
-    """Tax amount for one explicit type/rate combination."""
+    """Taxable base and tax amount for one explicit type/rate combination."""
 
     tax_type: str
     tax_rate: Decimal | None = Field(
         default=None,
         description="Rate as a fraction; null for exempt/no-tax classifications",
+    )
+    taxable_value: Decimal = Field(
+        description="Recognized taxable base represented by this classification"
     )
     tax_amount: Decimal
     document_count: int = Field(

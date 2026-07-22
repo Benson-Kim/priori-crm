@@ -29,7 +29,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Table } from "@/components/ui/Table";
 import { useTableSort } from "@/hooks/useTableSort";
-import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
+import { buildReportPeriodParams, decimalSign, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
 import { formatCurrency, formatDisplayDate } from "@/lib/utils";
 
 export default function TaxReportPage() {
@@ -148,8 +148,13 @@ export default function TaxReportPage() {
 
   const fmt = (v: string | undefined) => formatCurrency(Number(v ?? 0), "KES");
 
-  const netVat = Number(data?.metrics.net_vat_estimate ?? 0);
-  const netVatStatus = netVat > 0 ? "output-exceeds-input" : netVat < 0 ? "input-exceeds-output" : "balanced";
+  const netVatSign = decimalSign(data?.metrics.net_vat_estimate ?? "0");
+  const netVatStatus =
+    netVatSign > 0
+      ? "output-exceeds-input"
+      : netVatSign < 0
+        ? "input-exceeds-output"
+        : "balanced";
   const netVatClass =
     netVatStatus === "output-exceeds-input"
       ? "border-amber-200 bg-amber-50"
@@ -344,6 +349,13 @@ export default function TaxReportPage() {
                 columns={[
                   { key: "label", header: "Tax Type" },
                   {
+                    key: "taxable_value",
+                    header: "Taxable Value (KES)",
+                    sortKey: "taxable_value",
+                    className: "text-right",
+                    render: (r) => fmt(r.taxable_value),
+                  },
+                  {
                     key: "tax_amount",
                     header: "Tax Amount (KES)",
                     sortKey: "tax_amount",
@@ -376,6 +388,13 @@ export default function TaxReportPage() {
               <Table
                 columns={[
                   { key: "label", header: "Tax Type" },
+                  {
+                    key: "taxable_value",
+                    header: "Taxable Value (KES)",
+                    sortKey: "taxable_value",
+                    className: "text-right",
+                    render: (r) => fmt(r.taxable_value),
+                  },
                   {
                     key: "tax_amount",
                     header: "Tax Amount (KES)",
