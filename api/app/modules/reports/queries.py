@@ -1020,6 +1020,9 @@ class ReportsRepository:
                     func.coalesce(
                         func.sum(InvoiceLineItem.tax_amount), Decimal("0")
                     ).label("tax_amount"),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.line_total), Decimal("0")
+                    ).label("taxable_value"),
                 )
                 .select_from(InvoiceLineItem)
                 .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
@@ -1036,6 +1039,9 @@ class ReportsRepository:
                     func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
                         "tax_amount"
                     ),
+                    func.coalesce(
+                        func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
+                    ).label("taxable_value"),
                 )
                 .select_from(Invoice)
                 .where(
@@ -1052,6 +1058,7 @@ class ReportsRepository:
                     combined.c.tax_rate,
                     func.sum(combined.c.document_count).label("document_count"),
                     func.sum(combined.c.tax_amount).label("tax_amount"),
+                    func.sum(combined.c.taxable_value).label("taxable_value"),
                 )
                 .group_by(combined.c.tax_type, combined.c.tax_rate)
                 .order_by(
@@ -1080,6 +1087,9 @@ class ReportsRepository:
                     func.coalesce(
                         func.sum(ExpenseLineItem.tax_amount), Decimal("0")
                     ).label("tax_amount"),
+                    func.coalesce(
+                        func.sum(ExpenseLineItem.line_total), Decimal("0")
+                    ).label("taxable_value"),
                 )
                 .select_from(ExpenseLineItem)
                 .join(Expense, ExpenseLineItem.expense_id == Expense.id)
