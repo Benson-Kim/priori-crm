@@ -340,6 +340,7 @@ def test_quote_conversion_preserves_line_vat_and_foreign_currency(db):
 def test_quote_conversion_rejects_a_due_date_before_the_invoice_date(db):
     customer = _customer(db, "QuotePastDue")
     quote = _quote(db, customer, "PAST-DUE")
+    quote.transaction_date = date(2026, 1, 1)
     quote.due_date = date(2026, 1, 14)
     db.flush()
 

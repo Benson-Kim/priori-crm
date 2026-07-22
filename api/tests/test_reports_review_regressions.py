@@ -267,16 +267,20 @@ def test_tax_breakdowns_reconcile_document_line_zero_and_custom_vat(db):
     purchases = {(r.tax_type, r.tax_rate): r for r in report.purchases_by_tax_type}
 
     assert sales[("vat_16", Decimal("0.1600"))].tax_amount == Decimal("48.00")
+    assert sales[("vat_16", Decimal("0.1600"))].taxable_value == Decimal("300.00")
     assert sales[("vat_16", Decimal("0.1600"))].document_count == 2
     assert sales[("vat_0", Decimal("0.0000"))].document_count == 1
+    assert sales[("vat_0", Decimal("0.0000"))].taxable_value == Decimal("300.00")
     assert sales[("vat_0", Decimal("0.0000"))].tax_amount == Decimal("0.00")
     assert sales[("vat_custom", Decimal("0.1500"))].tax_amount == Decimal("15.00")
+    assert sales[("vat_custom", Decimal("0.1500"))].taxable_value == Decimal("100.00")
     assert (
         sum((r.tax_amount for r in report.sales_by_tax_type), Decimal("0"))
         == report.metrics.vat_collected
     )
 
     assert purchases[("vat_16", Decimal("0.1600"))].document_count == 1
+    assert purchases[("vat_16", Decimal("0.1600"))].taxable_value == Decimal("100.00")
     assert ("vat_0", Decimal("0.0000")) not in purchases
     assert ("vat_custom", Decimal("0.1500")) not in purchases
     assert (
@@ -290,9 +294,9 @@ def test_tax_breakdowns_reconcile_document_line_zero_and_custom_vat(db):
     workbook = load_workbook(BytesIO(payload), read_only=True, data_only=False)
     sales_rows = list(workbook["Sales by Tax Type"].iter_rows(values_only=True))
     purchase_rows = list(workbook["Expense VAT by Type"].iter_rows(values_only=True))
-    assert ("15% VAT (Custom)", 15, 1) in sales_rows
-    assert ("0% VAT (Zero-rated)", 0, 1) in sales_rows
-    assert ("16% VAT", 16, 1) in purchase_rows
+    assert ("15% VAT (Custom)", 100, 15, 1) in sales_rows
+    assert ("0% VAT (Zero-rated)", 300, 0, 1) in sales_rows
+    assert ("16% VAT", 100, 16, 1) in purchase_rows
 
 
 def test_empty_report_contracts_expose_zero_values(db):
