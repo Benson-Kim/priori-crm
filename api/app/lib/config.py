@@ -3,6 +3,7 @@
 import secrets
 from functools import lru_cache
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,10 @@ class Settings(BaseSettings):
 
     # API
     API_V1_PREFIX: str = "/api/v1"
+
+    # Organization-local accounting cutoffs. This deployment is Kenya-based;
+    # override explicitly for another dedicated organization deployment.
+    REPORTING_TIMEZONE: str = "Africa/Nairobi"
 
     # Database
     DATABASE_URL: PostgresDsn
@@ -84,8 +89,10 @@ class Settings(BaseSettings):
     BATCH_TIMEOUT_SECONDS: int = Field(default=300, ge=60, le=3600)
 
     # Exports: cap how many heavy (Excel/PDF) generations run concurrently
-    # per process so a burst cannot exhaust CPU/memory.
+    # per process and reject oversized synchronous report workbooks.
     EXPORT_MAX_CONCURRENCY: int = Field(default=4, ge=1, le=64)
+    REPORT_EXPORT_MAX_ROWS: int = Field(default=100_000, ge=1, le=1_000_000)
+    TAX_REPORT_EXPORT_MAX_ROWS: int = Field(default=10_000, ge=1, le=100_000)
 
     # File Storage
     UPLOAD_DIR: str = "uploads"
@@ -128,6 +135,18 @@ class Settings(BaseSettings):
         if not str(v).startswith(("postgresql://", "postgresql+psycopg2://")):
             raise ValueError("DATABASE_URL must be a valid PostgreSQL URL")
         return v
+
+    @field_validator("REPORTING_TIMEZONE")
+    @classmethod
+    def validate_reporting_timezone(cls, value: str) -> str:
+        """Reject invalid IANA timezone names at application startup."""
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                "REPORTING_TIMEZONE must be a valid IANA timezone"
+            ) from exc
+        return value
 
     @model_validator(mode="after")
     def validate_production_hardening(self) -> "Settings":

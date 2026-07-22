@@ -8,6 +8,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useConfirm } from "@/hooks/useConfirm";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { formatCurrency, formatDisplayDate, saveBlob } from "@/lib/utils";
 import {
     deleteExpense,
@@ -121,13 +122,15 @@ export default function ExpensesPage() {
     };
 
     const [isExporting, setIsExporting] = useState(false);
+    const reportingDate = useReportingDate();
     const handleExport = async () => {
         setIsExporting(true);
         try {
-            const blob = await exportExpensesExcel({
+            const { blob, filename } = await exportExpensesExcel({
                 status: activeTab !== "all" ? activeTab : undefined,
+                reportingDate,
             });
-            saveBlob(blob, `Expenses_${new Date().toISOString().split("T")[0]}.xlsx`);
+            saveBlob(blob, filename || `Expenses_${new Date().toISOString().split("T")[0]}.xlsx`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to export expenses");
         } finally {

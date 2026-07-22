@@ -14,7 +14,11 @@ from pydantic import (
     model_validator,
 )
 
-from app.common.financial import calculate_days_overdue, check_is_overdue
+from app.common.reporting_time import (
+    calculate_days_overdue,
+    check_is_overdue,
+    reporting_date,
+)
 from app.common.validators import empty_str_to_none as normalize_empty_str
 from app.constants.enums import Currency, ExpenseStatus, TaxType
 
@@ -208,7 +212,7 @@ class ExpenseCreate(BaseModel):
         description="Vendor this expense is payable to — required ",
     )
     expense_date: date = Field(
-        default_factory=date.today,
+        default_factory=reporting_date,
         alias="expenseDate",
         description="Date the expense was incurred",
     )

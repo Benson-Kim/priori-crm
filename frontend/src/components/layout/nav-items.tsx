@@ -1,4 +1,5 @@
 import {
+    BarChart2,
     ClipboardList,
     DollarSign,
     FileText,
@@ -71,6 +72,16 @@ export const navItems: NavItem[] = [
                 icon: FileText,
             },
             { label: "Cashflow", path: "/cashflow", icon: DollarSign },
+        ],
+    },
+
+    {
+        label: "Reports",
+        icon: BarChart2,
+        children: [
+            { label: "Sales Report", path: "/reports/sales", icon: FileText },
+            { label: "Purchases Report", path: "/reports/purchases", icon: Receipt },
+            { label: "Tax Report", path: "/reports/taxes", icon: ReceiptText },
         ],
     },
 ];

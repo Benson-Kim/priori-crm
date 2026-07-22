@@ -19,13 +19,17 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.financial import (
+    allocate_discounted_line_taxes,
     build_line_items,
     calculate_discount,
     calculate_subtotal_vat,
     neutralize_line_tax,
     sum_line_totals,
+    validate_document_vat_rate_for_date,
+    validate_line_item_treatments_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, InvoiceStatus, TaxType
 from app.modules.invoices.models import Invoice, InvoiceLineItem, Payment
 from app.modules.invoices.queries import (
@@ -74,6 +78,7 @@ class InvoiceService(BaseDocumentService):
 
     # Shared preview-totals + reference-retry wiring
     _calculation_response_cls = InvoiceCalculationResponse
+    _discount_line_tax_in_preview = True
     MAX_REFERENCE_RETRIES = MAX_INVOICE_NUMBER_RETRIES
 
     # Statuses from which an invoice may be deleted. Only DRAFT is deletable:
@@ -101,6 +106,42 @@ class InvoiceService(BaseDocumentService):
         InvoiceStatus.PAID: [InvoiceStatus.CANCELED],
         InvoiceStatus.CANCELED: [],
     }
+
+    @staticmethod
+    def _line_payload(item: InvoiceLineItem) -> dict[str, Any]:
+        return {
+            "line_total": Decimal(str(item.line_total)),
+            "tax_type": item.tax_type,
+            "tax_amount": Decimal(str(item.tax_amount)),
+        }
+
+    def _recalculate_line_tax(self, invoice: Invoice) -> None:
+        """Reconcile a draft line-tax invoice from its discounted taxable bases."""
+        if invoice.status != InvoiceStatus.DRAFT or invoice.vat_enabled:
+            return
+
+        items = list(invoice.line_items)
+        discount_value = calculate_discount(
+            Decimal(str(invoice.subtotal)),
+            invoice.discount_type,
+            invoice.discount_amount,
+            invoice.discount_percentage,
+        )
+        allocated = allocate_discounted_line_taxes(
+            [self._line_payload(item) for item in items],
+            discount_value,
+        )
+        for item, values in zip(items, allocated, strict=True):
+            item.taxable_value = values["taxable_value"]
+            item.tax_amount = values["tax_amount"]
+
+        tax_total = sum(
+            (Decimal(str(item.tax_amount)) for item in items),
+            Decimal("0.00"),
+        )
+        invoice.tax_total = tax_total
+        invoice.total_due = invoice.subtotal - discount_value + tax_total
+        invoice.balance_due = invoice.total_due - invoice.amount_paid
 
     # CREATE
 
@@ -153,11 +194,17 @@ class InvoiceService(BaseDocumentService):
             data.vat_rate,
             fields_sent={"vat_enabled", "vat_rate"} & data.model_fields_set,
         )
+        validate_document_vat_rate_for_date(vat_rate, data.transaction_date)
 
-        line_items_data = build_line_items(data.line_items)
+        line_items_data = build_line_items(
+            data.line_items, tax_point_date=data.transaction_date
+        )
+
         if vat_enabled:
             # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
             neutralize_line_tax(line_items_data)
+            for item in line_items_data:
+                item["taxable_value"] = None
         subtotal, tax_total = sum_line_totals(line_items_data)
 
         discount_value = calculate_discount(
@@ -198,6 +245,9 @@ class InvoiceService(BaseDocumentService):
             for item in line_items_data:
                 self._db.add(InvoiceLineItem(invoice_id=invoice.id, **item))
             self._db.flush()
+            if not vat_enabled:
+                self._db.expire(invoice, ["line_items"])
+                self._recalculate_line_tax(invoice)
             return invoice
 
         invoice = self._with_reference_retry(_build, "invoice")
@@ -208,7 +258,7 @@ class InvoiceService(BaseDocumentService):
             extra={
                 "invoice_id": str(invoice.id),
                 "customer_id": str(data.customer_id),
-                "total_due": float(total_due),
+                "total_due": float(invoice.total_due),
                 "created_by": str(user_id) if user_id else None,
             },
         )
@@ -404,41 +454,39 @@ class InvoiceService(BaseDocumentService):
         self,
         invoice_id: uuid.UUID,
         data: InvoiceUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Invoice:
         """
         Update an existing invoice with optimistic locking.
 
         Editing restrictions based on status:
-        - DRAFT: Full editing allowed
-        - SENT: Limited editing (no customer/amount changes)
-        - PAID/OVERDUE/CANCELED: Read-only (no edits)
+        - DRAFT: Full editing allowed.
+        - SENT/PARTIAL/PAID/OVERDUE/CANCELED: immutable; use corrective documents.
+
+        The version precondition is mandatory: omitting it would allow a
+        concurrent status transition (e.g. mark-as-sent) to race past the
+        editability check.
         """
+        # SELECT ... FOR UPDATE before status check to serialize with
+        # concurrent send/payment/cancel transitions.
+        assert_version(self._db, Invoice, invoice_id, expected_version)
+
         invoice = self.get_by_id(invoice_id)
 
         if not invoice.is_editable:
             raise BadRequestException(
-                detail=f"Cannot edit invoice in {invoice.status} status", field="status"
+                detail=(
+                    f"Cannot edit an issued invoice in '{invoice.status}' status. "
+                    "Issued invoices are immutable; record the correction through "
+                    "a credit/debit note or controlled replacement workflow."
+                ),
+                field="status",
             )
-
-        # Atomic optimistic-lock guard: locks the row and compares the
-        # version under the lock, so concurrent edits conflict instead of
-        # silently overwriting.
-        assert_version(self._db, Invoice, invoice_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True)
 
         if not update_data:
             return invoice  # No updates
-
-        if invoice.status == InvoiceStatus.SENT:
-            restricted_fields = ["customer_id", "transaction_date", "currency"]
-            for field in restricted_fields:
-                if field in update_data:
-                    raise BadRequestException(
-                        detail=f"Cannot change {field} after invoice has been sent",
-                        field=field,
-                    )
 
         if "discount_type" in update_data:
             new_type = update_data["discount_type"]
@@ -457,12 +505,26 @@ class InvoiceService(BaseDocumentService):
             update_data.get("vat_enabled", invoice.vat_enabled)
         )
         effective_vat_rate = update_data.get("vat_rate", invoice.vat_rate)
+        effective_transaction_date = update_data.get(
+            "transaction_date", invoice.transaction_date
+        )
+
+        validate_document_vat_rate_for_date(
+            effective_vat_rate, effective_transaction_date
+        )
+
         if effective_vat_enabled and effective_vat_rate is None:
             raise BadRequestException(
                 detail="vat_rate is required when vat_enabled is true",
                 field="vat_rate",
             )
 
+        if "transaction_date" in update_data and "line_items" not in update_data:
+            validate_line_item_treatments_for_date(
+                invoice.line_items, effective_transaction_date
+            )
+
+        line_items_replaced = False
         # Handle line items update (replace all)
         if "line_items" in update_data:
             self._db.query(InvoiceLineItem).filter(
@@ -470,10 +532,14 @@ class InvoiceService(BaseDocumentService):
             ).delete()
 
             line_items_raw: list[dict] = update_data.pop("line_items")
-            line_items_data = build_line_items(line_items_raw)
+            line_items_data = build_line_items(
+                line_items_raw, tax_point_date=effective_transaction_date
+            )
             if effective_vat_enabled:
                 # Document-level VAT replaces per-line tax (mirrors POs).
                 neutralize_line_tax(line_items_data)
+                for item in line_items_data:
+                    item["taxable_value"] = None
             subtotal, tax_total = sum_line_totals(line_items_data)
 
             for item in line_items_data:
@@ -481,6 +547,7 @@ class InvoiceService(BaseDocumentService):
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
+            line_items_replaced = True
         elif "vat_enabled" in update_data:
             if effective_vat_enabled:
                 # VAT switched on without replacing line items: neutralise
@@ -489,7 +556,11 @@ class InvoiceService(BaseDocumentService):
                 self._db.query(InvoiceLineItem).filter(
                     InvoiceLineItem.invoice_id == invoice_id
                 ).update(
-                    {"tax_type": TaxType.NO_TAX.value, "tax_amount": Decimal("0.00")}
+                    {
+                        "tax_type": TaxType.NO_TAX.value,
+                        "taxable_value": None,
+                        "tax_amount": Decimal("0.00"),
+                    }
                 )
             else:
                 # VAT switched off: tax falls back to the per-line sum of
@@ -562,6 +633,17 @@ class InvoiceService(BaseDocumentService):
         for field, value in update_data.items():
             setattr(invoice, field, value)
 
+        if recompute_balance and not effective_vat_enabled:
+            if line_items_replaced:
+                self._db.flush()
+                self._db.expire(invoice, ["line_items"])
+            self._recalculate_line_tax(invoice)
+            if invoice.balance_due < Decimal("0.00"):
+                raise BadRequestException(
+                    detail="Cannot reduce the invoice total below recorded payments",
+                    field="line_items",
+                )
+
         # Increment version for optimistic locking
         invoice.version += 1
 
@@ -609,6 +691,7 @@ class InvoiceService(BaseDocumentService):
         record_payment so a concurrent transition cannot race this one.
         """
         invoice = self._get_locked(invoice_id)
+        self._recalculate_line_tax(invoice)
         self._transition(invoice, InvoiceStatus.SENT)
         invoice.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(invoice)
@@ -674,6 +757,8 @@ class InvoiceService(BaseDocumentService):
 
     def _validate_sendable(self, invoice: Invoice) -> None:
         """Reject sends for canceled invoices (DocumentSendMixin hook)."""
+        if invoice.status == InvoiceStatus.DRAFT:
+            self._recalculate_line_tax(invoice)
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
                 detail="Cannot send a canceled invoice",
@@ -808,70 +893,53 @@ class InvoiceService(BaseDocumentService):
         invoice_id: uuid.UUID,
         user_id: uuid.UUID | None = None,
     ) -> InvoiceDuplicateResponse:
-        """Duplicate an existing invoice as a new DRAFT."""
-        try:
-            original = self.get_by_id(invoice_id)
-            from datetime import timedelta
+        """Duplicate through create() so tax eligibility and totals are rebuilt."""
+        from datetime import timedelta
 
-            new_transaction_date = date.today()
-            new_due_date = new_transaction_date + timedelta(days=30)
+        original = self.get_by_id(invoice_id)
+        if not original.line_items:
+            raise BadRequestException(
+                detail="Cannot duplicate an invoice without line items.",
+                field="line_items",
+            )
 
-            def _build() -> InvoiceDuplicateResponse:
-                duplicate = Invoice(
-                    invoice_number=self._generate_invoice_number(),
-                    invoice_reference=self._generate_invoice_reference(),
-                    customer_id=original.customer_id,
-                    transaction_date=new_transaction_date,
-                    due_date=new_due_date,
-                    currency=original.currency,
-                    status=InvoiceStatus.DRAFT,
-                    subtotal=original.subtotal,
-                    discount_type=original.discount_type,
-                    discount_amount=original.discount_amount,
-                    discount_percentage=original.discount_percentage,
-                    tax_total=original.tax_total,
-                    total_due=original.total_due,
-                    amount_paid=Decimal("0.00"),
-                    balance_due=original.total_due,
-                    rfq_number=original.rfq_number,
-                    notes=original.notes,
-                    created_by=user_id,
-                )
-                self._db.add(duplicate)
-                self._db.flush()
-                for orig_item in original.line_items:
-                    self._db.add(
-                        InvoiceLineItem(
-                            invoice_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        )
-                    )
-                self._db.flush()
-                logger.info(
-                    "Duplicated invoice %s → %s",
-                    original.invoice_number,
-                    duplicate.invoice_number,
-                )
-                return InvoiceDuplicateResponse(
-                    original_invoice_id=original.id,
-                    new_invoice_id=duplicate.id,
-                    new_invoice_number=duplicate.invoice_number,
-                )
-
-            return self._with_reference_retry(_build, "invoice")
-
-        except NotFoundException:
-            raise
-        except SQLAlchemyError as e:
-            logger.exception("Error duplicating invoice %s", invoice_id)
-            raise DatabaseException("Failed to duplicate invoice") from e
+        new_transaction_date = reporting_date()
+        duplicate = self.create(
+            InvoiceCreate(
+                customer_id=original.customer_id,
+                transaction_date=new_transaction_date,
+                due_date=new_transaction_date + timedelta(days=30),
+                currency=original.currency,
+                line_items=[
+                    {
+                        "item_name": item.item_name,
+                        "description": item.description,
+                        "quantity": item.quantity,
+                        "unit_price": item.unit_price,
+                        "tax_type": item.tax_type,
+                    }
+                    for item in original.line_items
+                ],
+                discount_type=original.discount_type,
+                discount_amount=original.discount_amount,
+                discount_percentage=original.discount_percentage,
+                vat_enabled=original.vat_enabled,
+                vat_rate=original.vat_rate,
+                rfq_number=original.rfq_number,
+                notes=original.notes,
+            ),
+            user_id=user_id,
+        )
+        logger.info(
+            "Duplicated invoice %s -> %s",
+            original.invoice_number,
+            duplicate.invoice_number,
+        )
+        return InvoiceDuplicateResponse(
+            original_invoice_id=original.id,
+            new_invoice_id=duplicate.id,
+            new_invoice_number=duplicate.invoice_number,
+        )
 
     def cancel_invoice(self, invoice_id: uuid.UUID) -> Invoice:
         """
@@ -1097,7 +1165,7 @@ class InvoiceService(BaseDocumentService):
         row-by-row, so no FOR UPDATE pre-read is needed.
         """
         try:
-            today = date.today()
+            today = reporting_date()
 
             updated = (
                 self._db.query(Invoice)

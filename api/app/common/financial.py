@@ -5,10 +5,14 @@ Single source of truth for tax rates and discount logic used across
 the Invoices, Quotes, and Expenses modules. Any future tax type must be added here only.
 """
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from app.common.exceptions import BadRequestException
 from app.constants.enums import DiscountType, TaxType
 
 # Money Rounding Policy
@@ -44,13 +48,136 @@ class LineItemInput(Protocol):
 # Tax Rates
 
 
+class TaxApplicability(StrEnum):
+    """Business scope required for an effective-dated tax treatment."""
+
+    GENERAL = "general"
+    PETROLEUM = "petroleum"
+
+
+@dataclass(frozen=True)
+class TaxRateRule:
+    """Effective-dated and scoped tax-treatment rule."""
+
+    jurisdiction: str
+    treatment: TaxType
+    rate: Decimal
+    effective_from: date
+    effective_to: date | None
+    applicability: TaxApplicability
+
+
+KENYA_TAX_RATE_RULES: tuple[TaxRateRule, ...] = (
+    TaxRateRule(
+        "KE", TaxType.VAT_16, Decimal("0.16"), date.min, None, TaxApplicability.GENERAL
+    ),
+    TaxRateRule(
+        "KE",
+        TaxType.PETROLEUM_VAT_8,
+        Decimal("0.08"),
+        date(2018, 9, 1),
+        date(2023, 6, 30),
+        TaxApplicability.PETROLEUM,
+    ),
+    TaxRateRule(
+        "KE",
+        TaxType.PETROLEUM_VAT_13,
+        Decimal("0.13"),
+        date(2026, 4, 15),
+        date(2026, 4, 15),
+        TaxApplicability.PETROLEUM,
+    ),
+    TaxRateRule(
+        "KE",
+        TaxType.PETROLEUM_VAT_8,
+        Decimal("0.08"),
+        date(2026, 4, 16),
+        date(2026, 10, 14),
+        TaxApplicability.PETROLEUM,
+    ),
+    TaxRateRule(
+        "KE", TaxType.VAT_0, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
+    TaxRateRule(
+        "KE", TaxType.EXEMPT, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
+    TaxRateRule(
+        "KE", TaxType.NO_TAX, Decimal("0.00"), date.min, None, TaxApplicability.GENERAL
+    ),
+)
+
+# Arithmetic registry: retired treatments remain calculable for historical records.
 TAX_RATES: dict[TaxType, Decimal] = {
-    TaxType.VAT_16: Decimal("0.16"),
     TaxType.VAT_8: Decimal("0.08"),
-    TaxType.VAT_0: Decimal("0.00"),
-    TaxType.EXEMPT: Decimal("0.00"),
-    TaxType.NO_TAX: Decimal("0.00"),
+    **{rule.treatment: rule.rate for rule in KENYA_TAX_RATE_RULES},
 }
+
+
+def validate_tax_treatment_for_date(tax_type: TaxType | str, tax_point: date) -> None:
+    """Reject a treatment that was not effective on the document tax point."""
+    treatment = TaxType(tax_type)
+    if treatment == TaxType.VAT_8:
+        raise BadRequestException(
+            detail=(
+                "Legacy unscoped VAT 8% records are read-only; select a "
+                "petroleum-scoped treatment for a supported tax point"
+            ),
+            field="tax_type",
+        )
+    matching = [
+        rule
+        for rule in KENYA_TAX_RATE_RULES
+        if rule.treatment == treatment
+        and rule.effective_from <= tax_point
+        and (rule.effective_to is None or tax_point <= rule.effective_to)
+    ]
+    if not matching:
+        raise BadRequestException(
+            detail=(
+                f"Tax treatment '{treatment.value}' is not valid on "
+                f"{tax_point.isoformat()}"
+            ),
+            field="tax_type",
+        )
+
+
+def validate_document_vat_rate_for_date(
+    vat_rate: Decimal | None,
+    tax_point: date,
+) -> None:
+    """Reject petroleum rates where the document has no applicability scope."""
+    if vat_rate is None:
+        return
+    normalized_rate = Decimal(str(vat_rate))
+    if normalized_rate in {Decimal("0.08"), Decimal("0.13")}:
+        raise BadRequestException(
+            detail=(
+                "Petroleum VAT rates require a petroleum-scoped line treatment "
+                f"for tax point {tax_point.isoformat()}"
+            ),
+            field="vat_rate",
+        )
+
+
+def validate_line_item_treatments_for_date(
+    line_items: Iterable[Any],
+    tax_point: date,
+) -> None:
+    """Validate persisted or incoming line-item treatments for one tax point.
+
+    Date-only document updates do not rebuild line items, so validation must
+    also work against ORM rows. This helper accepts mappings and attribute-based
+    objects and deliberately performs eligibility validation without changing
+    any stored historical rate or amount.
+    """
+    for item in line_items:
+        tax_type = (
+            item.get("tax_type")
+            if isinstance(item, dict)
+            else getattr(item, "tax_type", None)
+        )
+        if tax_type is not None:
+            validate_tax_treatment_for_date(tax_type, tax_point)
 
 
 def get_tax_rate(tax_type: TaxType) -> Decimal:
@@ -94,7 +221,9 @@ def calculate_line_item(
 # Line Item Builders
 
 
-def build_line_items(raw_items: list[Any]) -> list[dict]:
+def build_line_items(
+    raw_items: list[Any], *, tax_point_date: date | None = None
+) -> list[dict]:
     """
     Build calculated line-item dicts from a list of inputs.
 
@@ -106,7 +235,6 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
     line_number, item_name, description, quantity, unit_price, line_total,
     tax_type, tax_amount.
     """
-    required_fields = ("item_name", "description", "quantity", "unit_price", "tax_type")
 
     result: list[dict] = []
     for idx, item in enumerate(raw_items, start=1):
@@ -119,25 +247,38 @@ def build_line_items(raw_items: list[Any]) -> list[dict]:
             else lambda k, d=None, _it=item: getattr(_it, k, d)
         )
 
+        item_name = _get("item_name")
+        description = _get("description")
+        quantity = _get("quantity")
+        unit_price = _get("unit_price")
+        raw_tax_type = _get("tax_type")
+
         # Validate required fields are present rather than silently coercing a
         # missing value to None (which would TypeError in calculation or
         # persist a NULL).
-        for field in required_fields:
-            if _get(field) is None:
-                raise ValueError(
-                    f"Line item {idx} is missing required field '{field}'."
-                )
+        if item_name is None:
+            raise ValueError(f"Line item {idx} is missing required field 'item_name'.")
+        if description is None:
+            raise ValueError(
+                f"Line item {idx} is missing required field 'description'."
+            )
+        if quantity is None:
+            raise ValueError(f"Line item {idx} is missing required field 'quantity'.")
+        if unit_price is None:
+            raise ValueError(f"Line item {idx} is missing required field 'unit_price'.")
+        if raw_tax_type is None:
+            raise ValueError(f"Line item {idx} is missing required field 'tax_type'.")
 
-        quantity = _get("quantity")
-        unit_price = _get("unit_price")
-        tax_type = _get("tax_type")
+        tax_type = TaxType(raw_tax_type)
+        if tax_point_date:
+            validate_tax_treatment_for_date(tax_type, tax_point_date)
 
         line_total, tax_amount = calculate_line_item(quantity, unit_price, tax_type)
         result.append(
             {
                 "line_number": idx,
-                "item_name": _get("item_name"),
-                "description": _get("description"),
+                "item_name": item_name,
+                "description": description,
                 "quantity": quantity,
                 "unit_price": unit_price,
                 "line_total": line_total,
@@ -157,6 +298,58 @@ def sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
     subtotal = sum((item["line_total"] for item in line_items_data), Decimal("0.00"))
     tax_total = sum((item["tax_amount"] for item in line_items_data), Decimal("0.00"))
     return subtotal, tax_total
+
+
+def allocate_discounted_line_taxes(
+    line_items_data: list[dict],
+    discount_value: Decimal,
+) -> list[dict]:
+    """Allocate a document discount across line taxable bases and recalculate tax.
+
+    The gross ``line_total`` values remain unchanged so the invoice subtotal and
+    displayed document discount retain their existing meaning. ``taxable_value``
+    stores each line's post-discount base, while ``tax_amount`` is rounded from
+    that base using the shared money policy.
+
+    The final line absorbs any cent-level allocation remainder so the persisted
+    taxable bases always sum exactly to ``subtotal - discount_value``.
+    """
+    subtotal = sum(
+        (Decimal(str(item["line_total"])) for item in line_items_data),
+        Decimal("0.00"),
+    )
+    net_subtotal = quantize_money(max(subtotal - discount_value, Decimal("0.00")))
+
+    if subtotal <= 0:
+        for item in line_items_data:
+            item["taxable_value"] = Decimal("0.00")
+            item["tax_amount"] = Decimal("0.00")
+        return line_items_data
+
+    exact_shares = [
+        Decimal(str(item["line_total"])) * net_subtotal / subtotal
+        for item in line_items_data
+    ]
+    taxable_values = [
+        share.quantize(MONEY_QUANTUM, rounding=ROUND_DOWN) for share in exact_shares
+    ]
+    remaining_cents = int(
+        (net_subtotal - sum(taxable_values, Decimal("0.00"))) / MONEY_QUANTUM
+    )
+    remainder_order = sorted(
+        range(len(line_items_data)),
+        key=lambda index: (exact_shares[index] - taxable_values[index], -index),
+        reverse=True,
+    )
+    for index in remainder_order[:remaining_cents]:
+        taxable_values[index] += MONEY_QUANTUM
+
+    for item, taxable_value in zip(line_items_data, taxable_values, strict=True):
+        tax_rate = get_tax_rate(TaxType(item["tax_type"]))
+        item["taxable_value"] = taxable_value
+        item["tax_amount"] = quantize_money(taxable_value * tax_rate)
+
+    return line_items_data
 
 
 # Document-level (subtotal) VAT
@@ -222,45 +415,3 @@ def calculate_discount(
     if discount_type == DiscountType.PERCENTAGE and discount_percentage:
         return quantize_money(subtotal * discount_percentage / Decimal("100"))
     return Decimal("0.00")
-
-
-# Overdue Status Calculation
-
-
-# Single source of truth for which statuses can never be overdue/expired.
-DEFAULT_TERMINAL_STATUSES: frozenset[str] = frozenset({"paid", "canceled"})
-
-
-def check_is_overdue(
-    status: str,
-    due_date: date,
-    terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
-) -> bool:
-    """
-    Check if a record is overdue/expired based on status and due date.
-
-    The single definition of "past due": the status is not terminal and the
-    due date is in the past. ``terminal_statuses`` lets each document type
-    supply the statuses that can't be overdue/expired (e.g. invoices use
-    paid/canceled; quotes use approved/invoiced).
-    """
-    from datetime import date as dt_date
-
-    normalized_terminal = {s.lower() for s in terminal_statuses}
-    return status.lower() not in normalized_terminal and due_date < dt_date.today()
-
-
-def calculate_days_overdue(
-    status: str,
-    due_date: date,
-    terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
-) -> int:
-    """
-    Calculate the number of days a record is overdue/expired.
-    Returns 0 if not overdue.
-    """
-    from datetime import date as dt_date
-
-    if not check_is_overdue(status, due_date, terminal_statuses):
-        return 0
-    return (dt_date.today() - due_date).days

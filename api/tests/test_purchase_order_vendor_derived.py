@@ -152,7 +152,11 @@ class TestUpdateReDerivesComplianceOnVendorChange:
         po = service.create(_create_payload(original_vendor.id))
         assert po.compliance_ref == "P051111111A"
 
-        updated = service.update(po.id, PurchaseOrderUpdate(vendorId=new_vendor.id))
+        updated = service.update(
+            po.id,
+            PurchaseOrderUpdate(vendorId=new_vendor.id),
+            expected_version=po.version,
+        )
         assert updated.vendor_id == new_vendor.id
         assert updated.compliance_ref == "P052222222B"
         # The PO stays DRAFT and editable throughout.

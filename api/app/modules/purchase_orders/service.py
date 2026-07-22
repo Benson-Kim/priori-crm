@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Any, ClassVar
 
@@ -38,8 +39,10 @@ from app.common.financial import (
     build_line_items,
     calculate_subtotal_vat,
     sum_line_totals,
+    validate_document_vat_rate_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.constants.enums import (
     Currency,
     DocumentSource,
@@ -190,9 +193,11 @@ class PurchaseOrderService(BaseDocumentService):
     @staticmethod
     def _build_line_items(
         raw_items: list[PurchaseOrderLineItemCreate],
+        *,
+        tax_point_date: date,
     ) -> list[dict]:
         """Delegate to the shared build_line_items helper (no local calc)."""
-        return build_line_items(raw_items)
+        return build_line_items(raw_items, tax_point_date=tax_point_date)
 
     @staticmethod
     def _sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
@@ -276,7 +281,7 @@ class PurchaseOrderService(BaseDocumentService):
         # the owner profile so new POs inherit our own VAT settings.
         vat_fields_sent = {"vat_enabled", "vat_rate"} & data.model_fields_set
         if vat_fields_sent:
-            vat_enabled = bool(data.vat_enabled)
+            vat_enabled = data.vat_enabled
             vat_rate = data.vat_rate if vat_enabled else None
         else:
             from app.modules.owner.service import OwnerService
@@ -284,12 +289,16 @@ class PurchaseOrderService(BaseDocumentService):
             _profile = OwnerService(self._db).get_or_create()
             vat_enabled = bool(_profile.vat_enabled) and _profile.vat_rate is not None
             vat_rate = Decimal(str(_profile.vat_rate)) if vat_enabled else None
+
+        validate_document_vat_rate_for_date(vat_rate, data.order_date)
         vat_compliance_ref = data.vat_compliance_ref
         if vat_compliance_ref is None:
             vat_compliance_ref = self._owner_vat_compliance_ref()
 
         # Deterministic, no DB writes — computed once outside the retry loop.
-        line_items_data = self._strip_line_tax(self._build_line_items(data.line_items))
+        line_items_data = self._strip_line_tax(
+            self._build_line_items(data.line_items, tax_point_date=data.order_date)
+        )
         subtotal, _line_tax = self._sum_line_totals(line_items_data)
         tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
         total = subtotal + tax_total
@@ -788,7 +797,7 @@ Best regards,
         self,
         po_id: uuid.UUID,
         data: PurchaseOrderUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> PurchaseOrder:
         """Update a purchase order with optimistic locking.
 
@@ -875,6 +884,7 @@ Best regards,
                 detail="vat_rate is required when vat_enabled is true",
                 field="vat_rate",
             )
+        validate_document_vat_rate_for_date(vat_rate, new_order_date)
         # Only stage the VAT columns when they actually change; a neutral
         # update (e.g. notes-only) must not dirty vat_enabled/vat_rate.
         if vat_changed:
@@ -893,7 +903,9 @@ Best regards,
 
             raw_items: list[dict] = update_data.pop("line_items")
             typed_items = [PurchaseOrderLineItemCreate(**item) for item in raw_items]
-            line_items_data = self._strip_line_tax(self._build_line_items(typed_items))
+            line_items_data = self._strip_line_tax(
+                self._build_line_items(typed_items, tax_point_date=new_order_date)
+            )
 
             for item in line_items_data:
                 self._db.add(PurchaseOrderLineItem(po_id=purchase_order.id, **item))
@@ -1559,55 +1571,6 @@ Best regards,
             },
         )
 
-    # CANCEL
-
-    def cancel(self, po_id: uuid.UUID) -> PurchaseOrder:
-        """Cancel a purchase order: DRAFT | SENT -> CANCELED.
-
-        Cancel voids the PO while preserving the record: a
-        CANCELED PO is terminal and can never be re-opened or edited
-        (``is_editable`` already gates editing to DRAFT only). BILLED and
-        already-CANCELED purchase orders cannot be cancelled — the shared
-        ``_transition`` rejects those edges with a typed BadRequestException
-        (no silent no-op).
-
-        Locked load: serializes with send / convert / delete so the status
-        gate and transition cannot interleave with a concurrent transition
-        (race-condition contract — all status transitions load FOR UPDATE).
-        The audit row is written in the same locked transaction.
-        """
-        purchase_order = self._get_locked(po_id)
-
-        previous_status = purchase_order.status
-        # Route through the state machine so ALLOWED_TRANSITIONS is enforced
-        # and the version bump is owned in one place. BILLED/CANCELED have no
-        # CANCELED edge, so this raises BadRequestException for them.
-        self._transition(purchase_order, PurchaseOrderStatus.CANCELED)
-        self._db.flush()
-
-        # Durable audit trail, atomic with the transition.
-        record_audit_event(
-            self._db,
-            actor_id=self._actor_id,
-            entity_type="purchase_order",
-            entity_id=purchase_order.id,
-            action="canceled",
-            before={"status": status_value(previous_status)},
-            after={"status": status_value(PurchaseOrderStatus.CANCELED)},
-        )
-
-        logger.warning(
-            "Canceled purchase order: %s",
-            purchase_order.po_reference,
-            extra={"po_id": str(purchase_order.id)},
-        )
-
-        emit_event(
-            PurchaseOrderEvent.PO_CANCELLED,
-            {"po_id": str(purchase_order.id)},
-        )
-        return purchase_order
-
     # DELETE
 
     def delete(self, po_id: uuid.UUID) -> bool:
@@ -1710,17 +1673,18 @@ Best regards,
         - compliance_ref is CLEARED (specific to the original);
         - attached documents are NOT copied.
         """
-        from datetime import date
 
         try:
             original = self.get_by_id(po_id)
+            duplicate_date = reporting_date()
+            validate_document_vat_rate_for_date(original.vat_rate, duplicate_date)
 
             def _build() -> PurchaseOrder:
                 duplicate = PurchaseOrder(
                     po_number=self._generate_po_number(),
                     po_reference=self._generate_po_reference(),
                     vendor_id=original.vendor_id,
-                    order_date=date.today(),
+                    order_date=duplicate_date,
                     delivery_date=original.delivery_date,
                     currency=original.currency,
                     status=PurchaseOrderStatus.DRAFT,
@@ -1788,6 +1752,8 @@ Best regards,
     def calculate_totals(
         cls,
         line_items: list[PurchaseOrderLineItemCreate],
+        *,
+        tax_point_date: date,
         vat_enabled: bool = False,
         vat_rate: Decimal | None = None,
     ) -> PurchaseOrderCalculationResponse:
@@ -1801,9 +1767,21 @@ Best regards,
         (parity is asserted in tests). No discount in v1:
         total = subtotal + tax_total.
         """
-        calculated_items = cls._strip_line_tax(cls._build_line_items(line_items))
+        if vat_enabled and vat_rate is None:
+            raise BadRequestException(
+                detail="vat_rate is required when vat_enabled is true",
+                field="vat_rate",
+            )
+        effective_vat_rate = vat_rate if vat_enabled else None
+        validate_document_vat_rate_for_date(effective_vat_rate, tax_point_date)
+        calculated_items = cls._strip_line_tax(
+            cls._build_line_items(
+                line_items,
+                tax_point_date=tax_point_date,
+            )
+        )
         subtotal, _line_tax = cls._sum_line_totals(calculated_items)
-        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, vat_rate)
+        tax_total = calculate_subtotal_vat(subtotal, vat_enabled, effective_vat_rate)
 
         formatted_items = [
             {
@@ -1823,7 +1801,7 @@ Best regards,
             tax_total=tax_total,
             total=subtotal + tax_total,
             vat_enabled=vat_enabled,
-            vat_rate=vat_rate,
+            vat_rate=effective_vat_rate,
             line_items=formatted_items,
         )
 

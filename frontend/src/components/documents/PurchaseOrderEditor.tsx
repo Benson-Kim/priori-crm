@@ -1,5 +1,6 @@
 import { VendorSelector } from "@/components/modals/VendorSelector";
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Input } from "@/components/ui/Input";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -7,6 +8,7 @@ import {
   resolveDefaultTerms,
 } from "@/lib/compliance";
 import { getTodayString } from "@/lib/dateUtils";
+import { lineTaxValidationError, vatRateValidationError } from "@/lib/taxUtils";
 import { formatCurrency, saveBlob } from "@/lib/utils";
 import {
   deletePurchaseOrder,
@@ -121,6 +123,15 @@ export function PurchaseOrderEditor({
     const now = Date.now();
     return initialData?.orderDate ?? getTodayString(now);
   });
+
+  const orderDateTouched = useRef(false);
+
+  useEffect(() => {
+    const isEditingDoc = !!initialData?.poReference;
+    if (isEditingDoc || orderDateTouched.current || !profile?.reportingDate) return;
+    setOrderDate(profile.reportingDate);
+  }, [initialData?.poReference, profile?.reportingDate]);
+
   // Delivery date is optional for a purchase order.
   const [deliveryDate, setDeliveryDate] = useState<string>(
     initialData?.deliveryDate ?? ""
@@ -246,9 +257,20 @@ export function PurchaseOrderEditor({
       v.deliveryDate = "Delivery date must be on or after the order date";
     }
 
+    const vatRateError = vatEnabled ? vatRateValidationError(vatRatePct, orderDate) : undefined;
+    if (vatRateError) v.vatRate = vatRateError;
+
     const validItems = lineItems.filter(
       (r) => r.description.trim() || r.itemName.trim()
     );
+
+    if (!vatEnabled) {
+      for (const item of validItems) {
+        const taxError = lineTaxValidationError(item.taxType, orderDate);
+        if (taxError) v[`item_${item.key}_tax`] = taxError;
+      }
+    }
+
     if (validItems.length === 0) {
       v.lineItems = "At least one line item is required";
     }
@@ -522,13 +544,18 @@ export function PurchaseOrderEditor({
                 >
                   Order Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="order-date"
-                  type="date"
+                  variant="form"
                   value={orderDate}
-                  onChange={(e) => setOrderDate(e.target.value)}
+                  onChange={(d) => {
+                    setOrderDate(d);
+                    orderDateTouched.current = true;
+                  }}
                   disabled={restrictedMode}
                   error={errors.orderDate}
+                  aria-label="Order date"
+                  today={profile?.reportingDate}
                 />
 
                 {/* Delivery Date (optional) */}
@@ -538,14 +565,16 @@ export function PurchaseOrderEditor({
                 >
                   Delivery Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="delivery-date"
-                  type="date"
+                  variant="form"
                   value={deliveryDate}
                   min={orderDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  onChange={(d) => setDeliveryDate(d)}
                   disabled={restrictedMode}
                   error={errors.deliveryDate}
+                  aria-label="Delivery date"
+                  today={profile?.reportingDate}
                 />
 
 
@@ -589,6 +618,7 @@ export function PurchaseOrderEditor({
             onRemoveRow={removeRow}
             onUpdateRow={updateRow}
             enableInlineTax={false}
+            taxPointDate={orderDate}
           />
 
           {/* Purchase Order Totals (no Amount Paid / Balance Due). */}

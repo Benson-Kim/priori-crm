@@ -338,6 +338,51 @@ const routes = [
                         },
                     },
                     {
+                        path: "reports",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/reports")),
+                                handle: {
+                                    header: {
+                                        title: "Reports",
+                                        description: "Financial reports: sales, purchases, tax, and aging.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "sales",
+                                element: lazyPage(() => import("@/pages/reports/sales")),
+                                handle: {
+                                    header: {
+                                        title: "Sales Report",
+                                        description: "Revenue, invoices, outstanding balances and aged receivables.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "purchases",
+                                element: lazyPage(() => import("@/pages/reports/purchases")),
+                                handle: {
+                                    header: {
+                                        title: "Purchases Report",
+                                        description: "Expense and purchase order spend, vendor breakdown and aged payables.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "taxes",
+                                element: lazyPage(() => import("@/pages/reports/taxes")),
+                                handle: {
+                                    header: {
+                                        title: "Tax Report",
+                                        description: "VAT collected vs paid — net VAT position (KES ONLY).",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
                         path: "statements",
                         children: [
                             {

@@ -39,7 +39,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
-from app.common.financial import calculate_days_overdue, check_is_overdue, get_tax_rate
+from app.common.financial import get_tax_rate
+from app.common.reporting_time import calculate_days_overdue, check_is_overdue
 from app.constants.enums import Currency, DocumentSource, ExpenseStatus, TaxType
 
 

@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { ACCEPTED_UPLOAD_TYPES, CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
 import { recordPayment as recordExpensePayment, type ExpensePaymentPayload } from "@/services/expenseApi";
 import { recordPayment as recordInvoicePayment, type PaymentCreatePayload as InvoicePaymentPayload } from "@/services/invoiceApi";
@@ -192,9 +194,10 @@ export function RecordPaymentModal({
     // The PO currency is the balance currency; payments may be made in a
     // different currency and converted via the exchange rate.
     const poCurrency = currency || DEFAULT_CURRENCY;
+    const reportingDate = useReportingDate()
 
     const [amount, setAmount] = useState(String(prefillAmount ?? balanceDue));
-    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+    const [paymentDate, setPaymentDate] = useState(() => reportingDate);
     const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
     const [reference, setReference] = useState("");
     const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -229,46 +232,63 @@ export function RecordPaymentModal({
     const relatedInvoiceDocs = relatedDocuments.filter((d) => docTypeOf(d) === "invoice");
     const relatedPopDocs = relatedDocuments.filter((d) => docTypeOf(d) !== "invoice");
 
+    const latestReportingDateRef = useRef(reportingDate);
+    const paymentDateTouchedRef = useRef(false);
+
     useEffect(() => {
-        if (isOpen) {
-            startTransition(() => {
-                if (editPayment) {
-                    setAmount(String(editPayment.amount));
-                    setPaymentDate(
-                        editPayment.payment_date
-                            ? String(editPayment.payment_date).split("T")[0]
-                            : new Date().toISOString().split("T")[0]
-                    );
-                    setReference(editPayment.reference ?? "");
-                    setInvoiceNumber(
-                        (editPayment as { invoice_number?: string | null }).invoice_number ?? ""
-                    );
-                    setPaymentCurrency(
-                        (editPayment as { currency?: string | null }).currency ?? poCurrency
-                    );
-                    setExchangeRate(
-                        String((editPayment as { exchange_rate?: number | string | null }).exchange_rate ?? "1")
-                    );
-                    setExchangeDirection("paymentToPo");
-                    setNotes(editPayment.notes ?? "");
-                } else {
-                    setAmount(String(prefillAmount ?? balanceDue));
-                    setPaymentDate(new Date().toISOString().split("T")[0]);
-                    setReference("");
-                    setInvoiceNumber("");
-                    setPaymentCurrency(poCurrency);
-                    setExchangeRate("1");
-                    setExchangeDirection("paymentToPo");
-                    setNotes("");
-                }
-                setPaymentMethod("bank_transfer");
-                setInvoiceFiles([]);
-                setPopFiles([]);
-                setDeletedDocIds(new Set());
-                setError(null);
-            })
-        }
+        latestReportingDateRef.current = reportingDate;
+    }, [reportingDate]);
+
+    useEffect(() => {
+        if (!isOpen) return
+        const defaultPaymentDate = latestReportingDateRef.current;
+
+        startTransition(() => {
+            paymentDateTouchedRef.current = false;
+
+            if (editPayment) {
+                setAmount(String(editPayment.amount));
+                setPaymentDate(
+                    editPayment.payment_date
+                        ? String(editPayment.payment_date).split("T")[0]
+                        : defaultPaymentDate
+                );
+                setReference(editPayment.reference ?? "");
+                setInvoiceNumber(
+                    (editPayment as { invoice_number?: string | null }).invoice_number ?? ""
+                );
+                setPaymentCurrency(
+                    (editPayment as { currency?: string | null }).currency ?? poCurrency
+                );
+                setExchangeRate(
+                    String((editPayment as { exchange_rate?: number | string | null }).exchange_rate ?? "1")
+                );
+                setExchangeDirection("paymentToPo");
+                setNotes(editPayment.notes ?? "");
+            } else {
+                setAmount(String(prefillAmount ?? balanceDue));
+                setPaymentDate(defaultPaymentDate);
+                setReference("");
+                setInvoiceNumber("");
+                setPaymentCurrency(poCurrency);
+                setExchangeRate("1");
+                setExchangeDirection("paymentToPo");
+                setNotes("");
+            }
+            setPaymentMethod("bank_transfer");
+            setInvoiceFiles([]);
+            setPopFiles([]);
+            setDeletedDocIds(new Set());
+            setError(null);
+        })
+
     }, [isOpen, prefillAmount, balanceDue, editPayment, poCurrency]);
+
+    useEffect(() => {
+        if (!isOpen || editPayment || paymentDateTouchedRef.current) return
+
+        setPaymentDate(reportingDate);
+    }, [reportingDate, isOpen, editPayment]);
 
     // Keep the rate pinned to 1 whenever the payment currency matches the PO
     // currency (the backend enforces this too).
@@ -517,11 +537,16 @@ export function RecordPaymentModal({
 
                 <div className="space-y-2">
                     <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
-                    <Input
+                    <CalendarPicker
                         id="payment-date"
-                        type="date"
+                        variant="form"
                         value={paymentDate}
-                        onChange={(e) => setPaymentDate(e.target.value)}
+                        onChange={(date) => {
+                            paymentDateTouchedRef.current = true;
+                            setPaymentDate(date);
+                        }}
+                        today={reportingDate}
+                        aria-label="Payment date"
                     />
                 </div>
 

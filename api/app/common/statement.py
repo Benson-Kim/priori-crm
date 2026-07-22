@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.common.financial import quantize_money
+from app.common.reporting_time import reporting_date
 
 # Default statement window when the caller does not supply explicit bounds.
 DEFAULT_STATEMENT_PERIOD_DAYS = 365
@@ -39,7 +40,7 @@ def default_statement_period(
     ``period_start`` defaults to ``period_end`` minus 12 months.
     """
     if period_end is None:
-        period_end = date.today()
+        period_end = reporting_date()
     if period_start is None:
         period_start = period_end - timedelta(days=DEFAULT_STATEMENT_PERIOD_DAYS)
     return period_start, period_end

@@ -18,6 +18,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.statement import default_statement_period
 from app.constants.enums import UserRole
 from app.modules.customers.schemas import (
@@ -142,7 +143,7 @@ def get_customer(
     ]
 
     # Generate current-year statement
-    today = date.today()
+    today = reporting_date()
     try:
         statement = service.generate_statement(
             customer_id,
@@ -179,7 +180,7 @@ def update_customer(
     body: CustomerUpdate,
     service: CustomerServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -187,7 +188,7 @@ def update_customer(
                 "If the customer has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> CustomerResponse:
     """Update an existing customer with optimistic locking."""
     customer = service.update(customer_id, body, expected_version)

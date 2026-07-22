@@ -22,9 +22,11 @@ from app.common.exceptions import (
 from app.common.financial import (
     build_line_items,
     sum_line_totals,
+    validate_line_item_treatments_for_date,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
-from app.constants.enums import DocumentSource, ExpenseStatus
+from app.common.reporting_time import reporting_date
+from app.constants.enums import DocumentSource, ExpenseStatus, VendorStatus
 from app.modules.expenses.models import (
     Expense,
     ExpenseDocument,
@@ -116,10 +118,10 @@ class ExpenseService(BaseDocumentService):
 
     @staticmethod
     def _build_line_items(
-        raw_items: list[ExpenseLineItemCreate],
+        raw_items: list[ExpenseLineItemCreate], *, tax_point_date: date
     ) -> list[dict]:
         """Delegate to the shared build_line_items helper in common/financial.py."""
-        return build_line_items(raw_items)
+        return build_line_items(raw_items, tax_point_date=tax_point_date)
 
     @staticmethod
     def _sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
@@ -147,6 +149,15 @@ class ExpenseService(BaseDocumentService):
                 resource="vendor",
             )
 
+        if vendor.status != VendorStatus.ACTIVE:
+            raise BadRequestException(
+                detail=(
+                    "Cannot create an expense for inactive vendor: "
+                    f"{vendor.vendor_name}"
+                ),
+                field="vendor_id",
+            )
+
         # Single-currency-per-vendor (mirrors the customer rule on
         # invoices/quotes): vendor payables and statements sum balance_due
         # across this vendor's expenses, which is only meaningful in one
@@ -169,7 +180,9 @@ class ExpenseService(BaseDocumentService):
         expense_currency = vendor.currency or data.currency
 
         # Calculate outside retry loop — deterministic, no DB writes
-        line_items_data = self._build_line_items(data.line_items)
+        line_items_data = self._build_line_items(
+            data.line_items, tax_point_date=data.expense_date
+        )
         subtotal, tax_total = self._sum_line_totals(line_items_data)
         total_due = subtotal + tax_total
 
@@ -377,7 +390,7 @@ class ExpenseService(BaseDocumentService):
         self,
         expense_id: uuid.UUID,
         data: ExpenseUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Expense:
         """
         Update an existing expense with optimistic locking.
@@ -386,6 +399,9 @@ class ExpenseService(BaseDocumentService):
         PAID: read-only — raises BadRequestException.
         currency: always locked — not present in ExpenseUpdate schema.
         """
+        # Lock row before status check to serialize with concurrent transitions.
+        assert_version(self._db, Expense, expense_id, expected_version)
+
         expense = self.get_by_id(expense_id)
 
         if not expense.is_editable:
@@ -396,10 +412,6 @@ class ExpenseService(BaseDocumentService):
                 ),
                 field="status",
             )
-
-        # Atomic optimistic-lock guard: locks the row and compares the
-        # version under the lock, replacing the non-atomic Python compare.
-        assert_version(self._db, Expense, expense_id, expected_version)
 
         update_data = data.model_dump(exclude_unset=True, mode="python")
 
@@ -432,6 +444,9 @@ class ExpenseService(BaseDocumentService):
                 field="due_date",
             )
 
+        if "expense_date" in update_data and "line_items" not in update_data:
+            validate_line_item_treatments_for_date(expense.line_items, new_expense_date)
+
         # Replace line items
         if "line_items" in update_data:
             self._db.query(ExpenseLineItem).filter(
@@ -441,7 +456,9 @@ class ExpenseService(BaseDocumentService):
             # Convert raw dicts back to ExpenseLineItemCreate for type safety
             raw_items: list[dict] = update_data.pop("line_items")
             typed_items = [ExpenseLineItemCreate(**item) for item in raw_items]
-            line_items_data = self._build_line_items(typed_items)
+            line_items_data = self._build_line_items(
+                typed_items, tax_point_date=new_expense_date
+            )
 
             subtotal, tax_total = self._sum_line_totals(line_items_data)
             total_due = subtotal + tax_total
@@ -973,87 +990,50 @@ class ExpenseService(BaseDocumentService):
         """
         Duplicate an expense as a new PENDING record.
 
-        Copies: vendor, currency, line items, is_recurring, notes.
-        Resets: expense_date = today, due_date = today + 30 days.
-        Excludes: payments, documents (not carried over to duplicates).
-        Uses bounded retry for reference collisions.
+        Rebuilds through create() so current tax eligibility and totals are
+        identical to a newly entered expense.
         """
-        try:
-            from datetime import timedelta
+        from datetime import timedelta
 
-            original = self.get_by_id(expense_id)
-            new_expense_date = date.today()
-            new_due_date = new_expense_date + timedelta(days=30)
-
-            def _build() -> Expense:
-                duplicate = Expense(
-                    expense_number=self._generate_expense_number(),
-                    expense_reference=self._generate_expense_reference(),
-                    vendor_id=original.vendor_id,
-                    expense_date=new_expense_date,
-                    due_date=new_due_date,
-                    currency=original.currency,
-                    status=ExpenseStatus.PENDING,
-                    is_recurring=original.is_recurring,
-                    subtotal=original.subtotal,
-                    tax_total=original.tax_total,
-                    total_due=original.total_due,
-                    amount_paid=Decimal("0.00"),
-                    balance_due=original.total_due,
-                    notes=original.notes,
-                    created_by=user_id,
-                )
-                self._db.add(duplicate)
-                self._db.flush()
-
-                for orig_item in original.line_items:
-                    self._db.add(
-                        ExpenseLineItem(
-                            expense_id=duplicate.id,
-                            line_number=orig_item.line_number,
-                            item_name=orig_item.item_name,
-                            description=orig_item.description,
-                            quantity=orig_item.quantity,
-                            unit_price=orig_item.unit_price,
-                            line_total=orig_item.line_total,
-                            tax_type=orig_item.tax_type,
-                            tax_amount=orig_item.tax_amount,
-                        )
-                    )
-                self._db.flush()
-
-                logger.info(
-                    "Duplicated expense %s → %s",
-                    original.expense_number,
-                    duplicate.expense_number,
-                    extra={
-                        "original_id": str(original.id),
-                        "duplicate_id": str(duplicate.id),
-                    },
-                )
-                return duplicate
-
-            return self._with_reference_retry(_build, "expense")
-
-        except NotFoundException:
-            raise
-        except SQLAlchemyError as exc:
-            logger.exception("Error duplicating expense %s", expense_id)
-            raise DatabaseException("Failed to duplicate expense") from exc
+        original = self.get_by_id(expense_id)
+        new_expense_date = reporting_date()
+        payload = ExpenseCreate(
+            vendor_id=original.vendor_id,
+            expense_date=new_expense_date,
+            due_date=new_expense_date + timedelta(days=30),
+            currency=original.currency,
+            is_recurring=original.is_recurring,
+            notes=original.notes,
+            line_items=[
+                {
+                    "item_name": item.item_name,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "tax_type": item.tax_type,
+                }
+                for item in original.line_items
+            ],
+        )
+        return self.create(payload, user_id=user_id)
 
     # CALCULATION PREVIEW
 
     @classmethod
-    def calculate_totals(
+    def calculate_totals(  # type: ignore[override]
         cls,
         line_items: list[ExpenseLineItemCreate],
+        *,
+        tax_point_date: date,
     ) -> ExpenseCalculationResponse:
         """
         Calculate totals without persisting — live preview endpoint.
 
         No discount in v1: total_due = subtotal + tax_total.
         """
-        calculated_items = cls._build_line_items(line_items)
+        calculated_items = cls._build_line_items(
+            line_items, tax_point_date=tax_point_date
+        )
         subtotal, tax_total = cls._sum_line_totals(calculated_items)
 
         # Convert Decimals to floats for the response dict structure required
@@ -1096,8 +1076,9 @@ class ExpenseService(BaseDocumentService):
 
         Returns count of updated rows.
         """
+
         try:
-            today = date.today()
+            today = reporting_date()
 
             updated = (
                 self._db.query(Expense)

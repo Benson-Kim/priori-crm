@@ -10,6 +10,7 @@
 import {
   apiDelete,
   apiDownload,
+  apiDownloadWithFilename,
   apiGet,
   apiPost,
   apiPut,
@@ -160,13 +161,13 @@ export function downloadExpenseDocument(
  * (the documented POST /expenses/calculate contract), not snake_case keys
  * relying on the backend's populate_by_name fallback.
  */
-export function calculateTotals(data: ExpenseLineItemPayload[]) {
-  return apiPost<ExpenseCalculationResponse>("expenses/calculate", data);
+export function calculateTotals(expenseDate: string, data: ExpenseLineItemPayload[]) {
+  return apiPost<ExpenseCalculationResponse>(`expenses/calculate?expenseDate=${expenseDate}`, data);
 }
 
 /**
  * Download the currently-filtered expenses as an .xlsx workbook. Returns a
- * Blob the caller saves with `saveBlob`
+ * Blob and filename the caller saves with `saveBlob`
  */
 export function exportExpensesExcel(params?: {
   status?: string;
@@ -175,8 +176,9 @@ export function exportExpensesExcel(params?: {
   dateTo?: string;
   isRecurring?: boolean;
   includeLineItems?: boolean;
-}): Promise<Blob> {
+  reportingDate?: string;
+}) {
   const query = params ? createSearchParams(params) : "";
   const path = query ? `expenses/export/excel?${query}` : "expenses/export/excel";
-  return apiDownload(path);
+  return apiDownloadWithFilename(path);
 }

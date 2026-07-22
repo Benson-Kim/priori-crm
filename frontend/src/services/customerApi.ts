@@ -61,8 +61,8 @@ export function getCustomer(id: string) {
   return apiGet<CustomerDetail>(`customers/${id}`);
 }
 
-export function updateCustomer(id: string, data: Record<string, unknown>) {
-  return apiPut<Customer>(`customers/${id}`, data);
+export function updateCustomer(id: string, expectedVersion: number, data: Record<string, unknown>) {
+  return apiPut<Customer>(`customers/${id}?expectedVersion=${expectedVersion}`, data);
 }
 
 export function getCustomerCounts() {

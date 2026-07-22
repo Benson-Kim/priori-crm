@@ -15,15 +15,35 @@ no_tax/0; when disabled tax_total is 0 and total == subtotal.
 Pure-function tests — no database required (calculate_totals is a classmethod).
 """
 
+from datetime import date
 from decimal import Decimal
 
+import pytest
+
+from app.common.exceptions import BadRequestException
 from app.constants.enums import TaxType
 from app.modules.purchase_orders.schemas import PurchaseOrderLineItemCreate
 from app.modules.purchase_orders.service import PurchaseOrderService
 
 # 16% VAT as a fraction, sourced conceptually from the shared TAX_RATES table.
 VAT_16_RATE = Decimal("0.16")
-VAT_8_RATE = Decimal("0.08")
+VAT_0_RATE = Decimal("0.00")
+CURRENT_TAX_POINT = date(2026, 1, 15)
+
+
+def _calculate(
+    line_items,
+    *,
+    tax_point_date=CURRENT_TAX_POINT,
+    vat_enabled=False,
+    vat_rate=None,
+):
+    return PurchaseOrderService.calculate_totals(
+        line_items,
+        tax_point_date=tax_point_date,
+        vat_enabled=vat_enabled,
+        vat_rate=vat_rate,
+    )
 
 
 def _po_item(**kw) -> PurchaseOrderLineItemCreate:
@@ -45,7 +65,7 @@ class TestPurchaseOrderCalculateTotals:
     """calculate_totals over the PO-level-VAT input matrix."""
 
     def test_empty_line_items(self):
-        result = PurchaseOrderService.calculate_totals([])
+        result = _calculate([])
         assert result.subtotal == Decimal("0.00")
         assert result.tax_total == Decimal("0.00")
         assert result.total == Decimal("0.00")
@@ -54,7 +74,7 @@ class TestPurchaseOrderCalculateTotals:
     def test_vat_off_has_no_tax(self):
         # VAT disabled: tax_total is 0 and total == subtotal regardless of the
         # (now ignored) per-line tax type.
-        result = PurchaseOrderService.calculate_totals(
+        result = _calculate(
             [_po_item(quantity=Decimal("2"), unit_price=Decimal("100.00"))]
         )
         assert result.subtotal == Decimal("200.00")
@@ -63,7 +83,7 @@ class TestPurchaseOrderCalculateTotals:
         assert len(result.line_items) == 1
 
     def test_single_item_vat_16(self):
-        result = PurchaseOrderService.calculate_totals(
+        result = _calculate(
             [_po_item(quantity=Decimal("2"), unit_price=Decimal("100.00"))],
             vat_enabled=True,
             vat_rate=VAT_16_RATE,
@@ -80,7 +100,7 @@ class TestPurchaseOrderCalculateTotals:
     def test_multi_item_vat_on_subtotal(self):
         # PO-27: VAT is computed once on the whole subtotal, not per line, so
         # the (previously "mixed") per-line tax types are irrelevant.
-        result = PurchaseOrderService.calculate_totals(
+        result = _calculate(
             [
                 _po_item(quantity=Decimal("2"), unit_price=Decimal("100.00")),
                 _po_item(quantity=Decimal("3"), unit_price=Decimal("50.00")),
@@ -95,17 +115,25 @@ class TestPurchaseOrderCalculateTotals:
 
     def test_rate_change_recomputes_tax(self):
         items = [_po_item(quantity=Decimal("2"), unit_price=Decimal("100.00"))]
-        at_16 = PurchaseOrderService.calculate_totals(
-            items, vat_enabled=True, vat_rate=VAT_16_RATE
-        )
-        at_8 = PurchaseOrderService.calculate_totals(
-            items, vat_enabled=True, vat_rate=VAT_8_RATE
+        at_16 = _calculate(items, vat_enabled=True, vat_rate=VAT_16_RATE)
+        at_zero = _calculate(
+            items,
+            vat_enabled=True,
+            vat_rate=VAT_0_RATE,
         )
         assert at_16.tax_total == Decimal("32.00")
-        assert at_8.tax_total == Decimal("16.00")
+        assert at_zero.tax_total == Decimal("0.00")
+
+    def test_retired_rate_is_rejected_for_current_tax_point(self):
+        with pytest.raises(BadRequestException):
+            _calculate(
+                [_po_item()],
+                vat_enabled=True,
+                vat_rate=Decimal("0.08"),
+            )
 
     def test_large_quantities_no_drift(self):
-        result = PurchaseOrderService.calculate_totals(
+        result = _calculate(
             [_po_item(quantity=Decimal("100000"), unit_price=Decimal("999.99"))],
             vat_enabled=True,
             vat_rate=VAT_16_RATE,
@@ -116,7 +144,7 @@ class TestPurchaseOrderCalculateTotals:
         assert result.total == Decimal("115998840.00")
 
     def test_all_money_is_decimal_2dp(self):
-        result = PurchaseOrderService.calculate_totals(
+        result = _calculate(
             [_po_item(quantity=Decimal("3"), unit_price=Decimal("33.33"))],
             vat_enabled=True,
             vat_rate=VAT_16_RATE,
@@ -136,9 +164,10 @@ class TestDelegatesToSharedFinancial:
         real_build = svc.build_line_items
         real_sum = svc.sum_line_totals
 
-        def spy_build(items):
+        def spy_build(items, *, tax_point_date=None):
             calls["build"] += 1
-            return real_build(items)
+            assert tax_point_date == CURRENT_TAX_POINT
+            return real_build(items, tax_point_date=tax_point_date)
 
         def spy_sum(data):
             calls["sum"] += 1
@@ -147,6 +176,6 @@ class TestDelegatesToSharedFinancial:
         monkeypatch.setattr(svc, "build_line_items", spy_build)
         monkeypatch.setattr(svc, "sum_line_totals", spy_sum)
 
-        PurchaseOrderService.calculate_totals([_po_item()])
+        _calculate([_po_item()])
         assert calls["build"] == 1
         assert calls["sum"] == 1

@@ -329,15 +329,14 @@ export function downloadPurchaseOrderDocument(
  */
 export function calculateTotals(
   data: PurchaseOrderLineItemPayload[],
+  orderDate: string,
   vat?: { vatEnabled?: boolean; vatRate?: number | null }
 ) {
-  const query =
-    vat && (vat.vatEnabled || vat.vatRate != null)
-      ? `?${createSearchParams({
-          vatEnabled: vat.vatEnabled ? "true" : "false",
-          vatRate: vat.vatRate ?? undefined,
-        })}`
-      : "";
+  const query = `?${createSearchParams({
+    orderDate,
+    vatEnabled: vat?.vatEnabled ? "true" : "false",
+    vatRate: vat?.vatRate ?? undefined,
+  })}`;
   return apiPost<PurchaseOrderCalculationResponse>(
     `purchase-orders/calculate${query}`,
     data
