@@ -5,12 +5,11 @@ Hides: advisory lock acquisition, count/max query, prefix formatting,
 and zero-padded numbering behind a single generate() method.
 """
 
-from datetime import date
-
 from sqlalchemy import Integer, func, text
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.common.reference_sequence import ReferenceSequence
+from app.common.reporting_time import reporting_date
 
 # Format regexes for parsing references in triggers or validation
 DATE_SCOPED_REGEX = r"^[A-Za-z0-9_]+-[0-9]{8}-[0-9]+$"
@@ -103,7 +102,7 @@ class ReferenceGenerator:
             The next reference string (e.g. "INV-20260527-003").
         """
         if use_date_scope:
-            today = date.today()
+            today = reporting_date()
             full_prefix = f"{prefix}-{today.strftime('%Y%m%d')}"
             self._advisory_lock(f"{lock_key}_{full_prefix}")
 

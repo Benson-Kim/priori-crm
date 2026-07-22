@@ -31,10 +31,11 @@ Usage::
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from app.common.database import get_db_context
+from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency, CustomerType, PaymentMethod, TaxType
 from app.lib.config import settings
 from app.modules.customers.models import Customer
@@ -137,8 +138,8 @@ def _seed_quote(db, customer: Customer) -> Quote:
     quote = QuoteService(db).create(
         QuoteCreate(
             customer_id=customer.id,
-            transaction_date=date.today(),
-            due_date=date.today() + timedelta(days=14),
+            transaction_date=reporting_date(),
+            due_date=reporting_date() + timedelta(days=14),
             currency=Currency.KES,
             line_items=[
                 QuoteLineItemCreate(
@@ -163,8 +164,8 @@ def _seed_invoice(db, customer: Customer):
     invoice = svc.create(
         InvoiceCreate(
             customer_id=customer.id,
-            transaction_date=date.today(),
-            due_date=date.today() + timedelta(days=30),
+            transaction_date=reporting_date(),
+            due_date=reporting_date() + timedelta(days=30),
             currency=Currency.KES,
             line_items=[
                 InvoiceLineItemCreate(
@@ -186,7 +187,7 @@ def _seed_invoice(db, customer: Customer):
         invoice.id,
         PaymentCreate(
             amount=Decimal("40000.00"),
-            payment_date=date.today(),
+            payment_date=reporting_date(),
             payment_method=PaymentMethod.BANK_TRANSFER,
             reference="DEMO-PAY-1",
         ),
@@ -213,7 +214,7 @@ def _seed_overpayment(db, invoice_id) -> None:
         invoice_id,
         PaymentCreate(
             amount=Decimal("76000.00"),  # clears the ~116000 total
-            payment_date=date.today(),
+            payment_date=reporting_date(),
             payment_method=PaymentMethod.BANK_TRANSFER,
             reference="DEMO-PAY-2",
         ),
@@ -222,7 +223,7 @@ def _seed_overpayment(db, invoice_id) -> None:
         invoice_id,
         PaymentCreate(
             amount=Decimal("5000.00"),  # overpayment -> negative balance_due
-            payment_date=date.today(),
+            payment_date=reporting_date(),
             payment_method=PaymentMethod.CASH,
             reference="DEMO-OVERPAY",
         ),
@@ -242,8 +243,8 @@ def _seed_purchase_order(db, vendor: Vendor) -> None:
     po = svc.create(
         PurchaseOrderCreate(
             vendor_id=vendor.id,
-            order_date=date.today(),
-            delivery_date=date.today() + timedelta(days=7),
+            order_date=reporting_date(),
+            delivery_date=reporting_date() + timedelta(days=7),
             line_items=[
                 PurchaseOrderLineItemCreate(
                     item_name="Laptops",
@@ -262,7 +263,7 @@ def _seed_purchase_order(db, vendor: Vendor) -> None:
         po.id,
         PurchaseOrderPaymentCreate(
             amount=Decimal("100000.00"),
-            payment_date=date.today(),
+            payment_date=reporting_date(),
             reference="DEMO-PO-PAY-1",
         ),
     )

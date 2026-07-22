@@ -1100,7 +1100,7 @@ class InvoiceService(BaseDocumentService):
         row-by-row, so no FOR UPDATE pre-read is needed.
         """
         try:
-            today = date.today()
+            today = reporting_date()
 
             updated = (
                 self._db.query(Invoice)

@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
-from app.common.financial import get_tax_rate
+from app.common.financial import calculate_days_overdue, check_is_overdue, get_tax_rate
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -345,7 +345,6 @@ class Invoice(Base):
     @property
     def is_overdue(self) -> bool:
         """Check if invoice is past due date (centralized predicate)."""
-        from app.common.financial import check_is_overdue
 
         # is_paid also covers balance_due <= 0, which the status-only predicate
         # cannot see, so keep it as an additional guard.
@@ -358,11 +357,14 @@ class Invoice(Base):
     @property
     def days_overdue(self) -> int:
         """Calculate days overdue (0 if not overdue)."""
-        from datetime import date
 
         if not self.is_overdue:
             return 0
-        return (date.today() - self.due_date).days
+        return calculate_days_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+        )
 
     @property
     def discount_value(self) -> Decimal:

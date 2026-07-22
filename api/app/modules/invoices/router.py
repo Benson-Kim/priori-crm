@@ -14,6 +14,7 @@ from app.common.dependencies import (
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
@@ -289,7 +290,7 @@ async def export_invoices_to_excel(
         exporter.export_invoices, invoices, include_line_items
     )
 
-    filename = f"Invoices_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Invoices_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
