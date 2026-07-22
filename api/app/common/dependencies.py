@@ -4,6 +4,7 @@ import secrets
 from typing import Annotated
 
 from fastapi import Depends, Header
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.common.database import get_db
@@ -192,3 +193,33 @@ def get_dashboard_service(db: DbSession, current_user: CurrentUser):
 DashboardServiceDep = Annotated[
     "DashboardService", Depends(get_dashboard_service)  # noqa: F821
 ]
+
+
+def _start_report_snapshot(db: Session) -> None:
+    """Start a read-only repeatable-read transaction for report queries."""
+    if db.in_transaction():
+        db.commit()
+
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        db.execute(text("SET TRANSACTION READ ONLY"))
+
+
+def get_reports_service(db: DbSession, current_user: CurrentUser):
+    """Provide a report service on one consistent PostgreSQL read snapshot.
+
+    Authentication has already read the user with this request session. End
+    that short transaction before starting the report transaction so
+    ``REPEATABLE READ`` is applied before any report query executes.
+
+    SQLite remains on its normal test fallback; it does not prove PostgreSQL
+    snapshot semantics.
+    """
+    from app.modules.reports.service import ReportsService
+
+    _start_report_snapshot(db)
+    return ReportsService(db, current_user=current_user)
+
+
+ReportsServiceDep = Annotated["ReportsService", Depends(get_reports_service)]  # noqa: F821

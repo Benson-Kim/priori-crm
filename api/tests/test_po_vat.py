@@ -41,6 +41,8 @@ from app.modules.vendors.models import Vendor
 from tests.conftest import USING_POSTGRES
 
 VAT_16 = Decimal("0.16")
+VAT_8 = Decimal("0.08")
+HISTORICAL_VAT_8_DATE = date(2023, 6, 30)
 
 pg_only = pytest.mark.skipif(
     not USING_POSTGRES,
@@ -217,19 +219,60 @@ class TestVatUpdate:
         assert po.total == Decimal("200.00")
         assert po.vat_rate is None
 
-    def test_rate_change_recomputes(self, db):
+    def test_current_po_rejects_retired_rate(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
         po = svc.create(
             _create_payload(vendor_id=vendor.id, vat_enabled=True, vat_rate=VAT_16)
         )
-        svc.update(
-            po.id,
-            PurchaseOrderUpdate(vat_rate=Decimal("0.08")),
-            expected_version=1,
+        with pytest.raises(BadRequestException):
+            svc.update(
+                po.id,
+                PurchaseOrderUpdate(vat_rate=VAT_8),
+                expected_version=1,
+            )
+
+    def test_historical_po_rejects_unscoped_8_percent(self, db):
+        vendor = _vendor(db)
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService(db).create(
+                _create_payload(
+                    vendor_id=vendor.id,
+                    order_date=HISTORICAL_VAT_8_DATE,
+                    vat_enabled=True,
+                    vat_rate=VAT_8,
+                )
+            )
+
+    def test_2026_create_rejects_retired_rate(self, db):
+        vendor = _vendor(db)
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService(db).create(
+                _create_payload(
+                    vendor_id=vendor.id,
+                    order_date=date(2026, 1, 1),
+                    vat_enabled=True,
+                    vat_rate=VAT_8,
+                )
+            )
+
+    def test_historical_update_rejects_unscoped_8_percent(self, db):
+        vendor = _vendor(db)
+        svc = PurchaseOrderService(db)
+        po = svc.create(
+            _create_payload(
+                vendor_id=vendor.id,
+                order_date=HISTORICAL_VAT_8_DATE,
+                vat_enabled=True,
+                vat_rate=VAT_16,
+            )
         )
-        assert po.tax_total == Decimal("16.00")
-        assert po.total == Decimal("216.00")
+        with pytest.raises(BadRequestException):
+            svc.update(
+                po.id,
+                PurchaseOrderUpdate(vat_rate=VAT_8),
+                expected_version=1,
+            )
 
     def test_disabling_vat_below_amount_paid_is_blocked(self, db):
         # The amount-paid floor guard must hold when a VAT change would drop
@@ -292,6 +335,29 @@ class TestOverpaidWithVat:
         assert po.amount_paid == Decimal("250.00")
         assert po.balance_due == Decimal("-18.00")
         assert po.status == PurchaseOrderStatus.PAID
+
+
+# EFFECTIVE-DATE PREVIEW VALIDATION
+
+
+class TestEffectiveDatePreview:
+    def test_historical_preview_rejects_unscoped_8_percent(self):
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService.calculate_totals(
+                [_line()],
+                tax_point_date=HISTORICAL_VAT_8_DATE,
+                vat_enabled=True,
+                vat_rate=VAT_8,
+            )
+
+    def test_2026_preview_rejects_8_percent(self):
+        with pytest.raises(BadRequestException):
+            PurchaseOrderService.calculate_totals(
+                [_line()],
+                tax_point_date=date(2026, 1, 1),
+                vat_enabled=True,
+                vat_rate=VAT_8,
+            )
 
 
 # NEUTRAL-FIELD UPDATE MUST NOT ALTER TOTALS
@@ -381,17 +447,19 @@ class TestPreviewPersistParity:
     def test_calculate_matches_create(self, db):
         vendor = _vendor(db)
         svc = PurchaseOrderService(db)
+        order_date = date(2026, 1, 15)
         items = [
             _line(quantity=Decimal("2"), unit_price=Decimal("100.00")),
             _line(quantity=Decimal("7"), unit_price=Decimal("12.34")),
         ]
 
         preview = PurchaseOrderService.calculate_totals(
-            items, vat_enabled=True, vat_rate=VAT_16
+            items, tax_point_date=order_date, vat_enabled=True, vat_rate=VAT_16
         )
         po = svc.create(
             _create_payload(
                 vendor_id=vendor.id,
+                order_date=order_date,
                 line_items=items,
                 vat_enabled=True,
                 vat_rate=VAT_16,

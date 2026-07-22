@@ -9,9 +9,11 @@
 
 import { CustomerSelector } from "@/components/modals/CustomerSelector";
 import { Button } from "@/components/ui/Button";
+import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import {
   DEFAULT_DUE_DATE_DAYS,
 } from "@/lib/constants";
+import { lineTaxValidationError, vatRateValidationError } from "@/lib/taxUtils";
 import { Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";
@@ -29,7 +31,7 @@ import {
 } from "./utils";
 
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { getDefaultDueDate, getTodayString } from "@/lib/dateUtils";
+import { addIsoDays, getDefaultDueDate, getTodayString } from "@/lib/dateUtils";
 import { currencyOptions, type Currency } from "@/lib/enums";
 import { Input } from "../ui/Input";
 import { Toggle } from "../ui/Toggle";
@@ -166,6 +168,14 @@ export function DocumentEditor({
         : ""
   );
 
+  const transactionDateTouched = useRef(false);
+
+  useEffect(() => {
+    if (isEditing || transactionDateTouched.current || !profile?.reportingDate) return;
+    setTransactionDate(profile.reportingDate);
+    setDueDate(addIsoDays(profile.reportingDate, DEFAULT_DUE_DATE_DAYS));
+  }, [isEditing, profile?.reportingDate]);
+
   // Default new documents to the owner's (our own) VAT settings: the
   // toggle, the rate and the compliance ref all seed from the profile
   // until the user touches them. Editing an existing document never
@@ -209,6 +219,10 @@ export function DocumentEditor({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const vatRateError = vatEnabled
+    ? vatRateValidationError(vatRatePct, transactionDate)
+    : undefined;
 
   const vatRateFraction = useMemo(() => {
     const pct = Number.parseFloat(vatRatePct);
@@ -268,12 +282,20 @@ export function DocumentEditor({
       type === "quote" // quotes require itemName
     );
 
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
-
     const validItems = lineItems.filter(
       (r) => r.description.trim() || r.itemName.trim()
     );
+
+    if (vatRateError) validationErrors.vatRate = vatRateError;
+    if (!vatEnabled) {
+      for (const item of validItems) {
+        const taxError = lineTaxValidationError(item.taxType, transactionDate);
+        if (taxError) validationErrors[`item_${item.key}_tax`] = taxError;
+      }
+    }
+
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
 
     const items: DocumentLineItemPayload[] = validItems.map((r) => ({
       itemName: r.itemName.trim(),
@@ -376,13 +398,18 @@ export function DocumentEditor({
                 >
                   Transaction Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="transaction-date"
-                  type="date"
+                  variant="form"
                   value={transactionDate}
-                  onChange={(e) => setTransactionDate(e.target.value)}
+                  onChange={(d) => {
+                    setTransactionDate(d);
+                    transactionDateTouched.current = true;
+                  }}
                   disabled={restrictedMode}
                   error={errors.transactionDate}
+                  aria-label="Transaction date"
+                  today={profile?.reportingDate}
                 />
 
                 {/* Due Date */}
@@ -392,13 +419,15 @@ export function DocumentEditor({
                 >
                   Due Date
                 </label>
-                <Input
+                <CalendarPicker
                   id="due-date"
-                  type="date"
+                  variant="form"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(d) => setDueDate(d)}
                   disabled={restrictedMode}
                   error={errors.dueDate}
+                  aria-label="Due date"
+                  today={profile?.reportingDate}
                 />
 
                 {/* RFQ/RFP Number */}
@@ -453,6 +482,8 @@ export function DocumentEditor({
             lineItems={lineItems}
             errors={errors}
             restrictedMode={restrictedMode}
+            enableInlineTax={!vatEnabled}
+            taxPointDate={transactionDate}
             onAddRow={addRow}
             onRemoveRow={removeRow}
             onUpdateRow={updateRow}

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
 from app.common.financial import get_tax_rate
+from app.common.reporting_time import calculate_days_overdue, check_is_overdue
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -335,7 +336,7 @@ class Invoice(Base):
     @property
     def is_editable(self) -> bool:
         """Check if invoice can be edited."""
-        return self.status in [InvoiceStatus.DRAFT, InvoiceStatus.SENT]
+        return self.status == InvoiceStatus.DRAFT
 
     @property
     def is_paid(self) -> bool:
@@ -345,7 +346,6 @@ class Invoice(Base):
     @property
     def is_overdue(self) -> bool:
         """Check if invoice is past due date (centralized predicate)."""
-        from app.common.financial import check_is_overdue
 
         # is_paid also covers balance_due <= 0, which the status-only predicate
         # cannot see, so keep it as an additional guard.
@@ -358,11 +358,14 @@ class Invoice(Base):
     @property
     def days_overdue(self) -> int:
         """Calculate days overdue (0 if not overdue)."""
-        from datetime import date
 
         if not self.is_overdue:
             return 0
-        return (date.today() - self.due_date).days
+        return calculate_days_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+        )
 
     @property
     def discount_value(self) -> Decimal:
@@ -405,6 +408,10 @@ class InvoiceLineItem(Base):
         CheckConstraint(
             "tax_amount >= 0",
             name="ck_line_items_tax_non_negative",
+        ),
+        CheckConstraint(
+            "taxable_value IS NULL OR taxable_value >= 0",
+            name="ck_line_items_taxable_value_non_negative",
         ),
         Index("ix_line_items_invoice_id", "invoice_id"),
         UniqueConstraint(
@@ -469,6 +476,12 @@ class InvoiceLineItem(Base):
         nullable=False,
         default=TaxType.VAT_16,
         comment="Tax type for this line",
+    )
+
+    taxable_value: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 2),
+        nullable=True,
+        comment="Post-discount taxable base; NULL marks an unreconciled legacy line",
     )
 
     tax_amount: Mapped[Decimal] = mapped_column(

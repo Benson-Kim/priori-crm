@@ -144,7 +144,7 @@ class TestBalanceNonDrift:
         db.refresh(customer)
         assert customer.balance == Decimal("0.00")
 
-    def test_balance_resyncs_on_edit_of_sent_invoice(self, db):
+    def test_sent_invoice_edit_is_rejected_without_balance_drift(self, db):
         customer = _customer(db, email="bal2@acme.test")
         service = InvoiceService(db)
 
@@ -157,19 +157,24 @@ class TestBalanceNonDrift:
         assert customer.balance == Decimal("100.00")
 
         # Edit line items to raise the total; balance must follow.
-        service.update(
-            invoice.id,
-            InvoiceUpdate(
-                lineItems=[
-                    InvoiceLineItemCreate(
-                        itemName="Widget",
-                        description="A widget",
-                        quantity=Decimal("2"),
-                        unitPrice=Decimal("100.00"),
-                        taxType=TaxType.NO_TAX,
-                    )
-                ]
-            ),
-        )
+        with pytest.raises(BadRequestException, match="issued invoice"):
+            service.update(
+                invoice.id,
+                InvoiceUpdate(
+                    lineItems=[
+                        InvoiceLineItemCreate(
+                            itemName="Widget",
+                            description="A widget",
+                            quantity=Decimal("2"),
+                            unitPrice=Decimal("100.00"),
+                            taxType=TaxType.NO_TAX,
+                        )
+                    ]
+                ),
+                expected_version=invoice.version,
+            )
+
+        db.refresh(invoice)
         db.refresh(customer)
-        assert customer.balance == Decimal("200.00")
+        assert invoice.total_due == Decimal("100.00")
+        assert customer.balance == Decimal("100.00")

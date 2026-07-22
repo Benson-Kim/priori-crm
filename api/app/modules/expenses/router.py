@@ -26,6 +26,7 @@ from app.common.dependencies import (
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
 from app.modules.expenses.schemas import (
@@ -201,8 +202,12 @@ def get_expense_statistics(
 )
 def calculate_expense_totals(
     line_items: list[ExpenseLineItemCreate],
+    expense_date: Annotated[
+        date,
+        Query(alias="expenseDate", description="Expense tax-point date"),
+    ],
 ) -> ExpenseCalculationResponse:
-    return ExpenseService.calculate_totals(line_items)
+    return ExpenseService.calculate_totals(line_items, tax_point_date=expense_date)
 
 
 @router.get(
@@ -263,7 +268,7 @@ async def export_expenses_to_excel(
         exporter.export_expenses, expenses, include_line_items
     )
 
-    filename = f"Expenses_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Expenses_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -340,7 +345,7 @@ def update_expense(
     body: ExpenseUpdate,
     service: ExpenseServiceDep,
     expected_version: Annotated[
-        int | None,
+        int,
         Query(
             alias="expectedVersion",
             description=(
@@ -348,7 +353,7 @@ def update_expense(
                 "If the expense has been modified since, a 409 is returned."
             ),
         ),
-    ] = None,
+    ],
 ) -> ExpenseResponse:
     expense = service.update(expense_id, body, expected_version)
     return ExpenseResponse.model_validate(expense)

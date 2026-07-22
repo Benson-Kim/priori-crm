@@ -1,6 +1,443 @@
 {
   "components": {
     "schemas": {
+      "AgedPayableDetailRow": {
+        "description": "One expense row in the aged AP detail table.",
+        "properties": {
+          "amount_paid": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Paid",
+            "type": "string"
+          },
+          "balance_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Due",
+            "type": "string"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "days_overdue": {
+            "title": "Days Overdue",
+            "type": "integer"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "entry_date": {
+            "format": "date",
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_type": {
+            "const": "expense",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Due",
+            "type": "string"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_type",
+          "vendor_name",
+          "reference",
+          "number",
+          "entry_date",
+          "due_date",
+          "status",
+          "total_due",
+          "amount_paid",
+          "balance_due",
+          "bucket",
+          "days_overdue"
+        ],
+        "title": "AgedPayableDetailRow",
+        "type": "object"
+      },
+      "AgedPayableRow": {
+        "description": "One vendor row in the aged AP summary grid.",
+        "properties": {
+          "current": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current",
+            "type": "string"
+          },
+          "days_1_30": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 1 30",
+            "type": "string"
+          },
+          "days_31_60": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 31 60",
+            "type": "string"
+          },
+          "days_61_90": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 61 90",
+            "type": "string"
+          },
+          "days_90_plus": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 90 Plus",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendor_id",
+          "vendor_name",
+          "current",
+          "days_1_30",
+          "days_31_60",
+          "days_61_90",
+          "days_90_plus",
+          "total"
+        ],
+        "title": "AgedPayableRow",
+        "type": "object"
+      },
+      "AgedPayablesDetailResponse": {
+        "description": "Paginated aged AP rows (expenses only).",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AgedPayableDetailRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "currency",
+          "as_of_date",
+          "items",
+          "metadata"
+        ],
+        "title": "AgedPayablesDetailResponse",
+        "type": "object"
+      },
+      "AgedPayablesSummaryResponse": {
+        "description": "Aged payables: totals header + per-vendor breakdown.\n\nExpense payables only, bucketed by due_date. Purchase orders are commitments.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AgingBuckets"
+          },
+          "vendors": {
+            "items": {
+              "$ref": "#/components/schemas/AgedPayableRow"
+            },
+            "title": "Vendors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "as_of_date",
+          "totals",
+          "vendors"
+        ],
+        "title": "AgedPayablesSummaryResponse",
+        "type": "object"
+      },
+      "AgedReceivableDetailRow": {
+        "description": "One invoice row in the aged AR detail table.",
+        "properties": {
+          "amount_paid": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Paid",
+            "type": "string"
+          },
+          "balance_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Due",
+            "type": "string"
+          },
+          "bucket": {
+            "description": "Aging bucket: current | 1_30 | 31_60 | 61_90 | 90_plus",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "days_overdue": {
+            "description": "Negative = not yet due; 0 = due today; positive = days overdue",
+            "title": "Days Overdue",
+            "type": "integer"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Due",
+            "type": "string"
+          },
+          "transaction_date": {
+            "format": "date",
+            "title": "Transaction Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "customer_name",
+          "reference",
+          "number",
+          "transaction_date",
+          "due_date",
+          "status",
+          "total_due",
+          "amount_paid",
+          "balance_due",
+          "bucket",
+          "days_overdue"
+        ],
+        "title": "AgedReceivableDetailRow",
+        "type": "object"
+      },
+      "AgedReceivableRow": {
+        "description": "One customer row in the aged AR summary grid.",
+        "properties": {
+          "current": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current",
+            "type": "string"
+          },
+          "customer_id": {
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "days_1_30": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 1 30",
+            "type": "string"
+          },
+          "days_31_60": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 31 60",
+            "type": "string"
+          },
+          "days_61_90": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 61 90",
+            "type": "string"
+          },
+          "days_90_plus": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 90 Plus",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_id",
+          "customer_name",
+          "current",
+          "days_1_30",
+          "days_31_60",
+          "days_61_90",
+          "days_90_plus",
+          "total"
+        ],
+        "title": "AgedReceivableRow",
+        "type": "object"
+      },
+      "AgedReceivablesDetailResponse": {
+        "description": "Paginated aged AR invoice rows.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AgedReceivableDetailRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "currency",
+          "as_of_date",
+          "items",
+          "metadata"
+        ],
+        "title": "AgedReceivablesDetailResponse",
+        "type": "object"
+      },
+      "AgedReceivablesSummaryResponse": {
+        "description": "Aged receivables: totals header + per-customer breakdown.\n\nPoint-in-time snapshot: as_of_date is today UTC.\nNo date range filter \u2014 aging is always computed as of today.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/AgedReceivableRow"
+            },
+            "title": "Customers",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AgingBuckets"
+          }
+        },
+        "required": [
+          "currency",
+          "as_of_date",
+          "totals",
+          "customers"
+        ],
+        "title": "AgedReceivablesSummaryResponse",
+        "type": "object"
+      },
+      "AgingBuckets": {
+        "description": "Balance split across the five standard aging buckets.\n\nIndustry standard: Current (not yet due), 1-30, 31-60, 61-90, 90+ days.\nAll major accounting systems (QuickBooks, Xero, Sage) use this structure.",
+        "properties": {
+          "current": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current",
+            "type": "string"
+          },
+          "days_1_30": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 1 30",
+            "type": "string"
+          },
+          "days_31_60": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 31 60",
+            "type": "string"
+          },
+          "days_61_90": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 61 90",
+            "type": "string"
+          },
+          "days_90_plus": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Days 90 Plus",
+            "type": "string"
+          },
+          "total": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "title": "AgingBuckets",
+        "type": "object"
+      },
       "Body_attach_expense_document_api_v1_expenses__expense_id__documents_post": {
         "properties": {
           "file": {
@@ -816,12 +1253,10 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_type": {
-            "title": "Customer Type",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerType"
           },
           "email": {
             "title": "Email",
@@ -867,8 +1302,7 @@
             "title": "Province"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerStatus"
           },
           "updated_at": {
             "format": "date-time",
@@ -962,6 +1396,17 @@
         "title": "CustomerStatement",
         "type": "object"
       },
+      "CustomerStatus": {
+        "description": "Customer account status.",
+        "enum": [
+          "active",
+          "inactive",
+          "suspended",
+          "deleted"
+        ],
+        "title": "CustomerStatus",
+        "type": "string"
+      },
       "CustomerStatusCounts": {
         "description": "Customer counts by status for dashboard filter tabs.",
         "properties": {
@@ -1008,12 +1453,10 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_type": {
-            "title": "Customer Type",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerType"
           },
           "display_name": {
             "title": "Display Name",
@@ -1033,8 +1476,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CustomerStatus"
           }
         },
         "required": [
@@ -1463,6 +1905,77 @@
         "title": "DiscountType",
         "type": "string"
       },
+      "DocumentSource": {
+        "description": "Upload context for ExpenseDocument.source.",
+        "enum": [
+          "form",
+          "view",
+          "payment_modal"
+        ],
+        "title": "DocumentSource",
+        "type": "string"
+      },
+      "ExcludedTaxTransaction": {
+        "description": "One foreign-currency VAT document awaiting tax-point KES evidence.",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_type": {
+            "enum": [
+              "invoice",
+              "expense"
+            ],
+            "title": "Document Type",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "original_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Original Amount",
+            "type": "string"
+          },
+          "original_vat_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Original Vat Amount",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "transaction_date": {
+            "format": "date",
+            "title": "Transaction Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "document_type",
+          "reference",
+          "number",
+          "transaction_date",
+          "currency",
+          "original_amount",
+          "original_vat_amount",
+          "reason"
+        ],
+        "title": "ExcludedTaxTransaction",
+        "type": "object"
+      },
       "ExpenseCalculationResponse": {
         "description": "Totals preview \u2014 POST /expenses/calculate.\n\nNo discount in v1: total_due = subtotal + tax_total.\nMirrors QuoteCalculationResponse / InvoiceCalculationResponse.",
         "properties": {
@@ -1609,8 +2122,7 @@
             "type": "string"
           },
           "source": {
-            "title": "Source",
-            "type": "string"
+            "$ref": "#/components/schemas/DocumentSource"
           },
           "uploaded_at": {
             "format": "date-time",
@@ -1751,8 +2263,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -1960,8 +2471,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "days_overdue": {
             "readOnly": true,
@@ -2051,8 +2561,7 @@
             "type": "array"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/ExpenseStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -2191,6 +2700,17 @@
         "title": "ExpenseStatisticsResponse",
         "type": "object"
       },
+      "ExpenseStatus": {
+        "description": "Expense lifecycle states.",
+        "enum": [
+          "pending",
+          "paid",
+          "overdue",
+          "canceled"
+        ],
+        "title": "ExpenseStatus",
+        "type": "string"
+      },
       "ExpenseStatusCounts": {
         "description": "Status counts for the filter-tab bar.\nMirrors QuoteStatusCounts / InvoiceStatusCounts pattern.",
         "properties": {
@@ -2237,8 +2757,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "days_overdue": {
             "readOnly": true,
@@ -2278,8 +2797,7 @@
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/ExpenseStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -2934,8 +3452,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3015,8 +3532,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer": {
             "$ref": "#/components/schemas/CustomerSummary"
@@ -3059,13 +3575,12 @@
           "discount_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DiscountType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Discount Type"
+            ]
           },
           "due_date": {
             "format": "date",
@@ -3158,8 +3673,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/InvoiceStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3409,6 +3923,19 @@
         "title": "InvoiceStatisticsResponse",
         "type": "object"
       },
+      "InvoiceStatus": {
+        "description": "Invoice lifecycle status with strict state machine.",
+        "enum": [
+          "draft",
+          "sent",
+          "partial",
+          "paid",
+          "overdue",
+          "canceled"
+        ],
+        "title": "InvoiceStatus",
+        "type": "string"
+      },
       "InvoiceStatusCounts": {
         "description": "Invoice counts by status for dashboard.",
         "properties": {
@@ -3465,8 +3992,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_id": {
             "format": "uuid",
@@ -3508,8 +4034,7 @@
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/InvoiceStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -3896,6 +4421,14 @@
             ],
             "title": "Phone"
           },
+          "reportingDate": {
+            "title": "Reportingdate",
+            "type": "string"
+          },
+          "reportingTimezone": {
+            "title": "Reportingtimezone",
+            "type": "string"
+          },
           "taxPin": {
             "anyOf": [
               {
@@ -3948,7 +4481,9 @@
           }
         },
         "required": [
-          "fullName"
+          "fullName",
+          "reportingTimezone",
+          "reportingDate"
         ],
         "title": "OwnerProfileResponse",
         "type": "object"
@@ -4153,6 +4688,26 @@
         "title": "PaginatedResponse[CustomerSummary]",
         "type": "object"
       },
+      "PaginatedResponse_ExcludedTaxTransaction_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExcludedTaxTransaction"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[ExcludedTaxTransaction]",
+        "type": "object"
+      },
       "PaginatedResponse_ExpenseSummary_": {
         "properties": {
           "items": {
@@ -4213,6 +4768,26 @@
         "title": "PaginatedResponse[PurchaseOrderSummary]",
         "type": "object"
       },
+      "PaginatedResponse_PurchasesLedgerEntry_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasesLedgerEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[PurchasesLedgerEntry]",
+        "type": "object"
+      },
       "PaginatedResponse_QuoteSummary_": {
         "properties": {
           "items": {
@@ -4231,6 +4806,26 @@
           "metadata"
         ],
         "title": "PaginatedResponse[QuoteSummary]",
+        "type": "object"
+      },
+      "PaginatedResponse_SalesLedgerEntry_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SalesLedgerEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[SalesLedgerEntry]",
         "type": "object"
       },
       "PaginatedResponse_VendorSummary_": {
@@ -4440,8 +5035,7 @@
             "type": "string"
           },
           "payment_method": {
-            "title": "Payment Method",
-            "type": "string"
+            "$ref": "#/components/schemas/PaymentMethod"
           },
           "recorded_by": {
             "anyOf": [
@@ -4742,8 +5336,7 @@
             "type": "string"
           },
           "source": {
-            "title": "Source",
-            "type": "string"
+            "$ref": "#/components/schemas/DocumentSource"
           },
           "uploaded_at": {
             "format": "date-time",
@@ -4916,8 +5509,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5068,8 +5660,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "document_id": {
             "anyOf": [
@@ -5329,8 +5920,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "delivery_date": {
             "anyOf": [
@@ -5435,8 +6025,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/PurchaseOrderStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5622,6 +6211,16 @@
         "title": "PurchaseOrderSendResponse",
         "type": "object"
       },
+      "PurchaseOrderStatus": {
+        "description": "Purchase Order lifecycle states.\n\nLifecycle: DRAFT -> SENT -> PAID. There are no billed or canceled\nstates for purchase orders.",
+        "enum": [
+          "draft",
+          "sent",
+          "paid"
+        ],
+        "title": "PurchaseOrderStatus",
+        "type": "string"
+      },
       "PurchaseOrderStatusCounts": {
         "description": "Status counts for the filter-tab bar (\"All (160)\").\n\nThe PO lifecycle is DRAFT -> SENT -> PAID, so every status is included\nin ``all``. PAID is reached via record_payment (SENT -> PAID).",
         "properties": {
@@ -5675,8 +6274,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "delivery_date": {
             "anyOf": [
@@ -5713,8 +6311,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/PurchaseOrderStatus"
           },
           "total": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -5868,6 +6465,195 @@
           }
         },
         "title": "PurchaseOrderUpdate",
+        "type": "object"
+      },
+      "PurchasesLedgerEntry": {
+        "description": "One row in the combined expenses + POs ledger.",
+        "properties": {
+          "amount": {
+            "description": "Tax-inclusive total (Expense.total_due or PurchaseOrder.total)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "balance_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Due",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "expense",
+              "purchase_order"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "entry_date": {
+            "format": "date",
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "expense",
+              "purchase_order"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tax": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_type",
+          "entity_name",
+          "reference",
+          "number",
+          "category",
+          "entry_date",
+          "status",
+          "currency",
+          "amount",
+          "tax",
+          "balance_due"
+        ],
+        "title": "PurchasesLedgerEntry",
+        "type": "object"
+      },
+      "PurchasesReportSummaryResponse": {
+        "description": "Purchases report overview: metrics + top vendor breakdown.",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PurchasesSummaryMetrics"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ResolvedPeriod"
+          },
+          "spend_by_vendor": {
+            "items": {
+              "$ref": "#/components/schemas/SpendByVendor"
+            },
+            "title": "Spend By Vendor",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period",
+          "currency",
+          "metrics",
+          "spend_by_vendor"
+        ],
+        "title": "PurchasesReportSummaryResponse",
+        "type": "object"
+      },
+      "PurchasesSourceCounts": {
+        "description": "Per-source counts for the purchases filter tabs.",
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "expense": {
+            "title": "Expense",
+            "type": "integer"
+          },
+          "purchase_order": {
+            "title": "Purchase Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "expense",
+          "purchase_order"
+        ],
+        "title": "PurchasesSourceCounts",
+        "type": "object"
+      },
+      "PurchasesSummaryMetrics": {
+        "description": "Actual expense metrics plus separately identified PO commitments.",
+        "properties": {
+          "actual_spend": {
+            "description": "Pre-tax actual spend from expense records only",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Actual Spend",
+            "type": "string"
+          },
+          "expense_count": {
+            "title": "Expense Count",
+            "type": "integer"
+          },
+          "input_vat_estimate": {
+            "description": "Expense VAT before invoice/customs eligibility reconciliation",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Input Vat Estimate",
+            "type": "string"
+          },
+          "outstanding_payables": {
+            "description": "Positive unpaid expense balances only; excludes POs",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Outstanding Payables",
+            "type": "string"
+          },
+          "po_commitment_count": {
+            "title": "Po Commitment Count",
+            "type": "integer"
+          },
+          "po_commitment_tax": {
+            "description": "Tax embedded in PO commitments; never deductible input VAT",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Po Commitment Tax",
+            "type": "string"
+          },
+          "po_commitments": {
+            "description": "Pre-tax issued/paid PO commitments; not actual spend or AP",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Po Commitments",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actual_spend",
+          "po_commitments",
+          "input_vat_estimate",
+          "po_commitment_tax",
+          "expense_count",
+          "po_commitment_count",
+          "outstanding_payables"
+        ],
+        "title": "PurchasesSummaryMetrics",
         "type": "object"
       },
       "QuoteApproveRequest": {
@@ -6249,8 +7035,7 @@
             "type": "string"
           },
           "tax_type": {
-            "title": "Tax Type",
-            "type": "string"
+            "$ref": "#/components/schemas/TaxType"
           },
           "unit_price": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -6350,8 +7135,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer": {
             "$ref": "#/components/schemas/CustomerSummary"
@@ -6394,13 +7178,12 @@
           "discount_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DiscountType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Discount Type"
+            ]
           },
           "due_date": {
             "format": "date",
@@ -6510,8 +7293,7 @@
             "title": "Sent At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/QuoteStatus"
           },
           "subtotal": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -6766,6 +7548,18 @@
         "title": "QuoteStatisticsResponse",
         "type": "object"
       },
+      "QuoteStatus": {
+        "description": "Quote status values.",
+        "enum": [
+          "draft",
+          "sent",
+          "approved",
+          "invoiced",
+          "expired"
+        ],
+        "title": "QuoteStatus",
+        "type": "string"
+      },
       "QuoteStatusCounts": {
         "description": "Quote counts by status for dashboard.",
         "properties": {
@@ -6812,8 +7606,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "customer_id": {
             "format": "uuid",
@@ -6855,8 +7648,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/QuoteStatus"
           },
           "total_due": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -7101,6 +7893,44 @@
         "title": "RefreshTokenRequest",
         "type": "object"
       },
+      "ReportCompleteness": {
+        "description": "Whether the estimate covers every VAT document in the requested period.",
+        "properties": {
+          "excluded_currencies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Currencies",
+            "type": "array"
+          },
+          "excluded_document_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Excluded Document Count",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReportCompleteness",
+        "type": "object"
+      },
       "ResendOTPRequest": {
         "description": "OTP resend request.",
         "properties": {
@@ -7174,6 +8004,306 @@
           "previous_date_to"
         ],
         "title": "ResolvedPeriod",
+        "type": "object"
+      },
+      "RevenueByCategory": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "document_count",
+          "amount"
+        ],
+        "title": "RevenueByCategory",
+        "type": "object"
+      },
+      "RevenueByCustomer": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "customer_id": {
+            "description": "Stable customer ID for row keys (avoids merging duplicate names)",
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "invoice_count": {
+            "title": "Invoice Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "customer_id",
+          "customer_name",
+          "invoice_count",
+          "amount"
+        ],
+        "title": "RevenueByCustomer",
+        "type": "object"
+      },
+      "SalesLedgerEntry": {
+        "description": "One invoice row in the sales ledger.",
+        "properties": {
+          "amount": {
+            "description": "Invoice.total_due (tax-inclusive)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "balance_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Due",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "discount": {
+            "description": "Document-level discount applied",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "net_revenue": {
+            "description": "subtotal - discount (pre-tax net)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Revenue",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "description": "Invoice.subtotal \u2014 pre-tax gross of line items",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax": {
+            "description": "Invoice.tax_total",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "customer_name",
+          "reference",
+          "number",
+          "date",
+          "status",
+          "currency",
+          "subtotal",
+          "discount",
+          "net_revenue",
+          "amount",
+          "tax",
+          "balance_due"
+        ],
+        "title": "SalesLedgerEntry",
+        "type": "object"
+      },
+      "SalesReportSummaryResponse": {
+        "description": "Sales report overview: metrics + breakdowns.",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/SalesSummaryMetrics"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ResolvedPeriod"
+          },
+          "revenue_by_category": {
+            "items": {
+              "$ref": "#/components/schemas/RevenueByCategory"
+            },
+            "title": "Revenue By Category",
+            "type": "array"
+          },
+          "revenue_by_customer": {
+            "items": {
+              "$ref": "#/components/schemas/RevenueByCustomer"
+            },
+            "title": "Revenue By Customer",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period",
+          "currency",
+          "metrics",
+          "revenue_by_customer",
+          "revenue_by_category"
+        ],
+        "title": "SalesReportSummaryResponse",
+        "type": "object"
+      },
+      "SalesStatusCounts": {
+        "description": "Per-status counts for the sales filter tabs (recognized statuses only).",
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": 0,
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "paid": {
+            "default": 0,
+            "title": "Paid",
+            "type": "integer"
+          },
+          "partial": {
+            "default": 0,
+            "title": "Partial",
+            "type": "integer"
+          },
+          "sent": {
+            "default": 0,
+            "title": "Sent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all"
+        ],
+        "title": "SalesStatusCounts",
+        "type": "object"
+      },
+      "SalesSummaryMetrics": {
+        "description": "Top-line sales metrics for summary MetricCards.",
+        "properties": {
+          "discount_total": {
+            "description": "Total document-level discounts applied (subtotal - net_revenue)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount Total",
+            "type": "string"
+          },
+          "invoice_count": {
+            "title": "Invoice Count",
+            "type": "integer"
+          },
+          "net_revenue": {
+            "description": "Net revenue after discount, pre-tax (SUM of total_due - tax_total)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Revenue",
+            "type": "string"
+          },
+          "outstanding_balance": {
+            "description": "Sum of balance_due for SENT/PARTIAL/OVERDUE invoices",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Outstanding Balance",
+            "type": "string"
+          },
+          "overdue_balance": {
+            "description": "Sum of balance_due for OVERDUE invoices only",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Overdue Balance",
+            "type": "string"
+          },
+          "subtotal": {
+            "description": "Pre-tax gross line totals before document-level discounts",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_collected": {
+            "description": "Sum of Invoice.tax_total",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Collected",
+            "type": "string"
+          },
+          "total_invoiced": {
+            "description": "Sum of Invoice.total_due (tax-inclusive)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Invoiced",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subtotal",
+          "discount_total",
+          "net_revenue",
+          "tax_collected",
+          "total_invoiced",
+          "invoice_count",
+          "outstanding_balance",
+          "overdue_balance"
+        ],
+        "title": "SalesSummaryMetrics",
+        "type": "object"
+      },
+      "SpendByVendor": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "vendor_id": {
+            "format": "uuid",
+            "title": "Vendor Id",
+            "type": "string"
+          },
+          "vendor_name": {
+            "title": "Vendor Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendor_id",
+          "vendor_name",
+          "amount"
+        ],
+        "title": "SpendByVendor",
         "type": "object"
       },
       "StatementOverviewResponse": {
@@ -7280,11 +8410,147 @@
         "title": "StatementTransaction",
         "type": "object"
       },
+      "TaxByTypeRow": {
+        "description": "Taxable base and tax amount for one explicit type/rate combination.",
+        "properties": {
+          "document_count": {
+            "default": 0,
+            "description": "Distinct source-document count for this type/rate combination",
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "tax_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Amount",
+            "type": "string"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rate as a fraction; null for exempt/no-tax classifications",
+            "title": "Tax Rate"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "taxable_value": {
+            "description": "Recognized taxable base represented by this classification",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Taxable Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tax_type",
+          "taxable_value",
+          "tax_amount"
+        ],
+        "title": "TaxByTypeRow",
+        "type": "object"
+      },
+      "TaxReportResponse": {
+        "description": "Tax report: VAT position + per-type breakdowns for sales and purchases.",
+        "properties": {
+          "completeness": {
+            "$ref": "#/components/schemas/ReportCompleteness"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "filing_warning": {
+            "default": "This estimate is not a VAT return or filing-ready output. Confirm it against eTIMS records, customs records, credit and debit notes, and the KRA auto-populated return before filing.",
+            "title": "Filing Warning",
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/TaxSummaryMetrics"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ResolvedPeriod"
+          },
+          "purchases_by_tax_type": {
+            "items": {
+              "$ref": "#/components/schemas/TaxByTypeRow"
+            },
+            "title": "Purchases By Tax Type",
+            "type": "array"
+          },
+          "report_label": {
+            "const": "VAT reconciliation estimate",
+            "default": "VAT reconciliation estimate",
+            "title": "Report Label",
+            "type": "string"
+          },
+          "sales_by_tax_type": {
+            "items": {
+              "$ref": "#/components/schemas/TaxByTypeRow"
+            },
+            "title": "Sales By Tax Type",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period",
+          "currency",
+          "completeness",
+          "metrics",
+          "sales_by_tax_type",
+          "purchases_by_tax_type"
+        ],
+        "title": "TaxReportResponse",
+        "type": "object"
+      },
+      "TaxSummaryMetrics": {
+        "description": "Estimated VAT position before KRA evidence reconciliation.",
+        "properties": {
+          "input_vat_estimate": {
+            "description": "VAT from expense records only, before evidence eligibility review",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Input Vat Estimate",
+            "type": "string"
+          },
+          "net_vat_estimate": {
+            "description": "vat_collected - input_vat_estimate; reconciliation estimate only",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Vat Estimate",
+            "type": "string"
+          },
+          "vat_collected": {
+            "description": "Sales VAT collected (SUM Invoice.tax_total)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Collected",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vat_collected",
+          "input_vat_estimate",
+          "net_vat_estimate"
+        ],
+        "title": "TaxSummaryMetrics",
+        "type": "object"
+      },
       "TaxType": {
         "description": "Tax types for invoice line items.",
         "enum": [
           "vat_16",
           "vat_8",
+          "petroleum_vat_13",
+          "petroleum_vat_8",
           "vat_0",
           "exempt",
           "no_tax"
@@ -7413,8 +8679,7 @@
             "type": "string"
           },
           "role": {
-            "title": "Role",
-            "type": "string"
+            "$ref": "#/components/schemas/UserRole"
           }
         },
         "required": [
@@ -7427,6 +8692,16 @@
         ],
         "title": "UserResponse",
         "type": "object"
+      },
+      "UserRole": {
+        "description": "Authorization roles for application users.\n\nADMIN can perform any action. MANAGER may perform destructive and\nfinancial operations (hard-delete, record-payment, approve, convert).\nMEMBER may perform ordinary create/update operations only.",
+        "enum": [
+          "admin",
+          "manager",
+          "member"
+        ],
+        "title": "UserRole",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -7573,10 +8848,9 @@
             "type": "integer"
           },
           "currency": {
+            "$ref": "#/components/schemas/Currency",
             "default": "KES",
-            "description": "Display currency (from vendor)",
-            "title": "Currency",
-            "type": "string"
+            "description": "Display currency (from vendor)"
           },
           "items": {
             "items": {
@@ -7870,10 +9144,9 @@
         "description": "Payables summary .",
         "properties": {
           "currency": {
+            "$ref": "#/components/schemas/Currency",
             "default": "KES",
-            "description": "Currency for display (inherited from vendor record)",
-            "title": "Currency",
-            "type": "string"
+            "description": "Currency for display (inherited from vendor record)"
           },
           "overdue_total": {
             "default": "0.00",
@@ -7948,8 +9221,7 @@
             "title": "Created By"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "display_initials": {
             "description": "Two-letter avatar initials derived from vendor_name",
@@ -8020,8 +9292,7 @@
             "title": "Phone Secondary"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/VendorStatus"
           },
           "tax_id_pin": {
             "anyOf": [
@@ -8260,6 +9531,14 @@
         ],
         "title": "VendorStatementTransaction",
         "type": "object"
+      },
+      "VendorStatus": {
+        "enum": [
+          "active",
+          "inactive"
+        ],
+        "title": "VendorStatus",
+        "type": "string"
       },
       "VendorStatusCounts": {
         "description": "Counts backing the All/Active/Inactive tabs.",
@@ -8624,13 +9903,12 @@
           "currency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Currency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Currency"
+            ]
           },
           "email": {
             "anyOf": [
@@ -8691,8 +9969,7 @@
             "type": "string"
           },
           "currency": {
-            "title": "Currency",
-            "type": "string"
+            "$ref": "#/components/schemas/Currency"
           },
           "email": {
             "anyOf": [
@@ -8734,8 +10011,7 @@
             "title": "Phone Primary"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/VendorStatus"
           },
           "vendor_name": {
             "title": "Vendor Name",
@@ -9403,18 +10679,11 @@
             "description": "Pass the version from your last GET response. If the customer has been modified since, a 409 is returned.",
             "in": "query",
             "name": "expectedVersion",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Pass the version from your last GET response. If the customer has been modified since, a 409 is returned.",
-              "title": "Expectedversion"
+              "title": "Expectedversion",
+              "type": "integer"
             }
           }
         ],
@@ -10783,6 +12052,20 @@
       "post": {
         "description": "Calculate subtotal, tax_total, and total_due from line items without persisting. Used for real-time frontend recalculation. No discount applied in v1.",
         "operationId": "calculate_expense_totals_api_v1_expenses_calculate_post",
+        "parameters": [
+          {
+            "description": "Expense tax-point date",
+            "in": "query",
+            "name": "expenseDate",
+            "required": true,
+            "schema": {
+              "description": "Expense tax-point date",
+              "format": "date",
+              "title": "Expensedate",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -11227,18 +12510,11 @@
             "description": "Pass the version from your last GET response. If the expense has been modified since, a 409 is returned.",
             "in": "query",
             "name": "expectedVersion",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Pass the version from your last GET response. If the expense has been modified since, a 409 is returned.",
-              "title": "Expectedversion"
+              "title": "Expectedversion",
+              "type": "integer"
             }
           }
         ],
@@ -12073,6 +13349,18 @@
         "operationId": "calculate_invoice_totals_api_v1_invoices_calculate_post",
         "parameters": [
           {
+            "description": "Invoice transaction date used as the tax point for VAT validation",
+            "in": "query",
+            "name": "transactionDate",
+            "required": true,
+            "schema": {
+              "description": "Invoice transaction date used as the tax point for VAT validation",
+              "format": "date",
+              "title": "Transactiondate",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "discount_type",
             "required": false,
@@ -12612,18 +13900,11 @@
             "description": "Expected version number for optimistic locking",
             "in": "query",
             "name": "expected_version",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Expected version number for optimistic locking",
-              "title": "Expected Version"
+              "title": "Expected Version",
+              "type": "integer"
             }
           }
         ],
@@ -13286,7 +14567,7 @@
             }
           },
           {
-            "description": "draft | sent | billed | canceled",
+            "description": "draft | sent | billed",
             "in": "query",
             "name": "status",
             "required": false,
@@ -13299,7 +14580,7 @@
                   "type": "null"
                 }
               ],
-              "description": "draft | sent | billed | canceled",
+              "description": "draft | sent | billed",
               "title": "Status"
             }
           },
@@ -13521,6 +14802,18 @@
         "description": "Calculate subtotal, tax_total and total from line items without persisting. Used for real-time frontend recalculation. No discount in v1.",
         "operationId": "calculate_purchase_order_totals_api_v1_purchase_orders_calculate_post",
         "parameters": [
+          {
+            "description": "Tax-point date used to validate the selected VAT treatment",
+            "in": "query",
+            "name": "orderDate",
+            "required": true,
+            "schema": {
+              "description": "Tax-point date used to validate the selected VAT treatment",
+              "format": "date",
+              "title": "Orderdate",
+              "type": "string"
+            }
+          },
           {
             "description": "Enable PO-level VAT on the subtotal",
             "in": "query",
@@ -13954,7 +15247,7 @@
         ]
       },
       "put": {
-        "description": "Update a purchase order. Only DRAFT purchase orders are editable; SENT / BILLED / CANCELED are read-only. currency is locked after the first save. Supplying lineItems replaces the full set. Pass expectedVersion (from your last GET) for optimistic-lock protection.",
+        "description": "Update a purchase order. Only DRAFT purchase orders are editable; SENT / BILLED are read-only. currency is locked after the first save. Supplying lineItems replaces the full set. Pass expectedVersion (from your last GET) for optimistic-lock protection.",
         "operationId": "update_purchase_order_api_v1_purchase_orders__po_id__put",
         "parameters": [
           {
@@ -13971,18 +15264,11 @@
             "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
             "in": "query",
             "name": "expectedVersion",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Pass the version from your last GET response. If the purchase order has been modified since, a 409 is returned.",
-              "title": "Expectedversion"
+              "title": "Expectedversion",
+              "type": "integer"
             }
           }
         ],
@@ -14094,7 +15380,7 @@
         ]
       },
       "post": {
-        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED / CANCELED) and do not re-open edit mode. source must be 'form', 'view' or 'payment_modal' (proof-of-payment uploaded in the Record Payment modal). storage_key is never returned.",
+        "description": "Attach a supporting document to a purchase order. The file is validated (type allow-list, max size, magic-byte content sniff) and written to object storage, then its metadata is persisted. Attachments can be added from the View screen at any status (including SENT / BILLED) and do not re-open edit mode. source must be 'form', 'view' or 'payment_modal' (proof-of-payment uploaded in the Record Payment modal). storage_key is never returned.",
         "operationId": "upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
         "parameters": [
           {
@@ -15604,18 +16890,11 @@
             "description": "Expected version number for optimistic locking",
             "in": "query",
             "name": "expected_version",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Expected version number for optimistic locking",
-              "title": "Expected Version"
+              "title": "Expected Version",
+              "type": "integer"
             }
           }
         ],
@@ -15999,6 +17278,1526 @@
         "summary": "Send quote via email",
         "tags": [
           "Quotes"
+        ]
+      }
+    },
+    "/api/v1/reports/aged-payables": {
+      "get": {
+        "description": "Outstanding payable balances grouped by vendor and aging bucket. Expenses: bucketed by due_date. Point-in-time: no date range filter.",
+        "operationId": "get_aged_payables_api_v1_reports_aged_payables_get",
+        "parameters": [
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgedPayablesSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Aged payables summary",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/aged-payables/detail": {
+      "get": {
+        "description": "Individual outstanding expense rows with bucket and days overdue.",
+        "operationId": "list_aged_payables_detail_api_v1_reports_aged_payables_detail_get",
+        "parameters": [
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgedPayablesDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Aged payables detail",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/aged-receivables": {
+      "get": {
+        "description": "Outstanding invoice balances grouped by customer and aging bucket (Current, 1-30, 31-60, 61-90, 90+ days overdue). Point-in-time: no date range filter. Includes only SENT, PARTIAL, OVERDUE invoices with balance_due > 0.",
+        "operationId": "get_aged_receivables_api_v1_reports_aged_receivables_get",
+        "parameters": [
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgedReceivablesSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Aged receivables summary",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/aged-receivables/detail": {
+      "get": {
+        "description": "Individual outstanding invoice rows with aging bucket and days overdue. Ordered oldest-due first. Paginated with sentinel pattern (no COUNT).",
+        "operationId": "list_aged_receivables_detail_api_v1_reports_aged_receivables_detail_get",
+        "parameters": [
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgedReceivablesDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Aged receivables invoice-level detail",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/purchases": {
+      "get": {
+        "description": "Actual expense spend, expense-only outstanding payables, and potential input VAT. Purchase orders are shown separately as commitments.",
+        "operationId": "get_purchases_summary_api_v1_reports_purchases_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasesReportSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Purchases report summary",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/purchases/counts": {
+      "get": {
+        "description": "Per-source counts (all/expense/purchase_order).",
+        "operationId": "get_purchases_counts_api_v1_reports_purchases_counts_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Substring match on entity name or document reference",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring match on entity name or document reference",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasesSourceCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Purchases filter-tab counts",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/purchases/export": {
+      "get": {
+        "operationId": "export_purchases_api_v1_reports_purchases_export_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export purchases ledger to Excel",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/purchases/ledger": {
+      "get": {
+        "description": "Paginated combined expense + purchase-order ledger. Supports source filter (all/expense/purchase_order) and search. total/total_pages null unless withTotal=true.",
+        "operationId": "list_purchases_ledger_api_v1_reports_purchases_ledger_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Source filter",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "description": "Source filter",
+              "enum": [
+                "all",
+                "expense",
+                "purchase_order"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Substring match on entity name or document reference",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring match on entity name or document reference",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Also compute total/total_pages (extra COUNT)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also compute total/total_pages (extra COUNT)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_PurchasesLedgerEntry_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Purchases ledger",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/sales": {
+      "get": {
+        "description": "Net revenue (after discounts), tax collected, total invoiced, outstanding and overdue balances for the selected period. Includes top-customer and category breakdowns.",
+        "operationId": "get_sales_summary_api_v1_reports_sales_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesReportSummaryResponse"
+                }
+              }
+            },
+            "description": "Sales summary"
+          },
+          "400": {
+            "description": "Invalid period parameters"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales report summary",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/sales/counts": {
+      "get": {
+        "description": "Per-status counts (all/sent/partial/paid/overdue) under the current period and currency. Kept off the ledger endpoint so the page query never pays a mandatory COUNT.",
+        "operationId": "get_sales_counts_api_v1_reports_sales_counts_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesStatusCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales filter-tab counts",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/sales/export": {
+      "get": {
+        "description": "Download the full sales ledger (no pagination) as .xlsx.",
+        "operationId": "export_sales_api_v1_reports_sales_export_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export sales ledger to Excel",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/sales/ledger": {
+      "get": {
+        "description": "Paginated invoice ledger with subtotal, discount, net revenue, tax and balance columns. Supports search and status filter tabs. total/total_pages null unless withTotal=true.",
+        "operationId": "list_sales_ledger_api_v1_reports_sales_ledger_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Invoice status filter",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Invoice status filter",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Substring match on entity name or document reference",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring match on entity name or document reference",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Also compute total/total_pages (extra COUNT)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also compute total/total_pages (extra COUNT)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_SalesLedgerEntry_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales ledger",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/taxes": {
+      "get": {
+        "description": "A KES VAT reconciliation estimate, not a VAT return or filing-ready output. Confirm against eTIMS, customs records, credit/debit notes, and the KRA auto-populated return. By default, unsupported foreign-currency VAT documents are excluded and disclosed as a partial result; strict=true rejects an incomplete reconciliation with HTTP 422.",
+        "operationId": "get_tax_report_api_v1_reports_taxes_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "ISO-4217 currency to report in (single-currency)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "KES",
+              "description": "ISO-4217 currency to report in (single-currency)"
+            }
+          },
+          {
+            "description": "Reject partial VAT reconciliations when unsupported foreign-currency documents are present",
+            "in": "query",
+            "name": "strict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Reject partial VAT reconciliations when unsupported foreign-currency documents are present",
+              "title": "Strict",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Strict reconciliation is incomplete"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Tax (VAT) reconciliation estimate",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/taxes/excluded": {
+      "get": {
+        "description": "Paginated foreign-currency VAT documents excluded because immutable KES tax-point conversion evidence is unavailable.",
+        "operationId": "list_excluded_tax_transactions_api_v1_reports_taxes_excluded_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ExcludedTaxTransaction_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List transactions excluded from the VAT reconciliation estimate",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/taxes/export": {
+      "get": {
+        "operationId": "export_taxes_api_v1_reports_taxes_export_get",
+        "parameters": [
+          {
+            "description": "Reporting period preset",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RangePreset",
+              "default": "this_month",
+              "description": "Reporting period preset"
+            }
+          },
+          {
+            "description": "Window start (range=custom only)",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (range=custom only)",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Window end (range=custom only)",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window end (range=custom only)",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "Reject partial VAT reconciliations when unsupported foreign-currency documents are present",
+            "in": "query",
+            "name": "strict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Reject partial VAT reconciliations when unsupported foreign-currency documents are present",
+              "title": "Strict",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export VAT reconciliation estimate to Excel",
+        "tags": [
+          "Reports"
         ]
       }
     },
@@ -17024,21 +19823,14 @@
             }
           },
           {
-            "description": "Current version number for optimistic locking. If provided and the vendor has been updated since you loaded it, the request is rejected with HTTP 409.",
+            "description": "Current version number for optimistic locking. If the vendor has been updated since you loaded it, the request is rejected with HTTP 409.",
             "in": "query",
             "name": "expectedVersion",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Current version number for optimistic locking. If provided and the vendor has been updated since you loaded it, the request is rejected with HTTP 409.",
-              "title": "Expectedversion"
+              "description": "Current version number for optimistic locking. If the vendor has been updated since you loaded it, the request is rejected with HTTP 409.",
+              "title": "Expectedversion",
+              "type": "integer"
             }
           }
         ],

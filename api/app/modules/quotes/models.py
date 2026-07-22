@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
 from app.common.financial import get_tax_rate
+from app.common.reporting_time import check_is_overdue, reporting_date
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -345,7 +346,6 @@ class Quote(Base):
     @property
     def is_expired(self) -> bool:
         """Check if quote is past due date (centralized predicate)."""
-        from app.common.financial import check_is_overdue
 
         return check_is_overdue(
             self.status,
@@ -356,7 +356,7 @@ class Quote(Base):
     @property
     def days_until_expiry(self) -> int:
         """Calculate days until expiry (negative if expired)."""
-        return (self.due_date - date.today()).days
+        return (self.due_date - reporting_date()).days
 
     @property
     def can_convert_to_invoice(self) -> bool:

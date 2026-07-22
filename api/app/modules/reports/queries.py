@@ -1,0 +1,1422 @@
+"""Read-side SQL for the reports module.
+
+Accounting basis
+----------------
+Shares the recognition predicates from statements.queries — the single
+source of truth for what counts as recognized revenue and expense. Both
+modules must agree; importing rather than redefining prevents drift.
+
+  RECOGNIZED_INVOICE_STATUSES  — (SENT, PARTIAL, PAID, OVERDUE)
+  RECOGNIZED_EXPENSE_STATUSES  — (PENDING, PAID, OVERDUE)
+  RECOGNIZED_PO_STATUSES       — (SENT, PAID) — DRAFT is pre-financial
+
+Revenue: net of discount, pre-tax — SUM(Invoice.total_due - Invoice.tax_total).
+Formula: Invoice.total_due = subtotal - discount + tax_total, therefore
+total_due - tax_total = subtotal - discount = net revenue after discount.
+Invoice.discount_value is a @property, NOT a stored column; never reference
+it in SQL. The discount is derived as: subtotal - (total_due - tax_total).
+
+Tax: sales VAT is sourced from issued invoices. Potential input VAT is sourced
+only from expense records; purchase orders remain commitments and never enter
+input-VAT or accounts-payable totals. Per-type breakdowns retain both the
+classification and explicit stored rate. Zero-rated documents remain visible.
+
+Purchases ledger: union_all of expenses and POs, mirroring the cashflow
+module's pattern. All pagination (OFFSET/LIMIT) and ordering happen in SQL.
+
+PurchaseOrder.total (not total_due) — the PO model uses `total` for its
+tax-inclusive amount (confirmed purchase_orders/models.py:240).
+
+PurchaseOrderLineItem.po_id — the FK column is `po_id` not `purchase_order_id`
+(confirmed purchase_orders/models.py:434).
+
+Vendor.tax_id_pin — the KRA PIN field on Vendor is `tax_id_pin` not `kra_pin`
+(confirmed vendors/models.py:131).
+
+customer_display_name() — imported from statements.queries so search and
+display can never drift between reports and statements pages.
+
+Aged AR/AP: point-in-time (no date range). Every query receives one explicit
+organization-local ``as_of_date`` bind; database/session timezones are irrelevant.
+
+Read-only: this module never flushes or commits.
+"""
+
+import logging
+from collections.abc import Iterator
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Any, Final
+
+from sqlalchemy import (
+    Date,
+    Select,
+    bindparam,
+    case,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.common.exceptions import DatabaseException
+from app.common.search import build_search_clause
+from app.constants.enums import (
+    Currency,
+    ExpenseStatus,
+    InvoiceStatus,
+    PurchaseOrderStatus,
+    TaxType,
+)
+from app.modules.customers.models import Customer
+from app.modules.expenses.models import Expense, ExpenseLineItem
+from app.modules.invoices.models import Invoice, InvoiceLineItem
+from app.modules.purchase_orders.models import PurchaseOrder
+
+# Single source of truth — import, never redefine
+from app.modules.statements.queries import (
+    RECOGNIZED_EXPENSE_STATUSES,
+    RECOGNIZED_INVOICE_STATUSES,
+    customer_display_name,
+)
+from app.modules.vendors.models import Vendor
+
+logger = logging.getLogger(__name__)
+
+# POs recognized once issued (SENT) or settled (PAID). DRAFT is pre-financial.
+RECOGNIZED_PO_STATUSES: Final[tuple[PurchaseOrderStatus, ...]] = (
+    PurchaseOrderStatus.SENT,
+    PurchaseOrderStatus.PAID,
+)
+
+OUTSTANDING_INVOICE_STATUSES: Final[tuple[InvoiceStatus, ...]] = (
+    InvoiceStatus.SENT,
+    InvoiceStatus.PARTIAL,
+    InvoiceStatus.OVERDUE,
+)
+OUTSTANDING_EXPENSE_STATUSES: Final[tuple[ExpenseStatus, ...]] = (
+    ExpenseStatus.PENDING,
+    ExpenseStatus.OVERDUE,
+)
+
+
+def _invoice_outstanding_conds() -> list[Any]:
+    return [
+        Invoice.status.in_(OUTSTANDING_INVOICE_STATUSES),
+        Invoice.balance_due > 0,
+    ]
+
+
+def _expense_outstanding_conds() -> list[Any]:
+    return [
+        Expense.status.in_(OUTSTANDING_EXPENSE_STATUSES),
+        Expense.balance_due > 0,
+    ]
+
+
+def _aged_invoice_conds(currency: str, cutoff: Any) -> list[Any]:
+    """Outstanding invoices that existed on the requested aging date."""
+    return [
+        *_invoice_outstanding_conds(),
+        Invoice.transaction_date <= cutoff,
+        Invoice.currency == currency,
+    ]
+
+
+def _aged_expense_conds(currency: str, cutoff: Any) -> list[Any]:
+    """Outstanding expenses that existed on the requested aging date."""
+    return [
+        *_expense_outstanding_conds(),
+        Expense.expense_date <= cutoff,
+        Expense.currency == currency,
+    ]
+
+
+def _as_of_date_bind(as_of_date: date):
+    """Return a typed SQL bind for the one request-scoped accounting cutoff."""
+    return bindparam("as_of_date", value=as_of_date, type_=Date())
+
+
+def _line_tax_rate(tax_type_column: Any) -> Any:
+    """Map a line tax classification to its explicit rate, when applicable."""
+    return case(
+        (tax_type_column == TaxType.VAT_16, Decimal("0.1600")),
+        (tax_type_column == TaxType.PETROLEUM_VAT_13, Decimal("0.1300")),
+        (tax_type_column == TaxType.PETROLEUM_VAT_8, Decimal("0.0800")),
+        (tax_type_column == TaxType.VAT_8, Decimal("0.0800")),
+        (tax_type_column == TaxType.VAT_0, Decimal("0.0000")),
+        else_=None,
+    )
+
+
+def _document_tax_type(vat_rate_column: Any) -> Any:
+    """Classify document-level VAT without mislabelling custom rates as no-tax."""
+    return case(
+        (vat_rate_column == Decimal("0.1600"), TaxType.VAT_16.value),
+        (vat_rate_column == Decimal("0.0800"), TaxType.VAT_8.value),
+        (vat_rate_column == Decimal("0.0000"), TaxType.VAT_0.value),
+        else_="vat_custom",
+    )
+
+
+# Shared period-filter condition lists (mirrors StatementsRepository pattern)
+
+
+def _invoice_conds(date_from: date, date_to: date, currency: str) -> list:
+    """Invoice recognition predicates — mirrors StatementsRepository._invoice_conds."""
+    return [
+        Invoice.status.in_(RECOGNIZED_INVOICE_STATUSES),
+        Invoice.transaction_date >= date_from,
+        Invoice.transaction_date <= date_to,
+        Invoice.currency == currency,
+    ]
+
+
+def _expense_conds(date_from: date, date_to: date, currency: str) -> list:
+    """Expense recognition predicates — mirrors StatementsRepository._expense_conds."""
+    return [
+        Expense.status.in_(RECOGNIZED_EXPENSE_STATUSES),
+        Expense.expense_date >= date_from,
+        Expense.expense_date <= date_to,
+        Expense.currency == currency,
+    ]
+
+
+def _po_conds(date_from: date, date_to: date, currency: str) -> list:
+    """PO recognition predicates. Only SENT and PAID; DRAFT is pre-financial."""
+    return [
+        PurchaseOrder.status.in_(RECOGNIZED_PO_STATUSES),
+        PurchaseOrder.order_date >= date_from,
+        PurchaseOrder.order_date <= date_to,
+        PurchaseOrder.currency == currency,
+    ]
+
+
+# Data containers (frozen dataclasses — immutable, hashable)
+
+
+@dataclass(frozen=True)
+class SalesSummary:
+    """Aggregated sales metrics for one reporting window."""
+
+    subtotal: Decimal  # SUM(Invoice.subtotal) — gross of discount, pre-tax
+    discount_total: Decimal  # subtotal - net_revenue (derived)
+    net_revenue: Decimal  # SUM(total_due - tax_total) — post-discount, pre-tax
+    tax_collected: Decimal  # SUM(Invoice.tax_total)
+    total_invoiced: Decimal  # SUM(Invoice.total_due) — tax-inclusive
+    invoice_count: int
+    outstanding_balance: Decimal  # SUM(balance_due) for SENT/PARTIAL/OVERDUE
+    overdue_balance: Decimal  # SUM(balance_due) for OVERDUE only
+
+
+@dataclass(frozen=True)
+class PurchasesSummary:
+    """Actual expense activity plus separately classified PO commitments."""
+
+    actual_spend: Decimal  # expense records only, pre-tax
+    po_commitments: Decimal  # issued/paid PO subtotal, not actual spend/AP
+    input_vat_estimate: Decimal  # expense VAT before evidence eligibility review
+    po_commitment_tax: Decimal  # informational only; never deductible VAT
+    expense_count: int
+    po_commitment_count: int
+    outstanding_payables: Decimal  # unpaid expenses only
+
+
+@dataclass(frozen=True)
+class TaxSummary:
+    """VAT reconciliation estimate for one reporting window."""
+
+    vat_collected: Decimal  # sales VAT
+    input_vat_estimate: Decimal  # expense VAT, not yet evidence-qualified
+    net_vat_estimate: Decimal  # output VAT less input estimate
+
+
+# ReportsRepository
+
+
+class ReportsRepository:
+    """Read-side aggregate and ledger queries for the reports module.
+
+    Read-only: never flushes or commits. All aggregation is pushed into SQL.
+    Follows the same structure and conventions as StatementsRepository.
+    """
+
+    def __init__(self, db: Session) -> None:
+        self._db = db
+
+    # Sales: Summary
+
+    def sales_summary(
+        self, date_from: date, date_to: date, currency: str
+    ) -> SalesSummary:
+        """
+        Aggregated sales metrics.
+
+        Single document-level query. Revenue = SUM(total_due - tax_total) which
+        equals subtotal - discount (net of document-level discounts, pre-tax).
+        Invoice.discount_value is a @property not a column — never used in SQL.
+        """
+
+        inv_conds = _invoice_conds(date_from, date_to, currency)
+        try:
+            doc_stmt = (
+                select(
+                    func.coalesce(func.sum(Invoice.subtotal), Decimal("0")).label(
+                        "subtotal"
+                    ),
+                    func.coalesce(
+                        func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
+                    ).label("net_revenue"),
+                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
+                        "tax"
+                    ),
+                    func.coalesce(func.sum(Invoice.total_due), Decimal("0")).label(
+                        "total"
+                    ),
+                    func.count(Invoice.id).label("count"),
+                    func.coalesce(
+                        func.sum(Invoice.balance_due).filter(
+                            *_invoice_outstanding_conds()
+                        ),
+                        Decimal("0"),
+                    ).label("outstanding"),
+                    func.coalesce(
+                        func.sum(Invoice.balance_due).filter(
+                            Invoice.status == InvoiceStatus.OVERDUE,
+                            Invoice.balance_due > 0,
+                        ),
+                        Decimal("0"),
+                    ).label("overdue"),
+                )
+                .select_from(Invoice)
+                .where(*inv_conds)
+            )
+            row = self._db.execute(doc_stmt).one()
+
+            subtotal_d = Decimal(str(row.subtotal))
+            net_revenue_d = Decimal(str(row.net_revenue))
+
+            return SalesSummary(
+                subtotal=subtotal_d,
+                discount_total=subtotal_d - net_revenue_d,
+                net_revenue=net_revenue_d,
+                tax_collected=Decimal(str(row.tax)),
+                total_invoiced=Decimal(str(row.total)),
+                invoice_count=int(row.count),
+                outstanding_balance=Decimal(str(row.outstanding)),
+                overdue_balance=Decimal(str(row.overdue)),
+            )
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in sales_summary")
+            raise DatabaseException("Failed to calculate sales summary") from exc
+
+    # Sales: Breakdowns
+
+    def revenue_by_customer(
+        self, date_from: date, date_to: date, currency: str, *, limit: int = 10
+    ) -> list:
+        """Top N customers by net revenue (total_due - tax_total), post-discount.
+
+        Groups by Customer.id alongside the display name so two customers
+        that share a name remain separate rows.
+        """
+        inv_conds = _invoice_conds(date_from, date_to, currency)
+        entity = customer_display_name()
+        try:
+            amount = func.coalesce(
+                func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
+            ).label("amount")
+            stmt = (
+                select(
+                    Customer.id.label("customer_id"),
+                    entity.label("customer_name"),
+                    func.count(Invoice.id).label("invoice_count"),
+                    amount,
+                )
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.id)
+                .where(*inv_conds)
+                .group_by(Customer.id, entity)
+                .order_by(amount.desc())
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in revenue_by_customer")
+            raise DatabaseException("Failed to aggregate revenue by customer") from exc
+
+    def revenue_by_category(
+        self, date_from: date, date_to: date, currency: str
+    ) -> list:
+        """Revenue grouped by item_name (account/product category).
+
+        Allocates document-level discounts proportionally so that the
+        category breakdown reconciles with the summary's net revenue.
+        For each line: net_amount = line_total * (total_due - tax_total) / subtotal.
+        When subtotal is 0 the line contributes 0.
+        """
+        inv_conds = _invoice_conds(date_from, date_to, currency)
+        try:
+            net_line = (
+                InvoiceLineItem.line_total
+                * (Invoice.total_due - Invoice.tax_total)
+                / func.nullif(Invoice.subtotal, 0)
+            )
+            amount = func.coalesce(func.sum(net_line), Decimal("0")).label("amount")
+            stmt = (
+                select(
+                    InvoiceLineItem.item_name.label("category"),
+                    func.count(func.distinct(Invoice.id)).label("document_count"),
+                    amount,
+                )
+                .select_from(InvoiceLineItem)
+                .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
+                .where(*inv_conds)
+                .group_by(InvoiceLineItem.item_name)
+                .order_by(amount.desc())
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in revenue_by_category")
+            raise DatabaseException("Failed to aggregate revenue by category") from exc
+
+    # Sales: Ledger
+
+    def _sales_ledger_statement(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+    ) -> Select:
+        """Paginated list of recognized invoices. Fetch `per_page + 1` for sentinel."""
+        entity = customer_display_name()
+        conds = _invoice_conds(date_from, date_to, currency)
+        if status and status != "all":
+            conds.append(Invoice.status == status)
+        if search:
+            clause = build_search_clause(
+                search,
+                entity,
+                Invoice.invoice_reference,
+                Invoice.invoice_number,
+            )
+            if clause is not None:
+                conds.append(clause)
+        return (
+            select(
+                Invoice.id.label("id"),
+                entity.label("customer_name"),
+                Invoice.invoice_reference.label("reference"),
+                Invoice.invoice_number.label("number"),
+                Invoice.transaction_date.label("date"),
+                Invoice.status.label("status"),
+                Invoice.currency.label("currency"),
+                Invoice.subtotal.label("subtotal"),
+                (Invoice.subtotal - (Invoice.total_due - Invoice.tax_total)).label(
+                    "discount"
+                ),
+                (Invoice.total_due - Invoice.tax_total).label("net_revenue"),
+                Invoice.total_due.label("amount"),
+                Invoice.tax_total.label("tax"),
+                Invoice.balance_due.label("balance_due"),
+            )
+            .select_from(Invoice)
+            .join(Customer, Invoice.customer_id == Customer.id)
+            .where(*conds)
+            .order_by(Invoice.transaction_date.desc(), Invoice.id.desc())
+        )
+
+    def sales_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        offset: int = 0,
+        limit: int = 11,
+    ) -> list:
+        """Paginated list of recognized invoices. Fetch `per_page + 1` for sentinel."""
+        try:
+            stmt = (
+                self._sales_ledger_statement(
+                    date_from, date_to, currency, search=search, status=status
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in sales_ledger")
+            raise DatabaseException("Failed to load sales ledger") from exc
+
+    def iter_sales_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every matching sales row in deterministic order."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            stmt = self._sales_ledger_statement(date_from, date_to, currency)
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming sales_ledger")
+            raise DatabaseException("Failed to export sales ledger") from exc
+
+    def sales_ledger_total(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+    ) -> int:
+        """Exact row count for the sales ledger (used when withTotal=true)."""
+        entity = customer_display_name()
+        conds = _invoice_conds(date_from, date_to, currency)
+        if status and status != "all":
+            conds.append(Invoice.status == status)
+        if search:
+            clause = build_search_clause(
+                search,
+                entity,
+                Invoice.invoice_reference,
+                Invoice.invoice_number,
+            )
+            if clause is not None:
+                conds.append(clause)
+        try:
+            stmt = (
+                select(func.count())
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.id)
+                .where(*conds)
+            )
+            return int(self._db.execute(stmt).scalar() or 0)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in sales_ledger_total")
+            raise DatabaseException("Failed to count sales ledger") from exc
+
+    def sales_status_counts(
+        self, date_from: date, date_to: date, currency: str
+    ) -> dict[str, int]:
+        """Per-status counts for the filter tabs. Counts recognized statuses only."""
+        conds = _invoice_conds(date_from, date_to, currency)
+        try:
+            stmt = (
+                select(Invoice.status, func.count().label("cnt"))
+                .select_from(Invoice)
+                .where(*conds)
+                .group_by(Invoice.status)
+            )
+            rows = self._db.execute(stmt).all()
+            return {row.status: row.cnt for row in rows}
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in sales_status_counts")
+            raise DatabaseException("Failed to count sales by status") from exc
+
+    # Purchases: Summary
+
+    def purchases_summary(
+        self, date_from: date, date_to: date, currency: str
+    ) -> PurchasesSummary:
+        """Actual expense metrics plus PO commitments kept outside AP/VAT."""
+        exp_conds = _expense_conds(date_from, date_to, currency)
+        po_conds = _po_conds(date_from, date_to, currency)
+        try:
+            # Expense line totals (pre-tax)
+            exp_spend_stmt = (
+                select(
+                    func.coalesce(func.sum(ExpenseLineItem.line_total), Decimal("0"))
+                )
+                .select_from(ExpenseLineItem)
+                .join(Expense, ExpenseLineItem.expense_id == Expense.id)
+                .where(*exp_conds)
+            )
+            expense_spend = self._db.execute(exp_spend_stmt).scalar() or Decimal("0")
+
+            # Expense doc-level: tax, count, outstanding. The open-balance
+            # predicate is shared with aged payables so credits never reduce AP.
+
+            exp_meta_stmt = (
+                select(
+                    func.coalesce(func.sum(Expense.tax_total), Decimal("0")).label(
+                        "tax"
+                    ),
+                    func.count(Expense.id).label("cnt"),
+                    func.coalesce(
+                        func.sum(Expense.balance_due).filter(
+                            *_expense_outstanding_conds()
+                        ),
+                        Decimal("0"),
+                    ).label("outstanding"),
+                )
+                .select_from(Expense)
+                .where(*exp_conds)
+            )
+            exp_meta = self._db.execute(exp_meta_stmt).one()
+
+            # PO subtotals (pre-tax; PO.subtotal = stored Σ line_total).
+            # Surface their value and embedded tax separately, but never add either to actual spend, AP, or input VAT.
+            po_spend_stmt = (
+                select(func.coalesce(func.sum(PurchaseOrder.subtotal), Decimal("0")))
+                .select_from(PurchaseOrder)
+                .where(*po_conds)
+            )
+            po_spend = self._db.execute(po_spend_stmt).scalar() or Decimal("0")
+
+            # PO doc-level: tax, count, outstanding; balance_due is deliberately ignored.
+            po_meta_stmt = (
+                select(
+                    func.coalesce(
+                        func.sum(PurchaseOrder.tax_total), Decimal("0")
+                    ).label("tax"),
+                    func.count(PurchaseOrder.id).label("cnt"),
+                )
+                .select_from(PurchaseOrder)
+                .where(*po_conds)
+            )
+            po_meta = self._db.execute(po_meta_stmt).one()
+
+            expense_spend_d = Decimal(str(expense_spend))
+            po_spend_d = Decimal(str(po_spend))
+            exp_tax_d = Decimal(str(exp_meta.tax))
+            po_tax_d = Decimal(str(po_meta.tax))
+
+            return PurchasesSummary(
+                actual_spend=expense_spend_d,
+                po_commitments=po_spend_d,
+                input_vat_estimate=exp_tax_d,
+                po_commitment_tax=po_tax_d,
+                expense_count=int(exp_meta.cnt),
+                po_commitment_count=int(po_meta.cnt),
+                outstanding_payables=Decimal(str(exp_meta.outstanding)),
+            )
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in purchases_summary")
+            raise DatabaseException("Failed to calculate purchases summary") from exc
+
+    # Purchases: Breakdowns
+
+    def spend_by_vendor(
+        self, date_from: date, date_to: date, currency: str, *, limit: int = 10
+    ) -> list:
+        """Top N vendors by expense spend (pre-tax)."""
+        exp_conds = _expense_conds(date_from, date_to, currency)
+        try:
+            amount = func.coalesce(
+                func.sum(ExpenseLineItem.line_total), Decimal("0")
+            ).label("amount")
+            stmt = (
+                select(
+                    Vendor.id.label("vendor_id"),
+                    Vendor.vendor_name.label("vendor_name"),
+                    amount,
+                )
+                .select_from(ExpenseLineItem)
+                .join(Expense, ExpenseLineItem.expense_id == Expense.id)
+                .join(Vendor, Expense.vendor_id == Vendor.id)
+                .where(*exp_conds)
+                .group_by(Vendor.id, Vendor.vendor_name)
+                .order_by(amount.desc())
+                .limit(limit)
+            )
+
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in spend_by_vendor")
+            raise DatabaseException("Failed to aggregate spend by vendor") from exc
+
+    # Purchases: Ledger (union_all of expenses + POs)
+
+    def _purchases_subquery(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        source: str = "all",
+        search: str | None = None,
+    ):
+        """
+        Build the union_all subquery for the purchases ledger.
+
+        PurchaseOrder uses `.total` (not `.total_due`) for tax-inclusive amount.
+        PurchaseOrderLineItem FK is `po_id` (not `purchase_order_id`).
+        """
+        branches: list[Select] = []
+
+        if source in ("all", "expense"):
+            exp_conds = _expense_conds(date_from, date_to, currency)
+            if search:
+                clause = build_search_clause(
+                    search,
+                    Vendor.vendor_name,
+                    Expense.expense_reference,
+                    Expense.expense_number,
+                )
+                if clause is not None:
+                    exp_conds.append(clause)
+            branches.append(
+                select(
+                    Expense.id.label("source_id"),
+                    literal("expense").label("source_type"),
+                    Vendor.vendor_name.label("entity_name"),
+                    Expense.expense_reference.label("reference"),
+                    Expense.expense_number.label("number"),
+                    literal("expense").label("category"),
+                    Expense.expense_date.label("entry_date"),
+                    Expense.status.label("status"),
+                    Expense.currency.label("currency"),
+                    Expense.total_due.label("amount"),  # Expense uses total_due ✓
+                    Expense.tax_total.label("tax"),
+                    Expense.balance_due.label("balance_due"),
+                )
+                .select_from(Expense)
+                .join(Vendor, Expense.vendor_id == Vendor.id)
+                .where(*exp_conds)
+            )
+
+        if source in ("all", "purchase_order"):
+            po_conds = _po_conds(date_from, date_to, currency)
+            if search:
+                clause = build_search_clause(
+                    search,
+                    Vendor.vendor_name,
+                    PurchaseOrder.po_reference,
+                    PurchaseOrder.po_number,
+                )
+                if clause is not None:
+                    po_conds.append(clause)
+            branches.append(
+                select(
+                    PurchaseOrder.id.label("source_id"),
+                    literal("purchase_order").label("source_type"),
+                    Vendor.vendor_name.label("entity_name"),
+                    PurchaseOrder.po_reference.label("reference"),
+                    PurchaseOrder.po_number.label("number"),
+                    literal("purchase_order").label("category"),
+                    PurchaseOrder.order_date.label("entry_date"),
+                    PurchaseOrder.status.label("status"),
+                    PurchaseOrder.currency.label("currency"),
+                    PurchaseOrder.total.label(
+                        "amount"
+                    ),  # PO uses .total NOT .total_due ✓
+                    PurchaseOrder.tax_total.label("tax"),
+                    PurchaseOrder.balance_due.label("balance_due"),
+                )
+                .select_from(PurchaseOrder)
+                .join(Vendor, PurchaseOrder.vendor_id == Vendor.id)
+                .where(*po_conds)
+            )
+
+        # Fallback guard: if branches is empty (bad `source` value), return
+        # a subquery that always produces zero rows.
+        if not branches:
+            branches.append(
+                select(
+                    Expense.id.label("source_id"),
+                    literal("expense").label("source_type"),
+                    Vendor.vendor_name.label("entity_name"),
+                    Expense.expense_reference.label("reference"),
+                    Expense.expense_number.label("number"),
+                    literal("expense").label("category"),
+                    Expense.expense_date.label("entry_date"),
+                    Expense.status.label("status"),
+                    Expense.currency.label("currency"),
+                    Expense.total_due.label("amount"),
+                    Expense.tax_total.label("tax"),
+                    Expense.balance_due.label("balance_due"),
+                )
+                .select_from(Expense)
+                .where(Expense.id.is_(None))  # always-false predicate
+            )
+
+        sel = branches[0] if len(branches) == 1 else union_all(*branches)
+        return sel.subquery("purchase_entries")
+
+    def _purchases_ledger_statement(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        source: str = "all",
+        search: str | None = None,
+    ) -> Select:
+        sub = self._purchases_subquery(
+            date_from, date_to, currency, source=source, search=search
+        )
+        return select(sub).order_by(sub.c.entry_date.desc(), sub.c.source_id.desc())
+
+    def purchases_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        source: str = "all",
+        search: str | None = None,
+        offset: int = 0,
+        limit: int = 11,
+    ) -> list:
+        """Return one over-fetched purchases page in stable date/ID order."""
+        try:
+            stmt = (
+                self._purchases_ledger_statement(
+                    date_from, date_to, currency, source=source, search=search
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in purchases_ledger")
+            raise DatabaseException("Failed to load purchases ledger") from exc
+
+    def iter_purchases_ledger(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every matching purchase row in deterministic order."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            stmt = self._purchases_ledger_statement(date_from, date_to, currency)
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming purchases_ledger")
+            raise DatabaseException("Failed to export purchases ledger") from exc
+
+    def purchases_ledger_total(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        source: str = "all",
+        search: str | None = None,
+    ) -> int:
+        """Exact count for the purchases ledger (used when withTotal=true)."""
+        try:
+            sub = self._purchases_subquery(
+                date_from, date_to, currency, source=source, search=search
+            )
+            return int(
+                self._db.execute(select(func.count()).select_from(sub)).scalar() or 0
+            )
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in purchases_ledger_total")
+            raise DatabaseException("Failed to count purchases ledger") from exc
+
+    def purchases_source_counts(
+        self,
+        date_from: date,
+        date_to: date,
+        currency: str,
+        *,
+        search: str | None = None,
+    ) -> dict[str, int]:
+        """Per-source counts for the filter tabs (always uses source='all')."""
+        try:
+            sub = self._purchases_subquery(
+                date_from, date_to, currency, source="all", search=search
+            )
+            rows = self._db.execute(
+                select(sub.c.source_type, func.count()).group_by(sub.c.source_type)
+            ).all()
+            counts: dict[str, int] = {row[0]: row[1] for row in rows}
+            expense = counts.get("expense", 0)
+            po = counts.get("purchase_order", 0)
+            return {"all": expense + po, "expense": expense, "purchase_order": po}
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in purchases_source_counts")
+            raise DatabaseException("Failed to count purchases by source") from exc
+
+    # Tax Report
+
+    def _foreign_currency_vat_subquery(self, date_from: date, date_to: date):
+        """Build one row per unsupported foreign-currency VAT document."""
+        vat_types = (
+            TaxType.VAT_16,
+            TaxType.PETROLEUM_VAT_13,
+            TaxType.PETROLEUM_VAT_8,
+            TaxType.VAT_8,
+            TaxType.VAT_0,
+        )
+        invoice_line_vat = exists(
+            select(1).where(
+                InvoiceLineItem.invoice_id == Invoice.id,
+                InvoiceLineItem.tax_type.in_(vat_types),
+            )
+        )
+        expense_line_vat = exists(
+            select(1).where(
+                ExpenseLineItem.expense_id == Expense.id,
+                ExpenseLineItem.tax_type.in_(vat_types),
+            )
+        )
+        invoice_stmt = select(
+            Invoice.id.label("document_id"),
+            literal("invoice").label("document_type"),
+            Invoice.invoice_reference.label("reference"),
+            Invoice.invoice_number.label("number"),
+            Invoice.transaction_date.label("transaction_date"),
+            Invoice.currency.label("currency"),
+            Invoice.total_due.label("original_amount"),
+            Invoice.tax_total.label("original_vat_amount"),
+        ).where(
+            Invoice.status.in_(RECOGNIZED_INVOICE_STATUSES),
+            Invoice.transaction_date.between(date_from, date_to),
+            Invoice.currency != Currency.KES,
+            or_(
+                Invoice.vat_enabled.is_(True),
+                Invoice.tax_total != 0,
+                invoice_line_vat,
+            ),
+        )
+        expense_stmt = select(
+            Expense.id.label("document_id"),
+            literal("expense").label("document_type"),
+            Expense.expense_reference.label("reference"),
+            Expense.expense_number.label("number"),
+            Expense.expense_date.label("transaction_date"),
+            Expense.currency.label("currency"),
+            Expense.total_due.label("original_amount"),
+            Expense.tax_total.label("original_vat_amount"),
+        ).where(
+            Expense.status.in_(RECOGNIZED_EXPENSE_STATUSES),
+            Expense.expense_date.between(date_from, date_to),
+            Expense.currency != Currency.KES,
+            or_(Expense.tax_total != 0, expense_line_vat),
+        )
+        return union_all(invoice_stmt, expense_stmt).subquery(
+            "foreign_currency_vat_documents"
+        )
+
+    def foreign_currency_vat_summary(
+        self, date_from: date, date_to: date
+    ) -> tuple[int, list[str]]:
+        """Return the excluded document count and affected currencies."""
+        try:
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            rows = self._db.execute(
+                select(
+                    sub.c.currency,
+                    func.count().label("document_count"),
+                ).group_by(sub.c.currency)
+            ).all()
+            return (
+                sum(int(row.document_count) for row in rows),
+                sorted(str(row.currency) for row in rows),
+            )
+        except SQLAlchemyError as exc:
+            logger.exception("Database error summarizing foreign-currency VAT")
+            raise DatabaseException(
+                "Failed to summarize excluded VAT transactions"
+            ) from exc
+
+    def foreign_currency_vat_currencies(
+        self, date_from: date, date_to: date
+    ) -> list[str]:
+        """Compatibility wrapper returning only affected currencies."""
+        _, currencies = self.foreign_currency_vat_summary(date_from, date_to)
+        return currencies
+
+    def foreign_currency_vat_transactions(
+        self,
+        date_from: date,
+        date_to: date,
+        *,
+        offset: int = 0,
+        limit: int = 26,
+    ) -> list:
+        """Return a deterministic page of unsupported VAT documents."""
+        try:
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            stmt = (
+                select(sub)
+                .order_by(
+                    sub.c.transaction_date.desc(),
+                    sub.c.document_type.asc(),
+                    sub.c.document_id.desc(),
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error listing excluded VAT transactions")
+            raise DatabaseException("Failed to load excluded VAT transactions") from exc
+
+    def iter_foreign_currency_vat_transactions(
+        self,
+        date_from: date,
+        date_to: date,
+        *,
+        batch_size: int,
+    ) -> Iterator[Any]:
+        """Stream every unsupported VAT document for the Excel appendix."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        try:
+            sub = self._foreign_currency_vat_subquery(date_from, date_to)
+            stmt = select(sub).order_by(
+                sub.c.transaction_date.desc(),
+                sub.c.document_type.asc(),
+                sub.c.document_id.desc(),
+            )
+            result = self._db.execute(stmt.execution_options(stream_results=True))
+            yield from result.yield_per(batch_size)
+        except SQLAlchemyError as exc:
+            logger.exception("Database error streaming excluded VAT transactions")
+            raise DatabaseException(
+                "Failed to export excluded VAT transactions"
+            ) from exc
+
+    def tax_summary(self, date_from: date, date_to: date, currency: str) -> TaxSummary:
+        """Output VAT less expense-only input-VAT estimate."""
+        inv_conds = _invoice_conds(date_from, date_to, currency)
+        exp_conds = _expense_conds(date_from, date_to, currency)
+        try:
+            # Sales VAT: SUM(Invoice.tax_total) — no join needed, stored field
+            sales_vat_stmt = (
+                select(func.coalesce(func.sum(Invoice.tax_total), Decimal("0")))
+                .select_from(Invoice)
+                .where(*inv_conds)
+            )
+            vat_collected = self._db.execute(sales_vat_stmt).scalar() or Decimal("0")
+
+            # Purchase VAT (expenses)
+            exp_vat_stmt = (
+                select(func.coalesce(func.sum(Expense.tax_total), Decimal("0")))
+                .select_from(Expense)
+                .where(*exp_conds)
+            )
+            exp_vat = self._db.execute(exp_vat_stmt).scalar() or Decimal("0")
+
+            vat_collected_d = Decimal(str(vat_collected))
+            input_vat_d = Decimal(str(exp_vat))
+
+            return TaxSummary(
+                vat_collected=vat_collected_d,
+                input_vat_estimate=input_vat_d,
+                net_vat_estimate=vat_collected_d - input_vat_d,
+            )
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in tax_summary")
+            raise DatabaseException("Failed to calculate tax summary") from exc
+
+    def tax_by_type_sales(self, date_from: date, date_to: date, currency: str) -> list:
+        """Sales VAT breakdown by tax_type.
+
+        Document-level VAT participates even when its amount is zero, so a
+        zero-rated invoice remains visible. Rates outside the known enum are
+        classified as ``vat_custom`` rather than being mislabeled ``no_tax``.
+        """
+        inv_conds = _invoice_conds(date_from, date_to, currency)
+        try:
+            line_tax_rate = _line_tax_rate(InvoiceLineItem.tax_type)
+            line_branch = (
+                select(
+                    InvoiceLineItem.tax_type.label("tax_type"),
+                    line_tax_rate.label("tax_rate"),
+                    func.count(func.distinct(Invoice.id)).label("document_count"),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.tax_amount), Decimal("0")
+                    ).label("tax_amount"),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.taxable_value), Decimal("0")
+                    ).label("taxable_value"),
+                )
+                .select_from(InvoiceLineItem)
+                .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(False),
+                    InvoiceLineItem.taxable_value.is_not(None),
+                )
+                .group_by(InvoiceLineItem.tax_type, line_tax_rate)
+            )
+
+            legacy_branch = (
+                select(
+                    literal("unreconciled_historical").label("tax_type"),
+                    literal(None).label("tax_rate"),
+                    func.count(func.distinct(Invoice.id)).label("document_count"),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.tax_amount), Decimal("0")
+                    ).label("tax_amount"),
+                    literal(Decimal("0")).label("taxable_value"),
+                )
+                .select_from(InvoiceLineItem)
+                .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(False),
+                    InvoiceLineItem.taxable_value.is_(None),
+                )
+                .having(func.count(func.distinct(Invoice.id)) > 0)
+            )
+
+            inv_tax_type = _document_tax_type(Invoice.vat_rate)
+            doc_branch = (
+                select(
+                    inv_tax_type.label("tax_type"),
+                    Invoice.vat_rate.label("tax_rate"),
+                    func.count(Invoice.id).label("document_count"),
+                    func.coalesce(func.sum(Invoice.tax_total), Decimal("0")).label(
+                        "tax_amount"
+                    ),
+                    func.coalesce(
+                        func.sum(Invoice.total_due - Invoice.tax_total), Decimal("0")
+                    ).label("taxable_value"),
+                )
+                .select_from(Invoice)
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(True),
+                )
+                .group_by(inv_tax_type, Invoice.vat_rate)
+            )
+
+            combined = union_all(line_branch, legacy_branch, doc_branch).subquery(
+                "sales_tax_by_type"
+            )
+            stmt = (
+                select(
+                    combined.c.tax_type,
+                    combined.c.tax_rate,
+                    func.sum(combined.c.document_count).label("document_count"),
+                    func.sum(combined.c.tax_amount).label("tax_amount"),
+                    func.sum(combined.c.taxable_value).label("taxable_value"),
+                )
+                .group_by(combined.c.tax_type, combined.c.tax_rate)
+                .order_by(
+                    func.sum(combined.c.tax_amount).desc(),
+                    combined.c.tax_type.asc(),
+                    combined.c.tax_rate.asc().nulls_last(),
+                )
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in tax_by_type_sales")
+            raise DatabaseException("Failed to aggregate sales tax by type") from exc
+
+    def tax_by_type_purchases(
+        self, date_from: date, date_to: date, currency: str
+    ) -> list:
+        """Purchase VAT breakdown by tax_type and rate."""
+        exp_conds = _expense_conds(date_from, date_to, currency)
+        try:
+            expense_tax_rate = _line_tax_rate(ExpenseLineItem.tax_type)
+            stmt = (
+                select(
+                    ExpenseLineItem.tax_type.label("tax_type"),
+                    expense_tax_rate.label("tax_rate"),
+                    func.count(func.distinct(Expense.id)).label("document_count"),
+                    func.coalesce(
+                        func.sum(ExpenseLineItem.tax_amount), Decimal("0")
+                    ).label("tax_amount"),
+                    func.coalesce(
+                        func.sum(ExpenseLineItem.line_total), Decimal("0")
+                    ).label("taxable_value"),
+                )
+                .select_from(ExpenseLineItem)
+                .join(Expense, ExpenseLineItem.expense_id == Expense.id)
+                .where(*exp_conds)
+                .group_by(ExpenseLineItem.tax_type, expense_tax_rate)
+                .order_by(
+                    func.sum(ExpenseLineItem.tax_amount).desc(),
+                    ExpenseLineItem.tax_type.asc(),
+                    expense_tax_rate.asc().nulls_last(),
+                )
+            )
+
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in tax_by_type_purchases")
+            raise DatabaseException("Failed to aggregate purchase tax by type") from exc
+
+    # Aged Receivables
+
+    def aged_receivables_summary(self, currency: str, as_of_date: date) -> list:
+        """Flat rows: (customer_name, bucket, amount) for aged AR pivot.
+
+        Buckets: current (not yet due), 1_30, 31_60, 61_90, 90_plus.
+        The curoff is a request-scoped organization-local date bind
+        Only outstanding invoices: SENT / PARTIAL / OVERDUE with balance_due > 0.
+        """
+
+        entity = customer_display_name()
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Invoice.due_date
+        bucket = case(
+            (cutoff <= Invoice.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        ).label("bucket")
+
+        try:
+            stmt = (
+                select(
+                    Customer.id.label("customer_id"),
+                    entity.label("customer_name"),
+                    bucket,
+                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
+                )
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.id)
+                .where(*_aged_invoice_conds(currency, cutoff))
+                .group_by(Customer.id, entity, bucket)
+                .order_by(entity.asc(), Customer.id.asc(), bucket.asc())
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_receivables_summary")
+            raise DatabaseException("Failed to aggregate aged receivables") from exc
+
+    def aged_receivables_totals(self, currency: str, as_of_date: date) -> dict:
+        """Total balance_due bucketed across all outstanding invoices.
+
+        Used for the MetricCards at the top of the Aged Receivables tab.
+        Returns {bucket_key: Decimal}.
+        """
+
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Invoice.due_date
+        bucket = case(
+            (cutoff <= Invoice.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        ).label("bucket")
+
+        try:
+            stmt = (
+                select(
+                    bucket,
+                    func.coalesce(func.sum(Invoice.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
+                )
+                .select_from(Invoice)
+                .where(*_aged_invoice_conds(currency, cutoff))
+                .group_by(bucket)
+            )
+            rows = self._db.execute(stmt).all()
+            return {row.bucket: Decimal(str(row.amount)) for row in rows}
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_receivables_totals")
+            raise DatabaseException("Failed to total aged receivables") from exc
+
+    def aged_receivables_detail(
+        self,
+        currency: str,
+        as_of_date: date,
+        *,
+        offset: int = 0,
+        limit: int = 11,
+    ) -> list:
+        """Individual outstanding invoice rows with bucket and days_overdue.
+
+        Ordered oldest-due first (ascending due_date). Fetch limit+1 for
+        sentinel pagination (no COUNT needed).
+        days_overdue: negative = not yet due; 0 = due today; positive = overdue.
+        """
+
+        entity = customer_display_name()
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Invoice.due_date
+        bucket = case(
+            (cutoff <= Invoice.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        ).label("bucket")
+
+        try:
+            stmt = (
+                select(
+                    Invoice.id.label("id"),
+                    entity.label("customer_name"),
+                    Invoice.invoice_reference.label("reference"),
+                    Invoice.invoice_number.label("number"),
+                    Invoice.transaction_date.label("transaction_date"),
+                    Invoice.due_date.label("due_date"),
+                    Invoice.status.label("status"),
+                    Invoice.total_due.label("total_due"),
+                    Invoice.amount_paid.label("amount_paid"),
+                    Invoice.balance_due.label("balance_due"),
+                    bucket,
+                    days_late.label("days_overdue"),
+                )
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.id)
+                .where(*_aged_invoice_conds(currency, cutoff))
+                .order_by(Invoice.due_date.asc(), Invoice.id.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_receivables_detail")
+            raise DatabaseException("Failed to load aged receivables detail") from exc
+
+    # Aged Payables
+
+    def aged_payables_summary(self, currency: str, as_of_date: date) -> list:
+        """Flat rows: (vendor_name, bucket, amount) for aged AP pivot.
+
+        Expenses: buckets by due_date.
+        POs: always "current" — PurchaseOrder has no due_date field.
+        Returns rows with columns: vendor_id, vendor_name, bucket, amount.
+        """
+
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Expense.due_date
+        bucket = case(
+            (cutoff <= Expense.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        )
+        try:
+            stmt = (
+                select(
+                    Vendor.id.label("vendor_id"),
+                    Vendor.vendor_name.label("vendor_name"),
+                    bucket.label("bucket"),
+                    func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
+                )
+                .select_from(Expense)
+                .join(Vendor, Expense.vendor_id == Vendor.id)
+                .where(*_aged_expense_conds(currency, cutoff))
+                .group_by(Vendor.id, Vendor.vendor_name, bucket)
+                .order_by(
+                    Vendor.vendor_name.asc(),
+                    Vendor.id.asc(),
+                    bucket.asc(),
+                )
+            )
+
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_payables_summary")
+            raise DatabaseException("Failed to aggregate aged payables") from exc
+
+    def aged_payables_totals(self, currency: str, as_of_date: date) -> dict:
+        """Total outstanding balance by bucket across ALL unpaid expenses.
+
+        Used for the 5 MetricCards on the Aged Payables tab.
+        Returns {bucket_key: Decimal}.
+        """
+
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Expense.due_date
+        bucket = case(
+            (cutoff <= Expense.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        )
+        try:
+            stmt = (
+                select(
+                    bucket.label("bucket"),
+                    func.coalesce(func.sum(Expense.balance_due), Decimal("0")).label(
+                        "amount"
+                    ),
+                )
+                .select_from(Expense)
+                .where(*_aged_expense_conds(currency, cutoff))
+                .group_by(bucket)
+            )
+            rows = self._db.execute(stmt).all()
+            return {row.bucket: Decimal(str(row.amount)) for row in rows}
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_payables_totals")
+            raise DatabaseException("Failed to total aged payables") from exc
+
+    def aged_payables_detail(
+        self,
+        currency: str,
+        as_of_date: date,
+        *,
+        offset: int = 0,
+        limit: int = 11,
+    ) -> list:
+        """Individual expense for the aged AP detail table.
+        bucket by due_date; days_overdue = CURRENT_DATE - due_date.
+        Ordered oldest-due first.
+        """
+
+        cutoff = _as_of_date_bind(as_of_date)
+        days_late = cutoff - Expense.due_date
+        bucket = case(
+            (cutoff <= Expense.due_date, "current"),
+            (days_late.between(1, 30), "1_30"),
+            (days_late.between(31, 60), "31_60"),
+            (days_late.between(61, 90), "61_90"),
+            else_="90_plus",
+        )
+        try:
+            stmt = (
+                select(
+                    Expense.id.label("source_id"),
+                    literal("expense").label("source_type"),
+                    Vendor.vendor_name.label("vendor_name"),
+                    Expense.expense_reference.label("reference"),
+                    Expense.expense_number.label("number"),
+                    Expense.expense_date.label("entry_date"),
+                    Expense.due_date.label("due_date"),
+                    Expense.status.label("status"),
+                    Expense.total_due.label("total_due"),
+                    Expense.amount_paid.label("amount_paid"),
+                    Expense.balance_due.label("balance_due"),
+                    bucket.label("bucket"),
+                    days_late.label("days_overdue"),
+                )
+                .select_from(Expense)
+                .join(Vendor, Expense.vendor_id == Vendor.id)
+                .where(*_aged_expense_conds(currency, cutoff))
+                .order_by(Expense.due_date.asc(), Expense.id.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+
+            return list(self._db.execute(stmt).all())
+        except SQLAlchemyError as exc:
+            logger.exception("Database error in aged_payables_detail")
+            raise DatabaseException("Failed to load aged payables detail") from exc

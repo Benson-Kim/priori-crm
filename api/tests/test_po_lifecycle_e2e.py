@@ -46,6 +46,7 @@ _postgres_only = pytest.mark.skipif(
     not USING_POSTGRES,
     reason="Lifecycle flow uses FOR UPDATE (_get_locked), a PostgreSQL construct.",
 )
+TAX_POINT = date(2026, 1, 15)
 
 
 def _vendor(db, *, email="ap@acme.test", currency=Currency.KES) -> Vendor:
@@ -91,7 +92,9 @@ class TestCalculationParity:
         # numbers Quotes/Expenses produce for identical input.
         ref_subtotal, ref_tax = sum_line_totals(build_line_items(items))
 
-        svc_built = PurchaseOrderService._build_line_items(items)
+        svc_built = PurchaseOrderService._build_line_items(
+            items, tax_point_date=TAX_POINT
+        )
         svc_subtotal, svc_tax = PurchaseOrderService._sum_line_totals(svc_built)
 
         assert (svc_subtotal, svc_tax) == (ref_subtotal, ref_tax)
@@ -100,7 +103,7 @@ class TestCalculationParity:
     def test_zero_rated_has_no_tax(self) -> None:
         # VAT_0 is the zero-rated tax type: subtotal accrues, tax is 0.
         items = [_line_item(tax_type=TaxType.VAT_0)]
-        built = PurchaseOrderService._build_line_items(items)
+        built = PurchaseOrderService._build_line_items(items, tax_point_date=TAX_POINT)
         subtotal, tax_total = PurchaseOrderService._sum_line_totals(built)
         assert tax_total == Decimal("0.00")
         assert subtotal == Decimal("200.00")

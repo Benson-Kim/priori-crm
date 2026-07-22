@@ -130,6 +130,8 @@ class OwnerProfileResponse(BaseModel):
     # so the JSON never carries a path.
     has_logo: bool = Field(False, alias="hasLogo")
     updated_at: datetime | None = Field(None, alias="updatedAt")
+    reporting_timezone: str = Field(alias="reportingTimezone")
+    reporting_date: str = Field(alias="reportingDate")
 
     model_config = {"populate_by_name": True, "from_attributes": True}
 

@@ -18,6 +18,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.common.search import build_search_clause
 from app.common.statement import (
     EXCLUDED_STATEMENT_STATUSES,
@@ -246,7 +247,7 @@ class CustomerService(ServiceBase):
         self,
         customer_id: uuid.UUID,
         data: CustomerUpdate,
-        expected_version: int | None = None,
+        expected_version: int,
     ) -> Customer:
         """Update an existing customer with optimistic locking
 
@@ -698,7 +699,7 @@ class CustomerService(ServiceBase):
         Calculate financial summary for customer overview.
         """
         try:
-            today = date.today()
+            today = reporting_date()
 
             row = (
                 self._db.query(

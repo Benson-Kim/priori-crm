@@ -88,7 +88,9 @@ class TaxType(StrEnum):
     """Tax types for invoice line items."""
 
     VAT_16 = "vat_16"  # 16% VAT (Kenya standard)
-    VAT_8 = "vat_8"  # 8% VAT (Kenya petroleum/fuel)
+    VAT_8 = "vat_8"  # Legacy unscoped 8% records; not valid for new documents
+    PETROLEUM_VAT_13 = "petroleum_vat_13"
+    PETROLEUM_VAT_8 = "petroleum_vat_8"
     VAT_0 = "vat_0"  # 0% VAT (zero-rated)
     EXEMPT = "exempt"  # Exempt from VAT
     NO_TAX = "no_tax"  # No tax

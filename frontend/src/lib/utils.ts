@@ -279,3 +279,26 @@ export function saveBlob(blob: Blob, filename: string): void {
     URL.revokeObjectURL(url);
   }
 }
+
+export function responseFilename(
+  contentDisposition: string | null
+): string | undefined {
+  if (!contentDisposition) return undefined;
+  const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    const value = encoded.replace(/^"|"$/g, "");
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+}
+
+export function chooseDownloadFilename(
+  serverFilename: string | undefined,
+  fallback: string
+): string {
+  return serverFilename?.trim() || fallback;
+}

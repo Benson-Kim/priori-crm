@@ -167,7 +167,7 @@ class TestInvoiceStateMachine:
         )
 
         with pytest.raises(BadRequestException):
-            service.update(invoice.id, payload)
+            service.update(invoice.id, payload, expected_version=invoice.version)
 
 
 # expenses: unified payment settle path

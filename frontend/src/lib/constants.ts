@@ -41,6 +41,8 @@ export type CurrencyOption = (typeof CURRENCY_OPTIONS)[number]["value"];
  */
 export const TAX_RATES: Record<string, number> = {
   vat_16: 0.16,
+  petroleum_vat_13: 0.13,
+  petroleum_vat_8: 0.08,
   vat_8: 0.08,
   vat_0: 0.0,
   no_tax: 0.0,
@@ -68,11 +70,6 @@ export const TAX_CATEGORY_OPTIONS = [
   { value: "no_tax", label: "No Tax" },
 ] as const;
 
-export const VAT_RATE_OPTIONS = [
-  { value: "16", label: "16%" },
-  { value: "8", label: "8%" },
-  { value: "0", label: "0%" },
-] as const;
 
 export const DEFAULT_DUE_DATE_DAYS = 30;
 
