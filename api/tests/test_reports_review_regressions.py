@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 
 from app.common.excel import ExcelExporter
 from app.common.exceptions import ValidationException
+from app.common.financial import quantize_money
 from app.common.pagination import PaginationParams
 from app.constants.enums import (
     Currency,
@@ -105,6 +106,7 @@ def _invoice(
             unit_price=subtotal,
             line_total=subtotal,
             tax_type=tax_type,
+            taxable_value=subtotal,
             tax_amount=line_tax,
         )
     )
@@ -314,10 +316,10 @@ def test_line_taxable_values_allocate_invoice_discount_across_tax_types(db):
         discount_type=DiscountType.PERCENTAGE,
         discount_percentage=Decimal("20.00"),
         vat_enabled=False,
-        tax_total=Decimal("32.00"),
-        total_due=Decimal("272.00"),
+        tax_total=Decimal("25.60"),
+        total_due=Decimal("265.60"),
         amount_paid=Decimal("0.00"),
-        balance_due=Decimal("272.00"),
+        balance_due=Decimal("265.60"),
     )
     db.add(invoice)
     db.flush()
@@ -332,7 +334,8 @@ def test_line_taxable_values_allocate_invoice_discount_across_tax_types(db):
                 unit_price=Decimal("200.00"),
                 line_total=Decimal("200.00"),
                 tax_type=TaxType.VAT_16,
-                tax_amount=Decimal("32.00"),
+                taxable_value=Decimal("160.00"),
+                tax_amount=Decimal("25.60"),
             ),
             InvoiceLineItem(
                 invoice_id=invoice.id,
@@ -343,6 +346,7 @@ def test_line_taxable_values_allocate_invoice_discount_across_tax_types(db):
                 unit_price=Decimal("100.00"),
                 line_total=Decimal("100.00"),
                 tax_type=TaxType.VAT_0,
+                taxable_value=Decimal("80.00"),
                 tax_amount=Decimal("0.00"),
             ),
         ]
@@ -354,6 +358,10 @@ def test_line_taxable_values_allocate_invoice_discount_across_tax_types(db):
 
     assert sales[("vat_16", Decimal("0.1600"))].taxable_value == Decimal("160.00")
     assert sales[("vat_0", Decimal("0.0000"))].taxable_value == Decimal("80.00")
+    standard = sales[("vat_16", Decimal("0.1600"))]
+    assert standard.tax_amount == quantize_money(
+        standard.taxable_value * standard.tax_rate
+    )
     assert sum(
         (row.taxable_value for row in report.sales_by_tax_type), Decimal("0")
     ) == (invoice.total_due - invoice.tax_total)
