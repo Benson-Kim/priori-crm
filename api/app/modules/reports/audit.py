@@ -1,12 +1,12 @@
 """Authorization and append-only access auditing for financial reports."""
 
+from pathlib import Path
 import logging
 import uuid
 from collections.abc import Generator
 from datetime import date
 
 from fastapi import Request
-from sqlalchemy.orm import sessionmaker
 
 from app.common.audit import record_audit_event
 from app.common.dependencies import CurrentUser, DbSession
@@ -71,26 +71,64 @@ def _filters(request: Request) -> dict[str, str | bool]:
     return filters
 
 
-def _write_audit(
-    request_db: DbSession,
+def _append_audit(
+    db: DbSession,
     *,
     actor_id,
     report_type: str,
     action: str,
     payload: dict,
 ) -> None:
-    """Commit the audit independently so failed report requests remain visible."""
-    AuditSession = sessionmaker(bind=request_db.get_bind(), expire_on_commit=False)
-    with AuditSession() as audit_db:
-        record_audit_event(
-            audit_db,
-            actor_id=actor_id,
-            entity_type="financial_report",
-            entity_id=uuid.uuid5(_REPORT_AUDIT_NAMESPACE, report_type),
-            action=action,
-            after=payload,
+    """Append one audit row using the request-scoped database session."""
+    record_audit_event(
+        db,
+        actor_id=actor_id,
+        entity_type="financial_report",
+        entity_id=uuid.uuid5(_REPORT_AUDIT_NAMESPACE, report_type),
+        action=action,
+        after=payload,
+    )
+
+
+def _payload(
+    request: Request,
+    *,
+    report_type: str,
+    success: bool,
+    failure: str | None,
+    period: dict[str, str | None],
+) -> dict:
+    return {
+        "request_id": getattr(request.state, "request_id", None),
+        "success": success,
+        "failure": failure,
+        "report_type": report_type,
+        "period": period,
+        "currency": (
+            "KES"
+            if report_type == "vat_reconciliation_estimate"
+            else request.query_params.get("currency", "KES")
+        ),
+        "filters": _filters(request),
+        "export_metrics": getattr(request.state, "report_export_metrics", None),
+        "deployment_boundary": "single_organization",
+    }
+
+
+def _remove_unserved_export(request: Request) -> None:
+    """Remove a generated file when fail-closed auditing blocks its response."""
+    export_path = getattr(request.state, "report_export_path", None)
+    if not export_path:
+        return
+
+    try:
+        Path(export_path).unlink(missing_ok=True)
+    except OSError:
+        logger.warning(
+            "Failed to remove unserved report export",
+            extra={"export_path": str(export_path)},
+            exc_info=True,
         )
-        audit_db.commit()
 
 
 def authorize_and_audit_report_access(
@@ -98,11 +136,10 @@ def authorize_and_audit_report_access(
     db: DbSession,
     current_user: CurrentUser,
 ) -> Generator[None, None, None]:
-    """Default-deny report access and audit success or failure without payloads."""
+    """Default-deny report access with same-session, fail-closed auditing."""
     action = "report_export" if request.url.path.endswith("/export") else "report_view"
     report_type = _report_type(request.url.path)
-    success = False
-    failure: str | None = None
+    period = _period_context(request)
     try:
         role = UserRole(current_user.role)
         allowed = (
@@ -113,33 +150,48 @@ def authorize_and_audit_report_access(
                 "Financial reports require an administrator or manager role"
             )
         yield
-        success = True
     except Exception as exc:
-        failure = type(exc).__name__
-        raise
-    finally:
-        payload = {
-            "request_id": getattr(request.state, "request_id", None),
-            "success": success,
-            "failure": failure,
-            "report_type": report_type,
-            "period": _period_context(request),
-            "currency": request.query_params.get("currency", "KES"),
-            "filters": _filters(request),
-            "exported_row_count": getattr(
-                request.state, "report_export_row_count", None
-            ),
-            "deployment_boundary": "single_organization",
-        }
+        db.rollback()
         try:
-            _write_audit(
+            _append_audit(
                 db,
                 actor_id=current_user.id,
                 report_type=report_type,
                 action=action,
-                payload=payload,
+                payload=_payload(
+                    request,
+                    report_type=report_type,
+                    success=False,
+                    failure=type(exc).__name__,
+                    period=period,
+                ),
             )
+            db.commit()
         except Exception:
-            logger.exception("Failed to persist financial report access audit")
-            if success:
-                raise
+            db.rollback()
+            logger.exception("Failed to persist failed financial report audit")
+        _remove_unserved_export(request)
+        raise
+    else:
+        try:
+            if db.in_transaction():
+                db.commit()
+            _append_audit(
+                db,
+                actor_id=current_user.id,
+                report_type=report_type,
+                action=action,
+                payload=_payload(
+                    request,
+                    report_type=report_type,
+                    success=True,
+                    failure=None,
+                    period=period,
+                ),
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            _remove_unserved_export(request)
+            logger.exception("Failed to persist successful financial report audit")
+            raise
