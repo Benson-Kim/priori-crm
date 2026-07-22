@@ -8,11 +8,10 @@ the Invoices, Quotes, and Expenses modules. Any future tax type must be added he
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from app.common.exceptions import BadRequestException
-from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, TaxType
 
 # Money Rounding Policy
@@ -251,6 +250,58 @@ def sum_line_totals(line_items_data: list[dict]) -> tuple[Decimal, Decimal]:
     return subtotal, tax_total
 
 
+def allocate_discounted_line_taxes(
+    line_items_data: list[dict],
+    discount_value: Decimal,
+) -> list[dict]:
+    """Allocate a document discount across line taxable bases and recalculate tax.
+
+    The gross ``line_total`` values remain unchanged so the invoice subtotal and
+    displayed document discount retain their existing meaning. ``taxable_value``
+    stores each line's post-discount base, while ``tax_amount`` is rounded from
+    that base using the shared money policy.
+
+    The final line absorbs any cent-level allocation remainder so the persisted
+    taxable bases always sum exactly to ``subtotal - discount_value``.
+    """
+    subtotal = sum(
+        (Decimal(str(item["line_total"])) for item in line_items_data),
+        Decimal("0.00"),
+    )
+    net_subtotal = quantize_money(max(subtotal - discount_value, Decimal("0.00")))
+
+    if subtotal <= 0:
+        for item in line_items_data:
+            item["taxable_value"] = Decimal("0.00")
+            item["tax_amount"] = Decimal("0.00")
+        return line_items_data
+
+    exact_shares = [
+        Decimal(str(item["line_total"])) * net_subtotal / subtotal
+        for item in line_items_data
+    ]
+    taxable_values = [
+        share.quantize(MONEY_QUANTUM, rounding=ROUND_DOWN) for share in exact_shares
+    ]
+    remaining_cents = int(
+        (net_subtotal - sum(taxable_values, Decimal("0.00"))) / MONEY_QUANTUM
+    )
+    remainder_order = sorted(
+        range(len(line_items_data)),
+        key=lambda index: (exact_shares[index] - taxable_values[index], -index),
+        reverse=True,
+    )
+    for index in remainder_order[:remaining_cents]:
+        taxable_values[index] += MONEY_QUANTUM
+
+    for item, taxable_value in zip(line_items_data, taxable_values, strict=True):
+        tax_rate = get_tax_rate(TaxType(item["tax_type"]))
+        item["taxable_value"] = taxable_value
+        item["tax_amount"] = quantize_money(taxable_value * tax_rate)
+
+    return line_items_data
+
+
 # Document-level (subtotal) VAT
 
 
@@ -314,49 +365,3 @@ def calculate_discount(
     if discount_type == DiscountType.PERCENTAGE and discount_percentage:
         return quantize_money(subtotal * discount_percentage / Decimal("100"))
     return Decimal("0.00")
-
-
-# Overdue Status Calculation
-
-
-# Single source of truth for which statuses can never be overdue/expired.
-DEFAULT_TERMINAL_STATUSES: frozenset[str] = frozenset({"paid", "canceled"})
-
-
-def check_is_overdue(
-    status: str,
-    due_date: date,
-    terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
-    *,
-    as_of_date: date | None = None,
-) -> bool:
-    """
-    Check if a record is overdue/expired based on status and due date.
-
-    The single definition of "past due": the status is not terminal and the
-    due date is in the past. ``terminal_statuses`` lets each document type
-    supply the statuses that can't be overdue/expired (e.g. invoices use
-    paid/canceled; quotes use approved/invoiced).
-    """
-
-    cutoff = as_of_date or reporting_date()
-    normalized_terminal = {s.lower() for s in terminal_statuses}
-    return status.lower() not in normalized_terminal and due_date < cutoff
-
-
-def calculate_days_overdue(
-    status: str,
-    due_date: date,
-    terminal_statuses: frozenset[str] | set[str] = DEFAULT_TERMINAL_STATUSES,
-    *,
-    as_of_date: date | None = None,
-) -> int:
-    """
-    Calculate the number of days a record is overdue/expired.
-    Returns 0 if not overdue.
-    """
-
-    cutoff = as_of_date or reporting_date()
-    if not check_is_overdue(status, due_date, terminal_statuses, as_of_date=cutoff):
-        return 0
-    return (cutoff - due_date).days

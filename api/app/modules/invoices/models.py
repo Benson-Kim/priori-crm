@@ -19,7 +19,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.common.database import Base
-from app.common.financial import calculate_days_overdue, check_is_overdue, get_tax_rate
+from app.common.financial import get_tax_rate
+from app.common.reporting_time import calculate_days_overdue, check_is_overdue
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -408,6 +409,10 @@ class InvoiceLineItem(Base):
             "tax_amount >= 0",
             name="ck_line_items_tax_non_negative",
         ),
+        CheckConstraint(
+            "taxable_value IS NULL OR taxable_value >= 0",
+            name="ck_line_items_taxable_value_non_negative",
+        ),
         Index("ix_line_items_invoice_id", "invoice_id"),
         UniqueConstraint(
             "invoice_id", "line_number", name="uq_line_items_invoice_line_number"
@@ -471,6 +476,12 @@ class InvoiceLineItem(Base):
         nullable=False,
         default=TaxType.VAT_16,
         comment="Tax type for this line",
+    )
+
+    taxable_value: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 2),
+        nullable=True,
+        comment="Post-discount taxable base; NULL marks an unreconciled legacy line",
     )
 
     tax_amount: Mapped[Decimal] = mapped_column(

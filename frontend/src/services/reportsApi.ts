@@ -297,6 +297,7 @@ export const TAX_TYPE_LABELS: Record<string, string> = {
   vat_custom: "Custom VAT",
   exempt: "Exempt",
   no_tax: "No Tax",
+  unreconciled_historical: "Historical Stored VAT (Base Unavailable)",
 };
 
 export function formatTaxTypeLabel(row: TaxByTypeRow): string {

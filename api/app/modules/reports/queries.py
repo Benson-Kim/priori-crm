@@ -119,6 +119,24 @@ def _expense_outstanding_conds() -> list[Any]:
     ]
 
 
+def _aged_invoice_conds(currency: str, cutoff: Any) -> list[Any]:
+    """Outstanding invoices that existed on the requested aging date."""
+    return [
+        *_invoice_outstanding_conds(),
+        Invoice.transaction_date <= cutoff,
+        Invoice.currency == currency,
+    ]
+
+
+def _aged_expense_conds(currency: str, cutoff: Any) -> list[Any]:
+    """Outstanding expenses that existed on the requested aging date."""
+    return [
+        *_expense_outstanding_conds(),
+        Expense.expense_date <= cutoff,
+        Expense.currency == currency,
+    ]
+
+
 def _as_of_date_bind(as_of_date: date):
     """Return a typed SQL bind for the one request-scoped accounting cutoff."""
     return bindparam("as_of_date", value=as_of_date, type_=Date())
@@ -1012,14 +1030,6 @@ class ReportsRepository:
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
             line_tax_rate = _line_tax_rate(InvoiceLineItem.tax_type)
-            net_taxable_base = Invoice.total_due - Invoice.tax_total
-            discounted_line_value = case(
-                (
-                    Invoice.subtotal > 0,
-                    InvoiceLineItem.line_total * net_taxable_base / Invoice.subtotal,
-                ),
-                else_=Decimal("0"),
-            )
             line_branch = (
                 select(
                     InvoiceLineItem.tax_type.label("tax_type"),
@@ -1028,14 +1038,37 @@ class ReportsRepository:
                     func.coalesce(
                         func.sum(InvoiceLineItem.tax_amount), Decimal("0")
                     ).label("tax_amount"),
-                    func.coalesce(func.sum(discounted_line_value), Decimal("0")).label(
-                        "taxable_value"
-                    ),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.taxable_value), Decimal("0")
+                    ).label("taxable_value"),
                 )
                 .select_from(InvoiceLineItem)
                 .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
-                .where(*inv_conds, Invoice.vat_enabled.is_(False))
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(False),
+                    InvoiceLineItem.taxable_value.is_not(None),
+                )
                 .group_by(InvoiceLineItem.tax_type, line_tax_rate)
+            )
+
+            legacy_branch = (
+                select(
+                    literal("unreconciled_historical").label("tax_type"),
+                    literal(None).label("tax_rate"),
+                    func.count(func.distinct(Invoice.id)).label("document_count"),
+                    func.coalesce(
+                        func.sum(InvoiceLineItem.tax_amount), Decimal("0")
+                    ).label("tax_amount"),
+                    literal(Decimal("0")).label("taxable_value"),
+                )
+                .select_from(InvoiceLineItem)
+                .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
+                .where(
+                    *inv_conds,
+                    Invoice.vat_enabled.is_(False),
+                    InvoiceLineItem.taxable_value.is_(None),
+                )
             )
 
             inv_tax_type = _document_tax_type(Invoice.vat_rate)
@@ -1059,7 +1092,9 @@ class ReportsRepository:
                 .group_by(inv_tax_type, Invoice.vat_rate)
             )
 
-            combined = union_all(line_branch, doc_branch).subquery("sales_tax_by_type")
+            combined = union_all(line_branch, legacy_branch, doc_branch).subquery(
+                "sales_tax_by_type"
+            )
             stmt = (
                 select(
                     combined.c.tax_type,
@@ -1148,10 +1183,7 @@ class ReportsRepository:
                 )
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
-                .where(
-                    *_invoice_outstanding_conds(),
-                    Invoice.currency == currency,
-                )
+                .where(*_aged_invoice_conds(currency, cutoff))
                 .group_by(Customer.id, entity, bucket)
                 .order_by(entity.asc(), Customer.id.asc(), bucket.asc())
             )
@@ -1186,10 +1218,7 @@ class ReportsRepository:
                     ),
                 )
                 .select_from(Invoice)
-                .where(
-                    *_invoice_outstanding_conds(),
-                    Invoice.currency == currency,
-                )
+                .where(*_aged_invoice_conds(currency, cutoff))
                 .group_by(bucket)
             )
             rows = self._db.execute(stmt).all()
@@ -1242,10 +1271,7 @@ class ReportsRepository:
                 )
                 .select_from(Invoice)
                 .join(Customer, Invoice.customer_id == Customer.id)
-                .where(
-                    *_invoice_outstanding_conds(),
-                    Invoice.currency == currency,
-                )
+                .where(*_aged_invoice_conds(currency, cutoff))
                 .order_by(Invoice.due_date.asc(), Invoice.id.desc())
                 .offset(offset)
                 .limit(limit)
@@ -1286,10 +1312,7 @@ class ReportsRepository:
                 )
                 .select_from(Expense)
                 .join(Vendor, Expense.vendor_id == Vendor.id)
-                .where(
-                    *_expense_outstanding_conds(),
-                    Expense.currency == currency,
-                )
+                .where(*_aged_expense_conds(currency, cutoff))
                 .group_by(Vendor.id, Vendor.vendor_name, bucket)
                 .order_by(
                     Vendor.vendor_name.asc(),
@@ -1328,10 +1351,7 @@ class ReportsRepository:
                     ),
                 )
                 .select_from(Expense)
-                .where(
-                    *_expense_outstanding_conds(),
-                    Expense.currency == currency,
-                )
+                .where(*_aged_expense_conds(currency, cutoff))
                 .group_by(bucket)
             )
             rows = self._db.execute(stmt).all()
@@ -1381,10 +1401,7 @@ class ReportsRepository:
                 )
                 .select_from(Expense)
                 .join(Vendor, Expense.vendor_id == Vendor.id)
-                .where(
-                    *_expense_outstanding_conds(),
-                    Expense.currency == currency,
-                )
+                .where(*_aged_expense_conds(currency, cutoff))
                 .order_by(Expense.due_date.asc(), Expense.id.desc())
                 .offset(offset)
                 .limit(limit)

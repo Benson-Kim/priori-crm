@@ -83,6 +83,7 @@ def _tax_type_label(tax_type: str, tax_rate: Any) -> str:
         "vat_0": "0% VAT (Zero-rated)",
         "exempt": "Exempt",
         "no_tax": "No Tax",
+        "unreconciled_historical": "Historical Stored VAT (Base Unavailable)",
     }
     if tax_type != "vat_custom":
         return labels.get(tax_type, tax_type)
