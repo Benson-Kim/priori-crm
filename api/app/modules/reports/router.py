@@ -12,12 +12,16 @@ Aged AR/AP endpoints: point-in-time, no period filter.
 """
 
 import logging
+import os
+import tempfile
+from collections.abc import Iterator
 from datetime import date
-from io import BytesIO
+from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
+from starlette.background import BackgroundTask
 
 from app.common.dependencies import ReportsServiceDep
 from app.common.excel import ExcelExporter
@@ -45,9 +49,40 @@ from app.modules.statements.schemas import RangePreset, ResolvedPeriod
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[Depends(authorize_and_audit_report_access)])
+router = APIRouter(
+    dependencies=[
+        Depends(authorize_and_audit_report_access, scope="function"),
+    ]
+)
 
 _exporter = ExcelExporter()
+_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _temporary_xlsx_path() -> str:
+    fd, path = tempfile.mkstemp(prefix="priori-report-", suffix=".xlsx")
+    os.close(fd)
+    return path
+
+
+def _remove_export(path: str) -> None:
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        logger.warning(
+            "Failed to remove report export",
+            exc_info=True,
+            extra={"path": path},
+        )
+
+
+def _file_response(path: str, filename: str) -> FileResponse:
+    return FileResponse(
+        path,
+        media_type=_XLSX_MEDIA_TYPE,
+        filename=filename,
+        background=BackgroundTask(_remove_export, path),
+    )
 
 
 # Shared query-parameter annotations (mirrors statements router)
@@ -179,10 +214,11 @@ def get_sales_counts(
     "/sales/export",
     summary="Export sales ledger to Excel",
     description="Download the full sales ledger (no pagination) as .xlsx.",
-    response_class=StreamingResponse,
+    response_class=FileResponse,
 )
 async def export_sales(
     service: ReportsServiceDep,
+    request: Request,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
     date_to: DateToParam = None,
@@ -190,20 +226,34 @@ async def export_sales(
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
 
-    def build_export() -> bytes:
-        rows = service.export_sales_ledger(
-            period, currency, batch_size=settings.BATCH_SIZE
-        )
-        return _exporter.export_sales_report(rows, str(currency))
+    path = _temporary_xlsx_path()
 
-    xlsx_bytes = await run_export(build_export)
+    def build_export() -> int:
+        preflight_count = service.get_sales_ledger_total(period, currency)
+        service.validate_export_size(preflight_count, "Sales")
+        actual_count = 0
+
+        def counted_rows() -> Iterator[SalesLedgerEntry]:
+            nonlocal actual_count
+            for row in service.export_sales_ledger(
+                period, currency, batch_size=settings.BATCH_SIZE
+            ):
+                actual_count += 1
+                yield row
+
+        _exporter.export_sales_report(counted_rows(), str(currency), destination=path)
+        return actual_count
+
+    try:
+        actual_count = await run_export(build_export)
+    except BaseException:
+        _remove_export(path)
+        raise
+
+    request.state.report_export_metrics = {"exported_data_row_count": actual_count}
+    request.state.report_export_path = path
     filename = f"sales-report-{period.date_from}-{period.date_to}.xlsx"
-
-    return StreamingResponse(
-        BytesIO(xlsx_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _file_response(path, filename)
 
 
 # Purchases: Summary
@@ -285,10 +335,11 @@ def get_purchases_counts(
 @router.get(
     "/purchases/export",
     summary="Export purchases ledger to Excel",
-    response_class=StreamingResponse,
+    response_class=FileResponse,
 )
 async def export_purchases(
     service: ReportsServiceDep,
+    request: Request,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
     date_to: DateToParam = None,
@@ -296,19 +347,36 @@ async def export_purchases(
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
 
-    def build_export() -> bytes:
-        rows = service.export_purchases_ledger(
-            period, currency, batch_size=settings.BATCH_SIZE
-        )
-        return _exporter.export_purchases_report(rows, str(currency))
+    path = _temporary_xlsx_path()
 
-    xlsx_bytes = await run_export(build_export)
+    def build_export() -> int:
+        preflight_count = service.get_purchases_ledger_total(period, currency)
+        service.validate_export_size(preflight_count, "Purchases")
+        actual_count = 0
+
+        def counted_rows() -> Iterator[PurchasesLedgerEntry]:
+            nonlocal actual_count
+            for row in service.export_purchases_ledger(
+                period, currency, batch_size=settings.BATCH_SIZE
+            ):
+                actual_count += 1
+                yield row
+
+        _exporter.export_purchases_report(
+            counted_rows(), str(currency), destination=path
+        )
+        return actual_count
+
+    try:
+        actual_count = await run_export(build_export)
+    except BaseException:
+        _remove_export(path)
+        raise
+
+    request.state.report_export_metrics = {"exported_data_row_count": actual_count}
+    request.state.report_export_path = path
     filename = f"purchases-report-{period.date_from}-{period.date_to}.xlsx"
-    return StreamingResponse(
-        BytesIO(xlsx_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _file_response(path, filename)
 
 
 # Tax Report
@@ -366,41 +434,74 @@ def list_excluded_tax_transactions(
 @router.get(
     "/taxes/export",
     summary="Export VAT reconciliation estimate to Excel",
-    response_class=StreamingResponse,
+    response_class=FileResponse,
 )
 async def export_taxes(
     service: ReportsServiceDep,
+    request: Request,
     range_preset: RangeParam = RangePreset.THIS_MONTH,
     date_from: DateFromParam = None,
     date_to: DateToParam = None,
     strict: StrictTaxParam = False,
 ) -> StreamingResponse:
     period = ResolvedPeriod.resolve(range_preset, date_from, date_to)
+    path = _temporary_xlsx_path()
 
-    def build_export() -> tuple[bytes, str]:
+    def build_export() -> tuple[str, dict[str, int]]:
         report = service.get_tax_report(period, Currency.KES, strict=strict)
-        excluded_rows = (
-            service.iter_excluded_tax_transactions(
-                period, batch_size=settings.BATCH_SIZE
-            )
-            if report.completeness.status == "partial"
-            else ()
+        fixed_row_count = (
+            3 + len(report.sales_by_tax_type) + len(report.purchases_by_tax_type)
         )
-        return (
-            _exporter.export_tax_report(report, "KES", excluded_rows),
-            report.completeness.status,
+        service.validate_export_size(
+            fixed_row_count + report.completeness.excluded_document_count,
+            "VAT reconciliation",
+            max_rows=settings.TAX_REPORT_EXPORT_MAX_ROWS,
         )
 
-    xlsx_bytes, completeness_status = await run_export(build_export)
+        actual_excluded_count = 0
+
+        def counted_excluded_rows() -> Iterator[ExcludedTaxTransaction]:
+            nonlocal actual_excluded_count
+            if report.completeness.status != "partial":
+                return
+            for row in service.iter_excluded_tax_transactions(
+                period, batch_size=settings.BATCH_SIZE
+            ):
+                actual_excluded_count += 1
+                service.validate_export_size(
+                    fixed_row_count + actual_excluded_count,
+                    "VAT reconciliation",
+                    max_rows=settings.TAX_REPORT_EXPORT_MAX_ROWS,
+                )
+                yield row
+
+        _exporter.export_tax_report(
+            report,
+            "KES",
+            counted_excluded_rows(),
+            destination=path,
+        )
+        return report.completeness.status, {
+            "summary_metric_row_count": 3,
+            "sales_breakdown_row_count": len(report.sales_by_tax_type),
+            "purchase_breakdown_row_count": len(report.purchases_by_tax_type),
+            "excluded_document_count": actual_excluded_count,
+            "workbook_data_row_count": fixed_row_count + actual_excluded_count,
+        }
+
+    try:
+        completeness_status, export_metrics = await run_export(build_export)
+    except BaseException:
+        _remove_export(path)
+        raise
+
+    request.state.report_export_metrics = export_metrics
+    request.state.report_export_path = path
     prefix = "partial-" if completeness_status == "partial" else ""
     filename = (
         f"{prefix}vat-reconciliation-estimate-{period.date_from}-{period.date_to}.xlsx"
     )
-    return StreamingResponse(
-        BytesIO(xlsx_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _file_response(path, filename)
 
 
 # Aged Receivables
