@@ -73,7 +73,6 @@ class ReportsService:
         self.current_user = current_user
         self.repo = ReportsRepository(db)
 
-
     @staticmethod
     def validate_export_size(
         row_count: int,
@@ -82,13 +81,12 @@ class ReportsService:
         max_rows: int | None = None,
     ) -> None:
         """Reject an oversized synchronous export before or during generation."""
-        limit = settings.REPORT_EXPORT_MAX_ROWS if max_rows is None else max_rows
+        limit = settings.TAX_REPORT_EXPORT_MAX_ROWS if max_rows is None else max_rows
         if row_count > limit:
             raise BadRequestException(
                 f"{report_name} report has more than {limit:,} rows; narrow the "
                 "reporting period before exporting"
             )
-        
 
     # Sales: Summary
 

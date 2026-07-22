@@ -91,7 +91,6 @@ class Settings(BaseSettings):
     # Exports: cap how many heavy (Excel/PDF) generations run concurrently
     # per process and reject oversized synchronous report workbooks.
     EXPORT_MAX_CONCURRENCY: int = Field(default=4, ge=1, le=64)
-    REPORT_EXPORT_MAX_ROWS: int = Field(default=100_000, ge=1, le=1_000_000)
     TAX_REPORT_EXPORT_MAX_ROWS: int = Field(default=10_000, ge=1, le=100_000)
 
     # File Storage

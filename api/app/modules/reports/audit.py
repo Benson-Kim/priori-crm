@@ -1,10 +1,10 @@
 """Authorization and append-only access auditing for financial reports."""
 
-from pathlib import Path
 import logging
 import uuid
 from collections.abc import Generator
 from datetime import date
+from pathlib import Path
 
 from fastapi import Request
 

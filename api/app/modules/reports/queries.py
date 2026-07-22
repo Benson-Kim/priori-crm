@@ -1012,6 +1012,14 @@ class ReportsRepository:
         inv_conds = _invoice_conds(date_from, date_to, currency)
         try:
             line_tax_rate = _line_tax_rate(InvoiceLineItem.tax_type)
+            net_taxable_base = Invoice.total_due - Invoice.tax_total
+            discounted_line_value = case(
+                (
+                    Invoice.subtotal > 0,
+                    InvoiceLineItem.line_total * net_taxable_base / Invoice.subtotal,
+                ),
+                else_=Decimal("0"),
+            )
             line_branch = (
                 select(
                     InvoiceLineItem.tax_type.label("tax_type"),
@@ -1020,9 +1028,9 @@ class ReportsRepository:
                     func.coalesce(
                         func.sum(InvoiceLineItem.tax_amount), Decimal("0")
                     ).label("tax_amount"),
-                    func.coalesce(
-                        func.sum(InvoiceLineItem.line_total), Decimal("0")
-                    ).label("taxable_value"),
+                    func.coalesce(func.sum(discounted_line_value), Decimal("0")).label(
+                        "taxable_value"
+                    ),
                 )
                 .select_from(InvoiceLineItem)
                 .join(Invoice, InvoiceLineItem.invoice_id == Invoice.id)
