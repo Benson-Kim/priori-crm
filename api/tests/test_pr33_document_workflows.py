@@ -7,6 +7,7 @@ from itertools import count
 import pytest
 
 from app.common.exceptions import BadRequestException
+from app.common.financial import get_tax_rate, quantize_money
 from app.constants.enums import (
     Currency,
     CustomerStatus,
@@ -171,17 +172,26 @@ def _quote(
     tax_type: TaxType = TaxType.VAT_16,
     document_vat: bool = False,
 ) -> Quote:
+    line_total = Decimal("100.00")
+    historical_8_percent = tax_type in {
+        TaxType.VAT_8,
+        TaxType.PETROLEUM_VAT_8,
+    }
+
+    line_tax = (
+        Decimal("0.00")
+        if document_vat
+        else quantize_money(line_total * get_tax_rate(tax_type))
+    )
     quote = Quote(
         quote_number=f"QTE-WF-{suffix}",
         quote_reference=f"QT-WF-{suffix}",
         customer_id=customer.id,
-        transaction_date=(
-            date(2023, 6, 30) if tax_type == TaxType.VAT_8 else CURRENT_DATE
-        ),
+        transaction_date=(date(2023, 6, 30) if historical_8_percent else CURRENT_DATE),
         due_date=date(2026, 2, 15),
         currency=customer.currency,
         status=QuoteStatus.APPROVED,
-        subtotal=Decimal("100.00"),
+        subtotal=line_total,
         discount_type=DiscountType.PERCENTAGE,
         discount_amount=None,
         discount_percentage=Decimal("10.00"),
@@ -195,6 +205,7 @@ def _quote(
     )
     db.add(quote)
     db.flush()
+
     db.add(
         QuoteLineItem(
             quote_id=quote.id,
@@ -202,16 +213,10 @@ def _quote(
             item_name="Service",
             description="Consulting service",
             quantity=Decimal("1.00"),
-            unit_price=Decimal("100.00"),
-            line_total=Decimal("100.00"),
+            unit_price=line_total,
+            line_total=line_total,
             tax_type=TaxType.NO_TAX if document_vat else tax_type,
-            tax_amount=(
-                Decimal("0.00")
-                if document_vat
-                else Decimal("8.00")
-                if tax_type == TaxType.VAT_8
-                else Decimal("16.00")
-            ),
+            tax_amount=line_tax,
         )
     )
     db.flush()
@@ -251,7 +256,7 @@ def test_invoice_duplicate_rejects_historical_8_percent_on_current_tax_point(db)
         db,
         customer,
         transaction_date=date(2023, 6, 30),
-        tax_type=TaxType.VAT_8,
+        tax_type=TaxType.PETROLEUM_VAT_8,
     )
 
     with pytest.raises(BadRequestException):
@@ -298,7 +303,7 @@ def test_expense_duplicate_rejects_historical_8_percent_on_current_tax_point(db)
         db,
         vendor,
         expense_date=date(2023, 6, 30),
-        tax_type=TaxType.VAT_8,
+        tax_type=TaxType.PETROLEUM_VAT_8,
     )
     with pytest.raises(BadRequestException):
         ExpenseService(db).duplicate(source.id)
@@ -323,7 +328,7 @@ def test_quote_conversion_recalculates_document_vat_and_preserves_due_date(db):
     assert quote.related_invoice_id == invoice.id
 
 
-def test_quote_conversion_preserves_line_vat_and_foreign_currency(db):
+def test_quote_conversion_recalculates_line_vat_and_preserves_currency(db):
     customer = _customer(db, "QuoteUsd", currency=Currency.USD)
     quote = _quote(db, customer, "USD", document_vat=False)
 
@@ -332,9 +337,11 @@ def test_quote_conversion_preserves_line_vat_and_foreign_currency(db):
 
     assert invoice.currency == Currency.USD
     assert invoice.vat_enabled is False
-    assert invoice.tax_total == Decimal("16.00")
-    assert invoice.total_due == Decimal("106.00")
+    assert invoice.tax_total == Decimal("14.40")
+    assert invoice.total_due == Decimal("104.40")
     assert invoice.line_items[0].tax_type == TaxType.VAT_16
+    assert invoice.line_items[0].taxable_value == Decimal("90.00")
+    assert invoice.line_items[0].tax_amount == Decimal("14.40")
 
 
 def test_quote_conversion_rejects_a_due_date_before_the_invoice_date(db):
@@ -351,14 +358,37 @@ def test_quote_conversion_rejects_a_due_date_before_the_invoice_date(db):
     assert quote.related_invoice_id is None
 
 
-def test_quote_conversion_rejects_historical_8_percent_and_inactive_customer(db):
-    customer = _customer(db, "QuoteHistorical")
-    historical = _quote(db, customer, "HIST", tax_type=TaxType.VAT_8)
+def test_quote_conversion_rejects_expired_petroleum_vat_8(db):
+    customer = _customer(db, "QuotePetroleumHistorical")
+    historical = _quote(
+        db,
+        customer,
+        "PETROLEUM-HIST",
+        tax_type=TaxType.PETROLEUM_VAT_8,
+    )
+
     with pytest.raises(BadRequestException):
         QuoteService(db).convert_to_invoice(historical.id)
 
-    current = _quote(db, customer, "INACTIVE")
+
+def test_quote_conversion_rejects_legacy_unscoped_vat_8(db):
+    customer = _customer(db, "QuoteLegacyVat")
+    legacy = _quote(
+        db,
+        customer,
+        "LEGACY-HIST",
+        tax_type=TaxType.VAT_8,
+    )
+
+    with pytest.raises(BadRequestException):
+        QuoteService(db).convert_to_invoice(legacy.id)
+
+
+def test_quote_conversion_rechecks_customer_status(db):
+    customer = _customer(db, "QuoteInactive")
+    quote = _quote(db, customer, "INACTIVE")
     customer.status = CustomerStatus.INACTIVE
     db.flush()
+
     with pytest.raises(BadRequestException):
-        QuoteService(db).convert_to_invoice(current.id)
+        QuoteService(db).convert_to_invoice(quote.id)

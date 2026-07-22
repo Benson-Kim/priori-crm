@@ -78,6 +78,7 @@ class InvoiceService(BaseDocumentService):
 
     # Shared preview-totals + reference-retry wiring
     _calculation_response_cls = InvoiceCalculationResponse
+    _discount_line_tax_in_preview = True
     MAX_REFERENCE_RETRIES = MAX_INVOICE_NUMBER_RETRIES
 
     # Statuses from which an invoice may be deleted. Only DRAFT is deletable:
@@ -141,66 +142,6 @@ class InvoiceService(BaseDocumentService):
         invoice.tax_total = tax_total
         invoice.total_due = invoice.subtotal - discount_value + tax_total
         invoice.balance_due = invoice.total_due - invoice.amount_paid
-
-    @classmethod
-    def calculate_totals(
-        cls,
-        line_items: list[Any],
-        discount_type: Any = None,
-        discount_amount: Any = None,
-        discount_percentage: Any = None,
-        vat_enabled: bool = False,
-        vat_rate: Any = None,
-        *,
-        tax_point_date: date | None = None,
-    ) -> InvoiceCalculationResponse:
-        """Preview invoice totals using the same discounted line-tax policy."""
-        if tax_point_date is not None:
-            validate_document_vat_rate_for_date(
-                vat_rate if vat_enabled else None,
-                tax_point_date,
-            )
-        built_items = build_line_items(line_items, tax_point_date=tax_point_date)
-        subtotal, _ = sum_line_totals(built_items)
-        discount_value = calculate_discount(
-            subtotal, discount_type, discount_amount, discount_percentage
-        )
-
-        if vat_enabled:
-            neutralize_line_tax(built_items)
-            for item in built_items:
-                item["taxable_value"] = None
-            tax_total = calculate_subtotal_vat(
-                subtotal - discount_value, vat_enabled, vat_rate
-            )
-        else:
-            allocate_discounted_line_taxes(built_items, discount_value)
-            _, tax_total = sum_line_totals(built_items)
-
-        calculated_items = [
-            {
-                "item_name": item["item_name"],
-                "description": item["description"],
-                "quantity": float(item["quantity"]),
-                "unit_price": float(item["unit_price"]),
-                "line_total": float(item["line_total"]),
-                "taxable_value": (
-                    float(item["taxable_value"])
-                    if item["taxable_value"] is not None
-                    else None
-                ),
-                "tax_type": item["tax_type"],
-                "tax_amount": float(item["tax_amount"]),
-            }
-            for item in built_items
-        ]
-        return cls._calculation_response_cls(
-            subtotal=subtotal,
-            discount_value=discount_value,
-            tax_total=tax_total,
-            total_due=subtotal - discount_value + tax_total,
-            line_items=calculated_items,
-        )
 
     # CREATE
 
@@ -317,7 +258,7 @@ class InvoiceService(BaseDocumentService):
             extra={
                 "invoice_id": str(invoice.id),
                 "customer_id": str(data.customer_id),
-                "total_due": float(total_due),
+                "total_due": float(invoice.total_due),
                 "created_by": str(user_id) if user_id else None,
             },
         )

@@ -27,9 +27,8 @@ from app.modules.purchase_orders.service import PurchaseOrderService
 
 # 16% VAT as a fraction, sourced conceptually from the shared TAX_RATES table.
 VAT_16_RATE = Decimal("0.16")
-VAT_8_RATE = Decimal("0.08")
+VAT_0_RATE = Decimal("0.00")
 CURRENT_TAX_POINT = date(2026, 1, 15)
-HISTORICAL_TAX_POINT = date(2023, 6, 30)
 
 
 def _calculate(
@@ -117,21 +116,20 @@ class TestPurchaseOrderCalculateTotals:
     def test_rate_change_recomputes_tax(self):
         items = [_po_item(quantity=Decimal("2"), unit_price=Decimal("100.00"))]
         at_16 = _calculate(items, vat_enabled=True, vat_rate=VAT_16_RATE)
-        at_8 = _calculate(
+        at_zero = _calculate(
             items,
-            tax_point_date=HISTORICAL_TAX_POINT,
             vat_enabled=True,
-            vat_rate=VAT_8_RATE,
+            vat_rate=VAT_0_RATE,
         )
         assert at_16.tax_total == Decimal("32.00")
-        assert at_8.tax_total == Decimal("16.00")
+        assert at_zero.tax_total == Decimal("0.00")
 
     def test_retired_rate_is_rejected_for_current_tax_point(self):
         with pytest.raises(BadRequestException):
             _calculate(
                 [_po_item()],
                 vat_enabled=True,
-                vat_rate=VAT_8_RATE,
+                vat_rate=Decimal("0.08"),
             )
 
     def test_large_quantities_no_drift(self):
