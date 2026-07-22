@@ -1076,8 +1076,9 @@ class ExpenseService(BaseDocumentService):
 
         Returns count of updated rows.
         """
+
         try:
-            today = date.today()
+            today = reporting_date()
 
             updated = (
                 self._db.query(Expense)

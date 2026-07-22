@@ -292,11 +292,14 @@ export function formatDaysOverdue(days: number): string {
 
 export const TAX_TYPE_LABELS: Record<string, string> = {
   vat_16: "16% VAT",
-  vat_8: "8% VAT",
+  vat_8: "8% VAT (Legacy Unscoped)",
+  petroleum_vat_13: "13% VAT (Petroleum)",
+  petroleum_vat_8: "8% VAT (Petroleum)",
   vat_0: "0% VAT (Zero-rated)",
   vat_custom: "Custom VAT",
   exempt: "Exempt",
   no_tax: "No Tax",
+  unreconciled_historical: "Historical Stored VAT (Base Unavailable)",
 };
 
 export function formatTaxTypeLabel(row: TaxByTypeRow): string {

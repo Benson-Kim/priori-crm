@@ -120,8 +120,13 @@ export function parseTaxType(taxType: string): {
   rate: string;
   isVat: boolean;
 } {
-  const isVat = taxType.startsWith("vat_");
-  const rate = isVat ? (taxType.split("_")[1] ?? "0") : "0";
+  const isPetroleumVat = taxType.startsWith("petroleum_vat_");
+  const isVat = taxType.startsWith("vat_") || isPetroleumVat;
+  const rate = isPetroleumVat
+    ? (taxType.split("_")[2] ?? "0")
+    : isVat
+      ? (taxType.split("_")[1] ?? "0")
+      : "0";
   const category = isVat ? "vat" : taxType === "exempt" ? "exempt" : "no_tax";
   return { category, rate, isVat };
 }

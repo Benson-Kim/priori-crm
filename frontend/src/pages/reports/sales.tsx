@@ -22,6 +22,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
 import { useAgedReport } from "@/hooks/useAgedReport";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { useTableSort } from "@/hooks/useTableSort";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
 import { buildReportPeriodParams, defaultReportPeriod, isReportPeriodReady, type ReportPeriodFilter } from "@/lib/reportUtils";
@@ -40,7 +41,6 @@ import {
   type SalesReportSummaryResponse,
   type SalesStatusCounts,
 } from "@/services/reportsApi";
-import { useReportingDate } from "@/hooks/useReportingDate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 

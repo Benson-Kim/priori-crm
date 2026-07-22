@@ -11,7 +11,8 @@ import {
   getTodayString,
   isDueDateBeforeTransactionDate,
 } from "@/lib/dateUtils";
-import { formatCurrency, lineTaxValidationError } from "@/lib/utils";
+import { lineTaxValidationError } from "@/lib/taxUtils";
+import { formatCurrency, } from "@/lib/utils";
 import { PaperclipIcon, Plus, Save, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Divider } from "../ui/Divider";

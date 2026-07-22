@@ -16,6 +16,7 @@ from pydantic import (
     field_validator,
 )
 
+from app.common.reporting_time import reporting_date
 from app.common.validators import (
     empty_str_to_none as _empty_str_to_none,
 )
@@ -321,7 +322,7 @@ class VendorTransactionSummary(BaseModel):
         """
         if self.status != "overdue" or self.due_date is None:
             return 0
-        delta = (date.today() - self.due_date).days  # `date` is the type again
+        delta = (reporting_date() - self.due_date).days  # `date` is the type again
         return max(delta, 0)
 
     @computed_field

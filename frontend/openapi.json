@@ -13303,6 +13303,18 @@
         "operationId": "calculate_invoice_totals_api_v1_invoices_calculate_post",
         "parameters": [
           {
+            "description": "Invoice transaction date used as the tax point for VAT validation",
+            "in": "query",
+            "name": "transactionDate",
+            "required": true,
+            "schema": {
+              "description": "Invoice transaction date used as the tax point for VAT validation",
+              "format": "date",
+              "title": "Transactiondate",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "discount_type",
             "required": false,

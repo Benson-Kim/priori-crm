@@ -7,11 +7,17 @@ from uuid import UUID
 from pydantic import (
     BaseModel,
     Field,
+    PrivateAttr,
     computed_field,
     field_validator,
     model_validator,
 )
 
+from app.common.reporting_time import (
+    calculate_days_overdue,
+    check_is_overdue,
+    reporting_date,
+)
 from app.constants.enums import (
     Currency,
     DiscountType,
@@ -114,7 +120,7 @@ class PaymentCreate(BaseModel):
     )
 
     payment_date: date = Field(
-        default_factory=date.today,
+        default_factory=reporting_date,
         description="Date payment was received",
         alias="paymentDate",
     )
@@ -186,7 +192,7 @@ class InvoiceCreate(BaseModel):
     )
 
     transaction_date: date = Field(
-        default_factory=date.today,
+        default_factory=reporting_date,
         description="Invoice issue date",
         alias="transactionDate",
     )
@@ -461,10 +467,10 @@ class InvoiceResponse(BaseModel):
     @property
     def is_overdue(self) -> bool:
         """Check if invoice is overdue."""
-        return (
-            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED]
-            and self.due_date < date.today()
-            and self.balance_due > 0
+        return self.balance_due > 0 and check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
         )
 
     @computed_field
@@ -473,7 +479,11 @@ class InvoiceResponse(BaseModel):
         """Calculate days overdue."""
         if not self.is_overdue:
             return 0
-        return (date.today() - self.due_date).days
+        return calculate_days_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+        )
 
     model_config = {"from_attributes": True}
 
@@ -497,14 +507,17 @@ class InvoiceSummary(BaseModel):
 
     created_at: datetime
 
+    _as_of_date: date = PrivateAttr(default_factory=reporting_date)
+
     @computed_field
     @property
     def is_overdue(self) -> bool:
         """Check if invoice is overdue."""
-        return (
-            self.status not in [InvoiceStatus.PAID, InvoiceStatus.CANCELED]
-            and self.due_date < date.today()
-            and self.balance_due > 0
+        return self.balance_due > 0 and check_is_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+            as_of_date=self._as_of_date,
         )
 
     @computed_field
@@ -513,7 +526,12 @@ class InvoiceSummary(BaseModel):
         """Calculate days overdue."""
         if not self.is_overdue:
             return 0
-        return (date.today() - self.due_date).days
+        return calculate_days_overdue(
+            self.status,
+            self.due_date,
+            terminal_statuses={InvoiceStatus.PAID, InvoiceStatus.CANCELED},
+            as_of_date=self._as_of_date,
+        )
 
     model_config = {"from_attributes": True}
 

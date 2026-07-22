@@ -19,6 +19,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.financial import (
+    allocate_discounted_line_taxes,
     build_line_items,
     calculate_discount,
     calculate_subtotal_vat,
@@ -105,6 +106,102 @@ class InvoiceService(BaseDocumentService):
         InvoiceStatus.CANCELED: [],
     }
 
+    @staticmethod
+    def _line_payload(item: InvoiceLineItem) -> dict[str, Any]:
+        return {
+            "line_total": Decimal(str(item.line_total)),
+            "tax_type": item.tax_type,
+            "tax_amount": Decimal(str(item.tax_amount)),
+        }
+
+    def _recalculate_line_tax(self, invoice: Invoice) -> None:
+        """Reconcile a draft line-tax invoice from its discounted taxable bases."""
+        if invoice.status != InvoiceStatus.DRAFT or invoice.vat_enabled:
+            return
+
+        items = list(invoice.line_items)
+        discount_value = calculate_discount(
+            Decimal(str(invoice.subtotal)),
+            invoice.discount_type,
+            invoice.discount_amount,
+            invoice.discount_percentage,
+        )
+        allocated = allocate_discounted_line_taxes(
+            [self._line_payload(item) for item in items],
+            discount_value,
+        )
+        for item, values in zip(items, allocated, strict=True):
+            item.taxable_value = values["taxable_value"]
+            item.tax_amount = values["tax_amount"]
+
+        tax_total = sum(
+            (Decimal(str(item.tax_amount)) for item in items),
+            Decimal("0.00"),
+        )
+        invoice.tax_total = tax_total
+        invoice.total_due = invoice.subtotal - discount_value + tax_total
+        invoice.balance_due = invoice.total_due - invoice.amount_paid
+
+    @classmethod
+    def calculate_totals(
+        cls,
+        line_items: list[Any],
+        discount_type: Any = None,
+        discount_amount: Any = None,
+        discount_percentage: Any = None,
+        vat_enabled: bool = False,
+        vat_rate: Any = None,
+        *,
+        tax_point_date: date | None = None,
+    ) -> InvoiceCalculationResponse:
+        """Preview invoice totals using the same discounted line-tax policy."""
+        if tax_point_date is not None:
+            validate_document_vat_rate_for_date(
+                vat_rate if vat_enabled else None,
+                tax_point_date,
+            )
+        built_items = build_line_items(line_items, tax_point_date=tax_point_date)
+        subtotal, _ = sum_line_totals(built_items)
+        discount_value = calculate_discount(
+            subtotal, discount_type, discount_amount, discount_percentage
+        )
+
+        if vat_enabled:
+            neutralize_line_tax(built_items)
+            for item in built_items:
+                item["taxable_value"] = None
+            tax_total = calculate_subtotal_vat(
+                subtotal - discount_value, vat_enabled, vat_rate
+            )
+        else:
+            allocate_discounted_line_taxes(built_items, discount_value)
+            _, tax_total = sum_line_totals(built_items)
+
+        calculated_items = [
+            {
+                "item_name": item["item_name"],
+                "description": item["description"],
+                "quantity": float(item["quantity"]),
+                "unit_price": float(item["unit_price"]),
+                "line_total": float(item["line_total"]),
+                "taxable_value": (
+                    float(item["taxable_value"])
+                    if item["taxable_value"] is not None
+                    else None
+                ),
+                "tax_type": item["tax_type"],
+                "tax_amount": float(item["tax_amount"]),
+            }
+            for item in built_items
+        ]
+        return cls._calculation_response_cls(
+            subtotal=subtotal,
+            discount_value=discount_value,
+            tax_total=tax_total,
+            total_due=subtotal - discount_value + tax_total,
+            line_items=calculated_items,
+        )
+
     # CREATE
 
     def create(self, data: InvoiceCreate, user_id: uuid.UUID | None = None) -> Invoice:
@@ -165,6 +262,8 @@ class InvoiceService(BaseDocumentService):
         if vat_enabled:
             # Document-level VAT replaces per-line tax (mirrors PO-level VAT).
             neutralize_line_tax(line_items_data)
+            for item in line_items_data:
+                item["taxable_value"] = None
         subtotal, tax_total = sum_line_totals(line_items_data)
 
         discount_value = calculate_discount(
@@ -205,6 +304,9 @@ class InvoiceService(BaseDocumentService):
             for item in line_items_data:
                 self._db.add(InvoiceLineItem(invoice_id=invoice.id, **item))
             self._db.flush()
+            if not vat_enabled:
+                self._db.expire(invoice, ["line_items"])
+                self._recalculate_line_tax(invoice)
             return invoice
 
         invoice = self._with_reference_retry(_build, "invoice")
@@ -481,6 +583,7 @@ class InvoiceService(BaseDocumentService):
                 invoice.line_items, effective_transaction_date
             )
 
+        line_items_replaced = False
         # Handle line items update (replace all)
         if "line_items" in update_data:
             self._db.query(InvoiceLineItem).filter(
@@ -494,6 +597,8 @@ class InvoiceService(BaseDocumentService):
             if effective_vat_enabled:
                 # Document-level VAT replaces per-line tax (mirrors POs).
                 neutralize_line_tax(line_items_data)
+                for item in line_items_data:
+                    item["taxable_value"] = None
             subtotal, tax_total = sum_line_totals(line_items_data)
 
             for item in line_items_data:
@@ -501,6 +606,7 @@ class InvoiceService(BaseDocumentService):
 
             update_data["subtotal"] = subtotal
             update_data["tax_total"] = tax_total
+            line_items_replaced = True
         elif "vat_enabled" in update_data:
             if effective_vat_enabled:
                 # VAT switched on without replacing line items: neutralise
@@ -509,7 +615,11 @@ class InvoiceService(BaseDocumentService):
                 self._db.query(InvoiceLineItem).filter(
                     InvoiceLineItem.invoice_id == invoice_id
                 ).update(
-                    {"tax_type": TaxType.NO_TAX.value, "tax_amount": Decimal("0.00")}
+                    {
+                        "tax_type": TaxType.NO_TAX.value,
+                        "taxable_value": None,
+                        "tax_amount": Decimal("0.00"),
+                    }
                 )
             else:
                 # VAT switched off: tax falls back to the per-line sum of
@@ -582,6 +692,17 @@ class InvoiceService(BaseDocumentService):
         for field, value in update_data.items():
             setattr(invoice, field, value)
 
+        if recompute_balance and not effective_vat_enabled:
+            if line_items_replaced:
+                self._db.flush()
+                self._db.expire(invoice, ["line_items"])
+            self._recalculate_line_tax(invoice)
+            if invoice.balance_due < Decimal("0.00"):
+                raise BadRequestException(
+                    detail="Cannot reduce the invoice total below recorded payments",
+                    field="line_items",
+                )
+
         # Increment version for optimistic locking
         invoice.version += 1
 
@@ -629,6 +750,7 @@ class InvoiceService(BaseDocumentService):
         record_payment so a concurrent transition cannot race this one.
         """
         invoice = self._get_locked(invoice_id)
+        self._recalculate_line_tax(invoice)
         self._transition(invoice, InvoiceStatus.SENT)
         invoice.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(invoice)
@@ -694,6 +816,8 @@ class InvoiceService(BaseDocumentService):
 
     def _validate_sendable(self, invoice: Invoice) -> None:
         """Reject sends for canceled invoices (DocumentSendMixin hook)."""
+        if invoice.status == InvoiceStatus.DRAFT:
+            self._recalculate_line_tax(invoice)
         if invoice.status == InvoiceStatus.CANCELED:
             raise BadRequestException(
                 detail="Cannot send a canceled invoice",
@@ -1100,7 +1224,7 @@ class InvoiceService(BaseDocumentService):
         row-by-row, so no FOR UPDATE pre-read is needed.
         """
         try:
-            today = date.today()
+            today = reporting_date()
 
             updated = (
                 self._db.query(Invoice)

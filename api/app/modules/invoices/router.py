@@ -14,6 +14,7 @@ from app.common.dependencies import (
     verify_internal_secret,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reporting_time import reporting_date
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
@@ -181,6 +182,15 @@ def get_invoice_counts(
 )
 def calculate_invoice_totals(
     line_items: list[InvoiceLineItemCreate],
+    transaction_date: Annotated[
+        date,
+        Query(
+            alias="transactionDate",
+            description=(
+                "Invoice transaction date used as the tax point for VAT validation"
+            ),
+        ),
+    ],
     discount_type: Annotated[str | None, Query()] = None,
     discount_amount: Annotated[float | None, Query()] = None,
     discount_percentage: Annotated[float | None, Query()] = None,
@@ -225,7 +235,13 @@ def calculate_invoice_totals(
     vr = Decimal(str(vat_rate)) if vat_rate is not None else None
 
     return InvoiceService.calculate_totals(
-        line_items, dt, da, dp, vat_enabled=vat_enabled, vat_rate=vr
+        line_items,
+        dt,
+        da,
+        dp,
+        vat_enabled=vat_enabled,
+        vat_rate=vr,
+        tax_point_date=transaction_date,
     )
 
 
@@ -289,7 +305,7 @@ async def export_invoices_to_excel(
         exporter.export_invoices, invoices, include_line_items
     )
 
-    filename = f"Invoices_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Invoices_{reporting_date().strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
