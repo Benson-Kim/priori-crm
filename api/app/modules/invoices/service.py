@@ -151,9 +151,16 @@ class InvoiceService(BaseDocumentService):
         discount_percentage: Any = None,
         vat_enabled: bool = False,
         vat_rate: Any = None,
+        *,
+        tax_point_date: date | None = None,
     ) -> InvoiceCalculationResponse:
         """Preview invoice totals using the same discounted line-tax policy."""
-        built_items = build_line_items(line_items)
+        if tax_point_date is not None:
+            validate_document_vat_rate_for_date(
+                vat_rate if vat_enabled else None,
+                tax_point_date,
+            )
+        built_items = build_line_items(line_items, tax_point_date=tax_point_date)
         subtotal, _ = sum_line_totals(built_items)
         discount_value = calculate_discount(
             subtotal, discount_type, discount_amount, discount_percentage

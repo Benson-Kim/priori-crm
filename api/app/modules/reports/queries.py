@@ -1077,6 +1077,7 @@ class ReportsRepository:
                     Invoice.vat_enabled.is_(False),
                     InvoiceLineItem.taxable_value.is_(None),
                 )
+                .having(func.count(func.distinct(Invoice.id)) > 0)
             )
 
             inv_tax_type = _document_tax_type(Invoice.vat_rate)

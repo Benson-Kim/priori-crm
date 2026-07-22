@@ -4,6 +4,9 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
+from app.common.exceptions import BadRequestException
 from app.common.financial import (
     allocate_discounted_line_taxes,
     build_line_items,
@@ -20,6 +23,7 @@ from app.constants.enums import (
 )
 from app.modules.customers.models import Customer
 from app.modules.invoices.models import Invoice, InvoiceLineItem
+from app.modules.invoices.router import calculate_invoice_totals
 from app.modules.invoices.schemas import (
     InvoiceCreate,
     InvoiceLineItemCreate,
@@ -63,6 +67,52 @@ def _items() -> list[InvoiceLineItemCreate]:
             tax_type=TaxType.VAT_0,
         ),
     ]
+
+
+def _petroleum_item(tax_type: TaxType) -> InvoiceLineItemCreate:
+    return InvoiceLineItemCreate(
+        item_name="Fuel",
+        description="Fuel",
+        quantity=Decimal("1"),
+        unit_price=Decimal("100.00"),
+        tax_type=tax_type,
+    )
+
+
+@pytest.mark.no_db
+def test_invoice_preview_enforces_tax_point_rules():
+    with pytest.raises(BadRequestException):
+        calculate_invoice_totals(
+            line_items=[_petroleum_item(TaxType.PETROLEUM_VAT_13)],
+            transaction_date=date(2026, 4, 14),
+            discount_type=None,
+            discount_amount=None,
+            discount_percentage=None,
+            vat_enabled=False,
+            vat_rate=None,
+        )
+
+    preview = calculate_invoice_totals(
+        line_items=[_petroleum_item(TaxType.PETROLEUM_VAT_13)],
+        transaction_date=date(2026, 4, 15),
+        discount_type=None,
+        discount_amount=None,
+        discount_percentage=None,
+        vat_enabled=False,
+        vat_rate=None,
+    )
+    assert preview.tax_total == Decimal("13.00")
+
+    with pytest.raises(BadRequestException):
+        calculate_invoice_totals(
+            line_items=_items(),
+            transaction_date=date(2026, 4, 15),
+            discount_type=None,
+            discount_amount=None,
+            discount_percentage=None,
+            vat_enabled=True,
+            vat_rate=Decimal("0.13"),
+        )
 
 
 def test_discount_allocation_persists_line_level_tax_invariant():
