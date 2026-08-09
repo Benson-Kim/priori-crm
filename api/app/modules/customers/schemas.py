@@ -14,7 +14,14 @@ from app.common.validators import (
     normalize_phone,
     validate_country_code,
 )
-from app.constants.enums import Currency, CustomerType
+from app.constants.enums import (
+    BillingCurrency,
+    BillingPaymentTerms,
+    Currency,
+    CustomerType,
+    Industry,
+    TaxTreatment,
+)
 
 # Request Schemas
 
@@ -44,6 +51,23 @@ class CustomerCreate(BaseModel):
         None, max_length=50, description="VAT/Tax number", alias="vatNumber"
     )
     currency: Currency = Field(default=Currency.KES, description="Default currency")
+    industry: Industry | None = Field(
+        None, description="Industry classification"
+    )
+    tenant_domain: str | None = Field(
+        None,
+        max_length=255,
+        description="Microsoft 365 tenant domain",
+        alias="tenantDomain",
+    )
+    owner_id: UUID | None = Field(
+        None, description="Account owner (sales rep) user ID", alias="ownerId"
+    )
+    primary_currency: BillingCurrency | None = Field(
+        None,
+        description="Which billing profile (USD|KES) is the default",
+        alias="primaryCurrency",
+    )
     address: str | None = Field(None, min_length=5, description="Primary address")
     address2: str | None = Field(None, description="Secondary address")
     country: str | None = Field(
@@ -61,6 +85,7 @@ class CustomerCreate(BaseModel):
         "company_name",
         "website",
         "vat_number",
+        "tenant_domain",
         "address",
         "address2",
         "province",
@@ -151,6 +176,10 @@ class CustomerUpdate(BaseModel):
     website: str | None = Field(None, max_length=500)
     vat_number: str | None = Field(None, max_length=50, alias="vatNumber")
     currency: Currency | None = None
+    industry: Industry | None = None
+    tenant_domain: str | None = Field(None, max_length=255, alias="tenantDomain")
+    owner_id: UUID | None = Field(None, alias="ownerId")
+    primary_currency: BillingCurrency | None = Field(None, alias="primaryCurrency")
     address: str | None = None
     address2: str | None = None
     country: str | None = Field(None, min_length=2, max_length=2)
@@ -165,6 +194,7 @@ class CustomerUpdate(BaseModel):
         "company_name",
         "website",
         "vat_number",
+        "tenant_domain",
         "address",
         "address2",
         "province",
@@ -203,7 +233,52 @@ class CustomerUpdate(BaseModel):
     }
 
 
+class BillingProfileUpdate(BaseModel):
+    """PATCH body for a customer billing profile. All fields optional.
+
+    Any accepted change flips the profile back to unsynced server-side;
+    ``code`` and ``currency`` are immutable once issued (the code is the
+    accounting identity of the profile).
+    """
+
+    payment_terms: BillingPaymentTerms | None = Field(
+        None, description="Payment terms", alias="paymentTerms"
+    )
+    tax_treatment: TaxTreatment | None = Field(
+        None, description="Tax treatment", alias="taxTreatment"
+    )
+    credit_limit: Decimal | None = Field(
+        None,
+        ge=0,
+        description="Credit limit in the profile's own currency",
+        alias="creditLimit",
+    )
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
 # Response Schemas
+
+
+class BillingProfileResponse(BaseModel):
+    """One per-currency billing profile of a customer."""
+
+    id: UUID
+    customer_id: UUID
+    currency: str
+    code: str
+    payment_terms: str
+    tax_treatment: str
+    credit_limit: Decimal
+    synced: bool
+    synced_at: datetime | None = None
+    version: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class CustomerResponse(BaseModel):
@@ -221,6 +296,11 @@ class CustomerResponse(BaseModel):
     vat_number: str | None = None
     currency: str
     balance: Decimal
+    industry: str | None = None
+    tenant_domain: str | None = None
+    owner_id: UUID | None = None
+    primary_currency: str | None = None
+    billing_profiles: list[BillingProfileResponse] = Field(default_factory=list)
     address: str | None = None
     address2: str | None = None
     country: str | None = None
