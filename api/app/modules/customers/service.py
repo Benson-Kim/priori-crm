@@ -133,6 +133,7 @@ class CustomerService(ServiceBase):
     @staticmethod
     def _profile_snapshot(profile: CustomerBillingProfile) -> dict[str, Any]:
         """Serialisable audit snapshot of a profile's mutable state."""
+        synced_at = profile.synced_at.isoformat() if profile.synced_at else None
         return {
             "code": profile.code,
             "currency": profile.currency,
@@ -140,9 +141,7 @@ class CustomerService(ServiceBase):
             "tax_treatment": profile.tax_treatment,
             "credit_limit": str(profile.credit_limit),
             "synced": profile.synced,
-            "synced_at": (
-                profile.synced_at.isoformat() if profile.synced_at else None
-            ),
+            "synced_at": synced_at,
         }
 
     def _create_billing_profiles(
@@ -343,9 +342,7 @@ class CustomerService(ServiceBase):
             )
             if not profiles:
                 raise NotFoundException(
-                    detail=(
-                        f"No billing profiles found for customer '{customer_id}'"
-                    ),
+                    detail=f"No billing profiles found for customer '{customer_id}'",
                     resource="customer_billing_profile",
                 )
 
