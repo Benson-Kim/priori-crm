@@ -53,6 +53,61 @@ class Currency(StrEnum):
     GBP = "GBP"  # British Pound
 
 
+class BillingCurrency(StrEnum):
+    """Currencies for which a customer billing profile exists in accounting.
+
+    Deliberately a strict subset of :class:`Currency`: every customer is
+    registered once with exactly one USD and one KES billing profile
+    (deal-desk parity). EUR/GBP remain display/conversion-only.
+    """
+
+    USD = "USD"
+    KES = "KES"
+
+
+class Industry(StrEnum):
+    """Customer industry classification (deal-desk prototype's 10 values)."""
+
+    FINANCIAL_SERVICES = "Financial services"
+    HEALTHCARE = "Healthcare"
+    EDUCATION = "Education"
+    LOGISTICS_TRANSPORT = "Logistics & transport"
+    HOSPITALITY = "Hospitality"
+    MANUFACTURING = "Manufacturing"
+    PROFESSIONAL_SERVICES = "Professional services"
+    NGO_NON_PROFIT = "NGO / Non-profit"
+    RETAIL = "Retail"
+    OTHER = "Other"
+
+
+class TaxTreatment(StrEnum):
+    """Tax treatment of a customer billing profile.
+
+    Display values from the deal-desk prototype; each maps 1:1 onto an
+    existing document-level :class:`TaxType` so profile settings can drive
+    line-item taxation without a second taxonomy.
+    """
+
+    VAT_16 = "VAT 16%"
+    ZERO_RATED_EXPORT = "Zero-rated (export)"
+    EXEMPT = "Exempt"
+
+    @property
+    def tax_type(self) -> "TaxType":
+        """The document-level TaxType this treatment corresponds to."""
+        return _TAX_TREATMENT_TO_TAX_TYPE[self]
+
+
+class BillingPaymentTerms(StrEnum):
+    """Payment-terms options offered on a customer billing profile."""
+
+    ON_RECEIPT = "On receipt"
+    NET_14 = "14 days"
+    NET_30 = "30 days"
+    NET_45 = "45 days"
+    NET_60 = "60 days"
+
+
 class TransactionType(StrEnum):
     """Transaction classification."""
 
@@ -94,6 +149,16 @@ class TaxType(StrEnum):
     VAT_0 = "vat_0"  # 0% VAT (zero-rated)
     EXEMPT = "exempt"  # Exempt from VAT
     NO_TAX = "no_tax"  # No tax
+
+
+#: Compatibility mapping from the profile-level TaxTreatment display values
+#: onto the existing document-level TaxType members. Kept next to TaxType so
+#: any change to either taxonomy is reviewed against the other.
+_TAX_TREATMENT_TO_TAX_TYPE: dict["TaxTreatment", "TaxType"] = {
+    TaxTreatment.VAT_16: TaxType.VAT_16,
+    TaxTreatment.ZERO_RATED_EXPORT: TaxType.VAT_0,
+    TaxTreatment.EXEMPT: TaxType.EXEMPT,
+}
 
 
 class DiscountType(StrEnum):
