@@ -51,9 +51,7 @@ class CustomerCreate(BaseModel):
         None, max_length=50, description="VAT/Tax number", alias="vatNumber"
     )
     currency: Currency = Field(default=Currency.KES, description="Default currency")
-    industry: Industry | None = Field(
-        None, description="Industry classification"
-    )
+    industry: Industry | None = Field(None, description="Industry classification")
     tenant_domain: str | None = Field(
         None,
         max_length=255,
