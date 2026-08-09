@@ -326,9 +326,7 @@ class CustomerService(ServiceBase):
             )
             raise DatabaseException("Failed to sync billing profile") from e
 
-    def sync_all_profiles(
-        self, customer_id: uuid.UUID
-    ) -> list[CustomerBillingProfile]:
+    def sync_all_profiles(self, customer_id: uuid.UUID) -> list[CustomerBillingProfile]:
         """Mark every profile of a customer as pushed to accounting."""
         try:
             self.get_by_id(customer_id)
