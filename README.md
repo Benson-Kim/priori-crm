@@ -1,4 +1,4 @@
-# Priori Technologies - Accounting Software
+# Business Central - Accounting Software
 
 > Modern accounting & CRM platform built with FastAPI and React.
 
@@ -14,7 +14,7 @@
 
 ## Product Overview
 
-Priori is an enterprise CRM + accounting platform that covers the full
+Business Central is an enterprise CRM + accounting platform that covers the full
 sales-to-cash and procure-to-pay lifecycles for a single business owner and
 their team.
 
@@ -491,5 +491,5 @@ actively maintained.
 
 ## License
 
-© 2026 Priori Technologies - All Rights Reserved
+© 2026 Business Central - All Rights Reserved
 
