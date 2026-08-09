@@ -18,6 +18,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.reference import ReferenceGenerator
 from app.common.reporting_time import reporting_date
 from app.common.search import build_search_clause
 from app.common.statement import (
@@ -27,9 +28,16 @@ from app.common.statement import (
     StatementGenerator,
 )
 from app.common.statistics import status_counts
-from app.constants.enums import CustomerStatus
-from app.modules.customers.models import Customer
+from app.constants.enums import BillingCurrency, CustomerStatus
+from app.modules.customers.models import Customer, CustomerBillingProfile
+from app.modules.customers.profile_backfill import (
+    PROFILE_CODE_SCOPE_KEY,
+    build_profile_code,
+    default_profile_values,
+    profile_code_slug,
+)
 from app.modules.customers.schemas import (
+    BillingProfileUpdate,
     CustomerCreate,
     CustomerResponse,
     CustomerStatement,
@@ -79,6 +87,10 @@ class CustomerService(ServiceBase):
                 website=data.website,
                 vat_number=data.vat_number,
                 currency=data.currency,
+                industry=data.industry,
+                tenant_domain=data.tenant_domain,
+                owner_id=data.owner_id,
+                primary_currency=data.primary_currency,
                 address=data.address,
                 address2=data.address2,
                 country=data.country,
@@ -89,6 +101,10 @@ class CustomerService(ServiceBase):
 
             self._db.add(customer)
             self._db.flush()
+
+            # Both billing profiles are created in the SAME transaction as
+            # the customer: a customer can never exist half-registered.
+            self._create_billing_profiles(customer)
 
             logger.info(
                 f"Created customer: {customer.id}",
@@ -111,6 +127,247 @@ class CustomerService(ServiceBase):
         except SQLAlchemyError as e:
             logger.exception("Database error creating customer")
             raise DatabaseException("Failed to create customer") from e
+
+    # Billing profiles
+
+    @staticmethod
+    def _profile_snapshot(profile: CustomerBillingProfile) -> dict[str, Any]:
+        """Serialisable audit snapshot of a profile's mutable state."""
+        return {
+            "code": profile.code,
+            "currency": profile.currency,
+            "payment_terms": profile.payment_terms,
+            "tax_treatment": profile.tax_treatment,
+            "credit_limit": str(profile.credit_limit),
+            "synced": profile.synced,
+            "synced_at": (
+                profile.synced_at.isoformat() if profile.synced_at else None
+            ),
+        }
+
+    def _create_billing_profiles(
+        self, customer: Customer
+    ) -> list[CustomerBillingProfile]:
+        """Create the USD and KES profiles for a freshly created customer.
+
+        Flush-only (atomic with the customer insert). One monotonic
+        reference-sequence suffix is issued per customer so both profile
+        codes share it, differing only in the currency segment; the suffix
+        (not the 3-letter slug) is what guarantees global code uniqueness.
+        """
+        suffix = ReferenceGenerator(self._db).next_suffix(PROFILE_CODE_SCOPE_KEY)
+        slug = profile_code_slug(customer.display_name)
+
+        profiles: list[CustomerBillingProfile] = []
+        for currency in BillingCurrency:
+            values = default_profile_values(currency.value)
+            profile = CustomerBillingProfile(
+                customer_id=customer.id,
+                currency=currency.value,
+                code=build_profile_code(slug, suffix, currency.value),
+                payment_terms=values["payment_terms"],
+                tax_treatment=values["tax_treatment"],
+                credit_limit=values["credit_limit"],
+                synced=False,
+            )
+            self._db.add(profile)
+            profiles.append(profile)
+        self._db.flush()
+
+        for profile in profiles:
+            record_audit_event(
+                self._db,
+                actor_id=self._actor_id,
+                entity_type="customer_billing_profile",
+                entity_id=profile.id,
+                action="created",
+                after=self._profile_snapshot(profile),
+            )
+        return profiles
+
+    def _get_profile(
+        self, customer_id: uuid.UUID, currency: str, for_update: bool = False
+    ) -> CustomerBillingProfile:
+        """Load one profile of a (non-deleted) customer or raise 404.
+
+        ``for_update`` locks the row so the edit/sync mutations are
+        race-safe: two concurrent writers serialise on the row instead of
+        interleaving their synced/synced_at writes (PostgreSQL guarantee;
+        FOR UPDATE is a no-op on the SQLite test fallback).
+        """
+        self.get_by_id(customer_id)
+
+        query = self._db.query(CustomerBillingProfile).filter(
+            CustomerBillingProfile.customer_id == customer_id,
+            CustomerBillingProfile.currency == currency,
+        )
+        if for_update:
+            query = query.with_for_update()
+        profile = query.first()
+        if profile is None:
+            raise NotFoundException(
+                detail=(
+                    f"Billing profile '{currency}' not found for customer "
+                    f"'{customer_id}'"
+                ),
+                resource="customer_billing_profile",
+            )
+        return profile
+
+    def update_profile(
+        self,
+        customer_id: uuid.UUID,
+        currency: str,
+        data: BillingProfileUpdate,
+        expected_version: int,
+    ) -> CustomerBillingProfile:
+        """Edit a billing profile; ANY accepted change resets ``synced``.
+
+        Mirrors the customer optimistic-lock contract: ``expected_version``
+        is compared under a row lock (assert_version), so a stale writer
+        gets a 409 instead of silently clobbering a concurrent edit — and
+        the unsync flip can never be lost to a race.
+        """
+        try:
+            profile = self._get_profile(customer_id, currency)
+
+            assert_version(
+                self._db, CustomerBillingProfile, profile.id, expected_version
+            )
+
+            update_data = data.model_dump(exclude_unset=True)
+            if not update_data:
+                return profile
+
+            before = self._profile_snapshot(profile)
+
+            for field, value in update_data.items():
+                setattr(profile, field, value)
+
+            # Deal-desk contract: editing a profile marks it out of sync
+            # until it is pushed to accounting again (server-side, not
+            # client-optional).
+            profile.synced = False
+            profile.version += 1
+            self._db.flush()
+
+            record_audit_event(
+                self._db,
+                actor_id=self._actor_id,
+                entity_type="customer_billing_profile",
+                entity_id=profile.id,
+                action="updated",
+                before=before,
+                after=self._profile_snapshot(profile),
+            )
+
+            logger.info(
+                f"Updated billing profile {profile.code}",
+                extra={
+                    "customer_id": str(customer_id),
+                    "currency": currency,
+                    "updated_fields": list(update_data.keys()),
+                    "new_version": profile.version,
+                },
+            )
+            return profile
+
+        except (NotFoundException, ConflictException):
+            raise
+        except IntegrityError as e:
+            logger.exception(
+                f"Integrity error updating billing profile {customer_id}/{currency}"
+            )
+            raise ConflictException(
+                "Billing profile update violates database constraints"
+            ) from e
+        except SQLAlchemyError as e:
+            logger.exception(
+                f"Database error updating billing profile {customer_id}/{currency}"
+            )
+            raise DatabaseException("Failed to update billing profile") from e
+
+    def _mark_synced(self, profile: CustomerBillingProfile) -> None:
+        """Flip one (row-locked) profile to synced and audit the push."""
+        before = self._profile_snapshot(profile)
+        profile.synced = True
+        profile.synced_at = datetime.now(UTC)
+        profile.version += 1
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=self._actor_id,
+            entity_type="customer_billing_profile",
+            entity_id=profile.id,
+            action="synced",
+            before=before,
+            after=self._profile_snapshot(profile),
+        )
+
+    def sync_profile(
+        self, customer_id: uuid.UUID, currency: str
+    ) -> CustomerBillingProfile:
+        """Mark one profile as pushed to accounting (idempotent re-sync)."""
+        try:
+            profile = self._get_profile(customer_id, currency, for_update=True)
+            self._mark_synced(profile)
+
+            logger.info(
+                f"Synced billing profile {profile.code}",
+                extra={"customer_id": str(customer_id), "currency": currency},
+            )
+            return profile
+
+        except NotFoundException:
+            raise
+        except SQLAlchemyError as e:
+            logger.exception(
+                f"Database error syncing billing profile {customer_id}/{currency}"
+            )
+            raise DatabaseException("Failed to sync billing profile") from e
+
+    def sync_all_profiles(
+        self, customer_id: uuid.UUID
+    ) -> list[CustomerBillingProfile]:
+        """Mark every profile of a customer as pushed to accounting."""
+        try:
+            self.get_by_id(customer_id)
+
+            profiles = (
+                self._db.query(CustomerBillingProfile)
+                .filter(CustomerBillingProfile.customer_id == customer_id)
+                .order_by(CustomerBillingProfile.currency)
+                .with_for_update()
+                .all()
+            )
+            if not profiles:
+                raise NotFoundException(
+                    detail=(
+                        f"No billing profiles found for customer '{customer_id}'"
+                    ),
+                    resource="customer_billing_profile",
+                )
+
+            for profile in profiles:
+                self._mark_synced(profile)
+
+            logger.info(
+                f"Synced all billing profiles for customer {customer_id}",
+                extra={
+                    "customer_id": str(customer_id),
+                    "profile_count": len(profiles),
+                },
+            )
+            return profiles
+
+        except NotFoundException:
+            raise
+        except SQLAlchemyError as e:
+            logger.exception(
+                f"Database error syncing billing profiles for {customer_id}"
+            )
+            raise DatabaseException("Failed to sync billing profiles") from e
 
     # Read One
 
@@ -143,10 +400,23 @@ class CustomerService(ServiceBase):
         params: PaginationParams,
         status: str | None = None,
         search: str | None = None,
+        unsynced: bool = False,
     ) -> PaginatedResponse[CustomerResponse]:
-        """List customers with pagination, optional status filter and search."""
+        """List customers with pagination, optional status filter and search.
+
+        ``unsynced=True`` narrows the list to customers with at least one
+        billing profile not yet pushed to accounting — the hygiene /
+        notification query of the deal-desk workflow.
+        """
         try:
             query = self._db.query(Customer)
+
+            if unsynced:
+                query = query.filter(
+                    Customer.billing_profiles.any(
+                        CustomerBillingProfile.synced.is_(False)
+                    )
+                )
 
             if status and status != "all":
                 try:
