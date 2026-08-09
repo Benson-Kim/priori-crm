@@ -3,12 +3,15 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import (
@@ -17,7 +20,20 @@ from sqlalchemy.dialects.postgresql import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
-from app.constants.enums import Currency, CustomerStatus, CustomerType
+from app.constants.enums import (
+    BillingCurrency,
+    Currency,
+    CustomerStatus,
+    CustomerType,
+    Industry,
+    TaxTreatment,
+)
+
+#: SQL IN-list literals shared by the ORM CHECK constraints and the Alembic
+#: migration, derived from the enums so the two layers cannot drift.
+_BILLING_CURRENCY_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in BillingCurrency)
+_INDUSTRY_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in Industry)
+_TAX_TREATMENT_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in TaxTreatment)
 
 
 class Customer(Base):
@@ -47,6 +63,15 @@ class Customer(Base):
             "(customer_type = 'business' AND company_name IS NOT NULL) OR "
             "(customer_type = 'individual')",
             name="ck_customers_business_requires_company_name",
+        ),
+        CheckConstraint(
+            f"industry IS NULL OR industry IN ({_INDUSTRY_CHECK_VALUES})",
+            name="ck_customers_valid_industry",
+        ),
+        CheckConstraint(
+            "primary_currency IS NULL OR "
+            f"primary_currency IN ({_BILLING_CURRENCY_CHECK_VALUES})",
+            name="ck_customers_valid_primary_currency",
         ),
         # Composite indexes for common query patterns
         Index("ix_customers_status_created", "status", "created_at"),
@@ -166,6 +191,32 @@ class Customer(Base):
         comment="Optimistic-locking version counter",
     )
 
+    industry: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Industry classification (deal-desk prototype's 10 values)",
+    )
+
+    tenant_domain: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Microsoft 365 tenant domain (e.g. acme.onmicrosoft.com)",
+    )
+
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Account owner (sales rep) responsible for this customer",
+    )
+
+    primary_currency: Mapped[str | None] = mapped_column(
+        String(3),
+        nullable=True,
+        comment="Which billing profile (USD|KES) is the customer's default",
+    )
+
     address: Mapped[str] = mapped_column(
         Text,
         nullable=True,
@@ -245,6 +296,18 @@ class Customer(Base):
         lazy="select",
     )
 
+    billing_profiles = relationship(
+        "CustomerBillingProfile",
+        back_populates="customer",
+        # Profiles are owned by the customer row: they carry no independent
+        # financial history, so they live and die with it (the DB-level
+        # ondelete=CASCADE mirrors this for out-of-ORM deletes).
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="CustomerBillingProfile.currency",
+        lazy="selectin",
+    )
+
     def __init__(self, *args, **kwargs):
         """Support legacy `is_active` constructor arguments for tests and callers."""
         if "is_active" in kwargs:
@@ -297,3 +360,130 @@ class Customer(Base):
             self.country,
         ]
         return ", ".join(filter(None, parts))
+
+
+class CustomerBillingProfile(Base):
+    """Per-currency (USD/KES) billing profile for a customer.
+
+    Every customer carries exactly one profile per billing currency, created
+    atomically with the customer (and backfilled for pre-existing rows).
+    ``synced``/``synced_at`` form the internal posting/readiness flag toward
+    accounting inside Business Central (see ADR 0009): any edit flips the
+    profile back to unsynced until it is pushed again.
+    """
+
+    __tablename__ = "customer_billing_profiles"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id",
+            "currency",
+            name="uq_customer_billing_profiles_customer_id_currency",
+        ),
+        CheckConstraint(
+            f"currency IN ({_BILLING_CURRENCY_CHECK_VALUES})",
+            name="ck_customer_billing_profiles_valid_currency",
+        ),
+        CheckConstraint(
+            f"tax_treatment IN ({_TAX_TREATMENT_CHECK_VALUES})",
+            name="ck_customer_billing_profiles_valid_tax_treatment",
+        ),
+        CheckConstraint(
+            "credit_limit >= 0",
+            name="ck_customer_billing_profiles_credit_limit_non_negative",
+        ),
+        # Hygiene/notification query: "profiles not yet pushed to accounting".
+        Index("ix_customer_billing_profiles_synced", "synced"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        comment="Billing currency of this profile (USD or KES)",
+    )
+
+    code: Mapped[str] = mapped_column(
+        String(30),
+        unique=True,
+        nullable=False,
+        comment=(
+            "Accounting profile code: name slug + monotonic reference-"
+            "sequence suffix + currency (e.g. BAR-0007-USD)"
+        ),
+    )
+
+    payment_terms: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="Payment terms label (e.g. 'On receipt', '30 days')",
+    )
+
+    tax_treatment: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        comment="Tax treatment display value; maps 1:1 onto TaxType",
+    )
+
+    credit_limit: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+        comment="Credit limit expressed in the profile's own currency",
+    )
+
+    synced: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment="Whether the profile has been pushed to accounting",
+    )
+
+    synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When the profile was last pushed to accounting",
+    )
+
+    version: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="Optimistic-locking version counter",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    customer = relationship("Customer", back_populates="billing_profiles")
+
+    def __repr__(self) -> str:
+        return (
+            f"<CustomerBillingProfile(code='{self.code}', "
+            f"customer_id={self.customer_id}, synced={self.synced})>"
+        )

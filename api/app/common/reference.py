@@ -29,6 +29,24 @@ class ReferenceGenerator:
             {"key": key},
         )
 
+    def next_suffix(self, scope_key: str) -> int:
+        """Return the next value of a global, never-reused numeric counter.
+
+        Thin public wrapper for callers that need only a monotonic suffix
+        (e.g. customer billing-profile codes) rather than a fully formatted
+        ``PREFIX-NNN`` reference: the caller owns the final string format.
+
+        The advisory lock is PostgreSQL-only; on the SQLite test fallback the
+        lock is skipped (there is nothing equivalent to acquire) and the
+        UNIQUE constraint on the referencing column remains the safety net.
+        No bootstrap table scan is performed: scopes served by this method
+        start at 1 and are thereafter driven purely by the persisted
+        high-water mark.
+        """
+        if self._db.get_bind().dialect.name == "postgresql":
+            self._advisory_lock(scope_key)
+        return self._next_with_high_water_mark(scope_key, lambda: 0)
+
     def _next_with_high_water_mark(self, scope_key: str, table_max_fn) -> int:
         """Return the next value from the persisted high-water mark.
 
