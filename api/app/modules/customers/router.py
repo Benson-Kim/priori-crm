@@ -20,8 +20,10 @@ from app.common.exceptions import (
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
 from app.common.statement import default_statement_period
-from app.constants.enums import UserRole
+from app.constants.enums import BillingCurrency, UserRole
 from app.modules.customers.schemas import (
+    BillingProfileResponse,
+    BillingProfileUpdate,
     CustomerCreate,
     CustomerDeleteCheckResponse,
     CustomerDeleteResponse,
@@ -88,10 +90,21 @@ def list_customers(
             description="Include total/total_pages (runs a COUNT(*); off by default)",
         ),
     ] = False,
+    unsynced: Annotated[
+        bool,
+        Query(
+            description=(
+                "Only customers with at least one billing profile not yet "
+                "pushed to accounting"
+            ),
+        ),
+    ] = False,
 ) -> PaginatedResponse[CustomerSummary]:
     """List customers with pagination, status filter, and search."""
     params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
-    return service.list_customers(params, status=status, search=search)
+    return service.list_customers(
+        params, status=status, search=search, unsynced=unsynced
+    )
 
 
 @router.get(
@@ -193,6 +206,86 @@ def update_customer(
     """Update an existing customer with optimistic locking."""
     customer = service.update(customer_id, body, expected_version)
     return CustomerResponse.model_validate(customer)
+
+
+@router.patch(
+    "/{customer_id}/profiles/{currency}",
+    summary="Edit a billing profile",
+    description=(
+        "Update payment terms, tax treatment or credit limit of one "
+        "per-currency billing profile. Any accepted change marks the "
+        "profile out of sync until it is pushed to accounting again."
+    ),
+    responses={
+        200: {"description": "Billing profile updated (now unsynced)"},
+        404: {"description": "Customer or billing profile not found"},
+        409: {"description": "Profile modified by another user (stale version)"},
+    },
+)
+def update_billing_profile(
+    customer_id: UUID,
+    currency: BillingCurrency,
+    body: BillingProfileUpdate,
+    service: CustomerServiceDep,
+    expected_version: Annotated[
+        int,
+        Query(
+            alias="expectedVersion",
+            description=(
+                "Pass the profile version from your last GET response. "
+                "If the profile has been modified since, a 409 is returned."
+            ),
+        ),
+    ],
+) -> BillingProfileResponse:
+    """Edit a billing profile with optimistic locking; resets its sync flag."""
+    profile = service.update_profile(
+        customer_id, currency.value, body, expected_version
+    )
+    return BillingProfileResponse.model_validate(profile)
+
+
+@router.post(
+    "/{customer_id}/profiles/{currency}/sync",
+    status_code=status.HTTP_200_OK,
+    summary="Mark a billing profile as posted to accounting",
+    description=(
+        "Flip one per-currency billing profile to synced and stamp "
+        "synced_at. Idempotent: re-syncing an already-synced profile "
+        "refreshes the timestamp."
+    ),
+    responses={
+        200: {"description": "Billing profile marked synced"},
+        404: {"description": "Customer or billing profile not found"},
+    },
+)
+def sync_billing_profile(
+    customer_id: UUID,
+    currency: BillingCurrency,
+    service: CustomerServiceDep,
+) -> BillingProfileResponse:
+    """Mark one billing profile as pushed to accounting."""
+    profile = service.sync_profile(customer_id, currency.value)
+    return BillingProfileResponse.model_validate(profile)
+
+
+@router.post(
+    "/{customer_id}/profiles/sync-all",
+    status_code=status.HTTP_200_OK,
+    summary="Mark all billing profiles as posted to accounting",
+    description="Flip every billing profile of the customer to synced.",
+    responses={
+        200: {"description": "All billing profiles marked synced"},
+        404: {"description": "Customer or billing profiles not found"},
+    },
+)
+def sync_all_billing_profiles(
+    customer_id: UUID,
+    service: CustomerServiceDep,
+) -> list[BillingProfileResponse]:
+    """Mark every billing profile of a customer as pushed to accounting."""
+    profiles = service.sync_all_profiles(customer_id)
+    return [BillingProfileResponse.model_validate(p) for p in profiles]
 
 
 @router.post(
