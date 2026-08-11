@@ -49,3 +49,14 @@ DEFAULT_BILLING_PROFILE_DEFAULTS: dict[str, dict[str, str]] = {
         "credit_limit": "10000.00",
     },
 }
+
+# Fixed FX table for the Sales Desk USD-equivalent deal value fields
+# (lists/aggregations display USD equivalents; detail views show the deal's
+# native currency). Values are UNITS OF CURRENCY PER 1 USD, kept as decimal
+# strings so no layer ever touches floats. Mirrors the deal-desk prototype's
+# FX constant (KES 129.5 per USD). A live FX source is out of scope for the
+# deals module and is left to the analytics backend (#45) if needed.
+BILLING_CURRENCY_PER_USD: dict[str, str] = {
+    "USD": "1",
+    "KES": "129.50",
+}

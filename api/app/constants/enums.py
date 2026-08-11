@@ -218,6 +218,83 @@ class PurchaseOrderStatus(StrEnum):
     PAID = "paid"  # Fully settled via recorded payments
 
 
+class DealStage(StrEnum):
+    """Sales Desk pipeline stages, in fixed order (deal-desk prototype).
+
+    A deal advances one stage at a time; there is no skipping. The fifth
+    "stage" of the design's ``Stage N of 5`` progress label is the closed
+    (won) state, which is a :class:`DealStatus`, not a stage.
+    """
+
+    ACTIVATION = "activation"
+    QUALIFICATION = "qualification"
+    PROPOSAL_QUOTE = "proposal_quote"
+    NEGOTIATION = "negotiation"
+
+    @property
+    def label(self) -> str:
+        """Display label from the prototype ('Proposal & Quote' etc.)."""
+        return DEAL_STAGE_LABELS[self]
+
+
+#: Fixed pipeline order — the single source of truth for transition
+#: validation ("no skipping") and the ``Stage N of 5`` progress position.
+DEAL_STAGE_ORDER: tuple[DealStage, ...] = (
+    DealStage.ACTIVATION,
+    DealStage.QUALIFICATION,
+    DealStage.PROPOSAL_QUOTE,
+    DealStage.NEGOTIATION,
+)
+
+#: Display labels used in the stage-history timeline and progress labels.
+DEAL_STAGE_LABELS: dict[DealStage, str] = {
+    DealStage.ACTIVATION: "Activation",
+    DealStage.QUALIFICATION: "Qualification",
+    DealStage.PROPOSAL_QUOTE: "Proposal & Quote",
+    DealStage.NEGOTIATION: "Negotiation",
+}
+
+#: Total positions in the design's stage progress strip: the four open
+#: stages plus the closed (won) end-cap — "Stage N of 5".
+DEAL_STAGE_PROGRESS_TOTAL: int = len(DEAL_STAGE_ORDER) + 1
+
+
+class DealStatus(StrEnum):
+    """Deal lifecycle status.
+
+    OPEN deals sit at one of the four :class:`DealStage` values. PARKED
+    deals are frozen (future pipeline) with a ``parked_until`` date and a
+    ``resume_stage`` to return to. WON/LOST are terminal and carry a close
+    reason + note.
+    """
+
+    OPEN = "open"
+    WON = "won"
+    LOST = "lost"
+    PARKED = "parked"
+
+
+class DealWonReason(StrEnum):
+    """Enumerated 'main reason we won' options (deal-desk prototype)."""
+
+    PRICE_PACKAGING = "Price & packaging"
+    RELATIONSHIP_TRUST = "Relationship / trust"
+    PRODUCT_FIT = "Product fit"
+    MIGRATION_SUPPORT_OFFER = "Migration & support offer"
+    FASTER_RESPONSE = "Faster response than competitor"
+
+
+class DealLostReason(StrEnum):
+    """Enumerated 'main reason we lost' options (deal-desk prototype)."""
+
+    PRICE_TOO_HIGH = "Price too high"
+    LOST_TO_COMPETITOR = "Lost to competitor"
+    BAD_TIMING = "Bad timing"
+    NO_BUDGET = "No budget"
+    WENT_DIRECT = "Went direct to Microsoft"
+    NO_DECISION = "No decision / went silent"
+
+
 class DocumentType(StrEnum):
     """Classification for purchase-order payment-modal attachments.
 
