@@ -232,9 +232,7 @@ class DealService(StateMachineMixin, ServiceBase):
             Deal.product,
         )
         if clause is not None:
-            query = query.join(Customer, Deal.customer_id == Customer.id).filter(
-                clause
-            )
+            query = query.join(Customer, Deal.customer_id == Customer.id).filter(clause)
 
         return query
 
@@ -562,9 +560,7 @@ class DealService(StateMachineMixin, ServiceBase):
 
     # INTERNALS
 
-    def _record(
-        self, deal: Deal, stage_label: str, note: str
-    ) -> DealActivity:
+    def _record(self, deal: Deal, stage_label: str, note: str) -> DealActivity:
         """Append one stage-record row (same transaction as the mutation).
 
         Appended through the relationship so the in-session history stays

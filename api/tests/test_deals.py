@@ -738,9 +738,7 @@ def test_list_hygiene_buckets(db):
     )
     assert _ids(quiet) == {str(fx.open_negotiation.id)}
 
-    old = fx.svc.list_deals(
-        params, DealFilterParams(hygiene=DealHygieneBucket.OPEN_45)
-    )
+    old = fx.svc.list_deals(params, DealFilterParams(hygiene=DealHygieneBucket.OPEN_45))
     assert _ids(old) == {str(fx.open_negotiation.id)}
 
     # No open deal is >30d idle; closed/parked never qualify.
@@ -833,9 +831,7 @@ def test_update_currency_revalidated_and_closed_read_only(db):
     deal = _make_deal(db, owner, customer, currency="USD")
     svc = _svc(db, owner)
 
-    kes_profile = next(
-        p for p in customer.billing_profiles if p.currency == "KES"
-    )
+    kes_profile = next(p for p in customer.billing_profiles if p.currency == "KES")
     db.delete(kes_profile)
     db.flush()
     db.expire(customer, ["billing_profiles"])
