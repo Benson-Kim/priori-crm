@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 
 import type { DealStage } from "./Chip";
+import { PIPELINE_STAGES, type DealStatus, type PipelineStage } from "./stage-utils";
 
 /**
  * StagePath / StageStepper — Sales Desk deal-stage visualisation.
@@ -16,19 +17,6 @@ import type { DealStage } from "./Chip";
  *   filled white text, upcoming `#F3F4F6`/`#9CA3AF`; "Proposal & Quote"
  *   abbreviates to `Prop. & Quote`.
  */
-
-/** The 5 pipeline stages in fixed order. */
-export const PIPELINE_STAGES = [
-  "Activation",
-  "Qualification",
-  "Proposal & Quote",
-  "Negotiation",
-  "Won",
-] as const;
-
-export type PipelineStage = (typeof PIPELINE_STAGES)[number];
-
-export type DealStatus = "open" | "won" | "lost";
 
 const SEGMENT_COUNT = PIPELINE_STAGES.length;
 
