@@ -124,8 +124,12 @@ class DealStage(StrEnum):
     NEGOTIATION = "negotiation"
 
     @property
-    def index(self) -> int:
-        """1-based position in the pipeline (UI: "Stage N of 5")."""
+    def pipeline_index(self) -> int:
+        """1-based position in the pipeline (UI: "Stage N of 5").
+
+        Named ``pipeline_index`` (not ``index``) to avoid shadowing
+        ``str.index`` on this str-mixin enum.
+        """
         return _DEAL_STAGE_ORDER.index(self) + 1
 
     @property

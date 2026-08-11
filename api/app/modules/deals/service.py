@@ -386,7 +386,10 @@ class DealService(StateMachineMixin, ServiceBase):
         deal = self.get_by_id(deal_id)
         note = self._require_note(note)
 
-        new_status = DealStatus(result)
+        try:
+            new_status = DealStatus(result)
+        except ValueError:
+            new_status = None
         if new_status not in (DealStatus.WON, DealStatus.LOST):
             raise BadRequestException(
                 detail="Close result must be 'won' or 'lost'.", field="result"
@@ -536,7 +539,7 @@ class DealService(StateMachineMixin, ServiceBase):
             value=deal.value,
             currency=deal.currency,
             stage=stage,
-            stage_index=stage.index,
+            stage_index=stage.pipeline_index,
             stage_total=DEAL_PIPELINE_TOTAL_STEPS,
             stage_label=stage.label,
             status=status,

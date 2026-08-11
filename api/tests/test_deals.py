@@ -152,8 +152,8 @@ def test_stage_order_labels_and_indexes():
         "proposal_quote",
         "negotiation",
     ]
-    assert DealStage.ACTIVATION.index == 1
-    assert DealStage.NEGOTIATION.index == 4
+    assert DealStage.ACTIVATION.pipeline_index == 1
+    assert DealStage.NEGOTIATION.pipeline_index == 4
     assert DEAL_PIPELINE_TOTAL_STEPS == 5
     assert DealStage.PROPOSAL_QUOTE.label == "Proposal & Quote"
     assert DealStage.ACTIVATION.next_stage is DealStage.QUALIFICATION
