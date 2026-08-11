@@ -1,4 +1,4 @@
-# ADR-0009: Billing-profile "sync" is an internal posting/readiness flag
+# ADR-0010: Billing-profile "sync" is an internal posting/readiness flag
 
 - **Status:** Accepted
 - **Date:** 2026-08-09
