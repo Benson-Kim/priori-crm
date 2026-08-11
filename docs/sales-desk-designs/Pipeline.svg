@@ -1,0 +1,355 @@
+<svg width="1551" height="1024" viewBox="0 0 1551 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1551" height="1024" rx="16" fill="#F6F7F9"/>
+<mask id="path-2-inside-1_3633_24668" fill="white">
+<path d="M0 0H240V1024H0V0Z"/>
+</mask>
+<path d="M0 0H240V1024H0V0Z" fill="white"/>
+<path d="M240 0H239V1024H240H241V0H240Z" fill="#E4E8EF" mask="url(#path-2-inside-1_3633_24668)"/>
+<g clip-path="url(#clip0_3633_24668)">
+<mask id="mask0_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="24" y="26" width="32" height="26">
+<path d="M56 26H24V52H56V26Z" fill="white"/>
+</mask>
+<g mask="url(#mask0_3633_24668)">
+<mask id="mask1_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="-191" y="-200" width="284" height="399">
+<path d="M92.8365 -199.177H-190.844V198.343H92.8365V-199.177Z" fill="white"/>
+</mask>
+<g mask="url(#mask1_3633_24668)">
+<mask id="mask2_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="-191" y="-200" width="284" height="399">
+<path d="M92.8365 -199.177H-190.844V198.343H92.8365V-199.177Z" fill="white"/>
+</mask>
+<g mask="url(#mask2_3633_24668)">
+<mask id="mask3_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="38" y="31" width="18" height="21">
+<path d="M44.825 31.5931C43.9652 31.5931 43.1799 31.9284 42.8019 32.4564L39.3586 37.2682C38.8391 37.9939 38.8499 38.8446 39.3879 39.564L47.2102 50.0264C47.8833 50.9263 49.2366 51.4922 50.7141 51.4922H55.4654L45.6919 38.4202L50.5783 31.5918H44.825V31.5931Z" fill="white"/>
+</mask>
+<g mask="url(#mask3_3633_24668)">
+<path d="M55.4661 31.593H38.8398V51.4928H55.4661V31.593Z" fill="url(#paint0_linear_3633_24668)"/>
+</g>
+<mask id="mask4_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="38" y="31" width="18" height="21">
+<path d="M44.825 31.5931C43.9652 31.5931 43.1799 31.9284 42.8019 32.4564L39.3586 37.2682C38.8391 37.9939 38.8499 38.8446 39.3879 39.564L47.2102 50.0264C47.8833 50.9263 49.2366 51.4922 50.7141 51.4922H55.4654L45.6919 38.4202L50.5783 31.5918H44.825V31.5931Z" fill="white"/>
+</mask>
+<g mask="url(#mask4_3633_24668)">
+<path d="M49.7091 23.7583L29.2832 38.4839L44.5935 59.3325L65.0194 44.6069L49.7091 23.7583Z" fill="url(#paint1_linear_3633_24668)"/>
+</g>
+<mask id="mask5_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="38" y="31" width="13" height="20">
+<path d="M44.825 31.5929C43.9652 31.5929 43.1799 31.9283 42.8019 32.4563L39.3586 37.2681C38.8391 37.9938 38.8499 38.8445 39.3879 39.5638L47.2102 50.0262C43.315 44.8152 43.011 42.169 45.6926 38.4207L50.579 31.5923H44.8257L44.825 31.5929Z" fill="white"/>
+</mask>
+<g mask="url(#mask5_3633_24668)">
+<path d="M50.5791 31.593H38.8398V50.0269H50.5791V31.593Z" fill="url(#paint2_linear_3633_24668)"/>
+</g>
+<mask id="mask6_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="38" y="31" width="13" height="20">
+<path d="M44.825 31.5929C43.9652 31.5929 43.1799 31.9283 42.8019 32.4563L39.3586 37.2681C38.8391 37.9938 38.8499 38.8445 39.3879 39.5638L47.2102 50.0262C43.315 44.8152 43.011 42.169 45.6926 38.4207L50.579 31.5923H44.8257L44.825 31.5929Z" fill="white"/>
+</mask>
+<g mask="url(#mask6_3633_24668)">
+<path d="M50.5791 31.593H38.8398V50.0269H50.5791V31.593Z" fill="url(#paint3_linear_3633_24668)"/>
+</g>
+<mask id="mask7_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="38" y="31" width="10" height="12">
+<path d="M44.825 31.5929C43.9652 31.5929 43.1799 31.9283 42.8019 32.4563L39.3586 37.2681C38.8391 37.9938 38.8499 38.8445 39.3879 39.5638L41.5953 42.5151C41.4442 40.8244 42.0421 39.2821 43.3258 37.4885L47.5449 31.5923H44.8257L44.825 31.5929Z" fill="white"/>
+</mask>
+<g mask="url(#mask7_3633_24668)">
+<path d="M40.5343 28.1751L34.4727 40.3862L45.8486 45.93L51.9102 33.7189L40.5343 28.1751Z" fill="url(#paint4_linear_3633_24668)"/>
+</g>
+<mask id="mask8_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="24" y="26" width="21" height="25">
+<path d="M24.4141 26.5676L36.3337 42.5107L30.3739 50.8391H37.3911C38.4403 50.8391 39.3977 50.4304 39.8586 49.7856L44.0585 43.9172C44.6921 43.0317 44.6787 41.9947 44.0228 41.1175L34.4826 28.3562C33.6616 27.2586 32.0114 26.5676 30.2088 26.5676H24.4141Z" fill="white"/>
+</mask>
+<g mask="url(#mask8_3633_24668)">
+<path d="M44.6921 26.5676H24.4141V50.8391H44.6921V26.5676Z" fill="url(#paint5_linear_3633_24668)"/>
+</g>
+<mask id="mask9_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="24" y="26" width="21" height="25">
+<path d="M24.4141 26.5676L36.3337 42.5107L30.3739 50.8391H37.3911C38.4403 50.8391 39.3977 50.4304 39.8586 49.7856L44.0585 43.9172C44.6921 43.0317 44.6787 41.9947 44.0228 41.1175L34.4826 28.3562C33.6616 27.2586 32.0114 26.5676 30.2088 26.5676H24.4141Z" fill="white"/>
+</mask>
+<g mask="url(#mask9_3633_24668)">
+<path d="M29.7645 17.7124L13.6172 44.4343L39.341 59.6943L55.4883 32.9724L29.7645 17.7124Z" fill="url(#paint6_linear_3633_24668)"/>
+</g>
+<mask id="mask10_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="30" y="28" width="15" height="23">
+<path d="M36.3328 42.5107L30.373 50.8391H37.3903C38.4395 50.8391 39.3969 50.4304 39.8577 49.7856L44.0576 43.9172C44.6912 43.0317 44.6778 41.9947 44.022 41.1175L34.4824 28.3562C39.2337 34.7116 39.6047 37.9395 36.3335 42.5107" fill="white"/>
+</mask>
+<g mask="url(#mask10_3633_24668)">
+<path d="M44.6919 28.3562H30.373V50.8391H44.6919V28.3562Z" fill="url(#paint7_linear_3633_24668)"/>
+</g>
+<mask id="mask11_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="-191" y="-200" width="284" height="399">
+<path d="M92.8365 -199.177H-190.844V198.343H92.8365V-199.177Z" fill="white"/>
+</mask>
+<g mask="url(#mask11_3633_24668)">
+<g style="mix-blend-mode:overlay">
+<mask id="mask12_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="30" y="28" width="15" height="23">
+<path d="M44.5236 28.3562H30.373V50.8391H44.5236V28.3562Z" fill="white"/>
+</mask>
+<g mask="url(#mask12_3633_24668)">
+<mask id="mask13_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="30" y="28" width="15" height="23">
+<path d="M34.4818 28.3562C39.2337 34.7116 39.604 37.9395 36.3329 42.5107L30.373 50.8391H37.3903C38.4395 50.8391 39.3969 50.4304 39.8584 49.7856L44.0583 43.9172C44.6919 43.0324 44.6785 41.9947 44.022 41.1175L34.4818 28.3562Z" fill="white"/>
+</mask>
+<g mask="url(#mask13_3633_24668)">
+<path d="M31.7306 24.1981L23.7227 48.7051L43.3325 54.9957L51.3405 30.4888L31.7306 24.1981Z" fill="url(#paint8_linear_3633_24668)"/>
+</g>
+</g>
+</g>
+<g opacity="0.42">
+<mask id="mask14_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="34" y="37" width="11" height="14">
+<path d="M44.524 37.5168H34.0742V50.8389H44.524V37.5168Z" fill="white"/>
+</mask>
+<g mask="url(#mask14_3633_24668)">
+<mask id="mask15_3633_24668" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="34" y="37" width="11" height="14">
+<path d="M44.0223 41.1167L41.3305 37.5168C41.5147 39.5795 40.7855 41.4603 39.22 43.648L34.0742 50.8389H37.3907C38.4399 50.8389 39.3972 50.4303 39.8587 49.7855L44.0586 43.9171C44.6922 43.0322 44.6788 41.9946 44.0223 41.1174" fill="white"/>
+</mask>
+<g mask="url(#mask15_3633_24668)">
+<path d="M36.1412 33.349L28.748 48.2424L42.623 55.0041L50.0161 40.1107L36.1412 33.349Z" fill="url(#paint9_linear_3633_24668)"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="66" y="37">Priori</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="66" y="51">Technologies</tspan></text>
+<path d="M26.25 103.5L27.75 102M27.75 102L33 96.75L38.25 102M27.75 102V109.5C27.75 109.699 27.829 109.89 27.9697 110.03C28.1103 110.171 28.3011 110.25 28.5 110.25H30.75M38.25 102L39.75 103.5M38.25 102V109.5C38.25 109.699 38.171 109.89 38.0303 110.03C37.8897 110.171 37.6989 110.25 37.5 110.25H35.25M30.75 110.25C30.9489 110.25 31.1397 110.171 31.2803 110.03C31.421 109.89 31.5 109.699 31.5 109.5V106.5C31.5 106.301 31.579 106.11 31.7197 105.97C31.8603 105.829 32.0511 105.75 32.25 105.75H33.75C33.9489 105.75 34.1397 105.829 34.2803 105.97C34.421 106.11 34.5 106.301 34.5 106.5V109.5C34.5 109.699 34.579 109.89 34.7197 110.03C34.8603 110.171 35.0511 110.25 35.25 110.25M30.75 110.25H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="107.836">Dashboard</tspan></text>
+<path d="M12 137C12 130.373 17.3726 125 24 125H215C221.627 125 227 130.373 227 137V152C227 158.627 221.627 164 215 164H24C17.3726 164 12 158.627 12 152V137Z" fill="#FBF0FB"/>
+<path d="M30.75 149.75V145.25C30.75 144.852 30.592 144.471 30.3107 144.189C30.0294 143.908 29.6478 143.75 29.25 143.75H27.75C27.3522 143.75 26.9706 143.908 26.6893 144.189C26.408 144.471 26.25 144.852 26.25 145.25V149.75C26.25 150.148 26.408 150.529 26.6893 150.811C26.9706 151.092 27.3522 151.25 27.75 151.25H29.25C29.6478 151.25 30.0294 151.092 30.3107 150.811C30.592 150.529 30.75 150.148 30.75 149.75ZM30.75 149.75V142.25C30.75 141.852 30.908 141.471 31.1893 141.189C31.4706 140.908 31.8522 140.75 32.25 140.75H33.75C34.1478 140.75 34.5294 140.908 34.8107 141.189C35.092 141.471 35.25 141.852 35.25 142.25V149.75M30.75 149.75C30.75 150.148 30.908 150.529 31.1893 150.811C31.4706 151.092 31.8522 151.25 32.25 151.25H33.75C34.1478 151.25 34.5294 151.092 34.8107 150.811C35.092 150.529 35.25 150.148 35.25 149.75M35.25 149.75V139.25C35.25 138.852 35.408 138.471 35.6893 138.189C35.9706 137.908 36.3522 137.75 36.75 137.75H38.25C38.6478 137.75 39.0294 137.908 39.3107 138.189C39.592 138.471 39.75 138.852 39.75 139.25V149.75C39.75 150.148 39.592 150.529 39.3107 150.811C39.0294 151.092 38.6478 151.25 38.25 151.25H36.75C36.3522 151.25 35.9706 151.092 35.6893 150.811C35.408 150.529 35.25 150.148 35.25 149.75Z" stroke="#912B90" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="148.836">Pipeline</tspan></text>
+<path d="M38.25 192.25V180.25C38.25 179.852 38.092 179.471 37.8107 179.189C37.5294 178.908 37.1478 178.75 36.75 178.75H29.25C28.8522 178.75 28.4706 178.908 28.1893 179.189C27.908 179.471 27.75 179.852 27.75 180.25V192.25M38.25 192.25H39.75M38.25 192.25H34.5M27.75 192.25H26.25M27.75 192.25H31.5M34.5 192.25V188.5C34.5 188.301 34.421 188.11 34.2803 187.97C34.1397 187.829 33.9489 187.75 33.75 187.75H32.25C32.0511 187.75 31.8603 187.829 31.7197 187.97C31.579 188.11 31.5 188.301 31.5 188.5V192.25M34.5 192.25H31.5M30.75 181.75H31.5M30.75 184.75H31.5M34.5 181.75H35.25M34.5 184.75H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="189.836">Companies</tspan></text>
+<path d="M33 223.5V226.5L35.25 228.75M39.75 226.5C39.75 227.386 39.5754 228.264 39.2362 229.083C38.897 229.902 38.3998 230.646 37.773 231.273C37.1462 231.9 36.4021 232.397 35.5831 232.736C34.7642 233.075 33.8864 233.25 33 233.25C32.1136 233.25 31.2358 233.075 30.4169 232.736C29.5979 232.397 28.8538 231.9 28.227 231.273C27.6002 230.646 27.103 229.902 26.7638 229.083C26.4246 228.264 26.25 227.386 26.25 226.5C26.25 224.71 26.9612 222.993 28.227 221.727C29.4929 220.461 31.2098 219.75 33 219.75C34.7902 219.75 36.5071 220.461 37.773 221.727C39.0388 222.993 39.75 224.71 39.75 226.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="230.836">Future pipeline</tspan></text>
+<path d="M30.75 263.75H35.25M35.25 271.25V269M33 271.25H33.0075M30.75 271.25H30.7575M30.75 266.75H30.7575M33 266.75H33.0075M35.25 266.75H35.2575M27 272.75H39C39.3978 272.75 39.7794 272.592 40.0607 272.311C40.342 272.029 40.5 271.648 40.5 271.25V263.75C40.5 263.352 40.342 262.971 40.0607 262.689C39.7794 262.408 39.3978 262.25 39 262.25H27C26.6022 262.25 26.2206 262.408 25.9393 262.689C25.658 262.971 25.5 263.352 25.5 263.75V271.25C25.5 271.648 25.658 272.029 25.9393 272.311C26.2206 272.592 26.6022 272.75 27 272.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="271.836">Quotes &#38; pricing</tspan></text>
+<path d="M30.75 308.5L32.25 310L35.25 307M39.75 308.5C39.75 309.386 39.5754 310.264 39.2362 311.083C38.897 311.902 38.3998 312.646 37.773 313.273C37.1462 313.9 36.4021 314.397 35.5831 314.736C34.7642 315.075 33.8864 315.25 33 315.25C32.1136 315.25 31.2358 315.075 30.4169 314.736C29.5979 314.397 28.8538 313.9 28.227 313.273C27.6002 312.646 27.103 311.902 26.7638 311.083C26.4246 310.264 26.25 309.386 26.25 308.5C26.25 306.71 26.9612 304.993 28.227 303.727C29.4929 302.461 31.2098 301.75 33 301.75C34.7902 301.75 36.5071 302.461 37.773 303.727C39.0388 304.993 39.75 306.71 39.75 308.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="312.836">Onboarding</tspan></text>
+<mask id="path-50-inside-2_3633_24668" fill="white">
+<path d="M0 918H239V1024H0V918Z"/>
+</mask>
+<path d="M0 918V919H239V918V917H0V918Z" fill="#E4E8EF" mask="url(#path-50-inside-2_3633_24668)"/>
+<path d="M16 950.5C16 942.768 22.268 936.5 30 936.5C37.732 936.5 44 942.768 44 950.5C44 958.232 37.732 964.5 30 964.5C22.268 964.5 16 958.232 16 950.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="21" y="954.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="54" y="947.2">Frank Mueke</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="54" y="962">Senior Admin</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="989">&#xa9; 2026 Priori &#x2014; All Rights Reserved</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="1004">Version: 1.0.188-288</tspan></text>
+<mask id="path-58-inside-3_3633_24668" fill="white">
+<path d="M240 0H1551V64H240V0Z"/>
+</mask>
+<path d="M240 0H1551V64H240V0Z" fill="white"/>
+<path d="M1551 64V63H240V64V65H1551V64Z" fill="#E4E8EF" mask="url(#path-58-inside-3_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="264" y="35.8357">Pipeline</tspan></text>
+<mask id="path-61-inside-4_3633_24668" fill="white">
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z"/>
+</mask>
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z" fill="#F6F7F9"/>
+<path d="M1244 16.5V17.5H1427V16.5V15.5H1244V16.5ZM1439 28.5H1438V34.5H1439H1440V28.5H1439ZM1427 46.5V45.5H1244V46.5V47.5H1427V46.5ZM1232 34.5H1233V28.5H1232H1231V34.5H1232ZM1244 46.5V45.5C1237.92 45.5 1233 40.5751 1233 34.5H1232H1231C1231 41.6797 1236.82 47.5 1244 47.5V46.5ZM1439 34.5H1438C1438 40.5751 1433.08 45.5 1427 45.5V46.5V47.5C1434.18 47.5 1440 41.6797 1440 34.5H1439ZM1427 16.5V17.5C1433.08 17.5 1438 22.4249 1438 28.5H1439H1440C1440 21.3203 1434.18 15.5 1427 15.5V16.5ZM1244 16.5V15.5C1236.82 15.5 1231 21.3203 1231 28.5H1232H1233C1233 22.4249 1237.92 17.5 1244 17.5V16.5Z" fill="#E4E8EF" mask="url(#path-61-inside-4_3633_24668)"/>
+<g clip-path="url(#clip1_3633_24668)">
+<path d="M1257.35 37.3499L1254.52 34.5224M1250.85 36.0499C1252.23 36.0499 1253.55 35.502 1254.53 34.5269C1255.5 33.5517 1256.05 32.229 1256.05 30.8499C1256.05 29.4708 1255.5 28.1481 1254.53 27.1729C1253.55 26.1978 1252.23 25.6499 1250.85 25.6499C1249.47 25.6499 1248.15 26.1978 1247.17 27.1729C1246.2 28.1481 1245.65 29.4708 1245.65 30.8499C1245.65 32.229 1246.2 33.5517 1247.17 34.5269C1248.15 35.502 1249.47 36.0499 1250.85 36.0499Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip2_3633_24668)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1266" y="35.7">Search companies, deals&#x2026;</tspan></text>
+</g>
+<mask id="path-65-inside-5_3633_24668" fill="white">
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z"/>
+</mask>
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z" fill="#F6F7F9"/>
+<path d="M1451 31.5M1483 31.5M1483 31.5M1451 31.5M1467 15.5M1483 31.5M1467 47.5M1451 31.5M1467 47.5V46.5C1458.72 46.5 1452 39.7843 1452 31.5H1451H1450C1450 40.8888 1457.61 48.5 1467 48.5V47.5ZM1483 31.5H1482C1482 39.7843 1475.28 46.5 1467 46.5V47.5V48.5C1476.39 48.5 1484 40.8888 1484 31.5H1483ZM1467 15.5V16.5C1475.28 16.5 1482 23.2157 1482 31.5H1483H1484C1484 22.1112 1476.39 14.5 1467 14.5V15.5ZM1467 15.5V14.5C1457.61 14.5 1450 22.1112 1450 31.5H1451H1452C1452 23.2157 1458.72 16.5 1467 16.5V15.5Z" fill="#E4E8EF" mask="url(#path-65-inside-5_3633_24668)"/>
+<path d="M1468.75 34.4167H1471.67L1470.85 33.5971C1470.74 33.487 1470.65 33.3563 1470.59 33.2125C1470.53 33.0687 1470.5 32.9145 1470.5 32.7588V30.9167C1470.5 30.1927 1470.28 29.4865 1469.86 28.8954C1469.44 28.3042 1468.85 27.8571 1468.17 27.6156V27.4167C1468.17 27.1072 1468.04 26.8105 1467.83 26.5917C1467.61 26.3729 1467.31 26.25 1467 26.25C1466.69 26.25 1466.39 26.3729 1466.18 26.5917C1465.96 26.8105 1465.83 27.1072 1465.83 27.4167V27.6156C1464.47 28.0962 1463.5 29.393 1463.5 30.9167V32.7594C1463.5 33.0732 1463.38 33.3748 1463.15 33.5971L1462.33 34.4167H1465.25M1468.75 34.4167V35C1468.75 35.4641 1468.57 35.9092 1468.24 36.2374C1467.91 36.5656 1467.46 36.75 1467 36.75C1466.54 36.75 1466.09 36.5656 1465.76 36.2374C1465.44 35.9092 1465.25 35.4641 1465.25 35V34.4167M1468.75 34.4167H1465.25" stroke="#6B7688" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1495 31.5C1495 22.6634 1502.16 15.5 1511 15.5C1519.84 15.5 1527 22.6634 1527 31.5C1527 40.3366 1519.84 47.5 1511 47.5C1502.16 47.5 1495 40.3366 1495 31.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="1502" y="35.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="bold" letter-spacing="0px"><tspan x="264" y="112.4">Pipeline</tspan></text>
+<g filter="url(#filter0_d_3633_24668)">
+<mask id="path-71-inside-6_3633_24668" fill="white">
+<path d="M264 152C264 145.373 269.373 140 276 140H604.102C610.729 140 616.102 145.373 616.102 152V168.57C616.102 175.198 610.729 180.57 604.102 180.57H276C269.373 180.57 264 175.198 264 168.57V152Z"/>
+</mask>
+<path d="M264 152C264 145.373 269.373 140 276 140H604.102C610.729 140 616.102 145.373 616.102 152V168.57C616.102 175.198 610.729 180.57 604.102 180.57H276C269.373 180.57 264 175.198 264 168.57V152Z" fill="white" shape-rendering="crispEdges"/>
+<path d="M276 140V141H604.102V140V139H276V140ZM616.102 152H615.102V168.57H616.102H617.102V152H616.102ZM604.102 180.57V179.57H276V180.57V181.57H604.102V180.57ZM264 168.57H265V152H264H263V168.57H264ZM276 180.57V179.57C269.925 179.57 265 174.645 265 168.57H264H263C263 175.75 268.82 181.57 276 181.57V180.57ZM616.102 168.57H615.102C615.102 174.645 610.177 179.57 604.102 179.57V180.57V181.57C611.281 181.57 617.102 175.75 617.102 168.57H616.102ZM604.102 140V141C610.177 141 615.102 145.925 615.102 152H616.102H617.102C617.102 144.82 611.281 139 604.102 139V140ZM276 140V139C268.82 139 263 144.82 263 152H264H265C265 145.925 269.925 141 276 141V140Z" fill="#E4E8EF" mask="url(#path-71-inside-6_3633_24668)"/>
+<path d="M269 153C269 148.582 272.582 145 277 145H334.453C338.871 145 342.453 148.582 342.453 153V167.57C342.453 171.989 338.871 175.57 334.453 175.57H277C272.582 175.57 269 171.989 269 167.57V153Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285.04" y="165.836">All</tspan></text>
+<g opacity="0.7">
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="307.174" y="165.2">(6)</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="362.718" y="165.836">Open</tspan></text>
+<g opacity="0.7">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="404.131" y="165.2">(4)</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="459.64" y="165.836">Won</tspan></text>
+<g opacity="0.7">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="495.715" y="165.2">(1)</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="547.311" y="165.836">Lost</tspan></text>
+<g opacity="0.7">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="579.582" y="165.2">(1)</tspan></text>
+</g>
+</g>
+<g filter="url(#filter1_d_3633_24668)">
+<mask id="path-85-inside-7_3633_24668" fill="white">
+<path d="M264 216.57C264 207.734 271.163 200.57 280 200.57H1511C1519.84 200.57 1527 207.734 1527 216.57V547.141C1527 555.977 1519.84 563.141 1511 563.141H280C271.163 563.141 264 555.977 264 547.141V216.57Z"/>
+</mask>
+<path d="M264 216.57C264 207.734 271.163 200.57 280 200.57H1511C1519.84 200.57 1527 207.734 1527 216.57V547.141C1527 555.977 1519.84 563.141 1511 563.141H280C271.163 563.141 264 555.977 264 547.141V216.57Z" fill="white"/>
+<path d="M280 200.57V201.57H1511V200.57V199.57H280V200.57ZM1527 216.57H1526V547.141H1527H1528V216.57H1527ZM1511 563.141V562.141H280V563.141V564.141H1511V563.141ZM264 547.141H265V216.57H264H263V547.141H264ZM280 563.141V562.141C271.716 562.141 265 555.425 265 547.141H264H263C263 556.529 270.611 564.141 280 564.141V563.141ZM1527 547.141H1526C1526 555.425 1519.28 562.141 1511 562.141V563.141V564.141C1520.39 564.141 1528 556.529 1528 547.141H1527ZM1511 200.57V201.57C1519.28 201.57 1526 208.286 1526 216.57H1527H1528C1528 207.181 1520.39 199.57 1511 199.57V200.57ZM280 200.57V199.57C270.611 199.57 263 207.181 263 216.57H264H265C265 208.286 271.716 201.57 280 201.57V200.57Z" fill="#E4E8EF" mask="url(#path-85-inside-7_3633_24668)"/>
+<mask id="path-87-inside-8_3633_24668" fill="white">
+<path d="M265 201.57H1526V244.641H265V201.57Z"/>
+</mask>
+<path d="M265 201.57H1526V244.641H265V201.57Z" fill="#F6F7F9"/>
+<path d="M1526 244.641V243.641H265V244.641V245.641H1526V244.641Z" fill="#E4E8EF" mask="url(#path-87-inside-8_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="285" y="228.406">Company</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="545.828" y="228.406">Product</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="787.047" y="228.406">Seats</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="879.773" y="228.406">Value (ARR)</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="1024.47" y="228.406">Weighted</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="1150.19" y="228.406">Stage</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="1350.1" y="228.406">Owner</tspan></text>
+<mask id="path-96-inside-9_3633_24668" fill="white">
+<path d="M265 244.641H1526V297.641H265V244.641Z"/>
+</mask>
+<path d="M1526 297.641V296.641H265V297.641V298.641H1526V297.641Z" fill="#E4E8EF" mask="url(#path-96-inside-9_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="276.687">Baraka Logistics</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="276.687">Microsoft 365 Business Premium</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="276.687">45</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="276.687">$11,880</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="276.687">$5,940</tspan></text>
+<path d="M1150.19 271.102C1150.19 265.441 1154.78 260.852 1160.44 260.852H1265.69C1271.35 260.852 1275.94 265.441 1275.94 271.102C1275.94 276.762 1271.35 281.352 1265.69 281.352H1160.44C1154.78 281.352 1150.19 276.762 1150.19 271.102Z" fill="#FBF0FB"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="276.052">Proposal &#38; Quote</tspan></text>
+<path d="M1350.1 271.141C1350.1 264.513 1355.47 259.141 1362.1 259.141C1368.73 259.141 1374.1 264.513 1374.1 271.141C1374.1 277.768 1368.73 283.141 1362.1 283.141C1355.47 283.141 1350.1 277.768 1350.1 271.141Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1355.6" y="274.283">TK</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="275.341">Tabitha</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="276.687">&#x203a;</tspan></text>
+<mask id="path-109-inside-10_3633_24668" fill="white">
+<path d="M265 297.641H1526V350.641H265V297.641Z"/>
+</mask>
+<path d="M1526 350.641V349.641H265V350.641V351.641H1526V350.641Z" fill="#E4E8EF" mask="url(#path-109-inside-10_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="329.687">Savannah Microfinance</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="329.687">Microsoft 365 E3</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="329.687">120</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="329.687">$51,840</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="329.687">$38,880</tspan></text>
+<path d="M1150.19 324.102C1150.19 318.441 1154.78 313.852 1160.44 313.852H1231.66C1237.32 313.852 1241.91 318.441 1241.91 324.102C1241.91 329.762 1237.32 334.352 1231.66 334.352H1160.44C1154.78 334.352 1150.19 329.762 1150.19 324.102Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="329.052">Negotiation</tspan></text>
+<path d="M1350.1 324.141C1350.1 317.513 1355.47 312.141 1362.1 312.141C1368.73 312.141 1374.1 317.513 1374.1 324.141C1374.1 330.768 1368.73 336.141 1362.1 336.141C1355.47 336.141 1350.1 330.768 1350.1 324.141Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1352.1" y="327.283">MW</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="328.341">Michael</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="329.687">&#x203a;</tspan></text>
+<mask id="path-122-inside-11_3633_24668" fill="white">
+<path d="M265 350.641H1526V403.641H265V350.641Z"/>
+</mask>
+<path d="M1526 403.641V402.641H265V403.641V404.641H1526V403.641Z" fill="#E4E8EF" mask="url(#path-122-inside-11_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="382.687">Nairobi Dental Group</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="382.687">Microsoft 365 Business Standard</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="382.687">18</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="382.687">$2,700</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="382.687">$270</tspan></text>
+<path d="M1150.19 377.102C1150.19 371.441 1154.78 366.852 1160.44 366.852H1222.66C1228.32 366.852 1232.91 371.441 1232.91 377.102C1232.91 382.762 1228.32 387.352 1222.66 387.352H1160.44C1154.78 387.352 1150.19 382.762 1150.19 377.102Z" fill="#EBF0FF"/>
+<text fill="#2456E6" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="382.052">Activation</tspan></text>
+<path d="M1350.1 377.141C1350.1 370.513 1355.47 365.141 1362.1 365.141C1368.73 365.141 1374.1 370.513 1374.1 377.141C1374.1 383.768 1368.73 389.141 1362.1 389.141C1355.47 389.141 1350.1 383.768 1350.1 377.141Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1355.6" y="380.283">TK</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="381.341">Tabitha</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="382.687">&#x203a;</tspan></text>
+<mask id="path-135-inside-12_3633_24668" fill="white">
+<path d="M265 403.641H1526V456.641H265V403.641Z"/>
+</mask>
+<path d="M1526 456.641V455.641H265V456.641V457.641H1526V456.641Z" fill="#E4E8EF" mask="url(#path-135-inside-12_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="435.687">Kilifi Beach Resorts</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="435.687">Teams Phone Standard</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="435.687">60</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="435.687">$5,760</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="435.687">$1,440</tspan></text>
+<path d="M1150.19 430.102C1150.19 424.441 1154.78 419.852 1160.44 419.852H1238.54C1244.2 419.852 1248.79 424.441 1248.79 430.102C1248.79 435.762 1244.2 440.352 1238.54 440.352H1160.44C1154.78 440.352 1150.19 435.762 1150.19 430.102Z" fill="#FBF1DE"/>
+<text fill="#B45309" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="435.052">Qualification</tspan></text>
+<path d="M1350.1 430.141C1350.1 423.513 1355.47 418.141 1362.1 418.141C1368.73 418.141 1374.1 423.513 1374.1 430.141C1374.1 436.768 1368.73 442.141 1362.1 442.141C1355.47 442.141 1350.1 436.768 1350.1 430.141Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1355.1" y="433.283">JN</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="434.341">Joy</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="435.687">&#x203a;</tspan></text>
+<mask id="path-148-inside-13_3633_24668" fill="white">
+<path d="M265 456.641H1526V509.641H265V456.641Z"/>
+</mask>
+<path d="M1526 509.641V508.641H265V509.641V510.641H1526V509.641Z" fill="#E4E8EF" mask="url(#path-148-inside-13_3633_24668)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="488.687">Highlands Coffee Exporters</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="488.687">Microsoft 365 E5</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="488.687">200</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="488.687">$136,800</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="488.687">&#x2014;</tspan></text>
+<path d="M1150.19 483.102C1150.19 477.441 1154.78 472.852 1160.44 472.852H1187.82C1193.48 472.852 1198.07 477.441 1198.07 483.102C1198.07 488.762 1193.48 493.352 1187.82 493.352H1160.44C1154.78 493.352 1150.19 488.762 1150.19 483.102Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="488.052">Won</tspan></text>
+<path d="M1350.1 483.141C1350.1 476.513 1355.47 471.141 1362.1 471.141C1368.73 471.141 1374.1 476.513 1374.1 483.141C1374.1 489.768 1368.73 495.141 1362.1 495.141C1355.47 495.141 1350.1 489.768 1350.1 483.141Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1352.1" y="486.283">MW</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="487.341">Michael</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="488.687">&#x203a;</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="285" y="541.687">Coastal Freight Ltd.</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="545.828" y="541.687">Microsoft 365 Business Standard</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="787.047" y="541.687">35</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="879.773" y="541.687">$5,250</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1024.47" y="541.687">&#x2014;</tspan></text>
+<path d="M1150.19 536.102C1150.19 530.441 1154.78 525.852 1160.44 525.852H1184.3C1189.97 525.852 1194.55 530.441 1194.55 536.102C1194.55 541.762 1189.97 546.352 1184.3 546.352H1160.44C1154.78 546.352 1150.19 541.762 1150.19 536.102Z" fill="#FBEBEB"/>
+<text fill="#C23434" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1160.19" y="541.052">Lost</tspan></text>
+<path d="M1350.1 536.141C1350.1 529.513 1355.47 524.141 1362.1 524.141C1368.73 524.141 1374.1 529.513 1374.1 536.141C1374.1 542.768 1368.73 548.141 1362.1 548.141C1355.47 548.141 1350.1 542.768 1350.1 536.141Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1355.1" y="539.283">JN</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1382.1" y="540.341">Joy</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1493.34" y="541.687">&#x203a;</tspan></text>
+</g>
+<defs>
+<filter id="filter0_d_3633_24668" x="261" y="138" width="358.102" height="46.5703" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_3633_24668"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_3633_24668" result="shape"/>
+</filter>
+<filter id="filter1_d_3633_24668" x="261" y="198.57" width="1269" height="368.57" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_3633_24668"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_3633_24668" result="shape"/>
+</filter>
+<linearGradient id="paint0_linear_3633_24668" x1="38.8484" y1="41.5516" x2="55.3451" y2="41.5516" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3E1856"/>
+<stop offset="1" stop-color="#C3509D"/>
+</linearGradient>
+<linearGradient id="paint1_linear_3633_24668" x1="46.0159" y1="40.0044" x2="53.338" y2="50.1609" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6B6C6C"/>
+<stop offset="1" stop-color="#F7F8F8"/>
+</linearGradient>
+<linearGradient id="paint2_linear_3633_24668" x1="44.725" y1="50.2127" x2="44.725" y2="31.7699" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3E1856"/>
+<stop offset="1" stop-color="#C3509D"/>
+</linearGradient>
+<linearGradient id="paint3_linear_3633_24668" x1="38.2344" y1="40.8223" x2="49.8441" y2="40.8223" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6B6C6C"/>
+<stop offset="1" stop-color="#F7F8F8"/>
+</linearGradient>
+<linearGradient id="paint4_linear_3633_24668" x1="51.667" y1="41.178" x2="38.597" y2="34.69" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6B6C6C"/>
+<stop offset="1" stop-color="#F7F8F8"/>
+</linearGradient>
+<linearGradient id="paint5_linear_3633_24668" x1="24.4085" y1="38.7054" x2="44.5019" y2="38.7054" gradientUnits="userSpaceOnUse">
+<stop stop-color="#DE3293"/>
+<stop offset="1" stop-color="#263979"/>
+</linearGradient>
+<linearGradient id="paint6_linear_3633_24668" x1="24.333" y1="32.6426" x2="38.7849" y2="41.3755" gradientUnits="userSpaceOnUse">
+<stop stop-color="#DE3293"/>
+<stop offset="1" stop-color="#263979"/>
+</linearGradient>
+<linearGradient id="paint7_linear_3633_24668" x1="37.4967" y1="49.9555" x2="37.4967" y2="27.4643" gradientUnits="userSpaceOnUse">
+<stop stop-color="#DE3293"/>
+<stop offset="1" stop-color="#263979"/>
+</linearGradient>
+<linearGradient id="paint8_linear_3633_24668" x1="37.2457" y1="39.5107" x2="48.935" y2="43.3304" gradientUnits="userSpaceOnUse">
+<stop stop-color="#DE3293"/>
+<stop offset="1" stop-color="#263979"/>
+</linearGradient>
+<linearGradient id="paint9_linear_3633_24668" x1="29.9179" y1="39.554" x2="45.8569" y2="47.4661" gradientUnits="userSpaceOnUse">
+<stop stop-color="#DE3293"/>
+<stop offset="1" stop-color="#263979"/>
+</linearGradient>
+<clipPath id="clip0_3633_24668">
+<rect width="32" height="26" fill="white" transform="translate(24 26)"/>
+</clipPath>
+<clipPath id="clip1_3633_24668">
+<rect width="13" height="13" fill="white" transform="translate(1245 25)"/>
+</clipPath>
+<clipPath id="clip2_3633_24668">
+<rect width="160" height="16" fill="white" transform="translate(1266 23.5)"/>
+</clipPath>
+</defs>
+</svg>
