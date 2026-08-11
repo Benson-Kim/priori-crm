@@ -109,10 +109,7 @@ api:lint:
     - pip install -r requirements.txt
   script:
     - ruff check .
-    # TEMPORARY (revert before merge): --diff instead of --check so the
-    # sandboxed agent session (no PyPI access) can read the exact
-    # formatting delta from the job log. Same exit-code semantics.
-    - ruff format --diff .
+    - ruff format --check .
 
 api:test:
   stage: test
