@@ -28,16 +28,24 @@ const DefaultLayout = () => {
     const activeDescription = override !== null ? override.description : header?.description;
     const showHeader = !!activeTitle;
 
+    // Chrome badge counts (sidebar nav badges + topbar bell) are served by
+    // issue #45's notifications endpoint and must never be computed
+    // client-side. Until that endpoint lands, both stay undefined/zero and
+    // the badges render hidden — replace with the notifications hook then.
+    const navBadgeCounts = undefined;
+    const notificationCount = 0;
+
     return (
         <OwnerProfileProvider>
             <HeaderContext.Provider value={{ override, setOverride }}>
                 <div className="flex h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">
-                    <Sidebar />
+                    <Sidebar badgeCounts={navBadgeCounts} />
                     <div className="flex flex-col flex-1 min-w-0 border border-gray-300 bg-gray-50 p-2 pb-4 rounded-2xl">
                         {showHeader && (
                             <Header
                                 title={activeTitle}
                                 description={activeDescription ?? ""}
+                                notificationCount={notificationCount}
                             />
                         )}
                         <main className="flex-1 p-4 overflow-auto">
