@@ -114,9 +114,7 @@ class DealCloseRequest(BaseModel):
 class DealParkRequest(BaseModel):
     """Request body for parking a deal into the future pipeline."""
 
-    parked_until: date = Field(
-        ..., description="Re-engage date", alias="parkedUntil"
-    )
+    parked_until: date = Field(..., description="Re-engage date", alias="parkedUntil")
     note: str = Field(
         ...,
         max_length=2000,
@@ -188,7 +186,7 @@ class DealResponse(DealSummary):
     """Full deal detail including the close note and stage record."""
 
     close_note: str | None = None
-    activities: list[DealActivityResponse] = []
+    activities: list[DealActivityResponse] = Field(default_factory=list)
     updated_at: datetime
 
 

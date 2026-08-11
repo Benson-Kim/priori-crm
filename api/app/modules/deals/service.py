@@ -203,12 +203,11 @@ class DealService(ServiceBase):
         last = last or fallback
         age_days = (today - first).days
         idle_days = (today - last).days
-        if deal.status == DealStatus.OPEN:
-            days_in_pipeline = age_days
-        else:
-            # Closed/parked deals stop the clock at their last record —
-            # the design's "Nd total" ribbon.
-            days_in_pipeline = (last - first).days
+        # Closed/parked deals stop the clock at their last record — the
+        # design's "Nd total" ribbon.
+        days_in_pipeline = (
+            age_days if deal.status == DealStatus.OPEN else (last - first).days
+        )
         return age_days, idle_days, days_in_pipeline
 
     @staticmethod
@@ -225,9 +224,7 @@ class DealService(ServiceBase):
         last: date | None,
         latest: DealActivity | None,
     ) -> dict[str, Any]:
-        age_days, idle_days, days_in_pipeline = self._activity_window(
-            deal, first, last
-        )
+        age_days, idle_days, days_in_pipeline = self._activity_window(deal, first, last)
         position = self._stage_position(deal)
         customer = deal.customer
         return {
@@ -340,9 +337,7 @@ class DealService(ServiceBase):
                 after=self._lifecycle_snapshot(deal),
             )
 
-            logger.info(
-                "Created deal %s", deal.id, extra={"deal_id": str(deal.id)}
-            )
+            logger.info("Created deal %s", deal.id, extra={"deal_id": str(deal.id)})
             return deal
         except IntegrityError as e:
             logger.exception("Integrity error creating deal")
@@ -417,10 +412,7 @@ class DealService(ServiceBase):
                 else_=2,
             )
             stage_rank = case(
-                *(
-                    (Deal.stage == s.value, i)
-                    for i, s in enumerate(DEAL_STAGE_ORDER)
-                ),
+                *((Deal.stage == s.value, i) for i, s in enumerate(DEAL_STAGE_ORDER)),
                 else_=len(DEAL_STAGE_ORDER),
             )
             usd_factor = case(
@@ -518,9 +510,7 @@ class DealService(ServiceBase):
             if data.value is not None:
                 deal.value = quantize_money(data.value)
             if data.owner_id is not None:
-                owner = (
-                    self._db.query(User).filter(User.id == data.owner_id).first()
-                )
+                owner = self._db.query(User).filter(User.id == data.owner_id).first()
                 if owner is None:
                     raise NotFoundException(
                         detail=f"User with ID '{data.owner_id}' not found",
@@ -588,7 +578,9 @@ class DealService(ServiceBase):
         self._db.flush()
         self._record_activity(deal, next_stage.label, cleaned)
         self._audit(
-            deal, "stage_advanced", before=before,
+            deal,
+            "stage_advanced",
+            before=before,
             after=self._lifecycle_snapshot(deal),
         )
         return deal
@@ -677,9 +669,7 @@ class DealService(ServiceBase):
             PARKED_LABEL,
             f"{cleaned} — re-engage on {parked_until.isoformat()}",
         )
-        self._audit(
-            deal, "parked", before=before, after=self._lifecycle_snapshot(deal)
-        )
+        self._audit(deal, "parked", before=before, after=self._lifecycle_snapshot(deal))
         return deal
 
     def resume(self, deal_id: uuid.UUID) -> Deal:
@@ -732,9 +722,7 @@ class DealService(ServiceBase):
             for stage, currency, count, value_sum in stage_rows:
                 bucket = per_stage[stage]
                 bucket["count"] += count
-                bucket["value_usd"] += usd_equivalent(
-                    Decimal(str(value_sum)), currency
-                )
+                bucket["value_usd"] += usd_equivalent(Decimal(str(value_sum)), currency)
 
             owner_rows = (
                 self._db.query(
@@ -771,9 +759,7 @@ class DealService(ServiceBase):
             owner_names: dict[uuid.UUID, str] = {}
             owner_ids = [oid for oid in per_owner if oid is not None]
             if owner_ids:
-                for user in (
-                    self._db.query(User).filter(User.id.in_(owner_ids)).all()
-                ):
+                for user in self._db.query(User).filter(User.id.in_(owner_ids)).all():
                     owner_names[user.id] = self._display_name(user) or ""
 
             return DealAggregatesResponse(
