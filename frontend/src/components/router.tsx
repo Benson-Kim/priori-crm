@@ -1,15 +1,16 @@
-import { lazy, Suspense, type ComponentType } from "react";
+﻿import { lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { LoadingState } from "@/components/ui/LoadingState";
 import LoginPage from "@/pages/auth/login";
 import RequireAuth from "./auth/RequireAuth";
 import DefaultLayout from "./layout/default-layout";
+import SalesDeskLayout from "./layout/sales-desk-layout";
 
 // Route-based code splitting: every page below is fetched on demand, so the
 // initial bundle only ships the shell (router, auth guard, layout) and the
 // login page. This is the single biggest lever for first paint on slow
-// (3G) networks — heavy dependencies like recharts (dashboard/statements)
+// (3G) networks: heavy dependencies like recharts (dashboard/statements)
 // and react-pdf (document previews) stay out of the entry chunk entirely.
 const lazyPage = (loader: () => Promise<{ default: ComponentType }>) => {
     const Page = lazy(loader);
@@ -398,6 +399,148 @@ const routes = [
                                 element: <Navigate to="/cashflow" replace />,
                             },
                         ],
+                    },
+                ],
+            },
+            /*
+             * Sales Desk, a sibling shell, not a section of DefaultLayout.
+             * The module owns the whole /sales-desk subtree and swaps in its
+             * own sidebar and header, so it mounts alongside the Business
+             * Central layout under the same auth guard.
+             */
+            {
+                path: "sales-desk",
+                element: <SalesDeskLayout />,
+                children: [
+                    {
+                        index: true,
+                        element: lazyPage(() => import("@/pages/sales-desk")),
+                        handle: {
+                            header: {
+                                title: "Dashboard",
+                                description: "Pipeline health, bookings and quota attainment.",
+                            },
+                        },
+                    },
+                    {
+                        path: "pipeline",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/pipeline")),
+                                handle: {
+                                    header: {
+                                        title: "Pipeline",
+                                        description: "Every deal and what it is worth.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/pipeline/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Pipeline",
+                                        description: "Work deals by owner, stage and activity.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "companies",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/companies")),
+                                handle: {
+                                    header: {
+                                        title: "Companies",
+                                        description: "Who we sell to and how to reach them.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/companies/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Companies",
+                                        description: "Billing profiles and accounting sync.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "future-pipeline",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/future-pipeline")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Future pipeline",
+                                        description: "Prospects and why we are waiting.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/future-pipeline/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Future pipeline",
+                                        description: "Planned prospects with engage-by dates.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "quotes",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/quotes")),
+                                handle: {
+                                    header: {
+                                        title: "Quotes & pricing",
+                                        description:
+                                            "Active quotes and the partner price list.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "new",
+                                element: lazyPage(() => import("@/pages/sales-desk/quotes/new")),
+                                handle: {
+                                    header: {
+                                        title: "Quotes & pricing",
+                                        description:
+                                            "Per-user pricing, billing period and currency.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        path: "onboarding",
+                        element: lazyPage(() => import("@/pages/sales-desk/onboarding")),
+                        handle: {
+                            header: {
+                                title: "Onboarding",
+                                description: "Post-sale delivery checklists for won deals.",
+                            },
+                        },
                     },
                 ],
             },
