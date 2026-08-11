@@ -153,6 +153,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(
         invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"]
     )
+    app.include_router(deals_router, prefix=f"{api_prefix}/deals", tags=["Deals"])
     app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
     app.include_router(
@@ -174,11 +175,6 @@ def _register_routers(app: FastAPI) -> None:
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore
-    )
-
-
-app = create_app()
-outes],  # type: ignore
     )
 
 
