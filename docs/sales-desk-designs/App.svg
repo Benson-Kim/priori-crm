@@ -1,0 +1,436 @@
+<svg width="1551" height="980" viewBox="0 0 1551 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1551" height="980" fill="#F6F7F9"/>
+<mask id="path-1-inside-1_3654_7835" fill="white">
+<path d="M0 0H240V980H0V0Z"/>
+</mask>
+<path d="M0 0H240V980H0V0Z" fill="white"/>
+<path d="M240 0H239V980H240H241V0H240Z" fill="#E4E8EF" mask="url(#path-1-inside-1_3654_7835)"/>
+<path d="M24 36C24 29.3726 29.3726 24 36 24H44C50.6274 24 56 29.3726 56 36V44C56 50.6274 50.6274 56 44 56H36C29.3726 56 24 50.6274 24 44V36Z" fill="url(#paint0_linear_3654_7835)"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="35.5" y="44.3357">P</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="66" y="38">Priori</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="66" y="52">Technologies</tspan></text>
+<path d="M26.25 103.5L27.75 102M27.75 102L33 96.75L38.25 102M27.75 102V109.5C27.75 109.699 27.829 109.89 27.9697 110.03C28.1103 110.171 28.3011 110.25 28.5 110.25H30.75M38.25 102L39.75 103.5M38.25 102V109.5C38.25 109.699 38.171 109.89 38.0303 110.03C37.8897 110.171 37.6989 110.25 37.5 110.25H35.25M30.75 110.25C30.9489 110.25 31.1397 110.171 31.2803 110.03C31.421 109.89 31.5 109.699 31.5 109.5V106.5C31.5 106.301 31.579 106.11 31.7197 105.97C31.8603 105.829 32.0511 105.75 32.25 105.75H33.75C33.9489 105.75 34.1397 105.829 34.2803 105.97C34.421 106.11 34.5 106.301 34.5 106.5V109.5C34.5 109.699 34.579 109.89 34.7197 110.03C34.8603 110.171 35.0511 110.25 35.25 110.25M30.75 110.25H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="107.836">Dashboard</tspan></text>
+<path d="M12 137C12 130.373 17.3726 125 24 125H215C221.627 125 227 130.373 227 137V152C227 158.627 221.627 164 215 164H24C17.3726 164 12 158.627 12 152V137Z" fill="#FBF0FB"/>
+<path d="M30.75 149.75V145.25C30.75 144.852 30.592 144.471 30.3107 144.189C30.0294 143.908 29.6478 143.75 29.25 143.75H27.75C27.3522 143.75 26.9706 143.908 26.6893 144.189C26.408 144.471 26.25 144.852 26.25 145.25V149.75C26.25 150.148 26.408 150.529 26.6893 150.811C26.9706 151.092 27.3522 151.25 27.75 151.25H29.25C29.6478 151.25 30.0294 151.092 30.3107 150.811C30.592 150.529 30.75 150.148 30.75 149.75ZM30.75 149.75V142.25C30.75 141.852 30.908 141.471 31.1893 141.189C31.4706 140.908 31.8522 140.75 32.25 140.75H33.75C34.1478 140.75 34.5294 140.908 34.8107 141.189C35.092 141.471 35.25 141.852 35.25 142.25V149.75M30.75 149.75C30.75 150.148 30.908 150.529 31.1893 150.811C31.4706 151.092 31.8522 151.25 32.25 151.25H33.75C34.1478 151.25 34.5294 151.092 34.8107 150.811C35.092 150.529 35.25 150.148 35.25 149.75M35.25 149.75V139.25C35.25 138.852 35.408 138.471 35.6893 138.189C35.9706 137.908 36.3522 137.75 36.75 137.75H38.25C38.6478 137.75 39.0294 137.908 39.3107 138.189C39.592 138.471 39.75 138.852 39.75 139.25V149.75C39.75 150.148 39.592 150.529 39.3107 150.811C39.0294 151.092 38.6478 151.25 38.25 151.25H36.75C36.3522 151.25 35.9706 151.092 35.6893 150.811C35.408 150.529 35.25 150.148 35.25 149.75Z" stroke="#912B90" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="148.836">Pipeline</tspan></text>
+<path d="M38.25 192.25V180.25C38.25 179.852 38.092 179.471 37.8107 179.189C37.5294 178.908 37.1478 178.75 36.75 178.75H29.25C28.8522 178.75 28.4706 178.908 28.1893 179.189C27.908 179.471 27.75 179.852 27.75 180.25V192.25M38.25 192.25H39.75M38.25 192.25H34.5M27.75 192.25H26.25M27.75 192.25H31.5M34.5 192.25V188.5C34.5 188.301 34.421 188.11 34.2803 187.97C34.1397 187.829 33.9489 187.75 33.75 187.75H32.25C32.0511 187.75 31.8603 187.829 31.7197 187.97C31.579 188.11 31.5 188.301 31.5 188.5V192.25M34.5 192.25H31.5M30.75 181.75H31.5M30.75 184.75H31.5M34.5 181.75H35.25M34.5 184.75H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="189.836">Companies</tspan></text>
+<path d="M199 185.5C199 181.082 202.582 177.5 207 177.5C211.418 177.5 215 181.082 215 185.5C215 189.918 211.418 193.5 207 193.5C202.582 193.5 199 189.918 199 185.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="188.643">2</tspan></text>
+<path d="M33 223.5V226.5L35.25 228.75M39.75 226.5C39.75 227.386 39.5754 228.264 39.2362 229.083C38.897 229.902 38.3998 230.646 37.773 231.273C37.1462 231.9 36.4021 232.397 35.5831 232.736C34.7642 233.075 33.8864 233.25 33 233.25C32.1136 233.25 31.2358 233.075 30.4169 232.736C29.5979 232.397 28.8538 231.9 28.227 231.273C27.6002 230.646 27.103 229.902 26.7638 229.083C26.4246 228.264 26.25 227.386 26.25 226.5C26.25 224.71 26.9612 222.993 28.227 221.727C29.4929 220.461 31.2098 219.75 33 219.75C34.7902 219.75 36.5071 220.461 37.773 221.727C39.0388 222.993 39.75 224.71 39.75 226.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="230.836">Future pipeline</tspan></text>
+<path d="M199 226.5C199 222.082 202.582 218.5 207 218.5C211.418 218.5 215 222.082 215 226.5C215 230.918 211.418 234.5 207 234.5C202.582 234.5 199 230.918 199 226.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="229.643">2</tspan></text>
+<path d="M30.75 263.75H35.25M35.25 271.25V269M33 271.25H33.0075M30.75 271.25H30.7575M30.75 266.75H30.7575M33 266.75H33.0075M35.25 266.75H35.2575M27 272.75H39C39.3978 272.75 39.7794 272.592 40.0607 272.311C40.342 272.029 40.5 271.648 40.5 271.25V263.75C40.5 263.352 40.342 262.971 40.0607 262.689C39.7794 262.408 39.3978 262.25 39 262.25H27C26.6022 262.25 26.2206 262.408 25.9393 262.689C25.658 262.971 25.5 263.352 25.5 263.75V271.25C25.5 271.648 25.658 272.029 25.9393 272.311C26.2206 272.592 26.6022 272.75 27 272.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="271.836">Quotes &#38; pricing</tspan></text>
+<path d="M30.75 308.5L32.25 310L35.25 307M39.75 308.5C39.75 309.386 39.5754 310.264 39.2362 311.083C38.897 311.902 38.3998 312.646 37.773 313.273C37.1462 313.9 36.4021 314.397 35.5831 314.736C34.7642 315.075 33.8864 315.25 33 315.25C32.1136 315.25 31.2358 315.075 30.4169 314.736C29.5979 314.397 28.8538 313.9 28.227 313.273C27.6002 312.646 27.103 311.902 26.7638 311.083C26.4246 310.264 26.25 309.386 26.25 308.5C26.25 306.71 26.9612 304.993 28.227 303.727C29.4929 302.461 31.2098 301.75 33 301.75C34.7902 301.75 36.5071 302.461 37.773 303.727C39.0388 304.993 39.75 306.71 39.75 308.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="312.836">Onboarding</tspan></text>
+<mask id="path-29-inside-2_3654_7835" fill="white">
+<path d="M0 874H239V980H0V874Z"/>
+</mask>
+<path d="M0 874V875H239V874V873H0V874Z" fill="#E4E8EF" mask="url(#path-29-inside-2_3654_7835)"/>
+<path d="M16 906.5C16 898.768 22.268 892.5 30 892.5C37.732 892.5 44 898.768 44 906.5C44 914.232 37.732 920.5 30 920.5C22.268 920.5 16 914.232 16 906.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="21" y="910.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="54" y="903.2">Frank Mueke</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="54" y="918">Senior Admin</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="945">&#xa9; 2026 Priori &#x2014; All Rights Reserved</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="960">Version: 1.0.188-288</tspan></text>
+<mask id="path-37-inside-3_3654_7835" fill="white">
+<path d="M240 0H1551V64H240V0Z"/>
+</mask>
+<path d="M240 0H1551V64H240V0Z" fill="white"/>
+<path d="M1551 64V63H240V64V65H1551V64Z" fill="#E4E8EF" mask="url(#path-37-inside-3_3654_7835)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="264" y="35.8357">Pipeline</tspan></text>
+<mask id="path-40-inside-4_3654_7835" fill="white">
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z"/>
+</mask>
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z" fill="#F6F7F9"/>
+<path d="M1244 16.5V17.5H1427V16.5V15.5H1244V16.5ZM1439 28.5H1438V34.5H1439H1440V28.5H1439ZM1427 46.5V45.5H1244V46.5V47.5H1427V46.5ZM1232 34.5H1233V28.5H1232H1231V34.5H1232ZM1244 46.5V45.5C1237.92 45.5 1233 40.5751 1233 34.5H1232H1231C1231 41.6797 1236.82 47.5 1244 47.5V46.5ZM1439 34.5H1438C1438 40.5751 1433.08 45.5 1427 45.5V46.5V47.5C1434.18 47.5 1440 41.6797 1440 34.5H1439ZM1427 16.5V17.5C1433.08 17.5 1438 22.4249 1438 28.5H1439H1440C1440 21.3203 1434.18 15.5 1427 15.5V16.5ZM1244 16.5V15.5C1236.82 15.5 1231 21.3203 1231 28.5H1232H1233C1233 22.4249 1237.92 17.5 1244 17.5V16.5Z" fill="#E4E8EF" mask="url(#path-40-inside-4_3654_7835)"/>
+<g clip-path="url(#clip0_3654_7835)">
+<path d="M1257.35 37.3499L1254.52 34.5224M1250.85 36.0499C1252.23 36.0499 1253.55 35.502 1254.53 34.5269C1255.5 33.5517 1256.05 32.229 1256.05 30.8499C1256.05 29.4708 1255.5 28.1481 1254.53 27.1729C1253.55 26.1978 1252.23 25.6499 1250.85 25.6499C1249.47 25.6499 1248.15 26.1978 1247.17 27.1729C1246.2 28.1481 1245.65 29.4708 1245.65 30.8499C1245.65 32.229 1246.2 33.5517 1247.17 34.5269C1248.15 35.502 1249.47 36.0499 1250.85 36.0499Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip1_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1266" y="35.7">Search companies, deals&#x2026;</tspan></text>
+</g>
+<mask id="path-44-inside-5_3654_7835" fill="white">
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z"/>
+</mask>
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z" fill="#F6F7F9"/>
+<path d="M1451 31.5M1483 31.5M1483 31.5M1451 31.5M1467 15.5M1483 31.5M1467 47.5M1451 31.5M1467 47.5V46.5C1458.72 46.5 1452 39.7843 1452 31.5H1451H1450C1450 40.8888 1457.61 48.5 1467 48.5V47.5ZM1483 31.5H1482C1482 39.7843 1475.28 46.5 1467 46.5V47.5V48.5C1476.39 48.5 1484 40.8888 1484 31.5H1483ZM1467 15.5V16.5C1475.28 16.5 1482 23.2157 1482 31.5H1483H1484C1484 22.1112 1476.39 14.5 1467 14.5V15.5ZM1467 15.5V14.5C1457.61 14.5 1450 22.1112 1450 31.5H1451H1452C1452 23.2157 1458.72 16.5 1467 16.5V15.5Z" fill="#E4E8EF" mask="url(#path-44-inside-5_3654_7835)"/>
+<path d="M1468.75 34.4167H1471.67L1470.85 33.5971C1470.74 33.487 1470.65 33.3563 1470.59 33.2125C1470.53 33.0687 1470.5 32.9145 1470.5 32.7588V30.9167C1470.5 30.1927 1470.28 29.4865 1469.86 28.8954C1469.44 28.3042 1468.85 27.8571 1468.17 27.6156V27.4167C1468.17 27.1072 1468.04 26.8105 1467.83 26.5917C1467.61 26.3729 1467.31 26.25 1467 26.25C1466.69 26.25 1466.39 26.3729 1466.18 26.5917C1465.96 26.8105 1465.83 27.1072 1465.83 27.4167V27.6156C1464.47 28.0962 1463.5 29.393 1463.5 30.9167V32.7594C1463.5 33.0732 1463.38 33.3748 1463.15 33.5971L1462.33 34.4167H1465.25M1468.75 34.4167V35C1468.75 35.4641 1468.57 35.9092 1468.24 36.2374C1467.91 36.5656 1467.46 36.75 1467 36.75C1466.54 36.75 1466.09 36.5656 1465.76 36.2374C1465.44 35.9092 1465.25 35.4641 1465.25 35V34.4167M1468.75 34.4167H1465.25" stroke="#6B7688" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1470 20.5C1470 16.0817 1473.58 12.5 1478 12.5C1482.42 12.5 1486 16.0817 1486 20.5C1486 24.9183 1482.42 28.5 1478 28.5C1473.58 28.5 1470 24.9183 1470 20.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="9" font-weight="bold" letter-spacing="0px"><tspan x="1475.07" y="23.65">5</tspan></text>
+<path d="M1495 31.5C1495 22.6634 1502.16 15.5 1511 15.5C1519.84 15.5 1527 22.6634 1527 31.5C1527 40.3366 1519.84 47.5 1511 47.5C1502.16 47.5 1495 40.3366 1495 31.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="1502" y="35.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="bold" letter-spacing="0px"><tspan x="264" y="112.4">Pipeline</tspan></text>
+<mask id="path-52-inside-6_3654_7835" fill="white">
+<path d="M264 152C264 143.163 271.163 136 280 136H554.75C563.587 136 570.75 143.163 570.75 152V180C570.75 188.837 563.587 196 554.75 196H280C271.163 196 264 188.837 264 180V152Z"/>
+</mask>
+<path d="M264 152C264 143.163 271.163 136 280 136H554.75C563.587 136 570.75 143.163 570.75 152V180C570.75 188.837 563.587 196 554.75 196H280C271.163 196 264 188.837 264 180V152Z" fill="white"/>
+<path d="M280 136V137H554.75V136V135H280V136ZM570.75 152H569.75V180H570.75H571.75V152H570.75ZM554.75 196V195H280V196V197H554.75V196ZM264 180H265V152H264H263V180H264ZM280 196V195C271.716 195 265 188.284 265 180H264H263C263 189.389 270.611 197 280 197V196ZM570.75 180H569.75C569.75 188.284 563.034 195 554.75 195V196V197C564.139 197 571.75 189.389 571.75 180H570.75ZM554.75 136V137C563.034 137 569.75 143.716 569.75 152H570.75H571.75C571.75 142.611 564.139 135 554.75 135V136ZM280 136V135C270.611 135 263 142.611 263 152H264H265C265 143.716 271.716 137 280 137V136Z" fill="#E4E8EF" mask="url(#path-52-inside-6_3654_7835)"/>
+<path d="M277 166C277 156.611 284.611 149 294 149C303.389 149 311 156.611 311 166C311 175.389 303.389 183 294 183C284.611 183 277 175.389 277 166Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12.24" font-weight="bold" letter-spacing="0px"><tspan x="286" y="169.964">TK</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="323" y="161.7">Tabitha Kimani</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="323" y="177.6">2 open &#xb7; $14.6k</tspan></text>
+<mask id="path-58-inside-7_3654_7835" fill="white">
+<path d="M582.75 152C582.75 143.163 589.913 136 598.75 136H873.5C882.337 136 889.5 143.163 889.5 152V180C889.5 188.837 882.337 196 873.5 196H598.75C589.913 196 582.75 188.837 582.75 180V152Z"/>
+</mask>
+<path d="M582.75 152C582.75 143.163 589.913 136 598.75 136H873.5C882.337 136 889.5 143.163 889.5 152V180C889.5 188.837 882.337 196 873.5 196H598.75C589.913 196 582.75 188.837 582.75 180V152Z" fill="white"/>
+<path d="M598.75 136V137H873.5V136V135H598.75V136ZM889.5 152H888.5V180H889.5H890.5V152H889.5ZM873.5 196V195H598.75V196V197H873.5V196ZM582.75 180H583.75V152H582.75H581.75V180H582.75ZM598.75 196V195C590.466 195 583.75 188.284 583.75 180H582.75H581.75C581.75 189.389 589.361 197 598.75 197V196ZM889.5 180H888.5C888.5 188.284 881.784 195 873.5 195V196V197C882.889 197 890.5 189.389 890.5 180H889.5ZM873.5 136V137C881.784 137 888.5 143.716 888.5 152H889.5H890.5C890.5 142.611 882.889 135 873.5 135V136ZM598.75 136V135C589.361 135 581.75 142.611 581.75 152H582.75H583.75C583.75 143.716 590.466 137 598.75 137V136Z" fill="#E4E8EF" mask="url(#path-58-inside-7_3654_7835)"/>
+<path d="M595.75 166C595.75 156.611 603.361 149 612.75 149C622.139 149 629.75 156.611 629.75 166C629.75 175.389 622.139 183 612.75 183C603.361 183 595.75 175.389 595.75 166Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12.24" font-weight="bold" letter-spacing="0px"><tspan x="600.25" y="169.964">MW</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="641.75" y="161.7">Michael Wafula</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="641.75" y="177.6">1 open &#xb7; $51.8k &#xb7; 50% won</tspan></text>
+<mask id="path-64-inside-8_3654_7835" fill="white">
+<path d="M901.5 152C901.5 143.163 908.663 136 917.5 136H1192.25C1201.09 136 1208.25 143.163 1208.25 152V180C1208.25 188.837 1201.09 196 1192.25 196H917.5C908.663 196 901.5 188.837 901.5 180V152Z"/>
+</mask>
+<path d="M901.5 152C901.5 143.163 908.663 136 917.5 136H1192.25C1201.09 136 1208.25 143.163 1208.25 152V180C1208.25 188.837 1201.09 196 1192.25 196H917.5C908.663 196 901.5 188.837 901.5 180V152Z" fill="white"/>
+<path d="M917.5 136V137H1192.25V136V135H917.5V136ZM1208.25 152H1207.25V180H1208.25H1209.25V152H1208.25ZM1192.25 196V195H917.5V196V197H1192.25V196ZM901.5 180H902.5V152H901.5H900.5V180H901.5ZM917.5 196V195C909.216 195 902.5 188.284 902.5 180H901.5H900.5C900.5 189.389 908.111 197 917.5 197V196ZM1208.25 180H1207.25C1207.25 188.284 1200.53 195 1192.25 195V196V197C1201.64 197 1209.25 189.389 1209.25 180H1208.25ZM1192.25 136V137C1200.53 137 1207.25 143.716 1207.25 152H1208.25H1209.25C1209.25 142.611 1201.64 135 1192.25 135V136ZM917.5 136V135C908.111 135 900.5 142.611 900.5 152H901.5H902.5C902.5 143.716 909.216 137 917.5 137V136Z" fill="#E4E8EF" mask="url(#path-64-inside-8_3654_7835)"/>
+<path d="M914.5 166C914.5 156.611 922.111 149 931.5 149C940.889 149 948.5 156.611 948.5 166C948.5 175.389 940.889 183 931.5 183C922.111 183 914.5 175.389 914.5 166Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12.24" font-weight="bold" letter-spacing="0px"><tspan x="923" y="169.964">JN</tspan></text>
+<g clip-path="url(#clip2_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="960.5" y="161.7">Joy Nduta</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="960.5" y="177.6">1 open &#xb7; $5.8k</tspan></text>
+<path d="M1154.25 160.5C1154.25 158.291 1156.04 156.5 1158.25 156.5H1191.25C1193.46 156.5 1195.25 158.291 1195.25 160.5V171.5C1195.25 173.709 1193.46 175.5 1191.25 175.5H1158.25C1156.04 175.5 1154.25 173.709 1154.25 171.5V160.5Z" fill="#FEF9C3"/>
+<text fill="#854D0E" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="1160.25" y="169.5">1 cold</tspan></text>
+<mask id="path-72-inside-9_3654_7835" fill="white">
+<path d="M1220.25 152C1220.25 143.163 1227.41 136 1236.25 136H1511C1519.84 136 1527 143.163 1527 152V180C1527 188.837 1519.84 196 1511 196H1236.25C1227.41 196 1220.25 188.837 1220.25 180V152Z"/>
+</mask>
+<path d="M1220.25 152C1220.25 143.163 1227.41 136 1236.25 136H1511C1519.84 136 1527 143.163 1527 152V180C1527 188.837 1519.84 196 1511 196H1236.25C1227.41 196 1220.25 188.837 1220.25 180V152Z" fill="#16233A"/>
+<path d="M1236.25 136V137H1511V136V135H1236.25V136ZM1527 152H1526V180H1527H1528V152H1527ZM1511 196V195H1236.25V196V197H1511V196ZM1220.25 180H1221.25V152H1220.25H1219.25V180H1220.25ZM1236.25 196V195C1227.97 195 1221.25 188.284 1221.25 180H1220.25H1219.25C1219.25 189.389 1226.86 197 1236.25 197V196ZM1527 180H1526C1526 188.284 1519.28 195 1511 195V196V197C1520.39 197 1528 189.389 1528 180H1527ZM1511 136V137C1519.28 137 1526 143.716 1526 152H1527H1528C1528 142.611 1520.39 135 1511 135V136ZM1236.25 136V135C1226.86 135 1219.25 142.611 1219.25 152H1220.25H1221.25C1221.25 143.716 1227.97 137 1236.25 137V136Z" fill="#16233A" mask="url(#path-72-inside-9_3654_7835)"/>
+<path d="M1233.25 166C1233.25 156.611 1240.86 149 1250.25 149C1259.64 149 1267.25 156.611 1267.25 166C1267.25 175.389 1259.64 183 1250.25 183C1240.86 183 1233.25 175.389 1233.25 166Z" fill="white" fill-opacity="0.2"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="1239.75" y="170.2">ALL</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1279.25" y="161.7">Whole team</tspan></text>
+<text fill="white" fill-opacity="0.7" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1279.25" y="177.6">4 open &#xb7; $72.2k</tspan></text>
+<mask id="path-78-inside-10_3654_7835" fill="white">
+<path d="M264 228C264 219.163 271.163 212 280 212H1511C1519.84 212 1527 219.163 1527 228V278.07C1527 286.907 1519.84 294.07 1511 294.07H280C271.163 294.07 264 286.907 264 278.07V228Z"/>
+</mask>
+<path d="M264 228C264 219.163 271.163 212 280 212H1511C1519.84 212 1527 219.163 1527 228V278.07C1527 286.907 1519.84 294.07 1511 294.07H280C271.163 294.07 264 286.907 264 278.07V228Z" fill="white"/>
+<path d="M280 212V213H1511V212V211H280V212ZM1527 228H1526V278.07H1527H1528V228H1527ZM1511 294.07V293.07H280V294.07V295.07H1511V294.07ZM264 278.07H265V228H264H263V278.07H264ZM280 294.07V293.07C271.716 293.07 265 286.355 265 278.07H264H263C263 287.459 270.611 295.07 280 295.07V294.07ZM1527 278.07H1526C1526 286.355 1519.28 293.07 1511 293.07V294.07V295.07C1520.39 295.07 1528 287.459 1528 278.07H1527ZM1511 212V213C1519.28 213 1526 219.716 1526 228H1527H1528C1528 218.611 1520.39 211 1511 211V212ZM280 212V211C270.611 211 263 218.611 263 228H264H265C265 219.716 271.716 213 280 213V212Z" fill="#E4E8EF" mask="url(#path-78-inside-10_3654_7835)"/>
+<mask id="path-80-inside-11_3654_7835" fill="white">
+<path d="M265 213H517.195V293.07H265V213Z"/>
+</mask>
+<path d="M517.195 213H516.195V293.07H517.195H518.195V213H517.195Z" fill="#E4E8EF" mask="url(#path-80-inside-11_3654_7835)"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0.25px"><tspan x="281" y="236">ACTIVATION</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="281" y="257.836">1 &#xb7; $2.7k</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="281" y="277.1">avg 1d in stage list</tspan></text>
+<mask id="path-85-inside-12_3654_7835" fill="white">
+<path d="M517.195 213H769.398V293.07H517.195V213Z"/>
+</mask>
+<path d="M769.398 213H768.398V293.07H769.398H770.398V213H769.398Z" fill="#E4E8EF" mask="url(#path-85-inside-12_3654_7835)"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0.25px"><tspan x="533.195" y="236">QUALIFICATION</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="533.195" y="257.836">1 &#xb7; $5.8k</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="533.195" y="277.1">avg 52d in stage list</tspan></text>
+<mask id="path-90-inside-13_3654_7835" fill="white">
+<path d="M769.398 213H1021.59V293.07H769.398V213Z"/>
+</mask>
+<path d="M1021.59 213H1020.59V293.07H1021.59H1022.59V213H1021.59Z" fill="#E4E8EF" mask="url(#path-90-inside-13_3654_7835)"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0.25px"><tspan x="785.398" y="236">PROPOSAL &#38; QUOTE</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="785.398" y="257.836">1 &#xb7; $11.9k</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="785.398" y="277.1">avg 21d in stage list</tspan></text>
+<mask id="path-95-inside-14_3654_7835" fill="white">
+<path d="M1021.59 213H1273.8V293.07H1021.59V213Z"/>
+</mask>
+<path d="M1273.8 213H1272.8V293.07H1273.8H1274.8V213H1273.8Z" fill="#E4E8EF" mask="url(#path-95-inside-14_3654_7835)"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0.25px"><tspan x="1037.59" y="236">NEGOTIATION</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="1037.59" y="257.836">1 &#xb7; $51.8k</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1037.59" y="277.1">avg 40d in stage list</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0.25px"><tspan x="1289.8" y="236">CLOSED</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="1289.8" y="257.836">2 &#xb7; 50% won</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1289.8" y="277.1">1 won &#xb7; 1 lost</tspan></text>
+<mask id="path-103-inside-15_3654_7835" fill="white">
+<path d="M264 326.07C264 317.234 271.163 310.07 280 310.07H1511C1519.84 310.07 1527 317.234 1527 326.07V863.469C1527 872.305 1519.84 879.469 1511 879.469H280C271.163 879.469 264 872.305 264 863.469V326.07Z"/>
+</mask>
+<path d="M264 326.07C264 317.234 271.163 310.07 280 310.07H1511C1519.84 310.07 1527 317.234 1527 326.07V863.469C1527 872.305 1519.84 879.469 1511 879.469H280C271.163 879.469 264 872.305 264 863.469V326.07Z" fill="white"/>
+<path d="M280 310.07V311.07H1511V310.07V309.07H280V310.07ZM1527 326.07H1526V863.469H1527H1528V326.07H1527ZM1511 879.469V878.469H280V879.469V880.469H1511V879.469ZM264 863.469H265V326.07H264H263V863.469H264ZM280 879.469V878.469C271.716 878.469 265 871.753 265 863.469H264H263C263 872.858 270.611 880.469 280 880.469V879.469ZM1527 863.469H1526C1526 871.753 1519.28 878.469 1511 878.469V879.469V880.469C1520.39 880.469 1528 872.858 1528 863.469H1527ZM1511 310.07V311.07C1519.28 311.07 1526 317.786 1526 326.07H1527H1528C1528 316.681 1520.39 309.07 1511 309.07V310.07ZM280 310.07V309.07C270.611 309.07 263 316.681 263 326.07H264H265C265 317.786 271.716 311.07 280 311.07V310.07Z" fill="#E4E8EF" mask="url(#path-103-inside-15_3654_7835)"/>
+<mask id="path-105-inside-16_3654_7835" fill="white">
+<path d="M265 311.07H1526V366.07H265V311.07Z"/>
+</mask>
+<path d="M1526 366.07V365.07H265V366.07V367.07H1526V366.07Z" fill="#E4E8EF" mask="url(#path-105-inside-16_3654_7835)"/>
+<mask id="path-107-inside-17_3654_7835" fill="white">
+<path d="M281 335.07C281 328.443 286.373 323.07 293 323.07H360C366.627 323.07 372 328.443 372 335.07V341.07C372 347.698 366.627 353.07 360 353.07H293C286.373 353.07 281 347.698 281 341.07V335.07Z"/>
+</mask>
+<path d="M281 335.07C281 328.443 286.373 323.07 293 323.07H360C366.627 323.07 372 328.443 372 335.07V341.07C372 347.698 366.627 353.07 360 353.07H293C286.373 353.07 281 347.698 281 341.07V335.07Z" fill="#FBF0FB"/>
+<path d="M293 323.07V324.07H360V323.07V322.07H293V323.07ZM372 335.07H371V341.07H372H373V335.07H372ZM360 353.07V352.07H293V353.07V354.07H360V353.07ZM281 341.07H282V335.07H281H280V341.07H281ZM293 353.07V352.07C286.925 352.07 282 347.145 282 341.07H281H280C280 348.25 285.82 354.07 293 354.07V353.07ZM372 341.07H371C371 347.145 366.075 352.07 360 352.07V353.07V354.07C367.18 354.07 373 348.25 373 341.07H372ZM360 323.07V324.07C366.075 324.07 371 328.995 371 335.07H372H373C373 327.891 367.18 322.07 360 322.07V323.07ZM293 323.07V322.07C285.82 322.07 280 327.891 280 335.07H281H282C282 328.995 286.925 324.07 293 324.07V323.07Z" fill="#912B90" mask="url(#path-107-inside-17_3654_7835)"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="294.16" y="342.27">All deals</tspan></text>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="352.316" y="341.237">6</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="392.24" y="342.27">Active this week</tspan></text>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="497.473" y="341.237">3</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="536.334" y="342.27">8&#x2013;30 days quiet</tspan></text>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="641.238" y="341.237">0</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="680.43" y="342.27">No activity 30d+</tspan></text>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="786.12" y="341.237">1</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="822.186" y="342.27">Open 45d+</tspan></text>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="896.12" y="341.237">1</tspan></text>
+<mask id="path-123-inside-18_3654_7835" fill="white">
+<path d="M987 334.07C987 332.966 987.895 332.07 989 332.07H997C998.105 332.07 999 332.966 999 334.07V342.07C999 343.175 998.105 344.07 997 344.07H989C987.895 344.07 987 343.175 987 342.07V334.07Z"/>
+</mask>
+<path d="M987 334.07C987 332.966 987.895 332.07 989 332.07H997C998.105 332.07 999 332.966 999 334.07V342.07C999 343.175 998.105 344.07 997 344.07H989C987.895 344.07 987 343.175 987 342.07V334.07Z" fill="white"/>
+<path d="M989 332.07V333.07H997V332.07V331.07H989V332.07ZM999 334.07H998V342.07H999H1000V334.07H999ZM997 344.07V343.07H989V344.07V345.07H997V344.07ZM987 342.07H988V334.07H987H986V342.07H987ZM989 344.07V343.07C988.448 343.07 988 342.623 988 342.07H987H986C986 343.727 987.343 345.07 989 345.07V344.07ZM999 342.07H998C998 342.623 997.552 343.07 997 343.07V344.07V345.07C998.657 345.07 1000 343.727 1000 342.07H999ZM997 332.07V333.07C997.552 333.07 998 333.518 998 334.07H999H1000C1000 332.413 998.657 331.07 997 331.07V332.07ZM989 332.07V331.07C987.343 331.07 986 332.413 986 334.07H987H988C988 333.518 988.448 333.07 989 333.07V332.07Z" fill="#767676" mask="url(#path-123-inside-18_3654_7835)"/>
+<mask id="path-125-inside-19_3654_7835" fill="white">
+<path d="M987 334.07C987 332.966 987.895 332.07 989 332.07H997C998.105 332.07 999 332.966 999 334.07V342.07C999 343.175 998.105 344.07 997 344.07H989C987.895 344.07 987 343.175 987 342.07V334.07Z"/>
+</mask>
+<path d="M987 334.07C987 332.966 987.895 332.07 989 332.07H997C998.105 332.07 999 332.966 999 334.07V342.07C999 343.175 998.105 344.07 997 344.07H989C987.895 344.07 987 343.175 987 342.07V334.07Z" fill="#912B90"/>
+<path d="M989 332.07V333.07H997V332.07V331.07H989V332.07ZM999 334.07H998V342.07H999H1000V334.07H999ZM997 344.07V343.07H989V344.07V345.07H997V344.07ZM987 342.07H988V334.07H987H986V342.07H987ZM989 344.07V343.07C988.448 343.07 988 342.623 988 342.07H987H986C986 343.727 987.343 345.07 989 345.07V344.07ZM999 342.07H998C998 342.623 997.552 343.07 997 343.07V344.07V345.07C998.657 345.07 1000 343.727 1000 342.07H999ZM997 332.07V333.07C997.552 333.07 998 333.518 998 334.07H999H1000C1000 332.413 998.657 331.07 997 331.07V332.07ZM989 332.07V331.07C987.343 331.07 986 332.413 986 334.07H987H988C988 333.518 988.448 333.07 989 333.07V332.07Z" fill="#912B90" mask="url(#path-125-inside-19_3654_7835)"/>
+<path d="M989.875 338.383L992.062 340.57L996.125 335.57" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="1005" y="342.27">Show closed</tspan></text>
+<mask id="path-129-inside-20_3654_7835" fill="white">
+<path d="M1089 335.07C1089 328.443 1094.37 323.07 1101 323.07H1237C1243.63 323.07 1249 328.443 1249 335.07V341.07C1249 347.698 1243.63 353.07 1237 353.07H1101C1094.37 353.07 1089 347.698 1089 341.07V335.07Z"/>
+</mask>
+<path d="M1101 323.07V324.07H1237V323.07V322.07H1101V323.07ZM1249 335.07H1248V341.07H1249H1250V335.07H1249ZM1237 353.07V352.07H1101V353.07V354.07H1237V353.07ZM1089 341.07H1090V335.07H1089H1088V341.07H1089ZM1101 353.07V352.07C1094.92 352.07 1090 347.145 1090 341.07H1089H1088C1088 348.25 1093.82 354.07 1101 354.07V353.07ZM1249 341.07H1248C1248 347.145 1243.08 352.07 1237 352.07V353.07V354.07C1244.18 354.07 1250 348.25 1250 341.07H1249ZM1237 323.07V324.07C1243.08 324.07 1248 328.995 1248 335.07H1249H1250C1250 327.891 1244.18 322.07 1237 322.07V323.07ZM1101 323.07V322.07C1093.82 322.07 1088 327.891 1088 335.07H1089H1090C1090 328.995 1094.92 324.07 1101 324.07V323.07Z" fill="#E4E8EF" mask="url(#path-129-inside-20_3654_7835)"/>
+<g clip-path="url(#clip3_3654_7835)">
+<path d="M1111.84 342.732L1109.59 340.479M1106.66 341.696C1107.76 341.696 1108.81 341.26 1109.59 340.483C1110.37 339.705 1110.81 338.651 1110.81 337.552C1110.81 336.453 1110.37 335.399 1109.59 334.622C1108.81 333.845 1107.76 333.409 1106.66 333.409C1105.56 333.409 1104.51 333.845 1103.73 334.622C1102.95 335.399 1102.52 336.453 1102.52 337.552C1102.52 338.651 1102.95 339.705 1103.73 340.483C1104.51 341.26 1105.56 341.696 1106.66 341.696Z" stroke="#6B7688" stroke-width="0.776955" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip4_3654_7835)">
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1120.36" y="342.27">Search deals&#x2026;</tspan></text>
+</g>
+<mask id="path-133-inside-21_3654_7835" fill="white">
+<path d="M1257 335.07C1257 328.443 1262.37 323.07 1269 323.07H1346C1352.63 323.07 1358 328.443 1358 335.07V341.07C1358 347.698 1352.63 353.07 1346 353.07H1269C1262.37 353.07 1257 347.698 1257 341.07V335.07Z"/>
+</mask>
+<path d="M1269 323.07V324.07H1346V323.07V322.07H1269V323.07ZM1358 335.07H1357V341.07H1358H1359V335.07H1358ZM1346 353.07V352.07H1269V353.07V354.07H1346V353.07ZM1257 341.07H1258V335.07H1257H1256V341.07H1257ZM1269 353.07V352.07C1262.92 352.07 1258 347.145 1258 341.07H1257H1256C1256 348.25 1261.82 354.07 1269 354.07V353.07ZM1358 341.07H1357C1357 347.145 1352.08 352.07 1346 352.07V353.07V354.07C1353.18 354.07 1359 348.25 1359 341.07H1358ZM1346 323.07V324.07C1352.08 324.07 1357 328.995 1357 335.07H1358H1359C1359 327.891 1353.18 322.07 1346 322.07V323.07ZM1269 323.07V322.07C1261.82 322.07 1256 327.891 1256 335.07H1257H1258C1258 328.995 1262.92 324.07 1269 324.07V323.07Z" fill="#E4E8EF" mask="url(#path-133-inside-21_3654_7835)"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="1270.39" y="342.27">&#x2193; Export CSV</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1366" y="342.27">Open pipeline </tspan></text>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1453.64" y="342.27">$72.2k/yr</tspan></text>
+<mask id="path-137-inside-22_3654_7835" fill="white">
+<path d="M265 366.07H1526V409.141H265V366.07Z"/>
+</mask>
+<path d="M1526 409.141V408.141H265V409.141V410.141H1526V409.141Z" fill="#E4E8EF" mask="url(#path-137-inside-22_3654_7835)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="281" y="392.906">Deal</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="621.469" y="392.906">Time in pipeline</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="392.906">Value / yr</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="949.32" y="392.906">Progress</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="1239.34" y="392.906">Latest record</tspan></text>
+<mask id="path-144-inside-23_3654_7835" fill="white">
+<path d="M265 409.141H1526V487.445H265V409.141Z"/>
+</mask>
+<path d="M1526 487.445V486.445H265V487.445V488.445H1526V487.445Z" fill="#E4E8EF" mask="url(#path-144-inside-23_3654_7835)"/>
+<path d="M281 445.148C281 437.416 287.268 431.148 295 431.148C302.732 431.148 309 437.416 309 445.148C309 452.88 302.732 459.148 295 459.148C287.268 459.148 281 452.88 281 445.148Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="288.5" y="448.376">TK</tspan></text>
+<g clip-path="url(#clip5_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="444.984">Nairobi Dental Group</tspan></text>
+</g>
+<g clip-path="url(#clip6_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="557.047" y="461.426">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="461.426">Microsoft 365 Business Standard &#xb7; 18 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 438.898C621.469 433.514 625.834 429.148 631.219 429.148H699.664C705.049 429.148 709.414 433.514 709.414 438.898C709.414 444.283 705.049 448.648 699.664 448.648H631.219C625.834 448.648 621.469 444.283 621.469 438.898Z" fill="#DCFCE7"/>
+<text fill="#15803D" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="442.856">1d in pipeline</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="621.469" y="463.426">Last activity 1d ago</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="452.844">$2.7k</tspan></text>
+<path d="M949.32 436.437C949.32 434.228 951.111 432.438 953.32 432.438H1000.12V442.438H953.32C951.111 442.438 949.32 440.647 949.32 438.438V436.437Z" fill="#1D4ED8"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 432.438)" fill="#E4E8EF"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 432.438)" fill="#E4E8EF"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 432.438)" fill="#E4E8EF"/>
+<path d="M1156.54 432.438H1203.34C1205.55 432.438 1207.34 434.228 1207.34 436.438V438.438C1207.34 440.647 1205.55 442.438 1203.34 442.438H1156.54V432.438Z" fill="#E4E8EF"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="460.145">Stage 1 of 5 &#xb7; Activation</tspan></text>
+<g clip-path="url(#clip7_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="434.241">Walk-in enquiry. Booked discovery call for </tspan><tspan x="1239.34" y="451.041">next week.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="470.942">Activation &#xb7; 2026-08-10</tspan></text>
+<mask id="path-159-inside-24_3654_7835" fill="white">
+<path d="M265 487.445H1526V565.75H265V487.445Z"/>
+</mask>
+<path d="M1526 565.75V564.75H265V565.75V566.75H1526V565.75Z" fill="#E4E8EF" mask="url(#path-159-inside-24_3654_7835)"/>
+<path d="M281 523.453C281 515.721 287.268 509.453 295 509.453C302.732 509.453 309 515.721 309 523.453C309 531.185 302.732 537.453 295 537.453C287.268 537.453 281 531.185 281 523.453Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="288" y="526.681">JN</tspan></text>
+<g clip-path="url(#clip8_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="523.289">Kilifi Beach Resorts</tspan></text>
+</g>
+<g clip-path="url(#clip9_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="510.759" y="539.731">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="539.731">Teams Phone Standard &#xb7; 60 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 517.203C621.469 511.818 625.834 507.453 631.219 507.453H709.078C714.463 507.453 718.828 511.818 718.828 517.203C718.828 522.588 714.463 526.953 709.078 526.953H631.219C625.834 526.953 621.469 522.588 621.469 517.203Z" fill="#FEF9C3"/>
+<text fill="#854D0E" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="521.16">52d in pipeline</tspan></text>
+<text fill="#C23434" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="621.469" y="541.731">Last activity 38d ago</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="531.148">$5.8k</tspan></text>
+<path d="M949.32 514.742C949.32 512.533 951.111 510.742 953.32 510.742H1000.12V520.742H953.32C951.111 520.742 949.32 518.951 949.32 516.742V514.742Z" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 510.742)" fill="#1D4ED8"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 510.742)" fill="#E4E8EF"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 510.742)" fill="#E4E8EF"/>
+<path d="M1156.54 510.742H1203.34C1205.55 510.742 1207.34 512.533 1207.34 514.742V516.742C1207.34 518.951 1205.55 520.742 1203.34 520.742H1156.54V510.742Z" fill="#E4E8EF"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="538.449">Stage 2 of 5 &#xb7; Qualification</tspan></text>
+<g clip-path="url(#clip10_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="512.545">Site survey done across 3 properties. Porting </tspan><tspan x="1239.34" y="529.345">60 numbers.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="549.246">Qualification &#xb7; 2026-07-04</tspan></text>
+<mask id="path-174-inside-25_3654_7835" fill="white">
+<path d="M265 565.75H1526V644.055H265V565.75Z"/>
+</mask>
+<path d="M1526 644.055V643.055H265V644.055V645.055H1526V644.055Z" fill="#E4E8EF" mask="url(#path-174-inside-25_3654_7835)"/>
+<path d="M281 601.758C281 594.026 287.268 587.758 295 587.758C302.732 587.758 309 594.026 309 601.758C309 609.49 302.732 615.758 295 615.758C287.268 615.758 281 609.49 281 601.758Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="288.5" y="604.986">TK</tspan></text>
+<g clip-path="url(#clip11_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="601.594">Baraka Logistics</tspan></text>
+</g>
+<g clip-path="url(#clip12_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="558.776" y="618.035">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="618.035">Microsoft 365 Business Premium &#xb7; 45 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 595.508C621.469 590.123 625.834 585.758 631.219 585.758H705.977C711.361 585.758 715.727 590.123 715.727 595.508C715.727 600.893 711.361 605.258 705.977 605.258H631.219C625.834 605.258 621.469 600.893 621.469 595.508Z" fill="#FEF9C3"/>
+<text fill="#854D0E" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="599.465">21d in pipeline</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="621.469" y="620.035">Last activity 4d ago</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="609.453">$11.9k</tspan></text>
+<path d="M949.32 593.047C949.32 590.838 951.111 589.047 953.32 589.047H1000.12V599.047H953.32C951.111 599.047 949.32 597.256 949.32 595.047V593.047Z" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 589.047)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 589.047)" fill="#1D4ED8"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 589.047)" fill="#E4E8EF"/>
+<path d="M1156.54 589.047H1203.34C1205.55 589.047 1207.34 590.838 1207.34 593.047V595.047C1207.34 597.256 1205.55 599.047 1203.34 599.047H1156.54V589.047Z" fill="#E4E8EF"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="616.754">Stage 3 of 5 &#xb7; Proposal &#38; Quote</tspan></text>
+<g clip-path="url(#clip13_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="590.85">Quote Q-2031 sent: Business Premium </tspan><tspan x="1239.34" y="607.65">annual, 8% partner discount.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="627.551">Proposal &#38; Quote &#xb7; 2026-08-07</tspan></text>
+<mask id="path-189-inside-26_3654_7835" fill="white">
+<path d="M265 644.055H1526V722.359H265V644.055Z"/>
+</mask>
+<path d="M1526 722.359V721.359H265V722.359V723.359H1526V722.359Z" fill="#E4E8EF" mask="url(#path-189-inside-26_3654_7835)"/>
+<path d="M281 680.062C281 672.331 287.268 666.062 295 666.062C302.732 666.062 309 672.331 309 680.062C309 687.794 302.732 694.062 295 694.062C287.268 694.062 281 687.794 281 680.062Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="285" y="683.29">MW</tspan></text>
+<g clip-path="url(#clip14_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="679.898">Savannah Microfinance</tspan></text>
+</g>
+<g clip-path="url(#clip15_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="473.602" y="696.34">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="696.34">Microsoft 365 E3 &#xb7; 120 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 673.812C621.469 668.428 625.834 664.062 631.219 664.062H710.062C715.447 664.062 719.812 668.428 719.812 673.812C719.812 679.197 715.447 683.562 710.062 683.562H631.219C625.834 683.562 621.469 679.197 621.469 673.812Z" fill="#FEF9C3"/>
+<text fill="#854D0E" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="677.77">40d in pipeline</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="621.469" y="698.34">Last activity 3d ago</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="687.758">$51.8k</tspan></text>
+<path d="M949.32 671.352C949.32 669.142 951.111 667.352 953.32 667.352H1000.12V677.352H953.32C951.111 677.352 949.32 675.561 949.32 673.352V671.352Z" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 667.352)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 667.352)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 667.352)" fill="#1D4ED8"/>
+<path d="M1156.54 667.352H1203.34C1205.55 667.352 1207.34 669.142 1207.34 671.352V673.352C1207.34 675.561 1205.55 677.352 1203.34 677.352H1156.54V667.352Z" fill="#E4E8EF"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="695.059">Stage 4 of 5 &#xb7; Negotiation</tspan></text>
+<g clip-path="url(#clip16_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="669.155">Asked for 10% off + free migration. Escalated </tspan><tspan x="1239.34" y="685.955">pricing to management.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="705.856">Negotiation &#xb7; 2026-08-08</tspan></text>
+<mask id="path-204-inside-27_3654_7835" fill="white">
+<path d="M265 722.359H1526V800.664H265V722.359Z"/>
+</mask>
+<path d="M1526 800.664V799.664H265V800.664V801.664H1526V800.664Z" fill="#E4E8EF" mask="url(#path-204-inside-27_3654_7835)"/>
+<path d="M281 758.367C281 750.635 287.268 744.367 295 744.367C302.732 744.367 309 750.635 309 758.367C309 766.099 302.732 772.367 295 772.367C287.268 772.367 281 766.099 281 758.367Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="285" y="761.595">MW</tspan></text>
+<g clip-path="url(#clip17_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="758.203">Acacia Insurance</tspan></text>
+</g>
+<g clip-path="url(#clip18_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="477.415" y="774.645">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="774.645">Microsoft 365 E5 &#xb7; 200 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 761.977C621.469 756.592 625.834 752.227 631.219 752.227H677.859C683.244 752.227 687.609 756.592 687.609 761.977C687.609 767.361 683.244 771.727 677.859 771.727H631.219C625.834 771.727 621.469 767.361 621.469 761.977Z" fill="#F3F4F6"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="765.934">90d total</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="766.062">$136.8k</tspan></text>
+<path d="M949.32 749.656C949.32 747.447 951.111 745.656 953.32 745.656H1000.12V755.656H953.32C951.111 755.656 949.32 753.865 949.32 751.656V749.656Z" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 745.656)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 745.656)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 745.656)" fill="#93C5FD"/>
+<path d="M1156.54 745.656H1203.34C1205.55 745.656 1207.34 747.447 1207.34 749.656V751.656C1207.34 753.865 1205.55 755.656 1203.34 755.656H1156.54V745.656Z" fill="#16A34A"/>
+<text fill="#16A34A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="773.363">Won &#x2014; Migration &#38; support offer</tspan></text>
+<g clip-path="url(#clip19_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="747.459">Won on white-glove migration plan and </tspan><tspan x="1239.34" y="764.259">local support SLA.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="784.16">Closed &#x2014; Won &#xb7; 2026-07-27</tspan></text>
+<path d="M281 836.672C281 828.94 287.268 822.672 295 822.672C302.732 822.672 309 828.94 309 836.672C309 844.404 302.732 850.672 295 850.672C287.268 850.672 281 844.404 281 836.672Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10.08" font-weight="bold" letter-spacing="0px"><tspan x="288" y="839.9">JN</tspan></text>
+<g clip-path="url(#clip20_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="319" y="836.508">Tumaini SACCO</tspan></text>
+</g>
+<g clip-path="url(#clip21_3654_7835)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="559.969" y="852.949">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="319" y="852.949">Microsoft 365 Business Standard &#xb7; 35 seats &#xb7; </tspan></text>
+</g>
+<path d="M621.469 840.281C621.469 834.896 625.834 830.531 631.219 830.531H678.016C683.4 830.531 687.766 834.896 687.766 840.281C687.766 845.666 683.4 850.031 678.016 850.031H631.219C625.834 850.031 621.469 845.666 621.469 840.281Z" fill="#F3F4F6"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="600" letter-spacing="0px"><tspan x="629.469" y="844.238">60d total</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="823.227" y="844.367">$5.3k</tspan></text>
+<path d="M949.32 827.961C949.32 825.752 951.111 823.961 953.32 823.961H1000.12V833.961H953.32C951.111 833.961 949.32 832.17 949.32 829.961V827.961Z" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1001.12 823.961)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1052.93 823.961)" fill="#93C5FD"/>
+<rect width="50.8047" height="10" transform="translate(1104.73 823.961)" fill="#93C5FD"/>
+<path d="M1156.54 823.961H1203.34C1205.55 823.961 1207.34 825.752 1207.34 827.961V829.961C1207.34 832.17 1205.55 833.961 1203.34 833.961H1156.54V823.961Z" fill="#EF4444"/>
+<text fill="#C23434" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="500" letter-spacing="0px"><tspan x="949.32" y="851.668">Lost &#x2014; Price too high</tspan></text>
+<g clip-path="url(#clip22_3654_7835)">
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1239.34" y="825.764">Board chose a cheaper local email host. </tspan><tspan x="1239.34" y="842.564">Revisit at renewal in 12 months.</tspan></text>
+</g>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" letter-spacing="0px"><tspan x="1239.34" y="862.465">Closed &#x2014; Lost &#xb7; 2026-07-14</tspan></text>
+<defs>
+<linearGradient id="paint0_linear_3654_7835" x1="24" y1="24" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+<stop stop-color="#912B90"/>
+<stop offset="1" stop-color="#2456E6"/>
+</linearGradient>
+<clipPath id="clip0_3654_7835">
+<rect width="13" height="13" fill="white" transform="translate(1245 25)"/>
+</clipPath>
+<clipPath id="clip1_3654_7835">
+<rect width="160" height="16" fill="white" transform="translate(1266 23.5)"/>
+</clipPath>
+<clipPath id="clip2_3654_7835">
+<rect width="181.75" height="16" fill="white" transform="translate(960.5 149.5)"/>
+</clipPath>
+<clipPath id="clip3_3654_7835">
+<rect width="10.3594" height="12" fill="white" transform="translate(1102 332.07)"/>
+</clipPath>
+<clipPath id="clip4_3654_7835">
+<rect width="115.641" height="16" fill="white" transform="translate(1120.36 330.07)"/>
+</clipPath>
+<clipPath id="clip5_3654_7835">
+<rect width="257.461" height="18.5703" fill="white" transform="translate(319 431.148)"/>
+</clipPath>
+<clipPath id="clip6_3654_7835">
+<rect width="257.461" height="15.7109" fill="white" transform="translate(319 449.719)"/>
+</clipPath>
+<clipPath id="clip7_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 421.641)"/>
+</clipPath>
+<clipPath id="clip8_3654_7835">
+<rect width="213.852" height="18.5703" fill="white" transform="translate(319 509.453)"/>
+</clipPath>
+<clipPath id="clip9_3654_7835">
+<rect width="213.852" height="15.7109" fill="white" transform="translate(319 528.023)"/>
+</clipPath>
+<clipPath id="clip10_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 499.945)"/>
+</clipPath>
+<clipPath id="clip11_3654_7835">
+<rect width="261.828" height="18.5703" fill="white" transform="translate(319 587.758)"/>
+</clipPath>
+<clipPath id="clip12_3654_7835">
+<rect width="261.828" height="15.7109" fill="white" transform="translate(319 606.328)"/>
+</clipPath>
+<clipPath id="clip13_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 578.25)"/>
+</clipPath>
+<clipPath id="clip14_3654_7835">
+<rect width="174.008" height="18.5703" fill="white" transform="translate(319 666.062)"/>
+</clipPath>
+<clipPath id="clip15_3654_7835">
+<rect width="174.008" height="15.7109" fill="white" transform="translate(319 684.633)"/>
+</clipPath>
+<clipPath id="clip16_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 656.555)"/>
+</clipPath>
+<clipPath id="clip17_3654_7835">
+<rect width="180.492" height="18.5703" fill="white" transform="translate(319 744.367)"/>
+</clipPath>
+<clipPath id="clip18_3654_7835">
+<rect width="180.492" height="15.7109" fill="white" transform="translate(319 762.938)"/>
+</clipPath>
+<clipPath id="clip19_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 734.859)"/>
+</clipPath>
+<clipPath id="clip20_3654_7835">
+<rect width="260.383" height="18.5703" fill="white" transform="translate(319 822.672)"/>
+</clipPath>
+<clipPath id="clip21_3654_7835">
+<rect width="260.383" height="15.7109" fill="white" transform="translate(319 841.242)"/>
+</clipPath>
+<clipPath id="clip22_3654_7835">
+<rect width="270.656" height="33.5938" fill="white" transform="translate(1239.34 813.164)"/>
+</clipPath>
+</defs>
+</svg>
