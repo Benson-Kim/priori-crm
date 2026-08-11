@@ -194,7 +194,7 @@ class Customer(Base):
     industry: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-        comment="Industry classification (deal-desk prototype's 10 values)",
+        comment="Industry classification (ratified design vocabulary, #53)",
     )
 
     tenant_domain: Mapped[str | None] = mapped_column(
