@@ -231,12 +231,12 @@ class DealLostReason(StrEnum):
 class DealHygieneBucket(StrEnum):
     """Activity-hygiene list filters for the pipeline (open deals only).
 
-    Mirrors the design's filter chips: Active this week / 8–30 days quiet /
+    Mirrors the design's filter chips: Active this week / 8-30 days quiet /
     No activity 30d+ / Open 45d+.
     """
 
     ACTIVE_WEEK = "active_week"  # last activity within 7 days
-    QUIET_8_30 = "quiet_8_30"  # last activity 8–30 days ago
+    QUIET_8_30 = "quiet_8_30"  # last activity 8-30 days ago
     NO_ACTIVITY_30 = "no_activity_30"  # last activity more than 30 days ago
     OPEN_45 = "open_45"  # in the pipeline for more than 45 days
 

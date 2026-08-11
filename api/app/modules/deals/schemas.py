@@ -69,9 +69,7 @@ class DealCreate(BaseModel):
     note: str | None = Field(
         None,
         max_length=5000,
-        description=(
-            "Optional first stage-record note; defaults to 'Deal created.'"
-        ),
+        description="Optional first stage-record note; defaults to 'Deal created.'",
     )
 
     model_config = {"populate_by_name": True}
@@ -258,7 +256,7 @@ class DealResponse(BaseModel):
     )
     weighted_value: Decimal | None = Field(
         description=(
-            "value × stage probability while the deal is in play; "
+            "value x stage probability while the deal is in play; "
             "null once closed (UI renders '—')"
         )
     )
