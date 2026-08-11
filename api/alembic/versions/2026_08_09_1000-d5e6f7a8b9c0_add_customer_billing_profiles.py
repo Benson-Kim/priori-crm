@@ -15,7 +15,7 @@ Deal-desk parity for the customers module (issue #43):
   prototype's collision-prone bare 3-letter slug), payment terms, tax
   treatment (display values mapping 1:1 onto TaxType), credit_limit stored
   as Numeric in the profile's OWN currency (no floats, no USD round-trip),
-  and the synced/synced_at posting flag (see ADR 0009).
+  and the synced/synced_at posting flag (see ADR 0010).
 - Backfills BOTH profiles for every existing customer from the seed defaults
   in app.constants.settings_defaults (USD: 30 days / Zero-rated (export) /
   25000 · KES: 14 days / VAT 16% / 10000) and advances the

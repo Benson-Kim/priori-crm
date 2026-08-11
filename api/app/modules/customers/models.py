@@ -368,7 +368,7 @@ class CustomerBillingProfile(Base):
     Every customer carries exactly one profile per billing currency, created
     atomically with the customer (and backfilled for pre-existing rows).
     ``synced``/``synced_at`` form the internal posting/readiness flag toward
-    accounting inside Business Central (see ADR 0009): any edit flips the
+    accounting inside Business Central (see ADR 0010): any edit flips the
     profile back to unsynced until it is pushed again.
     """
 
