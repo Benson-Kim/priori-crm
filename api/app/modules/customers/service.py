@@ -228,7 +228,11 @@ class CustomerService(ServiceBase):
         the unsync flip can never be lost to a race.
         """
         try:
-            profile = self._get_profile(customer_id, currency)
+            # Explicit row lock (symmetry with sync_profile): the profile is
+            # loaded FOR UPDATE so the version check and the edit-resets-sync
+            # flip below happen under the same lock — a concurrent writer
+            # serialises here instead of racing assert_version.
+            profile = self._get_profile(customer_id, currency, for_update=True)
 
             assert_version(
                 self._db, CustomerBillingProfile, profile.id, expected_version

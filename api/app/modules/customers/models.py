@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.common.database import Base
 from app.constants.enums import (
     BillingCurrency,
+    BillingPaymentTerms,
     Currency,
     CustomerStatus,
     CustomerType,
@@ -34,6 +35,7 @@ from app.constants.enums import (
 _BILLING_CURRENCY_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in BillingCurrency)
 _INDUSTRY_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in Industry)
 _TAX_TREATMENT_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in TaxTreatment)
+_PAYMENT_TERMS_CHECK_VALUES = ", ".join(f"'{m.value}'" for m in BillingPaymentTerms)
 
 
 class Customer(Base):
@@ -389,11 +391,23 @@ class CustomerBillingProfile(Base):
             name="ck_customer_billing_profiles_valid_tax_treatment",
         ),
         CheckConstraint(
+            f"payment_terms IN ({_PAYMENT_TERMS_CHECK_VALUES})",
+            name="ck_customer_billing_profiles_valid_payment_terms",
+        ),
+        CheckConstraint(
             "credit_limit >= 0",
             name="ck_customer_billing_profiles_credit_limit_non_negative",
         ),
-        # Hygiene/notification query: "profiles not yet pushed to accounting".
-        Index("ix_customer_billing_profiles_synced", "synced"),
+        # Hygiene/notification query ("profiles not yet pushed to
+        # accounting"): a partial index over the customer_id of unsynced
+        # rows serves the ?unsynced=true EXISTS probe directly, unlike a
+        # low-selectivity full boolean index.
+        Index(
+            "ix_customer_billing_profiles_unsynced_customer",
+            "customer_id",
+            postgresql_where=text("NOT synced"),
+            sqlite_where=text("NOT synced"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
