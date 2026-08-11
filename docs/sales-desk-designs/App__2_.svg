@@ -1,0 +1,194 @@
+<svg width="1551" height="980" viewBox="0 0 1551 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1551" height="980" fill="#F6F7F9"/>
+<mask id="path-1-inside-1_3654_9435" fill="white">
+<path d="M0 0H240V980H0V0Z"/>
+</mask>
+<path d="M0 0H240V980H0V0Z" fill="white"/>
+<path d="M240 0H239V980H240H241V0H240Z" fill="#E4E8EF" mask="url(#path-1-inside-1_3654_9435)"/>
+<path d="M24 36C24 29.3726 29.3726 24 36 24H44C50.6274 24 56 29.3726 56 36V44C56 50.6274 50.6274 56 44 56H36C29.3726 56 24 50.6274 24 44V36Z" fill="url(#paint0_linear_3654_9435)"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="35.5" y="44.3357">P</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="66" y="38">Priori</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="66" y="52">Technologies</tspan></text>
+<path d="M26.25 103.5L27.75 102M27.75 102L33 96.75L38.25 102M27.75 102V109.5C27.75 109.699 27.829 109.89 27.9697 110.03C28.1103 110.171 28.3011 110.25 28.5 110.25H30.75M38.25 102L39.75 103.5M38.25 102V109.5C38.25 109.699 38.171 109.89 38.0303 110.03C37.8897 110.171 37.6989 110.25 37.5 110.25H35.25M30.75 110.25C30.9489 110.25 31.1397 110.171 31.2803 110.03C31.421 109.89 31.5 109.699 31.5 109.5V106.5C31.5 106.301 31.579 106.11 31.7197 105.97C31.8603 105.829 32.0511 105.75 32.25 105.75H33.75C33.9489 105.75 34.1397 105.829 34.2803 105.97C34.421 106.11 34.5 106.301 34.5 106.5V109.5C34.5 109.699 34.579 109.89 34.7197 110.03C34.8603 110.171 35.0511 110.25 35.25 110.25M30.75 110.25H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="107.836">Dashboard</tspan></text>
+<path d="M30.75 149.75V145.25C30.75 144.852 30.592 144.471 30.3107 144.189C30.0294 143.908 29.6478 143.75 29.25 143.75H27.75C27.3522 143.75 26.9706 143.908 26.6893 144.189C26.408 144.471 26.25 144.852 26.25 145.25V149.75C26.25 150.148 26.408 150.529 26.6893 150.811C26.9706 151.092 27.3522 151.25 27.75 151.25H29.25C29.6478 151.25 30.0294 151.092 30.3107 150.811C30.592 150.529 30.75 150.148 30.75 149.75ZM30.75 149.75V142.25C30.75 141.852 30.908 141.471 31.1893 141.189C31.4706 140.908 31.8522 140.75 32.25 140.75H33.75C34.1478 140.75 34.5294 140.908 34.8107 141.189C35.092 141.471 35.25 141.852 35.25 142.25V149.75M30.75 149.75C30.75 150.148 30.908 150.529 31.1893 150.811C31.4706 151.092 31.8522 151.25 32.25 151.25H33.75C34.1478 151.25 34.5294 151.092 34.8107 150.811C35.092 150.529 35.25 150.148 35.25 149.75M35.25 149.75V139.25C35.25 138.852 35.408 138.471 35.6893 138.189C35.9706 137.908 36.3522 137.75 36.75 137.75H38.25C38.6478 137.75 39.0294 137.908 39.3107 138.189C39.592 138.471 39.75 138.852 39.75 139.25V149.75C39.75 150.148 39.592 150.529 39.3107 150.811C39.0294 151.092 38.6478 151.25 38.25 151.25H36.75C36.3522 151.25 35.9706 151.092 35.6893 150.811C35.408 150.529 35.25 150.148 35.25 149.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="148.836">Pipeline</tspan></text>
+<path d="M38.25 192.25V180.25C38.25 179.852 38.092 179.471 37.8107 179.189C37.5294 178.908 37.1478 178.75 36.75 178.75H29.25C28.8522 178.75 28.4706 178.908 28.1893 179.189C27.908 179.471 27.75 179.852 27.75 180.25V192.25M38.25 192.25H39.75M38.25 192.25H34.5M27.75 192.25H26.25M27.75 192.25H31.5M34.5 192.25V188.5C34.5 188.301 34.421 188.11 34.2803 187.97C34.1397 187.829 33.9489 187.75 33.75 187.75H32.25C32.0511 187.75 31.8603 187.829 31.7197 187.97C31.579 188.11 31.5 188.301 31.5 188.5V192.25M34.5 192.25H31.5M30.75 181.75H31.5M30.75 184.75H31.5M34.5 181.75H35.25M34.5 184.75H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="189.836">Companies</tspan></text>
+<path d="M199 185.5C199 181.082 202.582 177.5 207 177.5C211.418 177.5 215 181.082 215 185.5C215 189.918 211.418 193.5 207 193.5C202.582 193.5 199 189.918 199 185.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="188.643">2</tspan></text>
+<path d="M12 219C12 212.373 17.3726 207 24 207H215C221.627 207 227 212.373 227 219V234C227 240.627 221.627 246 215 246H24C17.3726 246 12 240.627 12 234V219Z" fill="#FBF0FB"/>
+<path d="M33 223.5V226.5L35.25 228.75M39.75 226.5C39.75 227.386 39.5754 228.264 39.2362 229.083C38.897 229.902 38.3998 230.646 37.773 231.273C37.1462 231.9 36.4021 232.397 35.5831 232.736C34.7642 233.075 33.8864 233.25 33 233.25C32.1136 233.25 31.2358 233.075 30.4169 232.736C29.5979 232.397 28.8538 231.9 28.227 231.273C27.6002 230.646 27.103 229.902 26.7638 229.083C26.4246 228.264 26.25 227.386 26.25 226.5C26.25 224.71 26.9612 222.993 28.227 221.727C29.4929 220.461 31.2098 219.75 33 219.75C34.7902 219.75 36.5071 220.461 37.773 221.727C39.0388 222.993 39.75 224.71 39.75 226.5Z" stroke="#912B90" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="230.836">Future pipeline</tspan></text>
+<path d="M199 226.5C199 222.082 202.582 218.5 207 218.5C211.418 218.5 215 222.082 215 226.5C215 230.918 211.418 234.5 207 234.5C202.582 234.5 199 230.918 199 226.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="229.643">2</tspan></text>
+<path d="M30.75 263.75H35.25M35.25 271.25V269M33 271.25H33.0075M30.75 271.25H30.7575M30.75 266.75H30.7575M33 266.75H33.0075M35.25 266.75H35.2575M27 272.75H39C39.3978 272.75 39.7794 272.592 40.0607 272.311C40.342 272.029 40.5 271.648 40.5 271.25V263.75C40.5 263.352 40.342 262.971 40.0607 262.689C39.7794 262.408 39.3978 262.25 39 262.25H27C26.6022 262.25 26.2206 262.408 25.9393 262.689C25.658 262.971 25.5 263.352 25.5 263.75V271.25C25.5 271.648 25.658 272.029 25.9393 272.311C26.2206 272.592 26.6022 272.75 27 272.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="271.836">Quotes &#38; pricing</tspan></text>
+<path d="M30.75 308.5L32.25 310L35.25 307M39.75 308.5C39.75 309.386 39.5754 310.264 39.2362 311.083C38.897 311.902 38.3998 312.646 37.773 313.273C37.1462 313.9 36.4021 314.397 35.5831 314.736C34.7642 315.075 33.8864 315.25 33 315.25C32.1136 315.25 31.2358 315.075 30.4169 314.736C29.5979 314.397 28.8538 313.9 28.227 313.273C27.6002 312.646 27.103 311.902 26.7638 311.083C26.4246 310.264 26.25 309.386 26.25 308.5C26.25 306.71 26.9612 304.993 28.227 303.727C29.4929 302.461 31.2098 301.75 33 301.75C34.7902 301.75 36.5071 302.461 37.773 303.727C39.0388 304.993 39.75 306.71 39.75 308.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="312.836">Onboarding</tspan></text>
+<mask id="path-29-inside-2_3654_9435" fill="white">
+<path d="M0 874H239V980H0V874Z"/>
+</mask>
+<path d="M0 874V875H239V874V873H0V874Z" fill="#E4E8EF" mask="url(#path-29-inside-2_3654_9435)"/>
+<path d="M16 906.5C16 898.768 22.268 892.5 30 892.5C37.732 892.5 44 898.768 44 906.5C44 914.232 37.732 920.5 30 920.5C22.268 920.5 16 914.232 16 906.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="21" y="910.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="54" y="903.2">Frank Mueke</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="54" y="918">Senior Admin</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="945">&#xa9; 2026 Priori &#x2014; All Rights Reserved</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="960">Version: 1.0.188-288</tspan></text>
+<mask id="path-37-inside-3_3654_9435" fill="white">
+<path d="M240 0H1551V64H240V0Z"/>
+</mask>
+<path d="M240 0H1551V64H240V0Z" fill="white"/>
+<path d="M1551 64V63H240V64V65H1551V64Z" fill="#E4E8EF" mask="url(#path-37-inside-3_3654_9435)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="264" y="35.8357">Future pipeline</tspan></text>
+<mask id="path-40-inside-4_3654_9435" fill="white">
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z"/>
+</mask>
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z" fill="#F6F7F9"/>
+<path d="M1244 16.5V17.5H1427V16.5V15.5H1244V16.5ZM1439 28.5H1438V34.5H1439H1440V28.5H1439ZM1427 46.5V45.5H1244V46.5V47.5H1427V46.5ZM1232 34.5H1233V28.5H1232H1231V34.5H1232ZM1244 46.5V45.5C1237.92 45.5 1233 40.5751 1233 34.5H1232H1231C1231 41.6797 1236.82 47.5 1244 47.5V46.5ZM1439 34.5H1438C1438 40.5751 1433.08 45.5 1427 45.5V46.5V47.5C1434.18 47.5 1440 41.6797 1440 34.5H1439ZM1427 16.5V17.5C1433.08 17.5 1438 22.4249 1438 28.5H1439H1440C1440 21.3203 1434.18 15.5 1427 15.5V16.5ZM1244 16.5V15.5C1236.82 15.5 1231 21.3203 1231 28.5H1232H1233C1233 22.4249 1237.92 17.5 1244 17.5V16.5Z" fill="#E4E8EF" mask="url(#path-40-inside-4_3654_9435)"/>
+<g clip-path="url(#clip0_3654_9435)">
+<path d="M1257.35 37.3499L1254.52 34.5224M1250.85 36.0499C1252.23 36.0499 1253.55 35.502 1254.53 34.5269C1255.5 33.5517 1256.05 32.229 1256.05 30.8499C1256.05 29.4708 1255.5 28.1481 1254.53 27.1729C1253.55 26.1978 1252.23 25.6499 1250.85 25.6499C1249.47 25.6499 1248.15 26.1978 1247.17 27.1729C1246.2 28.1481 1245.65 29.4708 1245.65 30.8499C1245.65 32.229 1246.2 33.5517 1247.17 34.5269C1248.15 35.502 1249.47 36.0499 1250.85 36.0499Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip1_3654_9435)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1266" y="35.7">Search companies, deals&#x2026;</tspan></text>
+</g>
+<mask id="path-44-inside-5_3654_9435" fill="white">
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z"/>
+</mask>
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z" fill="#F6F7F9"/>
+<path d="M1451 31.5M1483 31.5M1483 31.5M1451 31.5M1467 15.5M1483 31.5M1467 47.5M1451 31.5M1467 47.5V46.5C1458.72 46.5 1452 39.7843 1452 31.5H1451H1450C1450 40.8888 1457.61 48.5 1467 48.5V47.5ZM1483 31.5H1482C1482 39.7843 1475.28 46.5 1467 46.5V47.5V48.5C1476.39 48.5 1484 40.8888 1484 31.5H1483ZM1467 15.5V16.5C1475.28 16.5 1482 23.2157 1482 31.5H1483H1484C1484 22.1112 1476.39 14.5 1467 14.5V15.5ZM1467 15.5V14.5C1457.61 14.5 1450 22.1112 1450 31.5H1451H1452C1452 23.2157 1458.72 16.5 1467 16.5V15.5Z" fill="#E4E8EF" mask="url(#path-44-inside-5_3654_9435)"/>
+<path d="M1468.75 34.4167H1471.67L1470.85 33.5971C1470.74 33.487 1470.65 33.3563 1470.59 33.2125C1470.53 33.0687 1470.5 32.9145 1470.5 32.7588V30.9167C1470.5 30.1927 1470.28 29.4865 1469.86 28.8954C1469.44 28.3042 1468.85 27.8571 1468.17 27.6156V27.4167C1468.17 27.1072 1468.04 26.8105 1467.83 26.5917C1467.61 26.3729 1467.31 26.25 1467 26.25C1466.69 26.25 1466.39 26.3729 1466.18 26.5917C1465.96 26.8105 1465.83 27.1072 1465.83 27.4167V27.6156C1464.47 28.0962 1463.5 29.393 1463.5 30.9167V32.7594C1463.5 33.0732 1463.38 33.3748 1463.15 33.5971L1462.33 34.4167H1465.25M1468.75 34.4167V35C1468.75 35.4641 1468.57 35.9092 1468.24 36.2374C1467.91 36.5656 1467.46 36.75 1467 36.75C1466.54 36.75 1466.09 36.5656 1465.76 36.2374C1465.44 35.9092 1465.25 35.4641 1465.25 35V34.4167M1468.75 34.4167H1465.25" stroke="#6B7688" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1470 20.5C1470 16.0817 1473.58 12.5 1478 12.5C1482.42 12.5 1486 16.0817 1486 20.5C1486 24.9183 1482.42 28.5 1478 28.5C1473.58 28.5 1470 24.9183 1470 20.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="9" font-weight="bold" letter-spacing="0px"><tspan x="1475.07" y="23.65">5</tspan></text>
+<path d="M1495 31.5C1495 22.6634 1502.16 15.5 1511 15.5C1519.84 15.5 1527 22.6634 1527 31.5C1527 40.3366 1519.84 47.5 1511 47.5C1502.16 47.5 1495 40.3366 1495 31.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="1502" y="35.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="bold" letter-spacing="0px"><tspan x="264" y="112.4">Future Pipeline</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="264" y="135.836">Planned deals with an engage-by date. Due prospects raise a notification.</tspan></text>
+<path d="M1357 100C1357 93.3726 1362.37 88 1369 88H1515C1521.63 88 1527 93.3726 1527 100V111C1527 117.627 1521.63 123 1515 123H1369C1362.37 123 1357 117.627 1357 111V100Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="16" font-weight="500" letter-spacing="0px"><tspan x="1373.29" y="111.1">+</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="1393.36" y="109.836">Add planned deal</tspan></text>
+<g filter="url(#filter0_d_3654_9435)">
+<mask id="path-56-inside-6_3654_9435" fill="white">
+<path d="M264 177C264 168.163 271.163 161 280 161H1511C1519.84 161 1527 168.163 1527 177V419.57C1527 428.407 1519.84 435.57 1511 435.57H280C271.163 435.57 264 428.407 264 419.57V177Z"/>
+</mask>
+<path d="M264 177C264 168.163 271.163 161 280 161H1511C1519.84 161 1527 168.163 1527 177V419.57C1527 428.407 1519.84 435.57 1511 435.57H280C271.163 435.57 264 428.407 264 419.57V177Z" fill="white"/>
+<path d="M280 161V162H1511V161V160H280V161ZM1527 177H1526V419.57H1527H1528V177H1527ZM1511 435.57V434.57H280V435.57V436.57H1511V435.57ZM264 419.57H265V177H264H263V419.57H264ZM280 435.57V434.57C271.716 434.57 265 427.855 265 419.57H264H263C263 428.959 270.611 436.57 280 436.57V435.57ZM1527 419.57H1526C1526 427.855 1519.28 434.57 1511 434.57V435.57V436.57C1520.39 436.57 1528 428.959 1528 419.57H1527ZM1511 161V162C1519.28 162 1526 168.716 1526 177H1527H1528C1528 167.611 1520.39 160 1511 160V161ZM280 161V160C270.611 160 263 167.611 263 177H264H265C265 168.716 271.716 162 280 162V161Z" fill="#E4E8EF" mask="url(#path-56-inside-6_3654_9435)"/>
+<mask id="path-58-inside-7_3654_9435" fill="white">
+<path d="M265 162H1526V217H265V162Z"/>
+</mask>
+<path d="M1526 217V216H265V217V218H1526V217Z" fill="#E4E8EF" mask="url(#path-58-inside-7_3654_9435)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="281" y="193.336">Planned prospects</tspan></text>
+<path d="M417 189C417 183.477 421.477 179 427 179H431C436.523 179 441 183.477 441 189C441 194.523 436.523 199 431 199H427C421.477 199 417 194.523 417 189Z" fill="#FBF0FB"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="425" y="193.2">3</tspan></text>
+<path d="M453 189C453 183.477 457.477 179 463 179H519C524.523 179 529 183.477 529 189C529 194.523 524.523 199 519 199H463C457.477 199 453 194.523 453 189Z" fill="#FBEBEB"/>
+<text fill="#C23434" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="461" y="193.2">1 due now</tspan></text>
+<mask id="path-65-inside-8_3654_9435" fill="white">
+<path d="M1319 186C1319 179.373 1324.37 174 1331 174H1498C1504.63 174 1510 179.373 1510 186V192C1510 198.627 1504.63 204 1498 204H1331C1324.37 204 1319 198.627 1319 192V186Z"/>
+</mask>
+<path d="M1331 174V175H1498V174V173H1331V174ZM1510 186H1509V192H1510H1511V186H1510ZM1498 204V203H1331V204V205H1498V204ZM1319 192H1320V186H1319H1318V192H1319ZM1331 204V203C1324.92 203 1320 198.075 1320 192H1319H1318C1318 199.18 1323.82 205 1331 205V204ZM1510 192H1509C1509 198.075 1504.08 203 1498 203V204V205C1505.18 205 1511 199.18 1511 192H1510ZM1498 174V175C1504.08 175 1509 179.925 1509 186H1510H1511C1511 178.82 1505.18 173 1498 173V174ZM1331 174V173C1323.82 173 1318 178.82 1318 186H1319H1320C1320 179.925 1324.92 175 1331 175V174Z" fill="#E4E8EF" mask="url(#path-65-inside-8_3654_9435)"/>
+<g clip-path="url(#clip2_3654_9435)">
+<path d="M1344.35 194.85L1341.52 192.022M1337.85 193.55C1339.23 193.55 1340.55 193.002 1341.53 192.027C1342.5 191.052 1343.05 189.729 1343.05 188.35C1343.05 186.971 1342.5 185.648 1341.53 184.673C1340.55 183.698 1339.23 183.15 1337.85 183.15C1336.47 183.15 1335.15 183.698 1334.17 184.673C1333.2 185.648 1332.65 186.971 1332.65 188.35C1332.65 189.729 1333.2 191.052 1334.17 192.027C1335.15 193.002 1336.47 193.55 1337.85 193.55Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip3_3654_9435)">
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1353" y="193.2">Search prospects&#x2026;</tspan></text>
+</g>
+<mask id="path-69-inside-9_3654_9435" fill="white">
+<path d="M265 217H1526V264.07H265V217Z"/>
+</mask>
+<path d="M1526 264.07V263.07H265V264.07V265.07H1526V264.07Z" fill="#E4E8EF" mask="url(#path-69-inside-9_3654_9435)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="285" y="245.836">Company</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="479.375" y="245.836">Contact</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="664.141" y="245.836">Owner</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="798.641" y="245.836">Engage on</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="953.852" y="245.836">Est. ARR</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="1059.39" y="245.836">Note</tspan></text>
+<mask id="path-77-inside-10_3654_9435" fill="white">
+<path d="M265 264.07H1526V321.07H265V264.07Z"/>
+</mask>
+<path d="M1526 321.07V320.07H265V321.07V322.07H1526V321.07Z" fill="#E4E8EF" mask="url(#path-77-inside-10_3654_9435)"/>
+<path d="M285 292.781C285 290.572 286.791 288.781 289 288.781C291.209 288.781 293 290.572 293 292.781C293 294.99 291.209 296.781 289 296.781C286.791 296.781 285 294.99 285 292.781Z" fill="#F59E0B"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="301" y="297.117">Coast Freight Ltd.</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="479.375" y="298.117">Mary Achieng</tspan></text>
+<path d="M664.141 292.57C664.141 285.943 669.513 280.57 676.141 280.57C682.768 280.57 688.141 285.943 688.141 292.57C688.141 299.198 682.768 304.57 676.141 304.57C669.513 304.57 664.141 299.198 664.141 292.57Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="669.141" y="295.713">JN</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="696.141" y="296.77">Joy</tspan></text>
+<path d="M798.641 292.531C798.641 286.87 803.23 282.281 808.891 282.281H846.508C852.169 282.281 856.758 286.87 856.758 292.531C856.758 298.192 852.169 302.781 846.508 302.781H808.891C803.23 302.781 798.641 298.192 798.641 292.531Z" fill="#FEF9C3"/>
+<text fill="#B45309" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="808.641" y="297.481">Today</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="953.852" y="298.117">$9,600</tspan></text>
+<g clip-path="url(#clip4_3654_9435)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1059.39" y="297.117">Mid-contract with competitor until November. Unhappy with support.</tspan></text>
+</g>
+<path d="M1353.86 290.57C1353.86 283.943 1359.23 278.57 1365.86 278.57H1471.49C1478.12 278.57 1483.49 283.943 1483.49 290.57V294.57C1483.49 301.198 1478.12 306.57 1471.49 306.57H1365.86C1359.23 306.57 1353.86 301.198 1353.86 294.57V290.57Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1366.13" y="297.27">Start engaging &#x2192;</tspan></text>
+<mask id="path-91-inside-11_3654_9435" fill="white">
+<path d="M265 321.07H1526V378.07H265V321.07Z"/>
+</mask>
+<path d="M1526 378.07V377.07H265V378.07V379.07H1526V378.07Z" fill="#E4E8EF" mask="url(#path-91-inside-11_3654_9435)"/>
+<path d="M285 349.781C285 347.572 286.791 345.781 289 345.781C291.209 345.781 293 347.572 293 349.781C293 351.99 291.209 353.781 289 353.781C286.791 353.781 285 351.99 285 349.781Z" fill="#16A34A"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="301" y="354.117">Uhuru Academy</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="479.375" y="355.117">Samuel Mwangi</tspan></text>
+<path d="M664.141 349.57C664.141 342.943 669.513 337.57 676.141 337.57C682.768 337.57 688.141 342.943 688.141 349.57C688.141 356.198 682.768 361.57 676.141 361.57C669.513 361.57 664.141 356.198 664.141 349.57Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="669.641" y="352.713">TK</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="696.141" y="353.77">Tabitha</tspan></text>
+<path d="M798.641 349.531C798.641 343.87 803.23 339.281 808.891 339.281H885.438C891.098 339.281 895.688 343.87 895.688 349.531C895.688 355.192 891.098 359.781 885.438 359.781H808.891C803.23 359.781 798.641 355.192 798.641 349.531Z" fill="#F3F4F6"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="808.641" y="354.481">25 Sept 2026</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="953.852" y="355.117">$6,300</tspan></text>
+<g clip-path="url(#clip5_3654_9435)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1059.39" y="354.117">Education tenant &#x2014; engage before Term 1 planning.</tspan></text>
+</g>
+<path d="M1353.86 347.57C1353.86 340.943 1359.23 335.57 1365.86 335.57H1471.49C1478.12 335.57 1483.49 340.943 1483.49 347.57V351.57C1483.49 358.198 1478.12 363.57 1471.49 363.57H1365.86C1359.23 363.57 1353.86 358.198 1353.86 351.57V347.57Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1366.13" y="354.27">Start engaging &#x2192;</tspan></text>
+<path d="M285 406.781C285 404.572 286.791 402.781 289 402.781C291.209 402.781 293 404.572 293 406.781C293 408.99 291.209 410.781 289 410.781C286.791 410.781 285 408.99 285 406.781Z" fill="#16A34A"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="301" y="411.117">Lakeside Hospital</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="479.375" y="412.117">Dr. Rose Adhiambo</tspan></text>
+<path d="M664.141 406.57C664.141 399.943 669.513 394.57 676.141 394.57C682.768 394.57 688.141 399.943 688.141 406.57C688.141 413.198 682.768 418.57 676.141 418.57C669.513 418.57 664.141 413.198 664.141 406.57Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="666.141" y="409.713">MW</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="696.141" y="410.77">Michael</tspan></text>
+<path d="M798.641 406.531C798.641 400.87 803.23 396.281 808.891 396.281H874.914C880.575 396.281 885.164 400.87 885.164 406.531C885.164 412.192 880.575 416.781 874.914 416.781H808.891C803.23 416.781 798.641 412.192 798.641 406.531Z" fill="#F3F4F6"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="808.641" y="411.481">4 Nov 2026</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="953.852" y="412.117">$30,000</tspan></text>
+<g clip-path="url(#clip6_3654_9435)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1059.39" y="411.117">New CIO joining in ~3 months. Warm intro promised.</tspan></text>
+</g>
+<path d="M1353.86 404.57C1353.86 397.943 1359.23 392.57 1365.86 392.57H1471.49C1478.12 392.57 1483.49 397.943 1483.49 404.57V408.57C1483.49 415.198 1478.12 420.57 1471.49 420.57H1365.86C1359.23 420.57 1353.86 415.198 1353.86 408.57V404.57Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1366.13" y="411.27">Start engaging &#x2192;</tspan></text>
+</g>
+<defs>
+<filter id="filter0_d_3654_9435" x="261" y="159" width="1269" height="280.57" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_3654_9435"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_3654_9435" result="shape"/>
+</filter>
+<linearGradient id="paint0_linear_3654_9435" x1="24" y1="24" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+<stop stop-color="#912B90"/>
+<stop offset="1" stop-color="#2456E6"/>
+</linearGradient>
+<clipPath id="clip0_3654_9435">
+<rect width="13" height="13" fill="white" transform="translate(1245 25)"/>
+</clipPath>
+<clipPath id="clip1_3654_9435">
+<rect width="160" height="16" fill="white" transform="translate(1266 23.5)"/>
+</clipPath>
+<clipPath id="clip2_3654_9435">
+<rect width="13" height="13" fill="white" transform="translate(1332 182.5)"/>
+</clipPath>
+<clipPath id="clip3_3654_9435">
+<rect width="144" height="16" fill="white" transform="translate(1353 181)"/>
+</clipPath>
+<clipPath id="clip4_3654_9435">
+<rect width="254.469" height="18.5703" fill="white" transform="translate(1059.39 283.281)"/>
+</clipPath>
+<clipPath id="clip5_3654_9435">
+<rect width="254.469" height="18.5703" fill="white" transform="translate(1059.39 340.281)"/>
+</clipPath>
+<clipPath id="clip6_3654_9435">
+<rect width="254.469" height="18.5703" fill="white" transform="translate(1059.39 397.281)"/>
+</clipPath>
+</defs>
+</svg>
