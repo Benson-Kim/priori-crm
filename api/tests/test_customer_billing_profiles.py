@@ -164,7 +164,7 @@ def test_migration_industry_in_list_identical_to_enum():
     spec = importlib.util.spec_from_file_location("_billing_profiles_migration", path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
-    assert migration._INDUSTRY_VALUES == tuple(m.value for m in Industry)
+    assert tuple(m.value for m in Industry) == migration._INDUSTRY_VALUES
 
 
 def test_design_industries_accepted_on_create(db):
