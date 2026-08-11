@@ -507,7 +507,11 @@ class InvoiceSummary(BaseModel):
 
     created_at: datetime
 
-    _as_of_date: date = PrivateAttr(default_factory=reporting_date)
+    # Late-bound (lambda) so the module-level `reporting_date` is resolved at
+    # instantiation time, keeping the snapshot patchable in tests (mirrors the
+    # QuoteSummary pattern) instead of freezing the function reference at
+    # class-definition time.
+    _as_of_date: date = PrivateAttr(default_factory=lambda: reporting_date())
 
     @computed_field
     @property
