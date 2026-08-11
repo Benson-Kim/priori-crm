@@ -17,7 +17,7 @@ Stage/state rules (server-enforced — the UI only renders)
 
 import logging
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar
 
@@ -277,8 +277,6 @@ class DealService(StateMachineMixin, ServiceBase):
 
     @staticmethod
     def _days_ago(today: date, days: int) -> date:
-        from datetime import timedelta
-
         return today - timedelta(days=days)
 
     # UPDATE
@@ -496,7 +494,11 @@ class DealService(StateMachineMixin, ServiceBase):
     def build_response(self, deal: Deal) -> DealResponse:
         """Serialize a deal exactly as the screens consume it."""
         today = reporting_date()
-        activities = list(deal.activities)  # ordered oldest → newest
+        # Sort explicitly (oldest → newest) so derived values never depend
+        # on the in-session collection order after same-request appends.
+        activities = sorted(
+            deal.activities, key=lambda a: (a.activity_date, a.created_at)
+        )
 
         if activities:
             first_date = activities[0].activity_date
@@ -569,15 +571,18 @@ class DealService(StateMachineMixin, ServiceBase):
     def _record(
         self, deal: Deal, stage_label: str, note: str
     ) -> DealActivity:
-        """Append one stage-record row (same transaction as the mutation)."""
+        """Append one stage-record row (same transaction as the mutation).
+
+        Appended through the relationship so the in-session history stays
+        current for response building within the same request.
+        """
         activity = DealActivity(
-            deal_id=deal.id,
             stage_label=stage_label,
             note=note,
             activity_date=reporting_date(),
             author_id=self.actor_id,
         )
-        self._db.add(activity)
+        deal.activities.append(activity)
         self._db.flush()
         return activity
 
