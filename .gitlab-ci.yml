@@ -109,8 +109,7 @@ api:lint:
     - pip install -r requirements.txt
   script:
     - ruff check .
-    # TEMPORARY (revert before merge): print the exact formatting delta.
-    - ruff format --diff .
+    - ruff format --check .
 
 api:test:
   stage: test
