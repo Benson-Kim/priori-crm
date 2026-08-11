@@ -151,6 +151,16 @@ PurchaseOrderServiceDep = Annotated[
 ]
 
 
+def get_deal_service(db: DbSession, current_user: CurrentUser):
+    """Provide a DealService scoped to the current request and acting user."""
+    from app.modules.deals.service import DealService
+
+    return DealService(db, current_user=current_user)
+
+
+DealServiceDep = Annotated["DealService", Depends(get_deal_service)]  # noqa: F821
+
+
 def get_vendor_service(db: DbSession, current_user: CurrentUser):
     """Provide a VendorService scoped to the current request and acting user."""
     from app.modules.vendors.service import VendorService

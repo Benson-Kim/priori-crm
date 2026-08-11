@@ -16,6 +16,7 @@ import app.common.reference_sequence
 import app.common.reference_triggers
 import app.modules.auth.models
 import app.modules.customers.models
+import app.modules.deals.models
 import app.modules.expenses.models
 import app.modules.invoices.models
 import app.modules.owner.models
@@ -36,6 +37,7 @@ from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.deals.router import router as deals_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
@@ -172,6 +174,11 @@ def _register_routers(app: FastAPI) -> None:
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore
+    )
+
+
+app = create_app()
+outes],  # type: ignore
     )
 
 
