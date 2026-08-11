@@ -6,8 +6,9 @@ Create Date: 2026-08-09 10:00:00.000000
 
 Deal-desk parity for the customers module (issue #43):
 
-- customers gain nullable industry (the prototype's 10 values), tenant_domain,
-  owner_id (FK users, SET NULL) and primary_currency (USD|KES).
+- customers gain nullable industry (the 12 values ratified from the Sales
+  Desk designs — see issue #53), tenant_domain, owner_id (FK users, SET NULL)
+  and primary_currency (USD|KES).
 - New customer_billing_profiles table: exactly one profile per customer per
   billing currency (UNIQUE(customer_id, currency)), with a globally unique
   code (name slug + monotonic reference_sequences suffix — NOT the
@@ -44,12 +45,18 @@ down_revision: Union[str, None] = "c4d5e6f7a8b9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Ratified industry vocabulary (docs/sales-desk-designs, issue #53).
+# Must stay identical to app.constants.enums.Industry — kept as a literal
+# tuple (not derived from the enum) so this migration's CHECK stays frozen
+# at the ratified list; a future vocabulary change gets its own migration.
 _INDUSTRY_VALUES = (
     "Financial services",
     "Healthcare",
     "Education",
     "Logistics & transport",
-    "Hospitality",
+    "Hospitality & tourism",
+    "Agriculture & export",
+    "Insurance",
     "Manufacturing",
     "Professional services",
     "NGO / Non-profit",
@@ -68,7 +75,7 @@ def upgrade() -> None:
             "industry",
             sa.String(length=50),
             nullable=True,
-            comment="Industry classification (deal-desk prototype's 10 values)",
+            comment="Industry classification (ratified design vocabulary, #53)",
         ),
     )
     op.add_column(

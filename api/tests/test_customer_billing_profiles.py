@@ -13,7 +13,9 @@ Covers:
 - audit trail rows for every profile mutation.
 """
 
+import importlib.util
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -28,6 +30,7 @@ from app.common.reference_sequence import ReferenceSequence
 from app.constants.enums import (
     BillingCurrency,
     CustomerType,
+    Industry,
     TaxTreatment,
     TaxType,
     UserRole,
@@ -123,6 +126,57 @@ def test_tax_treatments_map_onto_existing_tax_types():
     assert TaxTreatment.VAT_16.tax_type is TaxType.VAT_16
     assert TaxTreatment.ZERO_RATED_EXPORT.tax_type is TaxType.VAT_0
     assert TaxTreatment.EXEMPT.tax_type is TaxType.EXEMPT
+
+
+# --------------------------------------------------------------------------
+# Industry vocabulary (ratified from docs/sales-desk-designs — issue #53)
+# --------------------------------------------------------------------------
+
+RATIFIED_INDUSTRIES = (
+    "Financial services",
+    "Healthcare",
+    "Education",
+    "Logistics & transport",
+    "Hospitality & tourism",
+    "Agriculture & export",
+    "Insurance",
+    "Manufacturing",
+    "Professional services",
+    "NGO / Non-profit",
+    "Retail",
+    "Other",
+)
+
+
+def test_industry_enum_matches_ratified_design_vocabulary():
+    """The 12 values ratified from the Sales Desk designs (see #53)."""
+    assert tuple(m.value for m in Industry) == RATIFIED_INDUSTRIES
+
+
+def test_migration_industry_in_list_identical_to_enum():
+    """The migration's CHECK IN-list must stay identical to the enum."""
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "2026_08_09_1000-d5e6f7a8b9c0_add_customer_billing_profiles.py"
+    )
+    spec = importlib.util.spec_from_file_location("_billing_profiles_migration", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration._INDUSTRY_VALUES == tuple(m.value for m in Industry)
+
+
+def test_design_industries_accepted_on_create(db):
+    """Industries shown in the ratified designs must not be rejected."""
+    svc = CustomerService(db)
+    for company, industry in (
+        ("Savannah Mount Hotels", Industry.HOSPITALITY_TOURISM),
+        ("Highlands Coffee Exporters", Industry.AGRICULTURE_EXPORT),
+        ("Acacia Insurance", Industry.INSURANCE),
+    ):
+        customer = svc.create(_create_payload(company_name=company, industry=industry))
+        assert customer.industry == industry.value
 
 
 def test_create_customer_creates_both_profiles_with_defaults(db):
