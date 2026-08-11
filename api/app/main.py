@@ -16,6 +16,7 @@ import app.common.reference_sequence
 import app.common.reference_triggers
 import app.modules.auth.models
 import app.modules.customers.models
+import app.modules.deals.models
 import app.modules.expenses.models
 import app.modules.invoices.models
 import app.modules.owner.models
@@ -172,6 +173,11 @@ def _register_routers(app: FastAPI) -> None:
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore
+    )
+
+
+app = create_app()
+outes],  # type: ignore
     )
 
 
