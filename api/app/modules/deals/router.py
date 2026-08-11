@@ -67,9 +67,7 @@ def create_deal(body: DealCreate, service: DealServiceDep) -> DealResponse:
 def list_deals(
     service: DealServiceDep,
     page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
-    per_page: Annotated[
-        int, Query(ge=1, le=100, description="Items per page")
-    ] = 10,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
     status_filter: Annotated[
         str | None,
         Query(

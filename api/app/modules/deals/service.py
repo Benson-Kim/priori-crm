@@ -124,8 +124,7 @@ class DealService(ServiceBase):
         if deal.status != DealStatus.OPEN:
             raise BadRequestException(
                 detail=(
-                    f"Only open deals can {action} — this deal is "
-                    f"'{deal.status}'."
+                    f"Only open deals can {action} — this deal is '{deal.status}'."
                 ),
                 field="status",
             )
