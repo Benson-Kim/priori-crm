@@ -268,6 +268,30 @@ def test_duplicate_currency_profile_rejected(db):
     db.rollback()
 
 
+def test_invalid_payment_terms_rejected_at_db_level(db):
+    """payment_terms carries a CHECK mirroring tax_treatment's.
+
+    Uses a profile-less raw customer so the only constraint the row can
+    violate is ck_customer_billing_profiles_valid_payment_terms (not the
+    UNIQUE(customer_id, currency) pair).
+    """
+    customer = _raw_customer(db, "Rogue Terms Ltd")
+
+    rogue = CustomerBillingProfile(
+        customer_id=customer.id,
+        currency="USD",
+        code="ROG-9999-USD",
+        payment_terms="90 days",  # not a BillingPaymentTerms value
+        tax_treatment="Exempt",
+        credit_limit=Decimal("1.00"),
+        synced=False,
+    )
+    db.add(rogue)
+    with pytest.raises(IntegrityError):
+        db.flush()
+    db.rollback()
+
+
 # --------------------------------------------------------------------------
 # Backfill (what the migration runs)
 # --------------------------------------------------------------------------

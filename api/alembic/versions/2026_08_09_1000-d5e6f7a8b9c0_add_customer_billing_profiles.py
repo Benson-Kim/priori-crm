@@ -65,6 +65,9 @@ _INDUSTRY_VALUES = (
 )
 _INDUSTRY_IN_LIST = ", ".join(f"'{v}'" for v in _INDUSTRY_VALUES)
 _TAX_TREATMENT_IN_LIST = "'VAT 16%', 'Zero-rated (export)', 'Exempt'"
+# Mirrors app.constants.enums.BillingPaymentTerms (symmetry with the
+# tax_treatment CHECK — !38 review, non-blocking item 5).
+_PAYMENT_TERMS_IN_LIST = "'On receipt', '14 days', '30 days', '45 days', '60 days'"
 
 
 def upgrade() -> None:
@@ -222,6 +225,10 @@ def upgrade() -> None:
             name="ck_customer_billing_profiles_valid_tax_treatment",
         ),
         sa.CheckConstraint(
+            f"payment_terms IN ({_PAYMENT_TERMS_IN_LIST})",
+            name="ck_customer_billing_profiles_valid_payment_terms",
+        ),
+        sa.CheckConstraint(
             "credit_limit >= 0",
             name="ck_customer_billing_profiles_credit_limit_non_negative",
         ),
@@ -231,10 +238,15 @@ def upgrade() -> None:
         "customer_billing_profiles",
         ["customer_id"],
     )
+    # Partial index serving the ?unsynced=true EXISTS probe: the interesting
+    # rows are the (few) unsynced ones, so index their customer_id directly
+    # instead of a low-selectivity boolean index over every row (!38 review,
+    # non-blocking item 4).
     op.create_index(
-        "ix_customer_billing_profiles_synced",
+        "ix_customer_billing_profiles_unsynced_customer",
         "customer_billing_profiles",
-        ["synced"],
+        ["customer_id"],
+        postgresql_where=sa.text("NOT synced"),
     )
 
     # --- backfill: both profiles for every existing customer ---------------
@@ -243,7 +255,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_customer_billing_profiles_synced",
+        "ix_customer_billing_profiles_unsynced_customer",
         table_name="customer_billing_profiles",
     )
     op.drop_index(
