@@ -251,8 +251,7 @@ def log_deal_activity(
     response_model=DealResponse,
     summary="Close deal won or lost",
     description=(
-        "Close an open deal with an enumerated won/lost reason and a "
-        "mandatory note."
+        "Close an open deal with an enumerated won/lost reason and a mandatory note."
     ),
     responses={
         200: {"description": "Deal closed"},
