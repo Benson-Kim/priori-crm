@@ -18,6 +18,7 @@ Each ADR follows [`0000-template.md`](0000-template.md): **Status · Context · 
 | [0006](0006-performance-and-response-budget.md) | Performance & the <1s response budget | Accepted |
 | [0007](0007-reliability-backups-and-operability.md) | Reliability, backups, DR & operability | Accepted |
 | [0008](0008-scalability-and-horizontal-scaling.md) | Scalability & horizontal scaling | Accepted |
-| [0009](0009-billing-profile-sync-as-internal-posting-flag.md) | Billing-profile "sync" is an internal posting/readiness flag | Accepted |
+| [0009](0009-rebrand-to-business-central-presentation-only.md) | Rebrand to "Business Central" at the presentation layer only | Accepted |
+| [0010](0010-billing-profile-sync-as-internal-posting-flag.md) | Billing-profile "sync" is an internal posting/readiness flag | Accepted |
 
 Related backlog: [`../work-items.md`](../work-items.md).

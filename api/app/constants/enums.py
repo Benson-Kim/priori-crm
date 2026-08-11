@@ -67,13 +67,23 @@ class BillingCurrency(StrEnum):
 
 
 class Industry(StrEnum):
-    """Customer industry classification (deal-desk prototype's 10 values)."""
+    """Customer industry classification (ratified design vocabulary).
+
+    The 12 values ratified from the Sales Desk design exports
+    (``docs/sales-desk-designs/`` on branch ``sales-desk-designs``; see the
+    review on !38 and issue #53): the deal-desk prototype's original list
+    with 'Hospitality' renamed to 'Hospitality & tourism' plus
+    'Agriculture & export' and 'Insurance'. Must stay identical to the
+    IN-list in migration ``d5e6f7a8b9c0``.
+    """
 
     FINANCIAL_SERVICES = "Financial services"
     HEALTHCARE = "Healthcare"
     EDUCATION = "Education"
     LOGISTICS_TRANSPORT = "Logistics & transport"
-    HOSPITALITY = "Hospitality"
+    HOSPITALITY_TOURISM = "Hospitality & tourism"
+    AGRICULTURE_EXPORT = "Agriculture & export"
+    INSURANCE = "Insurance"
     MANUFACTURING = "Manufacturing"
     PROFESSIONAL_SERVICES = "Professional services"
     NGO_NON_PROFIT = "NGO / Non-profit"
