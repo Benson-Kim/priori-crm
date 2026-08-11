@@ -1,0 +1,255 @@
+<svg width="1551" height="980" viewBox="0 0 1551 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1551" height="980" fill="#F6F7F9"/>
+<mask id="path-1-inside-1_3654_8375" fill="white">
+<path d="M0 0H240V980H0V0Z"/>
+</mask>
+<path d="M0 0H240V980H0V0Z" fill="white"/>
+<path d="M240 0H239V980H240H241V0H240Z" fill="#E4E8EF" mask="url(#path-1-inside-1_3654_8375)"/>
+<path d="M24 36C24 29.3726 29.3726 24 36 24H44C50.6274 24 56 29.3726 56 36V44C56 50.6274 50.6274 56 44 56H36C29.3726 56 24 50.6274 24 44V36Z" fill="url(#paint0_linear_3654_8375)"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="35.5" y="44.3357">P</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="66" y="38">Priori</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="66" y="52">Technologies</tspan></text>
+<path d="M26.25 103.5L27.75 102M27.75 102L33 96.75L38.25 102M27.75 102V109.5C27.75 109.699 27.829 109.89 27.9697 110.03C28.1103 110.171 28.3011 110.25 28.5 110.25H30.75M38.25 102L39.75 103.5M38.25 102V109.5C38.25 109.699 38.171 109.89 38.0303 110.03C37.8897 110.171 37.6989 110.25 37.5 110.25H35.25M30.75 110.25C30.9489 110.25 31.1397 110.171 31.2803 110.03C31.421 109.89 31.5 109.699 31.5 109.5V106.5C31.5 106.301 31.579 106.11 31.7197 105.97C31.8603 105.829 32.0511 105.75 32.25 105.75H33.75C33.9489 105.75 34.1397 105.829 34.2803 105.97C34.421 106.11 34.5 106.301 34.5 106.5V109.5C34.5 109.699 34.579 109.89 34.7197 110.03C34.8603 110.171 35.0511 110.25 35.25 110.25M30.75 110.25H35.25" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="107.836">Dashboard</tspan></text>
+<path d="M30.75 149.75V145.25C30.75 144.852 30.592 144.471 30.3107 144.189C30.0294 143.908 29.6478 143.75 29.25 143.75H27.75C27.3522 143.75 26.9706 143.908 26.6893 144.189C26.408 144.471 26.25 144.852 26.25 145.25V149.75C26.25 150.148 26.408 150.529 26.6893 150.811C26.9706 151.092 27.3522 151.25 27.75 151.25H29.25C29.6478 151.25 30.0294 151.092 30.3107 150.811C30.592 150.529 30.75 150.148 30.75 149.75ZM30.75 149.75V142.25C30.75 141.852 30.908 141.471 31.1893 141.189C31.4706 140.908 31.8522 140.75 32.25 140.75H33.75C34.1478 140.75 34.5294 140.908 34.8107 141.189C35.092 141.471 35.25 141.852 35.25 142.25V149.75M30.75 149.75C30.75 150.148 30.908 150.529 31.1893 150.811C31.4706 151.092 31.8522 151.25 32.25 151.25H33.75C34.1478 151.25 34.5294 151.092 34.8107 150.811C35.092 150.529 35.25 150.148 35.25 149.75M35.25 149.75V139.25C35.25 138.852 35.408 138.471 35.6893 138.189C35.9706 137.908 36.3522 137.75 36.75 137.75H38.25C38.6478 137.75 39.0294 137.908 39.3107 138.189C39.592 138.471 39.75 138.852 39.75 139.25V149.75C39.75 150.148 39.592 150.529 39.3107 150.811C39.0294 151.092 38.6478 151.25 38.25 151.25H36.75C36.3522 151.25 35.9706 151.092 35.6893 150.811C35.408 150.529 35.25 150.148 35.25 149.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="148.836">Pipeline</tspan></text>
+<path d="M12 178C12 171.373 17.3726 166 24 166H215C221.627 166 227 171.373 227 178V193C227 199.627 221.627 205 215 205H24C17.3726 205 12 199.627 12 193V178Z" fill="#FBF0FB"/>
+<path d="M38.25 192.25V180.25C38.25 179.852 38.092 179.471 37.8107 179.189C37.5294 178.908 37.1478 178.75 36.75 178.75H29.25C28.8522 178.75 28.4706 178.908 28.1893 179.189C27.908 179.471 27.75 179.852 27.75 180.25V192.25M38.25 192.25H39.75M38.25 192.25H34.5M27.75 192.25H26.25M27.75 192.25H31.5M34.5 192.25V188.5C34.5 188.301 34.421 188.11 34.2803 187.97C34.1397 187.829 33.9489 187.75 33.75 187.75H32.25C32.0511 187.75 31.8603 187.829 31.7197 187.97C31.579 188.11 31.5 188.301 31.5 188.5V192.25M34.5 192.25H31.5M30.75 181.75H31.5M30.75 184.75H31.5M34.5 181.75H35.25M34.5 184.75H35.25" stroke="#912B90" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="189.836">Companies</tspan></text>
+<path d="M199 185.5C199 181.082 202.582 177.5 207 177.5C211.418 177.5 215 181.082 215 185.5C215 189.918 211.418 193.5 207 193.5C202.582 193.5 199 189.918 199 185.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="188.643">2</tspan></text>
+<path d="M33 223.5V226.5L35.25 228.75M39.75 226.5C39.75 227.386 39.5754 228.264 39.2362 229.083C38.897 229.902 38.3998 230.646 37.773 231.273C37.1462 231.9 36.4021 232.397 35.5831 232.736C34.7642 233.075 33.8864 233.25 33 233.25C32.1136 233.25 31.2358 233.075 30.4169 232.736C29.5979 232.397 28.8538 231.9 28.227 231.273C27.6002 230.646 27.103 229.902 26.7638 229.083C26.4246 228.264 26.25 227.386 26.25 226.5C26.25 224.71 26.9612 222.993 28.227 221.727C29.4929 220.461 31.2098 219.75 33 219.75C34.7902 219.75 36.5071 220.461 37.773 221.727C39.0388 222.993 39.75 224.71 39.75 226.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="230.836">Future pipeline</tspan></text>
+<path d="M199 226.5C199 222.082 202.582 218.5 207 218.5C211.418 218.5 215 222.082 215 226.5C215 230.918 211.418 234.5 207 234.5C202.582 234.5 199 230.918 199 226.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" font-weight="bold" letter-spacing="0px"><tspan x="204" y="229.643">2</tspan></text>
+<path d="M30.75 263.75H35.25M35.25 271.25V269M33 271.25H33.0075M30.75 271.25H30.7575M30.75 266.75H30.7575M33 266.75H33.0075M35.25 266.75H35.2575M27 272.75H39C39.3978 272.75 39.7794 272.592 40.0607 272.311C40.342 272.029 40.5 271.648 40.5 271.25V263.75C40.5 263.352 40.342 262.971 40.0607 262.689C39.7794 262.408 39.3978 262.25 39 262.25H27C26.6022 262.25 26.2206 262.408 25.9393 262.689C25.658 262.971 25.5 263.352 25.5 263.75V271.25C25.5 271.648 25.658 272.029 25.9393 272.311C26.2206 272.592 26.6022 272.75 27 272.75Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="271.836">Quotes &#38; pricing</tspan></text>
+<path d="M30.75 308.5L32.25 310L35.25 307M39.75 308.5C39.75 309.386 39.5754 310.264 39.2362 311.083C38.897 311.902 38.3998 312.646 37.773 313.273C37.1462 313.9 36.4021 314.397 35.5831 314.736C34.7642 315.075 33.8864 315.25 33 315.25C32.1136 315.25 31.2358 315.075 30.4169 314.736C29.5979 314.397 28.8538 313.9 28.227 313.273C27.6002 312.646 27.103 311.902 26.7638 311.083C26.4246 310.264 26.25 309.386 26.25 308.5C26.25 306.71 26.9612 304.993 28.227 303.727C29.4929 302.461 31.2098 301.75 33 301.75C34.7902 301.75 36.5071 302.461 37.773 303.727C39.0388 304.993 39.75 306.71 39.75 308.5Z" stroke="#6B7688" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="52" y="312.836">Onboarding</tspan></text>
+<mask id="path-29-inside-2_3654_8375" fill="white">
+<path d="M0 874H239V980H0V874Z"/>
+</mask>
+<path d="M0 874V875H239V874V873H0V874Z" fill="#E4E8EF" mask="url(#path-29-inside-2_3654_8375)"/>
+<path d="M16 906.5C16 898.768 22.268 892.5 30 892.5C37.732 892.5 44 898.768 44 906.5C44 914.232 37.732 920.5 30 920.5C22.268 920.5 16 914.232 16 906.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="21" y="910.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="54" y="903.2">Frank Mueke</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="54" y="918">Senior Admin</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="945">&#xa9; 2026 Priori &#x2014; All Rights Reserved</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="10" letter-spacing="0px"><tspan x="16" y="960">Version: 1.0.188-288</tspan></text>
+<mask id="path-37-inside-3_3654_8375" fill="white">
+<path d="M240 0H1551V64H240V0Z"/>
+</mask>
+<path d="M240 0H1551V64H240V0Z" fill="white"/>
+<path d="M1551 64V63H240V64V65H1551V64Z" fill="#E4E8EF" mask="url(#path-37-inside-3_3654_8375)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="264" y="35.8357">Companies</tspan></text>
+<mask id="path-40-inside-4_3654_8375" fill="white">
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z"/>
+</mask>
+<path d="M1232 28.5C1232 21.8726 1237.37 16.5 1244 16.5H1427C1433.63 16.5 1439 21.8726 1439 28.5V34.5C1439 41.1274 1433.63 46.5 1427 46.5H1244C1237.37 46.5 1232 41.1274 1232 34.5V28.5Z" fill="#F6F7F9"/>
+<path d="M1244 16.5V17.5H1427V16.5V15.5H1244V16.5ZM1439 28.5H1438V34.5H1439H1440V28.5H1439ZM1427 46.5V45.5H1244V46.5V47.5H1427V46.5ZM1232 34.5H1233V28.5H1232H1231V34.5H1232ZM1244 46.5V45.5C1237.92 45.5 1233 40.5751 1233 34.5H1232H1231C1231 41.6797 1236.82 47.5 1244 47.5V46.5ZM1439 34.5H1438C1438 40.5751 1433.08 45.5 1427 45.5V46.5V47.5C1434.18 47.5 1440 41.6797 1440 34.5H1439ZM1427 16.5V17.5C1433.08 17.5 1438 22.4249 1438 28.5H1439H1440C1440 21.3203 1434.18 15.5 1427 15.5V16.5ZM1244 16.5V15.5C1236.82 15.5 1231 21.3203 1231 28.5H1232H1233C1233 22.4249 1237.92 17.5 1244 17.5V16.5Z" fill="#E4E8EF" mask="url(#path-40-inside-4_3654_8375)"/>
+<g clip-path="url(#clip0_3654_8375)">
+<path d="M1257.35 37.3499L1254.52 34.5224M1250.85 36.0499C1252.23 36.0499 1253.55 35.502 1254.53 34.5269C1255.5 33.5517 1256.05 32.229 1256.05 30.8499C1256.05 29.4708 1255.5 28.1481 1254.53 27.1729C1253.55 26.1978 1252.23 25.6499 1250.85 25.6499C1249.47 25.6499 1248.15 26.1978 1247.17 27.1729C1246.2 28.1481 1245.65 29.4708 1245.65 30.8499C1245.65 32.229 1246.2 33.5517 1247.17 34.5269C1248.15 35.502 1249.47 36.0499 1250.85 36.0499Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip1_3654_8375)">
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1266" y="35.7">Search companies, deals&#x2026;</tspan></text>
+</g>
+<mask id="path-44-inside-5_3654_8375" fill="white">
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z"/>
+</mask>
+<path d="M1451 31.5C1451 22.6634 1458.16 15.5 1467 15.5C1475.84 15.5 1483 22.6634 1483 31.5C1483 40.3366 1475.84 47.5 1467 47.5C1458.16 47.5 1451 40.3366 1451 31.5Z" fill="#F6F7F9"/>
+<path d="M1451 31.5M1483 31.5M1483 31.5M1451 31.5M1467 15.5M1483 31.5M1467 47.5M1451 31.5M1467 47.5V46.5C1458.72 46.5 1452 39.7843 1452 31.5H1451H1450C1450 40.8888 1457.61 48.5 1467 48.5V47.5ZM1483 31.5H1482C1482 39.7843 1475.28 46.5 1467 46.5V47.5V48.5C1476.39 48.5 1484 40.8888 1484 31.5H1483ZM1467 15.5V16.5C1475.28 16.5 1482 23.2157 1482 31.5H1483H1484C1484 22.1112 1476.39 14.5 1467 14.5V15.5ZM1467 15.5V14.5C1457.61 14.5 1450 22.1112 1450 31.5H1451H1452C1452 23.2157 1458.72 16.5 1467 16.5V15.5Z" fill="#E4E8EF" mask="url(#path-44-inside-5_3654_8375)"/>
+<path d="M1468.75 34.4167H1471.67L1470.85 33.5971C1470.74 33.487 1470.65 33.3563 1470.59 33.2125C1470.53 33.0687 1470.5 32.9145 1470.5 32.7588V30.9167C1470.5 30.1927 1470.28 29.4865 1469.86 28.8954C1469.44 28.3042 1468.85 27.8571 1468.17 27.6156V27.4167C1468.17 27.1072 1468.04 26.8105 1467.83 26.5917C1467.61 26.3729 1467.31 26.25 1467 26.25C1466.69 26.25 1466.39 26.3729 1466.18 26.5917C1465.96 26.8105 1465.83 27.1072 1465.83 27.4167V27.6156C1464.47 28.0962 1463.5 29.393 1463.5 30.9167V32.7594C1463.5 33.0732 1463.38 33.3748 1463.15 33.5971L1462.33 34.4167H1465.25M1468.75 34.4167V35C1468.75 35.4641 1468.57 35.9092 1468.24 36.2374C1467.91 36.5656 1467.46 36.75 1467 36.75C1466.54 36.75 1466.09 36.5656 1465.76 36.2374C1465.44 35.9092 1465.25 35.4641 1465.25 35V34.4167M1468.75 34.4167H1465.25" stroke="#6B7688" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1470 20.5C1470 16.0817 1473.58 12.5 1478 12.5C1482.42 12.5 1486 16.0817 1486 20.5C1486 24.9183 1482.42 28.5 1478 28.5C1473.58 28.5 1470 24.9183 1470 20.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="9" font-weight="bold" letter-spacing="0px"><tspan x="1475.07" y="23.65">5</tspan></text>
+<path d="M1495 31.5C1495 22.6634 1502.16 15.5 1511 15.5C1519.84 15.5 1527 22.6634 1527 31.5C1527 40.3366 1519.84 47.5 1511 47.5C1502.16 47.5 1495 40.3366 1495 31.5Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="1502" y="35.7">FM</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="bold" letter-spacing="0px"><tspan x="264" y="112.4">Companies</tspan></text>
+<path d="M1378 100C1378 93.3726 1383.37 88 1390 88H1515C1521.63 88 1527 93.3726 1527 100V111C1527 117.627 1521.63 123 1515 123H1390C1383.37 123 1378 117.627 1378 111V100Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="16" font-weight="500" letter-spacing="0px"><tspan x="1394.29" y="111.1">+</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="500" letter-spacing="0px"><tspan x="1414.01" y="109.836">New Company</tspan></text>
+<g filter="url(#filter0_d_3654_8375)">
+<mask id="path-55-inside-6_3654_8375" fill="white">
+<path d="M264 159C264 150.163 271.163 143 280 143H1511C1519.84 143 1527 150.163 1527 159V659.141C1527 667.977 1519.84 675.141 1511 675.141H280C271.163 675.141 264 667.977 264 659.141V159Z"/>
+</mask>
+<path d="M264 159C264 150.163 271.163 143 280 143H1511C1519.84 143 1527 150.163 1527 159V659.141C1527 667.977 1519.84 675.141 1511 675.141H280C271.163 675.141 264 667.977 264 659.141V159Z" fill="white"/>
+<path d="M280 143V144H1511V143V142H280V143ZM1527 159H1526V659.141H1527H1528V159H1527ZM1511 675.141V674.141H280V675.141V676.141H1511V675.141ZM264 659.141H265V159H264H263V659.141H264ZM280 675.141V674.141C271.716 674.141 265 667.425 265 659.141H264H263C263 668.529 270.611 676.141 280 676.141V675.141ZM1527 659.141H1526C1526 667.425 1519.28 674.141 1511 674.141V675.141V676.141C1520.39 676.141 1528 668.529 1528 659.141H1527ZM1511 143V144C1519.28 144 1526 150.716 1526 159H1527H1528C1528 149.611 1520.39 142 1511 142V143ZM280 143V142C270.611 142 263 149.611 263 159H264H265C265 150.716 271.716 144 280 144V143Z" fill="#E4E8EF" mask="url(#path-55-inside-6_3654_8375)"/>
+<mask id="path-57-inside-7_3654_8375" fill="white">
+<path d="M265 144H1526V202H265V144Z"/>
+</mask>
+<path d="M1526 202V201H265V202V203H1526V202Z" fill="#E4E8EF" mask="url(#path-57-inside-7_3654_8375)"/>
+<mask id="path-59-inside-8_3654_8375" fill="white">
+<path d="M281 168C281 161.373 286.373 156 293 156H340C346.627 156 352 161.373 352 168V177C352 183.627 346.627 189 340 189H293C286.373 189 281 183.627 281 177V168Z"/>
+</mask>
+<path d="M281 168C281 161.373 286.373 156 293 156H340C346.627 156 352 161.373 352 168V177C352 183.627 346.627 189 340 189H293C286.373 189 281 183.627 281 177V168Z" fill="#FBF0FB"/>
+<path d="M293 156V157H340V156V155H293V156ZM352 168H351V177H352H353V168H352ZM340 189V188H293V189V190H340V189ZM281 177H282V168H281H280V177H281ZM293 189V188C286.925 188 282 183.075 282 177H281H280C280 184.18 285.82 190 293 190V189ZM352 177H351C351 183.075 346.075 188 340 188V189V190C347.18 190 353 184.18 353 177H352ZM340 156V157C346.075 157 351 161.925 351 168H352H353C353 160.82 347.18 155 340 155V156ZM293 156V155C285.82 155 280 160.82 280 168H281H282C282 161.925 286.925 157 293 157V156Z" fill="#912B90" mask="url(#path-59-inside-8_3654_8375)"/>
+<text fill="#912B90" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="296.213" y="176.836">All (6)</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="374.425" y="176.836">Needs sync (2)</tspan></text>
+<mask id="path-64-inside-9_3654_8375" fill="white">
+<path d="M1287 168.215C1287 161.587 1292.37 156.215 1299 156.215H1498C1504.63 156.215 1510 161.587 1510 168.215V176.785C1510 183.413 1504.63 188.785 1498 188.785H1299C1292.37 188.785 1287 183.413 1287 176.785V168.215Z"/>
+</mask>
+<path d="M1299 156.215V157.215H1498V156.215V155.215H1299V156.215ZM1510 168.215H1509V176.785H1510H1511V168.215H1510ZM1498 188.785V187.785H1299V188.785V189.785H1498V188.785ZM1287 176.785H1288V168.215H1287H1286V176.785H1287ZM1299 188.785V187.785C1292.92 187.785 1288 182.86 1288 176.785H1287H1286C1286 183.965 1291.82 189.785 1299 189.785V188.785ZM1510 176.785H1509C1509 182.86 1504.08 187.785 1498 187.785V188.785V189.785C1505.18 189.785 1511 183.965 1511 176.785H1510ZM1498 156.215V157.215C1504.08 157.215 1509 162.14 1509 168.215H1510H1511C1511 161.035 1505.18 155.215 1498 155.215V156.215ZM1299 156.215V155.215C1291.82 155.215 1286 161.035 1286 168.215H1287H1288C1288 162.14 1292.92 157.215 1299 157.215V156.215Z" fill="#E4E8EF" mask="url(#path-64-inside-9_3654_8375)"/>
+<g clip-path="url(#clip2_3654_8375)">
+<path d="M1312.35 178.35L1309.52 175.522M1305.85 177.05C1307.23 177.05 1308.55 176.502 1309.53 175.527C1310.5 174.552 1311.05 173.229 1311.05 171.85C1311.05 170.471 1310.5 169.148 1309.53 168.173C1308.55 167.198 1307.23 166.65 1305.85 166.65C1304.47 166.65 1303.15 167.198 1302.17 168.173C1301.2 169.148 1300.65 170.471 1300.65 171.85C1300.65 173.229 1301.2 174.552 1302.17 175.527C1303.15 176.502 1304.47 177.05 1305.85 177.05Z" stroke="#6B7688" stroke-width="0.975" stroke-linecap="round"/>
+</g>
+<g clip-path="url(#clip3_3654_8375)">
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" letter-spacing="0px"><tspan x="1321" y="177.05">Search companies&#x2026;</tspan></text>
+</g>
+<mask id="path-68-inside-10_3654_8375" fill="white">
+<path d="M265 202H1526V249.07H265V202Z"/>
+</mask>
+<path d="M1526 249.07V248.07H265V249.07V250.07H1526V249.07Z" fill="#E4E8EF" mask="url(#path-68-inside-10_3654_8375)"/>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="285" y="230.836">Company</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="230.836">Billing profiles</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="bold" letter-spacing="0px"><tspan x="1242" y="230.836">Deals</tspan></text>
+<mask id="path-73-inside-11_3654_8375" fill="white">
+<path d="M265 249.07H1526V320.07H265V249.07Z"/>
+</mask>
+<path d="M1526 320.07V319.07H265V320.07V321.07H1526V320.07Z" fill="#E4E8EF" mask="url(#path-73-inside-11_3654_8375)"/>
+<path d="M285 284.781C285 274.84 293.059 266.781 303 266.781C312.941 266.781 321 274.84 321 284.781C321 294.722 312.941 302.781 303 302.781C293.059 302.781 285 294.722 285 284.781Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="295" y="288.925">TK</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="280.117">Baraka Logistics</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="299.481">Logistics &#38; transport &#xb7; Alice Wanjiru</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="277.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="277.725">BL-USD</tspan></text>
+<path d="M933.766 273.57C933.766 271.361 935.556 269.57 937.766 269.57C939.975 269.57 941.766 271.361 941.766 273.57C941.766 275.779 939.975 277.57 937.766 277.57C935.556 277.57 933.766 275.779 933.766 273.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="277.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="299.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="299.725">BL-KES</tspan></text>
+<path d="M933.766 295.57C933.766 293.361 935.556 291.57 937.766 291.57C939.975 291.57 941.766 293.361 941.766 295.57C941.766 297.779 939.975 299.57 937.766 299.57C935.556 299.57 933.766 297.779 933.766 295.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="299.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="280.77">1 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="296.77">0 closed</tspan></text>
+<path d="M1436.73 282.281C1436.73 275.654 1442.11 270.281 1448.73 270.281H1494C1500.63 270.281 1506 275.654 1506 282.281V286.781C1506 293.409 1500.63 298.781 1494 298.781H1448.73C1442.11 298.781 1436.73 293.409 1436.73 286.781V282.281Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1449.46" y="289.481">Synced</tspan></text>
+<mask id="path-91-inside-12_3654_8375" fill="white">
+<path d="M265 320.07H1526V391.07H265V320.07Z"/>
+</mask>
+<path d="M1526 391.07V390.07H265V391.07V392.07H1526V391.07Z" fill="#E4E8EF" mask="url(#path-91-inside-12_3654_8375)"/>
+<path d="M285 355.781C285 345.84 293.059 337.781 303 337.781C312.941 337.781 321 345.84 321 355.781C321 365.722 312.941 373.781 303 373.781C293.059 373.781 285 365.722 285 355.781Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="291" y="359.925">MW</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="351.117">Savannah Microfinance</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="370.481">Financial services &#xb7; Peter Otieno</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="348.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="348.725">SM-USD</tspan></text>
+<path d="M933.766 344.57C933.766 342.361 935.556 340.57 937.766 340.57C939.975 340.57 941.766 342.361 941.766 344.57C941.766 346.779 939.975 348.57 937.766 348.57C935.556 348.57 933.766 346.779 933.766 344.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="348.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="370.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="370.725">SM-KES</tspan></text>
+<path d="M933.766 366.57C933.766 364.361 935.556 362.57 937.766 362.57C939.975 362.57 941.766 364.361 941.766 366.57C941.766 368.779 939.975 370.57 937.766 370.57C935.556 370.57 933.766 368.779 933.766 366.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="370.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="351.77">1 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="367.77">0 closed</tspan></text>
+<path d="M1436.73 353.281C1436.73 346.654 1442.11 341.281 1448.73 341.281H1494C1500.63 341.281 1506 346.654 1506 353.281V357.781C1506 364.409 1500.63 369.781 1494 369.781H1448.73C1442.11 369.781 1436.73 364.409 1436.73 357.781V353.281Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1449.46" y="360.481">Synced</tspan></text>
+<mask id="path-109-inside-13_3654_8375" fill="white">
+<path d="M265 391.07H1526V462.07H265V391.07Z"/>
+</mask>
+<path d="M1526 462.07V461.07H265V462.07V463.07H1526V462.07Z" fill="#E4E8EF" mask="url(#path-109-inside-13_3654_8375)"/>
+<path d="M285 426.781C285 416.84 293.059 408.781 303 408.781C312.941 408.781 321 416.84 321 426.781C321 436.722 312.941 444.781 303 444.781C293.059 444.781 285 436.722 285 426.781Z" fill="#2456E6"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="295" y="430.925">TK</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="422.117">Nairobi Dental Group</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="441.481">Healthcare &#xb7; Grace Muthoni</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="419.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="419.725">NDG-USD</tspan></text>
+<path d="M933.766 415.57C933.766 413.361 935.556 411.57 937.766 411.57C939.975 411.57 941.766 413.361 941.766 415.57C941.766 417.779 939.975 419.57 937.766 419.57C935.556 419.57 933.766 417.779 933.766 415.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="419.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="441.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="441.725">NDG-KES</tspan></text>
+<path d="M933.766 437.57C933.766 435.361 935.556 433.57 937.766 433.57C939.975 433.57 941.766 435.361 941.766 437.57C941.766 439.779 939.975 441.57 937.766 441.57C935.556 441.57 933.766 439.779 933.766 437.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="441.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="422.77">1 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="438.77">0 closed</tspan></text>
+<path d="M1436.73 424.281C1436.73 417.654 1442.11 412.281 1448.73 412.281H1494C1500.63 412.281 1506 417.654 1506 424.281V428.781C1506 435.409 1500.63 440.781 1494 440.781H1448.73C1442.11 440.781 1436.73 435.409 1436.73 428.781V424.281Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1449.46" y="431.481">Synced</tspan></text>
+<mask id="path-127-inside-14_3654_8375" fill="white">
+<path d="M265 462.07H1526V533.07H265V462.07Z"/>
+</mask>
+<path d="M1526 533.07V532.07H265V533.07V534.07H1526V533.07Z" fill="#E4E8EF" mask="url(#path-127-inside-14_3654_8375)"/>
+<path d="M285 497.781C285 487.84 293.059 479.781 303 479.781C312.941 479.781 321 487.84 321 497.781C321 507.722 312.941 515.781 303 515.781C293.059 515.781 285 507.722 285 497.781Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="295" y="501.925">JN</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="493.117">Kilifi Beach Resorts</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="512.481">Hospitality &#38; tourism &#xb7; Hassan Mwavita</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="490.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="490.725">KBR-USD</tspan></text>
+<path d="M933.766 486.57C933.766 484.361 935.556 482.57 937.766 482.57C939.975 482.57 941.766 484.361 941.766 486.57C941.766 488.779 939.975 490.57 937.766 490.57C935.556 490.57 933.766 488.779 933.766 486.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="490.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="512.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="512.725">KBR-KES</tspan></text>
+<mask id="path-139-inside-15_3654_8375" fill="white">
+<path d="M933.766 508.57C933.766 506.361 935.556 504.57 937.766 504.57C939.975 504.57 941.766 506.361 941.766 508.57C941.766 510.779 939.975 512.57 937.766 512.57C935.556 512.57 933.766 510.779 933.766 508.57Z"/>
+</mask>
+<path d="M933.766 508.57M941.766 508.57M941.766 508.57M933.766 508.57M937.766 504.57M941.766 508.57M937.766 512.57M933.766 508.57M937.766 512.57V510.57C936.661 510.57 935.766 509.675 935.766 508.57H933.766H931.766C931.766 511.884 934.452 514.57 937.766 514.57V512.57ZM941.766 508.57H939.766C939.766 509.675 938.87 510.57 937.766 510.57V512.57V514.57C941.079 514.57 943.766 511.884 943.766 508.57H941.766ZM937.766 504.57V506.57C938.87 506.57 939.766 507.466 939.766 508.57H941.766H943.766C943.766 505.257 941.079 502.57 937.766 502.57V504.57ZM937.766 504.57V502.57C934.452 502.57 931.766 505.257 931.766 508.57H933.766H935.766C935.766 507.466 936.661 506.57 937.766 506.57V504.57Z" fill="#9CA3AF" mask="url(#path-139-inside-15_3654_8375)"/>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="949.766" y="512.77">Not synced</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="493.77">1 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="509.77">0 closed</tspan></text>
+<path d="M1364.78 493.57C1364.78 486.943 1370.15 481.57 1376.78 481.57H1494C1500.63 481.57 1506 486.943 1506 493.57V501.57C1506 508.198 1500.63 513.57 1494 513.57H1376.78C1370.15 513.57 1364.78 508.198 1364.78 501.57V493.57Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1381.17" y="502.27">Sync both profiles</tspan></text>
+<mask id="path-146-inside-16_3654_8375" fill="white">
+<path d="M265 533.07H1526V604.07H265V533.07Z"/>
+</mask>
+<path d="M1526 604.07V603.07H265V604.07V605.07H1526V604.07Z" fill="#E4E8EF" mask="url(#path-146-inside-16_3654_8375)"/>
+<path d="M285 568.781C285 558.84 293.059 550.781 303 550.781C312.941 550.781 321 558.84 321 568.781C321 578.722 312.941 586.781 303 586.781C293.059 586.781 285 578.722 285 568.781Z" fill="#7C3AED"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="291" y="572.925">MW</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="564.117">Acacia Insurance</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="583.481">Insurance &#xb7; Faith Chebet</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="561.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="561.725">AI-USD</tspan></text>
+<path d="M933.766 557.57C933.766 555.361 935.556 553.57 937.766 553.57C939.975 553.57 941.766 555.361 941.766 557.57C941.766 559.779 939.975 561.57 937.766 561.57C935.556 561.57 933.766 559.779 933.766 557.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="561.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="583.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="583.725">AI-KES</tspan></text>
+<path d="M933.766 579.57C933.766 577.361 935.556 575.57 937.766 575.57C939.975 575.57 941.766 577.361 941.766 579.57C941.766 581.779 939.975 583.57 937.766 583.57C935.556 583.57 933.766 581.779 933.766 579.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="583.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="564.77">0 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="580.77">1 closed</tspan></text>
+<path d="M1436.73 566.281C1436.73 559.654 1442.11 554.281 1448.73 554.281H1494C1500.63 554.281 1506 559.654 1506 566.281V570.781C1506 577.409 1500.63 582.781 1494 582.781H1448.73C1442.11 582.781 1436.73 577.409 1436.73 570.781V566.281Z" fill="#E6F5EB"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1449.46" y="573.481">Synced</tspan></text>
+<path d="M285 639.781C285 629.84 293.059 621.781 303 621.781C312.941 621.781 321 629.84 321 639.781C321 649.722 312.941 657.781 303 657.781C293.059 657.781 285 649.722 285 639.781Z" fill="#0D9488"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11.88" font-weight="bold" letter-spacing="0px"><tspan x="295" y="643.925">JN</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="13" font-weight="600" letter-spacing="0px"><tspan x="333" y="635.117">Tumaini SACCO</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="333" y="654.481">Financial services &#xb7; Omar Salim</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="632.77">USD</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="632.725">TS-USD</tspan></text>
+<mask id="path-170-inside-17_3654_8375" fill="white">
+<path d="M933.766 628.57C933.766 626.361 935.556 624.57 937.766 624.57C939.975 624.57 941.766 626.361 941.766 628.57C941.766 630.779 939.975 632.57 937.766 632.57C935.556 632.57 933.766 630.779 933.766 628.57Z"/>
+</mask>
+<path d="M933.766 628.57M941.766 628.57M941.766 628.57M933.766 628.57M937.766 624.57M941.766 628.57M937.766 632.57M933.766 628.57M937.766 632.57V630.57C936.661 630.57 935.766 629.675 935.766 628.57H933.766H931.766C931.766 631.884 934.452 634.57 937.766 634.57V632.57ZM941.766 628.57H939.766C939.766 629.675 938.87 630.57 937.766 630.57V632.57V634.57C941.079 634.57 943.766 631.884 943.766 628.57H941.766ZM937.766 624.57V626.57C938.87 626.57 939.766 627.466 939.766 628.57H941.766H943.766C943.766 625.257 941.079 622.57 937.766 622.57V624.57ZM937.766 624.57V622.57C934.452 622.57 931.766 625.257 931.766 628.57H933.766H935.766C935.766 627.466 936.661 626.57 937.766 626.57V624.57Z" fill="#9CA3AF" mask="url(#path-170-inside-17_3654_8375)"/>
+<text fill="#9CA3AF" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="949.766" y="632.77">Not synced</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0px"><tspan x="805.766" y="654.77">KES</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Menlo" font-size="12" letter-spacing="0px"><tspan x="845.766" y="654.725">TS-KES</tspan></text>
+<path d="M933.766 650.57C933.766 648.361 935.556 646.57 937.766 646.57C939.975 646.57 941.766 648.361 941.766 650.57C941.766 652.779 939.975 654.57 937.766 654.57C935.556 654.57 933.766 652.779 933.766 650.57Z" fill="#0F7A38"/>
+<text fill="#0F7A38" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="500" letter-spacing="0px"><tspan x="949.766" y="654.77">In accounting</tspan></text>
+<text fill="#16233A" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1242" y="635.77">0 open</tspan></text>
+<text fill="#6B7688" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0px"><tspan x="1242" y="651.77">1 closed</tspan></text>
+<path d="M1364.78 635.57C1364.78 628.943 1370.15 623.57 1376.78 623.57H1494C1500.63 623.57 1506 628.943 1506 635.57V643.57C1506 650.198 1500.63 655.57 1494 655.57H1376.78C1370.15 655.57 1364.78 650.198 1364.78 643.57V635.57Z" fill="#912B90"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="600" letter-spacing="0px"><tspan x="1381.17" y="644.27">Sync both profiles</tspan></text>
+</g>
+<defs>
+<filter id="filter0_d_3654_8375" x="261" y="141" width="1269" height="538.141" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_3654_8375"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_3654_8375" result="shape"/>
+</filter>
+<linearGradient id="paint0_linear_3654_8375" x1="24" y1="24" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+<stop stop-color="#912B90"/>
+<stop offset="1" stop-color="#2456E6"/>
+</linearGradient>
+<clipPath id="clip0_3654_8375">
+<rect width="13" height="13" fill="white" transform="translate(1245 25)"/>
+</clipPath>
+<clipPath id="clip1_3654_8375">
+<rect width="160" height="16" fill="white" transform="translate(1266 23.5)"/>
+</clipPath>
+<clipPath id="clip2_3654_8375">
+<rect width="13" height="13" fill="white" transform="translate(1300 166)"/>
+</clipPath>
+<clipPath id="clip3_3654_8375">
+<rect width="176" height="18.5703" fill="white" transform="translate(1321 163.215)"/>
+</clipPath>
+</defs>
+</svg>
