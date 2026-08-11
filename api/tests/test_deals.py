@@ -12,7 +12,7 @@ Covers:
   persisted, "Closed — Won/Lost" record, audit row;
 - park/resume: future re-engage date, resume_stage bookkeeping, records;
 - derived values: age_days / idle_days from the first/latest record,
-  weighted_value = value × stage probability (null once closed),
+  weighted_value = value x stage probability (null once closed),
   latest_record + full stage_history in responses;
 - list filters: tabs, owner, show_closed, hygiene buckets, search;
 - update: closed read-only, optimistic-lock 409, currency re-validated;
@@ -210,9 +210,7 @@ def test_create_deal_rejects_currency_without_billing_profile(db):
     """
     owner = _make_owner(db)
     customer = _make_customer(db)
-    usd_profile = next(
-        p for p in customer.billing_profiles if p.currency == "USD"
-    )
+    usd_profile = next(p for p in customer.billing_profiles if p.currency == "USD")
     db.delete(usd_profile)
     db.flush()
     db.expire(customer, ["billing_profiles"])
@@ -521,7 +519,7 @@ def test_age_idle_and_weighted_value_in_response(db):
     response = svc.build_response(deal)
     assert response.age_days == 40
     assert response.idle_days == 3
-    assert response.weighted_value == Decimal("38880.00")  # 51840 × 0.75
+    assert response.weighted_value == Decimal("38880.00")  # 51840 x 0.75
     assert response.stage_index == 4
     assert response.stage_total == 5
     assert response.stage_label == "Negotiation"
@@ -610,36 +608,57 @@ def _pipeline_fixture(db):
 
     dental = _make_customer(db, name="Nairobi Dental Group")
     open_fresh = _make_deal(
-        db, tabitha, dental, product="Microsoft 365 Business Standard",
-        seats=18, value=Decimal("2700.00"), currency="KES",
+        db,
+        tabitha,
+        dental,
+        product="Microsoft 365 Business Standard",
+        seats=18,
+        value=Decimal("2700.00"),
+        currency="KES",
     )
 
     savannah = _make_customer(db, name="Savannah Microfinance")
     open_negotiation = _make_deal(
-        db, tabitha, savannah, product="Microsoft 365 E3",
-        seats=120, value=Decimal("51840.00"),
+        db,
+        tabitha,
+        savannah,
+        product="Microsoft 365 E3",
+        seats=120,
+        value=Decimal("51840.00"),
     )
     for note in ("Qualified.", "Quote sent.", "Negotiating."):
         svc.advance_stage(open_negotiation.id, note)
 
     acacia = _make_customer(db, name="Acacia Insurance")
     won = _make_deal(
-        db, joy, acacia, product="Microsoft 365 E5",
-        seats=200, value=Decimal("136800.00"),
+        db,
+        joy,
+        acacia,
+        product="Microsoft 365 E5",
+        seats=200,
+        value=Decimal("136800.00"),
     )
     svc.close(won.id, "won", DealWonReason.MIGRATION_SUPPORT_OFFER.value, "Won.")
 
     tumaini = _make_customer(db, name="Tumaini SACCO")
     lost = _make_deal(
-        db, joy, tumaini, product="Microsoft 365 Business Standard",
-        seats=35, value=Decimal("5250.00"),
+        db,
+        joy,
+        tumaini,
+        product="Microsoft 365 Business Standard",
+        seats=35,
+        value=Decimal("5250.00"),
     )
     svc.close(lost.id, "lost", DealLostReason.PRICE_TOO_HIGH.value, "Too dear.")
 
     kilifi = _make_customer(db, name="Kilifi Beach Resorts")
     parked = _make_deal(
-        db, joy, kilifi, product="Teams Phone Standard",
-        seats=60, value=Decimal("5760.00"),
+        db,
+        joy,
+        kilifi,
+        product="Teams Phone Standard",
+        seats=60,
+        value=Decimal("5760.00"),
     )
     svc.park(parked.id, reporting_date() + timedelta(days=30), "Parked.")
 
@@ -691,9 +710,7 @@ def test_list_tabs_owner_and_show_closed(db):
         str(fx.parked.id),
     }
 
-    tabitha_page = fx.svc.list_deals(
-        params, DealFilterParams(owner_id=fx.tabitha.id)
-    )
+    tabitha_page = fx.svc.list_deals(params, DealFilterParams(owner_id=fx.tabitha.id))
     assert _ids(tabitha_page) == {
         str(fx.open_fresh.id),
         str(fx.open_negotiation.id),
@@ -824,9 +841,7 @@ def test_update_currency_revalidated_and_closed_read_only(db):
     db.expire(customer, ["billing_profiles"])
 
     with pytest.raises(BadRequestException):
-        svc.update(
-            deal.id, DealUpdate(currency="KES"), expected_version=deal.version
-        )
+        svc.update(deal.id, DealUpdate(currency="KES"), expected_version=deal.version)
 
     svc.close(deal.id, "won", DealWonReason.PRODUCT_FIT.value, "Signed.")
     with pytest.raises(BadRequestException):
@@ -895,9 +910,7 @@ def test_endpoint_full_lifecycle(db, client):
     assert resumed.status_code == 200
     assert resumed.json()["status"] == "open"
 
-    logged = client.post(
-        f"{API}/{deal_id}/activities", json={"note": "Demo booked."}
-    )
+    logged = client.post(f"{API}/{deal_id}/activities", json={"note": "Demo booked."})
     assert logged.status_code == 201
 
     advanced = client.post(
@@ -931,3 +944,5 @@ def test_endpoint_full_lifecycle(db, client):
 
     missing = client.get(f"{API}/{uuid4()}")
     assert missing.status_code == 404
+404
+de == 404

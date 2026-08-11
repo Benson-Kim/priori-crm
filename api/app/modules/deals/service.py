@@ -242,7 +242,7 @@ class DealService(StateMachineMixin, ServiceBase):
         """Activity-hygiene buckets; only open deals ever qualify.
 
         idle = days since the latest record; age = days since the first.
-        Mirrors the design's chips: Active this week (idle ≤ 7), 8–30 days
+        Mirrors the design's chips: Active this week (idle ≤ 7), 8-30 days
         quiet (7 < idle ≤ 30), No activity 30d+ (idle > 30), Open 45d+
         (age > 45).
         """
@@ -379,9 +379,7 @@ class DealService(StateMachineMixin, ServiceBase):
         self._record(deal, DealStage(deal.stage).label, note)
         return deal
 
-    def close(
-        self, deal_id: uuid.UUID, result: str, reason: str, note: str
-    ) -> Deal:
+    def close(self, deal_id: uuid.UUID, result: str, reason: str, note: str) -> Deal:
         """Close a deal won/lost with an enumerated reason + mandatory note."""
         deal = self.get_by_id(deal_id)
         note = self._require_note(note)
@@ -514,9 +512,7 @@ class DealService(StateMachineMixin, ServiceBase):
 
         weighted_value: Decimal | None = None
         if status in (DealStatus.OPEN, DealStatus.PARKED):
-            weighted_value = (deal.value * stage.probability).quantize(
-                Decimal("0.01")
-            )
+            weighted_value = (deal.value * stage.probability).quantize(Decimal("0.01"))
 
         history = [DealActivityResponse.model_validate(a) for a in activities]
 
@@ -564,9 +560,9 @@ class DealService(StateMachineMixin, ServiceBase):
     @staticmethod
     def _owner_response(owner: User) -> DealOwnerResponse:
         name = f"{owner.first_name} {owner.last_name}".strip()
-        initials = (
-            f"{(owner.first_name or ' ')[0]}{(owner.last_name or ' ')[0]}"
-        ).strip().upper()
+        first_initial = (owner.first_name or " ")[0]
+        last_initial = (owner.last_name or " ")[0]
+        initials = f"{first_initial}{last_initial}".strip().upper()
         return DealOwnerResponse(id=owner.id, name=name, initials=initials)
 
     # INTERNALS
