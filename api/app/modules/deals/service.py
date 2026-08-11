@@ -320,10 +320,7 @@ class DealService(StateMachineMixin, ServiceBase):
         deal = self.get_by_id(deal_id)
         if deal.is_closed:
             raise BadRequestException(
-                detail=(
-                    "Closed deals cannot be deleted — they are pipeline "
-                    "history."
-                ),
+                detail="Closed deals cannot be deleted — they are pipeline history.",
                 field="status",
             )
         record_audit_event(
@@ -540,9 +537,7 @@ class DealService(StateMachineMixin, ServiceBase):
             stage_label=stage.label,
             status=status,
             parked_until=deal.parked_until,
-            resume_stage=(
-                DealStage(deal.resume_stage) if deal.resume_stage else None
-            ),
+            resume_stage=(DealStage(deal.resume_stage) if deal.resume_stage else None),
             close_reason=deal.close_reason,
             close_note=deal.close_note,
             closed_at=deal.closed_at,

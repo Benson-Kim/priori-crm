@@ -71,8 +71,7 @@ class Deal(Base):
             name="ck_deals_valid_status",
         ),
         CheckConstraint(
-            "resume_stage IS NULL OR "
-            f"resume_stage IN ({_DEAL_STAGE_CHECK_VALUES})",
+            f"resume_stage IS NULL OR resume_stage IN ({_DEAL_STAGE_CHECK_VALUES})",
             name="ck_deals_valid_resume_stage",
         ),
         CheckConstraint(
