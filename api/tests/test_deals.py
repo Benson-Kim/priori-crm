@@ -944,5 +944,3 @@ def test_endpoint_full_lifecycle(db, client):
 
     missing = client.get(f"{API}/{uuid4()}")
     assert missing.status_code == 404
-404
-de == 404
