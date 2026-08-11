@@ -1,5 +1,6 @@
 """Application-wide enumerations for type safety."""
 
+from decimal import Decimal
 from enum import StrEnum
 
 
@@ -106,6 +107,133 @@ class BillingPaymentTerms(StrEnum):
     NET_30 = "30 days"
     NET_45 = "45 days"
     NET_60 = "60 days"
+
+
+class DealStage(StrEnum):
+    """Open-pipeline stages of a Sales Desk deal, in order.
+
+    A deal moves strictly one stage at a time (no skipping) and every
+    advance requires a note. The UI renders "Stage N of 5" where the fifth
+    step is the closed (won/lost) state carried by :class:`DealStatus`, so
+    the stage enum itself only holds the four open stages.
+    """
+
+    ACTIVATION = "activation"
+    QUALIFICATION = "qualification"
+    PROPOSAL_QUOTE = "proposal_quote"
+    NEGOTIATION = "negotiation"
+
+    @property
+    def index(self) -> int:
+        """1-based position in the pipeline (UI: "Stage N of 5")."""
+        return _DEAL_STAGE_ORDER.index(self) + 1
+
+    @property
+    def label(self) -> str:
+        """Human display label (verbatim from the Sales Desk designs)."""
+        return _DEAL_STAGE_LABELS[self]
+
+    @property
+    def probability(self) -> Decimal:
+        """Win probability used for the weighted pipeline value.
+
+        Calibrated against the Pipeline.svg "Weighted" column:
+        $2,700→$270 (10%), $5,760→$1,440 (25%), $11,880→$5,940 (50%),
+        $51,840→$38,880 (75%).
+        """
+        return _DEAL_STAGE_PROBABILITIES[self]
+
+    @property
+    def next_stage(self) -> "DealStage | None":
+        """The following stage, or None from the final open stage."""
+        idx = _DEAL_STAGE_ORDER.index(self)
+        if idx + 1 >= len(_DEAL_STAGE_ORDER):
+            return None
+        return _DEAL_STAGE_ORDER[idx + 1]
+
+
+#: Canonical stage ordering — the single source for index/next-stage logic.
+_DEAL_STAGE_ORDER: tuple["DealStage", ...] = (
+    DealStage.ACTIVATION,
+    DealStage.QUALIFICATION,
+    DealStage.PROPOSAL_QUOTE,
+    DealStage.NEGOTIATION,
+)
+
+_DEAL_STAGE_LABELS: dict["DealStage", str] = {
+    DealStage.ACTIVATION: "Activation",
+    DealStage.QUALIFICATION: "Qualification",
+    DealStage.PROPOSAL_QUOTE: "Proposal & Quote",
+    DealStage.NEGOTIATION: "Negotiation",
+}
+
+_DEAL_STAGE_PROBABILITIES: dict["DealStage", Decimal] = {
+    DealStage.ACTIVATION: Decimal("0.10"),
+    DealStage.QUALIFICATION: Decimal("0.25"),
+    DealStage.PROPOSAL_QUOTE: Decimal("0.50"),
+    DealStage.NEGOTIATION: Decimal("0.75"),
+}
+
+#: Total steps the pipeline UI renders ("Stage N of 5"): the four open
+#: stages plus the terminal closed (won/lost) step.
+DEAL_PIPELINE_TOTAL_STEPS: int = len(_DEAL_STAGE_ORDER) + 1
+
+
+class DealStatus(StrEnum):
+    """Lifecycle status of a deal.
+
+    OPEN deals sit in the pipeline; PARKED deals live in the future
+    pipeline (with ``parked_until``/``resume_stage``); WON/LOST are the
+    terminal closed states carrying a close reason + note.
+    """
+
+    OPEN = "open"
+    WON = "won"
+    LOST = "lost"
+    PARKED = "parked"
+
+
+class DealWonReason(StrEnum):
+    """Enumerated 'main reason we won' options (deal-desk parity)."""
+
+    PRICE_PACKAGING = "Price & packaging"
+    RELATIONSHIP_TRUST = "Relationship / trust"
+    PRODUCT_FIT = "Product fit"
+    MIGRATION_SUPPORT_OFFER = "Migration & support offer"
+    FASTER_RESPONSE = "Faster response than competitor"
+
+
+class DealLostReason(StrEnum):
+    """Enumerated 'main reason we lost' options (deal-desk parity)."""
+
+    PRICE_TOO_HIGH = "Price too high"
+    LOST_TO_COMPETITOR = "Lost to competitor"
+    BAD_TIMING = "Bad timing"
+    NO_BUDGET = "No budget"
+    WENT_DIRECT_TO_MICROSOFT = "Went direct to Microsoft"
+    NO_DECISION = "No decision / went silent"
+
+
+class DealHygieneBucket(StrEnum):
+    """Activity-hygiene list filters for the pipeline (open deals only).
+
+    Mirrors the design's filter chips: Active this week / 8–30 days quiet /
+    No activity 30d+ / Open 45d+.
+    """
+
+    ACTIVE_WEEK = "active_week"  # last activity within 7 days
+    QUIET_8_30 = "quiet_8_30"  # last activity 8–30 days ago
+    NO_ACTIVITY_30 = "no_activity_30"  # last activity more than 30 days ago
+    OPEN_45 = "open_45"  # in the pipeline for more than 45 days
+
+
+class DealTab(StrEnum):
+    """Pipeline list tabs: All (6) · Open (4) · Won (1) · Lost (1)."""
+
+    ALL = "all"
+    OPEN = "open"
+    WON = "won"
+    LOST = "lost"
 
 
 class TransactionType(StrEnum):

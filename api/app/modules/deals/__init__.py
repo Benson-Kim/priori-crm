@@ -1,0 +1,1 @@
+# Sales Desk — Deals module
