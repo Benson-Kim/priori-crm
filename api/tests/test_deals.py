@@ -299,8 +299,7 @@ def test_advance_endpoint_note_missing_or_blank_is_422(db, client):
 
     assert client.post(f"{API}/{deal.id}/advance", json={}).status_code == 422
     assert (
-        client.post(f"{API}/{deal.id}/advance", json={"note": "   "}).status_code
-        == 422
+        client.post(f"{API}/{deal.id}/advance", json={"note": "   "}).status_code == 422
     )
     ok = client.post(f"{API}/{deal.id}/advance", json={"note": "Qualified."})
     assert ok.status_code == 200
@@ -853,10 +852,7 @@ def test_delete_open_deal_audited_closed_rejected(db):
     open_id = open_deal.id
     svc.delete(open_id)
     assert db.query(Deal).filter(Deal.id == open_id).first() is None
-    assert (
-        db.query(DealActivity).filter(DealActivity.deal_id == open_id).count()
-        == 0
-    )
+    assert db.query(DealActivity).filter(DealActivity.deal_id == open_id).count() == 0
     assert len(_audit_rows(db, open_id, "hard_deleted")) == 1
 
     closed = _make_deal(db, owner, customer)
