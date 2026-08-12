@@ -67,9 +67,7 @@ class OnboardingService(ServiceBase):
                 field="status",
             )
         existing = (
-            self._db.query(Onboarding.id)
-            .filter(Onboarding.deal_id == deal.id)
-            .first()
+            self._db.query(Onboarding.id).filter(Onboarding.deal_id == deal.id).first()
         )
         if existing:
             raise BadRequestException(
@@ -140,9 +138,8 @@ class OnboardingService(ServiceBase):
             Onboarding.plan_label,
         )
         if clause is not None:
-            query = query.join(
-                Customer, Onboarding.customer_id == Customer.id
-            ).filter(clause)
+            query = query.join(Customer, Onboarding.customer_id == Customer.id)
+            query = query.filter(clause)
 
         total = query.count() if params.with_total else None
 
