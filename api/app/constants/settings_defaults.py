@@ -32,6 +32,26 @@ MAX_DEFAULT_TERMS_LENGTH: int = 2000
 # Matches the PurchaseOrderSendRequest.body cap.
 MAX_DEFAULT_SEND_MESSAGE_LENGTH: int = 5000
 
+# Default onboarding task template (issue #41). Seeded verbatim, in this
+# exact order, from the Onboarding.svg design export. Used whenever the
+# organisation has never configured its own template (the owner_profiles
+# column is NULL). Copied onto each onboarding checklist at CREATE TIME
+# ONLY (template versioning): editing the template never mutates existing
+# checklists.
+DEFAULT_ONBOARDING_TASKS: tuple[str, ...] = (
+    "Kick-off meeting",
+    "Tenant & domain setup",
+    "Licenses assigned",
+    "Data migration",
+    "Security baseline",
+    "User training",
+    "Handover to support",
+)
+
+# Bounds for a configurable onboarding task template (schema-enforced).
+MAX_ONBOARDING_TEMPLATE_TASKS: int = 20
+MAX_ONBOARDING_TASK_LABEL_LENGTH: int = 255
+
 # Seed values for the dual USD/KES customer billing profiles (deal-desk
 # parity). Applied when a customer is created AND by the one-off backfill
 # migration for pre-existing customers. Credit limits are expressed in the
@@ -48,4 +68,38 @@ DEFAULT_BILLING_PROFILE_DEFAULTS: dict[str, dict[str, str]] = {
         "tax_treatment": "VAT 16%",
         "credit_limit": "10000.00",
     },
+}
+
+# Sales Desk product catalog (Quotes & pricing, issue #44). Seeded verbatim
+# from the design export ``Quotes___Pricing.svg`` (branch
+# ``sales-desk-designs``): the 8 Microsoft 365 SKUs with their USD list
+# price per seat per month. Kept as decimal strings so no layer ever
+# touches floats. The price-list read (owner module) derives the design's
+# "Annual / seat" (monthly x 12) and "10-seat ARR" (monthly x 12 x 10)
+# columns from these raw values.
+DEFAULT_PRODUCT_CATALOG: list[dict[str, str]] = [
+    {"name": "Microsoft 365 Business Basic", "usd_per_seat_month": "6.00"},
+    {"name": "Microsoft 365 Business Standard", "usd_per_seat_month": "12.50"},
+    {"name": "Microsoft 365 Business Premium", "usd_per_seat_month": "22.00"},
+    {"name": "Microsoft 365 E3", "usd_per_seat_month": "36.00"},
+    {"name": "Microsoft 365 E5", "usd_per_seat_month": "57.00"},
+    {"name": "Exchange Online Plan 1", "usd_per_seat_month": "4.00"},
+    {"name": "Teams Phone Standard", "usd_per_seat_month": "8.00"},
+    {"name": "Copilot for Microsoft 365", "usd_per_seat_month": "30.00"},
+]
+
+# Discount applied to the per-user/month price when a quote line is billed
+# annually ("Annual -15%" toggle in the quote builder). Percentage points.
+DEFAULT_ANNUAL_BILLING_DISCOUNT_PCT: str = "15"
+
+# Display/conversion FX conventions (Sales Desk). Units of each currency
+# per 1 USD, calibrated against the design exports (``App__3_.svg`` totals
+# row: KSh 192,882.48 = $1,489.44 = (EUR)1,370.28 = (GBP)1,176.66).
+# USD and KES are the billable currencies; EUR/GBP are reference
+# (display-only) currencies — a quote can never be issued in them.
+DEFAULT_FX_UNITS_PER_USD: dict[str, str] = {
+    "USD": "1",
+    "KES": "129.50",
+    "EUR": "0.92",
+    "GBP": "0.79",
 }

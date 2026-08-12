@@ -12,11 +12,16 @@ from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
 from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
+    DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
 from app.lib.config import settings
-from app.modules.owner.schemas import OwnerProfileResponse, OwnerProfileUpdate
+from app.modules.owner.schemas import (
+    OwnerProfileResponse,
+    OwnerProfileUpdate,
+    SalesPricingSettings,
+)
 
 router = APIRouter()
 
@@ -42,6 +47,10 @@ def _to_response(profile) -> OwnerProfileResponse:
         ),
         default_send_message=profile.default_send_message,
         jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
+        onboarding_task_template=list(
+            profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS
+        ),
+        onboarding_template_version=profile.onboarding_template_version,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
         reporting_timezone=settings.REPORTING_TIMEZONE,
@@ -53,6 +62,26 @@ def _to_response(profile) -> OwnerProfileResponse:
 def get_owner_profile(service: OwnerServiceDep) -> OwnerProfileResponse:
     """Return the live owner profile (seeded from settings on first use)."""
     return _to_response(service.get_or_create())
+
+
+@router.get(
+    "/settings/sales-pricing",
+    response_model=SalesPricingSettings,
+    summary="Get the Sales Desk pricing settings + price list",
+    description=(
+        "The documented price-list source for the Quotes & pricing UI "
+        "(issue #44): the seeded product catalog with server-derived "
+        "Annual/seat (monthly x 12 at list) and 10-seat ARR (monthly x 12 "
+        "x 10) columns, the annual billing discount applied by the quote "
+        "builder, and the display-only FX conventions (units per 1 USD) "
+        "behind USD-equivalent totals and the conversions row. All values "
+        "are decimal strings."
+    ),
+    responses={200: {"description": "Sales pricing settings + price list"}},
+)
+def get_sales_pricing_settings(service: OwnerServiceDep) -> SalesPricingSettings:
+    """Return the org sales pricing settings and derived price list."""
+    return service.sales_pricing_settings()
 
 
 @router.put(

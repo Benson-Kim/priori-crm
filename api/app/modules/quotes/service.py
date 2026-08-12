@@ -18,6 +18,7 @@ from app.common.exceptions import (
     ConflictException,
     DatabaseException,
     NotFoundException,
+    UnsyncedBillingProfileException,
 )
 from app.common.financial import (
     build_line_items,
@@ -28,6 +29,7 @@ from app.common.financial import (
     validate_document_vat_rate_for_date,
     validate_line_item_treatments_for_date,
 )
+from app.common.fx import usd_equivalent
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
 from app.constants.enums import DiscountType, QuoteStatus, TaxType
@@ -118,8 +120,18 @@ class QuoteService(BaseDocumentService):
         QuoteStatus.EXPIRED: [QuoteStatus.SENT],
     }
 
-    def create(self, data: QuoteCreate, user_id: uuid.UUID | None = None) -> Quote:
-        """Create a new quote with line items and automatic calculations."""
+    def create(
+        self,
+        data: QuoteCreate,
+        user_id: uuid.UUID | None = None,
+        deal_id: uuid.UUID | None = None,
+    ) -> Quote:
+        """Create a new quote with line items and automatic calculations.
+
+        ``deal_id`` links the quote to the Sales Desk deal it was created
+        from (issue #44). It is set only by the deals prefill flow, never
+        directly from the public create endpoint.
+        """
         from app.constants.enums import CustomerStatus
         from app.modules.customers.models import Customer
 
@@ -137,19 +149,26 @@ class QuoteService(BaseDocumentService):
                 field="customer_id",
             )
 
-        # Single-currency-per-customer: reject a quote whose currency
-        # was explicitly set to something other than the customer's; else
-        # pin it to the customer's currency.
+        # Currency policy: a quote may be billed in the customer's own
+        # currency (legacy single-currency contract) or in any of the
+        # customer's billing-profile currencies (USD/KES dual-profile
+        # contract, issues #43/#44). Anything else is rejected; when the
+        # client sent no currency it is pinned to the customer's.
         if "currency" in data.model_fields_set and data.currency != customer.currency:
-            raise BadRequestException(
-                detail=(
-                    f"Quote currency '{data.currency}' does not match the "
-                    f"customer's currency '{customer.currency}'. A customer "
-                    "can only transact in a single currency."
-                ),
-                field="currency",
-            )
-        quote_currency = customer.currency
+            profile_currencies = {p.currency for p in customer.billing_profiles}
+            if data.currency not in profile_currencies:
+                raise BadRequestException(
+                    detail=(
+                        f"Quote currency '{data.currency}' matches neither "
+                        f"the customer's currency '{customer.currency}' nor "
+                        "any of the customer's billing-profile currencies "
+                        f"{sorted(profile_currencies)}."
+                    ),
+                    field="currency",
+                )
+            quote_currency = data.currency
+        else:
+            quote_currency = customer.currency
 
         # Document-level VAT: when the client sent neither field, default
         # from the owner profile so new quotes inherit our own VAT
@@ -184,6 +203,7 @@ class QuoteService(BaseDocumentService):
                 quote_number=self._generate_quote_number(),
                 quote_reference=self._generate_quote_reference(),
                 customer_id=data.customer_id,
+                deal_id=deal_id,
                 transaction_date=data.transaction_date,
                 due_date=data.due_date,
                 currency=quote_currency,
@@ -295,25 +315,41 @@ class QuoteService(BaseDocumentService):
         List quotes with pagination and filtering.
         """
         try:
-            from app.modules.customers.models import Customer
+            from sqlalchemy import and_
 
-            # Base query with customer join for display name
-            query = self._db.query(
-                Quote.id,
-                Quote.quote_number,
-                Quote.quote_reference,
-                Quote.customer_id,
-                Quote.transaction_date,
-                Quote.due_date,
-                Quote.status,
-                Quote.currency,
-                Quote.total_due,
-                Quote.created_at,
-                Customer.first_name,
-                Customer.last_name,
-                Customer.company_name,
-                Customer.customer_type,
-            ).join(Customer, Quote.customer_id == Customer.id)
+            from app.modules.customers.models import Customer, CustomerBillingProfile
+
+            # Base query with customer join for display name; the billing
+            # profile matching the quote currency is outer-joined for the
+            # Sales Desk list's profile-code column (issue #44).
+            query = (
+                self._db.query(
+                    Quote.id,
+                    Quote.quote_number,
+                    Quote.quote_reference,
+                    Quote.customer_id,
+                    Quote.deal_id,
+                    Quote.transaction_date,
+                    Quote.due_date,
+                    Quote.status,
+                    Quote.currency,
+                    Quote.total_due,
+                    Quote.created_at,
+                    Customer.first_name,
+                    Customer.last_name,
+                    Customer.company_name,
+                    Customer.customer_type,
+                    CustomerBillingProfile.code.label("billing_profile_code"),
+                )
+                .join(Customer, Quote.customer_id == Customer.id)
+                .outerjoin(
+                    CustomerBillingProfile,
+                    and_(
+                        CustomerBillingProfile.customer_id == Quote.customer_id,
+                        CustomerBillingProfile.currency == Quote.currency,
+                    ),
+                )
+            )
 
             query = self._apply_filters(query, filters)
 
@@ -341,11 +377,18 @@ class QuoteService(BaseDocumentService):
                         quote_reference=row.quote_reference,
                         customer_id=row.customer_id,
                         customer_name=display_name,
+                        deal_id=row.deal_id,
                         transaction_date=row.transaction_date,
                         due_date=row.due_date,
                         status=row.status,
                         currency=row.currency,
                         total_due=row.total_due,
+                        # Display-only conversion (common/fx.py) — never
+                        # persisted, never part of document totals.
+                        total_usd_equivalent=usd_equivalent(
+                            row.total_due, row.currency
+                        ),
+                        billing_profile_code=row.billing_profile_code,
                         created_at=row.created_at,
                     )
                 )
@@ -569,6 +612,37 @@ class QuoteService(BaseDocumentService):
         snapshot = OwnerService(self._db).snapshot_current()
         quote.owner_snapshot_id = snapshot.id
 
+    def _assert_billing_profile_synced(self, quote: Quote) -> None:
+        """Sales Desk issue/finalize gate (issue #44, ADR 0010).
+
+        A deal-linked quote posts to the customer billing profile matching
+        its currency; it cannot be issued (sent) or finalized (approved /
+        converted) while that profile has not been pushed to accounting.
+        Raises the typed ``UnsyncedBillingProfileException`` (409) so the
+        UI can offer the sync affordance.
+
+        Deliberately scoped to deal-linked quotes (``deal_id`` set):
+        standalone quotes predate billing profiles and keep their existing
+        lifecycle. Profiles are created atomically with the customer and
+        only deleted with it, so a deal-linked quote always finds one.
+        Reads only column attributes, so it is safe on ``_get_locked``
+        bare rows.
+        """
+        if quote.deal_id is None:
+            return
+        from app.modules.customers.models import CustomerBillingProfile
+
+        profile = (
+            self._db.query(CustomerBillingProfile)
+            .filter(
+                CustomerBillingProfile.customer_id == quote.customer_id,
+                CustomerBillingProfile.currency == quote.currency,
+            )
+            .first()
+        )
+        if profile is not None and not profile.synced:
+            raise UnsyncedBillingProfileException(profile.code, profile.currency)
+
     def mark_as_sent(
         self,
         quote_id: uuid.UUID,
@@ -580,6 +654,7 @@ class QuoteService(BaseDocumentService):
         convert_to_invoice so a concurrent transition cannot race this one.
         """
         quote = self._get_locked(quote_id)
+        self._assert_billing_profile_synced(quote)
         self._transition(quote, QuoteStatus.SENT)
         quote.sent_at = sent_at or datetime.now(UTC)
         self._capture_owner_snapshot(quote)
@@ -598,6 +673,8 @@ class QuoteService(BaseDocumentService):
                 detail="Cannot send a quote that has already been converted to an invoice",
                 field="status",
             )
+        # Deal-linked quotes cannot be issued against an unsynced profile.
+        self._assert_billing_profile_synced(quote)
 
     def send_quote(
         self,
@@ -674,6 +751,7 @@ class QuoteService(BaseDocumentService):
                 detail="Cannot approve an expired quote. Update the due date first.",
                 field="due_date",
             )
+        self._assert_billing_profile_synced(quote)
         self._transition(quote, QuoteStatus.APPROVED)  # enforces state machine
         quote.approved_at = approved_at or datetime.now(UTC)
         quote.approved_by = approved_by
@@ -741,6 +819,10 @@ class QuoteService(BaseDocumentService):
                     detail="This quote has already been converted to an invoice.",
                     field="status",
                 )
+
+        # Finalize gate: the billing profile may have been edited (and so
+        # unsynced) after approval — re-check before posting to accounting.
+        self._assert_billing_profile_synced(quote)
 
         from app.modules.invoices.schemas import InvoiceCreate
 
