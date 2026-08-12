@@ -189,13 +189,28 @@
  * border takes the brand colour with a 1px ring flush against it. No offset
  * halo, so a focused control reads as active rather than outlined.
  */
+/*
+ * Only the box shows focus, never the field inside it. The app-wide base rule
+ * puts a ring on the control itself, and the wrapper draws one too, which
+ * stacked into a rectangle floating inside the search box.
+ */
 .sales-desk :is(input, select, textarea):focus-visible {
   outline: none;
+  box-shadow: none;
+}
+
+/*
+ * A field that has been answered turns white; an empty one keeps the gray
+ * resting fill. `:placeholder-shown` is what tells them apart without the
+ * component having to track its own value.
+ */
+.sales-desk .h-control:has(.ui-input:not(:placeholder-shown)) {
+  background-color: var(--color-sd-card);
 }
 
 .sales-desk .h-control:focus-within {
-  border-color: var(--color-sd-brand);
-  box-shadow: 0 0 0 1px var(--color-sd-brand);
+  border-color: var(--color-priori-purple);
+  box-shadow: 0 0 0 1px var(--color-priori-purple);
 }
 
 /*
