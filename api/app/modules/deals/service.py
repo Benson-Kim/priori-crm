@@ -536,7 +536,9 @@ class DealService(StateMachineMixin, ServiceBase):
 
         weighted_value: Decimal | None = None
         if status in (DealStatus.OPEN, DealStatus.PARKED):
-            weighted_value = (deal.value * stage.probability).quantize(Decimal("0.01"))
+            weighted_value = (deal.value * self._stage_probability(stage)).quantize(
+                Decimal("0.01")
+            )
 
         history = [DealActivityResponse.model_validate(a) for a in activities]
 
