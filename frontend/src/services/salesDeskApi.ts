@@ -1016,6 +1016,9 @@ export interface FuturePipelineSummary {
     currency: BillingCurrency;
 }
 
+// TODO(#45-wiring): the server's `due_state` and ISO dates are authoritative
+// once GET /sales-desk/prospects ships; this urgency/days-until computation
+// is a fixture-only stand-in and must not survive the real wiring (#48).
 const urgencyOf = (daysUntil: number): ProspectUrgency =>
     daysUntil < 0 ? "overdue" : daysUntil === 0 ? "today" : "scheduled";
 
