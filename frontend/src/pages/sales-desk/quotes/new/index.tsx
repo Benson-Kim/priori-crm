@@ -16,7 +16,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
 import { InlineSelect } from "@/components/ui/InlineSelect";
@@ -28,11 +28,14 @@ import {
     PRODUCTS,
     QUOTE_CURRENCIES,
     REFERENCE_CURRENCIES,
+    UnsyncedProfileError,
     formatDeskMoney,
     formatQuoteMoney,
     getCompanyList,
+    getDealDetail,
     getQuoteList,
     priceQuote,
+    pushQuoteToAccounting,
     saveQuote,
     type BillingPeriod,
     type CompanyRow,
@@ -66,6 +69,13 @@ const BILLING_OPTIONS = [
 export default function SalesDeskQuoteBuilderPage() {
     const navigate = useNavigate();
 
+    // Set when the builder is opened from the pipeline deal drawer (#47);
+    // the quote then preselects that deal's company and billing currency
+    // and saves carrying the deal's id. Optional: absent, the builder is
+    // the plain standalone screen.
+    const [searchParams] = useSearchParams();
+    const dealId = Number(searchParams.get("deal")) || null;
+
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
     const [recentQuotes, setRecentQuotes] = useState<QuoteRow[]>([]);
     const [companyId, setCompanyId] = useState<number | null>(null);
@@ -74,6 +84,7 @@ export default function SalesDeskQuoteBuilderPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [pushingQuoteId, setPushingQuoteId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
@@ -81,15 +92,30 @@ export default function SalesDeskQuoteBuilderPage() {
     useEffect(() => {
         let active = true;
 
-        Promise.all([getCompanyList(), getQuoteList()])
-            .then(([companyRows, quoteRows]) => {
+        Promise.all([
+            getCompanyList(),
+            getQuoteList(),
+            // A stale or mistyped ?deal= link degrades to the default
+            // preselection rather than blocking the whole builder.
+            dealId === null ? Promise.resolve(null) : getDealDetail(dealId).catch(() => null),
+        ])
+            .then(([companyRows, quoteRows, dealDetail]) => {
                 if (!active) return;
                 setCompanies(companyRows);
                 setRecentQuotes(quoteRows);
-                // Default to the first company and the currency it transacts in.
-                setCompanyId((current) => current ?? companyRows[0]?.id ?? null);
+                // Preselect the deal's company and billing currency when opened
+                // from the deal drawer; otherwise default to the first company
+                // and the currency it transacts in.
+                const deal = dealDetail?.deal ?? null;
+                setCompanyId(
+                    (current) => current ?? deal?.company_id ?? companyRows[0]?.id ?? null
+                );
                 setCurrency((current) =>
-                    revision === 0 ? (companyRows[0]?.primary_currency ?? "USD") : current
+                    revision === 0
+                        ? (deal?.billing_currency ??
+                              companyRows[0]?.primary_currency ??
+                              "USD")
+                        : current
                 );
                 setError(null);
             })
@@ -104,7 +130,7 @@ export default function SalesDeskQuoteBuilderPage() {
         return () => {
             active = false;
         };
-    }, [revision]);
+    }, [revision, dealId]);
 
     const company = companies.find((entry) => entry.id === companyId) ?? null;
     const priced = useMemo(
@@ -131,8 +157,13 @@ export default function SalesDeskQuoteBuilderPage() {
         setError(null);
         setNotice(null);
         try {
-            const quote = await saveQuote({ companyId, currency, lines });
-            setNotice(`Quote ${quote.id} saved against ${quote.profile_code}.`);
+            const quote = await saveQuote({
+                companyId,
+                currency,
+                lines,
+                ...(dealId === null ? {} : { dealId }),
+            });
+            setNotice(`Quote ${quote.id} created against ${quote.profile_code}`);
             setLines([newLine()]);
             setRevision((value) => value + 1);
         } catch (err) {
@@ -142,15 +173,36 @@ export default function SalesDeskQuoteBuilderPage() {
         }
     };
 
+    /**
+     * Issue a Draft quote to accounting from the rail. A profile accounting
+     * has never seen cannot take a posting, so the typed error hands the
+     * user to the company drawer's sync flow (#46) instead of a dead end.
+     */
+    const pushToAccounting = async (quoteId: string) => {
+        setPushingQuoteId(quoteId);
+        setError(null);
+        setNotice(null);
+        try {
+            const quote = await pushQuoteToAccounting(quoteId);
+            setNotice(`Quote ${quote.id} pushed to accounting against ${quote.profile_code}`);
+            setRecentQuotes(await getQuoteList());
+        } catch (err) {
+            if (err instanceof UnsyncedProfileError) {
+                navigate(`/sales-desk/companies/workspace?company=${err.companyId}`);
+                return;
+            }
+            setError(err instanceof Error ? err.message : "Could not push that quote.");
+        } finally {
+            setPushingQuoteId(null);
+        }
+    };
+
     if (isLoading) {
         return <LoadingState message="Loading the quote builder..." className="h-64" />;
     }
 
     return (
         <div className="flex flex-col gap-5">
-            <div>
-            </div>
-
             {error && (
                 <div
                     role="alert"
@@ -216,7 +268,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                         className={cn(
                                             "px-3 py-1.5 text-xs font-semibold transition-colors",
                                             isActive
-                                                ? "bg-priori-purple text-white"
+                                                ? "bg-sd-brand text-white"
                                                 : "bg-sd-card text-sd-muted hover:text-sd-ink",
                                             !isActive && isReference && "italic"
                                         )}
@@ -241,8 +293,8 @@ export default function SalesDeskQuoteBuilderPage() {
                             </>
                         ) : (
                             <span className="text-sd-warn">
-                                {currency} is a reference currency. Switch to USD or KES to save
-                                this quote.
+                                {currency}: reference currency for conversion only — no
+                                accounting profile exists
                             </span>
                         )}
                     </p>
@@ -434,27 +486,45 @@ export default function SalesDeskQuoteBuilderPage() {
                             <p className="text-[11px] text-sd-muted">No quotes raised yet.</p>
                         ) : (
                             recentQuotes.map((quote) => (
-                                <button
+                                <div
                                     key={quote.id}
-                                    type="button"
-                                    onClick={() => navigate("/sales-desk/quotes")}
                                     className="rounded-2xl border border-sd-border bg-sd-card p-4 text-left transition-colors hover:border-sd-muted"
                                 >
-                                    <span className="flex items-center justify-between gap-2">
-                                        <span className="font-mono text-xs font-bold text-priori-purple">
-                                            {quote.id}
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate("/sales-desk/quotes")}
+                                        className="block w-full text-left"
+                                    >
+                                        <span className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-xs font-bold text-sd-brand">
+                                                {quote.id}
+                                            </span>
+                                            <StatusChip status={quote.status} />
                                         </span>
-                                        <StatusChip status={quote.status} />
-                                    </span>
-                                    <span className="block pt-1.5 text-[13px] font-semibold text-sd-ink">
-                                        {quote.company_name}
-                                    </span>
-                                    <span className="block pt-0.5 text-[11px] text-sd-muted">
-                                        <span className="font-mono">{quote.profile_code}</span> ·{" "}
-                                        {formatDate(quote.issued_on)} ·{" "}
-                                        {formatDeskMoney(quote.total_usd)}
-                                    </span>
-                                </button>
+                                        <span className="block pt-1.5 text-[13px] font-semibold text-sd-ink">
+                                            {quote.company_name}
+                                        </span>
+                                        <span className="block pt-0.5 text-[11px] text-sd-muted">
+                                            <span className="font-mono">
+                                                {quote.profile_code}
+                                            </span>{" "}
+                                            · {formatDate(quote.issued_on)} ·{" "}
+                                            {formatDeskMoney(quote.total_usd)}
+                                        </span>
+                                    </button>
+                                    {quote.status === "Draft" && (
+                                        <button
+                                            type="button"
+                                            disabled={pushingQuoteId === quote.id}
+                                            onClick={() => void pushToAccounting(quote.id)}
+                                            className="block pt-1.5 text-[11px] font-semibold text-sd-brand hover:underline disabled:opacity-50"
+                                        >
+                                            {pushingQuoteId === quote.id
+                                                ? "Pushing…"
+                                                : "Push to accounting"}
+                                        </button>
+                                    )}
+                                </div>
                             ))
                         )}
                     </div>
