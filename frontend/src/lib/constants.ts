@@ -2,7 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export const API_URL = API_BASE_URL + "/api/v1/";
 
 export const appConfig = {
-  appName: import.meta.env.VITE_APP_NAME || "Priori CRM",
+  appName: import.meta.env.VITE_APP_NAME || "Business Central",
   appVersion: import.meta.env.VITE_APP_VERSION || "1.0.0",
   apiUrl: API_URL,
 };

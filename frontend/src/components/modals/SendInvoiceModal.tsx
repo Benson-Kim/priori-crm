@@ -14,9 +14,9 @@ interface SendInvoiceModalProps {
 
 export function SendInvoiceModal({ isOpen, onClose, invoice, onSuccess }: SendInvoiceModalProps) {
     const [toEmail, setToEmail] = useState(invoice.customer?.email ?? "");
-    const [subject, setSubject] = useState(`Invoice ${invoice.invoice_reference} from Priori Technologies`);
+    const [subject, setSubject] = useState(`Invoice ${invoice.invoice_reference} from Business Central`);
     const [body, setBody] = useState(
-        `Dear Customer,\n\nPlease find attached Invoice ${invoice.invoice_reference} for the amount of ${invoice.total_due}.\n\nThank you for your business.\n\nPriori Technologies`
+        `Dear Customer,\n\nPlease find attached Invoice ${invoice.invoice_reference} for the amount of ${invoice.total_due}.\n\nThank you for your business.\n\nBusiness Central`
     );
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
