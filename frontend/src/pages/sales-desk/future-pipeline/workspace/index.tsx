@@ -13,11 +13,13 @@ import { useNavigate } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, type Column } from "@/components/ui/Table";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
+    DuplicateCustomerError,
     engageProspect,
     formatDeskMoney,
     getFuturePipelineSummary,
@@ -34,6 +36,13 @@ const TABLE_OVERRIDES =
 
 /** First name only, since the column is narrow and the avatar disambiguates. */
 const firstNameOf = (name: string) => name.split(" ")[0];
+
+/** An engage that hit the duplicate-customer 409, awaiting a decision. */
+interface DuplicatePrompt {
+    prospectId: number;
+    companyName: string;
+    existingCustomerId: number;
+}
 
 export default function SalesDeskFuturePipelineWorkspacePage() {
     const navigate = useNavigate();
@@ -72,6 +81,11 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
         };
     }, [debouncedSearch, revision]);
 
+    // Set when engaging hits an already-registered company; drives the
+    // link-or-cancel dialog below.
+    const [duplicate, setDuplicate] = useState<DuplicatePrompt | null>(null);
+    const [isLinking, setIsLinking] = useState(false);
+
     /** Promote the prospect, then follow it through to the deal it became. */
     const engage = useCallback(
         async (prospect: ProspectRow) => {
@@ -79,12 +93,39 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 const { dealId } = await engageProspect(prospect.id);
                 navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
             } catch (err) {
+                if (err instanceof DuplicateCustomerError) {
+                    setDuplicate({
+                        prospectId: prospect.id,
+                        companyName: err.companyName,
+                        existingCustomerId: err.existingCustomerId,
+                    });
+                    return;
+                }
                 setError(err instanceof Error ? err.message : "Could not engage that prospect.");
                 setRevision((value) => value + 1);
             }
         },
         [navigate]
     );
+
+    /** Resolve the duplicate by linking the deal to the existing customer. */
+    const linkToExisting = useCallback(async () => {
+        if (!duplicate) return;
+        setIsLinking(true);
+        try {
+            const { dealId } = await engageProspect(
+                duplicate.prospectId,
+                duplicate.existingCustomerId
+            );
+            navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
+        } catch (err) {
+            setDuplicate(null);
+            setError(err instanceof Error ? err.message : "Could not engage that prospect.");
+            setRevision((value) => value + 1);
+        } finally {
+            setIsLinking(false);
+        }
+    }, [duplicate, navigate]);
 
     const columns = useMemo<Column<ProspectRow>[]>(
         () => [
@@ -227,6 +268,22 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                     setIsCreating(false);
                     setRevision((value) => value + 1);
                 }}
+            />
+
+            {/* The store already knows this company; link rather than duplicate. */}
+            <Dialog
+                isOpen={duplicate !== null}
+                onClose={() => setDuplicate(null)}
+                title="Customer already exists"
+                description={
+                    duplicate
+                        ? `${duplicate.companyName} is already a registered customer. Link this deal to the existing customer record instead of registering a new one?`
+                        : undefined
+                }
+                confirmLabel="Link to existing customer"
+                cancelLabel="Cancel"
+                onConfirm={() => void linkToExisting()}
+                isLoading={isLinking}
             />
         </div>
     );
