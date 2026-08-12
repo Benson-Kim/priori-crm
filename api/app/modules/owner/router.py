@@ -12,9 +12,11 @@ from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
 from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
+    DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
+    DEFAULT_REP_QUARTERLY_TARGET_USD,
 )
 from app.lib.config import settings
 from app.modules.owner.schemas import (
