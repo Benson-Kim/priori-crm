@@ -201,6 +201,12 @@ api:openapi-schema:
     - pip install -r requirements.txt
   script:
     - python -m scripts.export_openapi "$CI_PROJECT_DIR/frontend/openapi.json"
+    # Temporary (will be reverted): emit the schema into the job trace so it
+    # can be retrieved where artifact download is unavailable.
+    - echo "OPENAPI_B64_BEGIN"
+    - base64 -w0 "$CI_PROJECT_DIR/frontend/openapi.json"
+    - echo ""
+    - echo "OPENAPI_B64_END"
   artifacts:
     paths:
       - frontend/openapi.json
