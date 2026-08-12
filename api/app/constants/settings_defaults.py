@@ -31,3 +31,21 @@ MAX_DEFAULT_TERMS_LENGTH: int = 2000
 # Hard cap on the stored default Send message (the email body pre-filled in the Send modal).
 # Matches the PurchaseOrderSendRequest.body cap.
 MAX_DEFAULT_SEND_MESSAGE_LENGTH: int = 5000
+
+# Seed values for the dual USD/KES customer billing profiles (deal-desk
+# parity). Applied when a customer is created AND by the one-off backfill
+# migration for pre-existing customers. Credit limits are expressed in the
+# profile's OWN currency (no USD round-trip) and kept as decimal strings so
+# neither the service layer nor the migration ever touches floats.
+DEFAULT_BILLING_PROFILE_DEFAULTS: dict[str, dict[str, str]] = {
+    "USD": {
+        "payment_terms": "30 days",
+        "tax_treatment": "Zero-rated (export)",
+        "credit_limit": "25000.00",
+    },
+    "KES": {
+        "payment_terms": "14 days",
+        "tax_treatment": "VAT 16%",
+        "credit_limit": "10000.00",
+    },
+}
