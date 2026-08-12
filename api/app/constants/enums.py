@@ -358,6 +358,18 @@ _QUOTE_STATUS_TO_DISPLAY: dict[QuoteStatus, QuoteDisplayStatus] = {
 }
 
 
+class BillingPeriod(StrEnum):
+    """Billing period of a quote-builder line (Sales Desk, issue #44).
+
+    ``annual`` applies the org's annual billing discount
+    (``annual_billing_discount_pct``, default 15) to the per-user/month
+    price and bills 12 months per seat; ``monthly`` bills 1 month at list.
+    """
+
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
+
+
 class VendorStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
