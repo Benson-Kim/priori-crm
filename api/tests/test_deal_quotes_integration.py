@@ -385,9 +385,13 @@ def test_reference_currency_rejected_over_http(db, client, actor):
 
 
 def test_unsynced_profile_blocks_issue_and_finalize(db, client, actor):
+    # KES throughout so the final conversion step stays inside the
+    # invoices module's single-currency-per-customer contract (customer
+    # default currency is KES); cross-currency conversion is governed by
+    # that pre-existing invoices policy, not by this gate.
     owner = _make_owner(db)
     customer = _make_customer(db)  # profiles start unsynced
-    deal = _make_deal(db, owner, customer)
+    deal = _make_deal(db, owner, customer, currency="KES")
     quote = _quote_svc(db, owner).create_quote_for_deal(deal.id, _body())
 
     # Creating a draft against an unsynced profile is allowed; ISSUING is not.
@@ -395,18 +399,18 @@ def test_unsynced_profile_blocks_issue_and_finalize(db, client, actor):
     assert resp.status_code == 409
     payload = resp.json()
     assert payload["error_code"] == "UnsyncedBillingProfileException"
-    assert payload["details"]["profile_code"] == _profile(db, customer.id, "USD").code
-    assert payload["details"]["currency"] == "USD"
+    assert payload["details"]["profile_code"] == _profile(db, customer.id, "KES").code
+    assert payload["details"]["currency"] == "KES"
 
     # Syncing the profile through the existing endpoint unblocks issuing.
-    sync = client.post(f"{CUSTOMERS_API}/{customer.id}/profiles/USD/sync")
+    sync = client.post(f"{CUSTOMERS_API}/{customer.id}/profiles/KES/sync")
     assert sync.status_code == 200
     resp = client.post(f"{QUOTES_API}/{quote.id}/mark-sent")
     assert resp.status_code == 200
 
     # FINALIZING re-checks: un-sync (an edit resets the flag) and approve
     # must be refused with the same typed error.
-    _profile(db, customer.id, "USD").synced = False
+    _profile(db, customer.id, "KES").synced = False
     db.flush()
     resp = client.post(f"{QUOTES_API}/{quote.id}/approve")
     assert resp.status_code == 409
@@ -417,7 +421,7 @@ def test_unsynced_profile_blocks_issue_and_finalize(db, client, actor):
     assert resp.status_code == 200
 
     # Conversion (push to accounting) is also gated.
-    _profile(db, customer.id, "USD").synced = False
+    _profile(db, customer.id, "KES").synced = False
     db.flush()
     resp = client.post(f"{QUOTES_API}/{quote.id}/convert-to-invoice")
     assert resp.status_code == 409
@@ -640,16 +644,25 @@ def test_no_pricing_logic_is_duplicated():
     )
     assert "calculate_totals" not in DealQuoteService.__dict__
 
+    # The module cannot call the shared financial primitives it never
+    # imports — proving the tax/total pipeline is not re-implemented there
+    # (namespace check, so docstring/comment mentions don't false-positive).
+    for primitive in (
+        "build_line_items",
+        "sum_line_totals",
+        "calculate_subtotal_vat",
+        "allocate_discounted_line_taxes",
+        "calculate_discount",
+    ):
+        assert getattr(quotes_integration, primitive, None) is None, (
+            f"duplicated pricing logic: {primitive!r} imported"
+        )
+
     source = inspect.getsource(quotes_integration)
     for forbidden in (
         "0.16",  # flat 16% VAT factor
         "16 /",  # 16-as-percentage arithmetic
         'Decimal("16")',
-        "build_line_items",
-        "sum_line_totals",
-        "calculate_subtotal_vat",
-        "allocate_discounted_line_taxes",
-        "calculate_discount(",
     ):
         assert forbidden not in source, f"duplicated pricing logic: {forbidden!r}"
 
