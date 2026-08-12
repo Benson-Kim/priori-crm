@@ -47,12 +47,14 @@ export function SegmentedControl({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-full cursor-pointer rounded-md px-2.5 text-xs font-semibold whitespace-nowrap transition-colors",
+              "h-full cursor-pointer rounded-md px-2.5 text-xs font-semibold whitespace-nowrap",
+              "transition-colors duration-150 active:scale-[0.98]",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
               active
                 ? tone === "brand"
                   ? "bg-sd-brand text-white"
                   : "bg-sd-ink text-white"
-                : "text-sd-muted hover:text-sd-ink"
+                : "text-sd-muted hover:bg-sd-card hover:text-sd-ink"
             )}
           >
             {option.label}

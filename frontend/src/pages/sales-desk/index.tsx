@@ -123,7 +123,7 @@ function RepQuotaPanel({ reps }: Readonly<{ reps: RepQuotaLine[] }>) {
 
 // Section: newest companies on the books
 
-const CELL_CLASS = "px-5 py-3 text-[13px]";
+const CELL_CLASS = "";
 
 const COMPANY_COLUMNS: Column<RecentCompany>[] = [
     {
@@ -216,8 +216,6 @@ export default function SalesDeskDashboardPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <h1 className="text-2xl leading-8 font-bold text-sd-ink">Dashboard</h1>
-
             {error && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                     {error}

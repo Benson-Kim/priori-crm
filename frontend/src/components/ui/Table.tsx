@@ -148,7 +148,7 @@ export function Table<T>({
                   onClick={isSortable ? () => handleHeaderClick(col) : undefined}
                   className={cn(
                     isSalesDesk
-                      ? "bg-sd-card p-3 text-left text-[13px] font-bold text-sd-ink"
+                      ? "bg-sd-surface px-cell-x py-cell-y text-left text-[13px] font-bold text-sd-ink"
                       : cn(
                         "p-3 text-left text-base font-bold text-content-primary",
                         "bg-gray-50 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg"
@@ -175,7 +175,7 @@ export function Table<T>({
                 className={cn(
                   "w-8",
                   isSalesDesk
-                    ? "bg-sd-card p-3"
+                    ? "bg-sd-surface px-cell-x py-cell-y"
                     : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg",
                   headerHidden && HIDDEN_HEADER_CELL
                 )}
@@ -203,7 +203,10 @@ export function Table<T>({
                   onClick={() => onRowClick?.(item)}
                   className={cn(
                     isSalesDesk
-                      ? "border-b border-sd-border transition-colors last:border-b-0 hover:bg-sd-surface/60"
+                      ? cn(
+                        "border-b border-sd-border transition-colors duration-150 last:border-b-0",
+                        onRowClick && "hover:bg-sd-surface active:bg-sd-surface/80"
+                      )
                       : cn(
                         "border-b border-gray-100 py-4 px-3",
                         "hover:bg-surface-app/50 transition-colors"
@@ -220,7 +223,7 @@ export function Table<T>({
                       key={col.key}
                       className={cn(
                         isSalesDesk
-                          ? "px-4 py-3 text-[13px] leading-5 text-sd-ink"
+                          ? "px-cell-x py-cell-y text-[13px] leading-5 text-sd-ink"
                           : "px-4 py-3 text-base text-content-primary leading-6",
                         col.className
                       )}

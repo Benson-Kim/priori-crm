@@ -11,7 +11,7 @@
  * across the two shells.
  */
 
-import { Bell, Search } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Outlet, useMatches, type UIMatch } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -19,32 +19,32 @@ import { useAuth } from "@/hooks/auth-context";
 import type { RouteHandle } from "@/lib/types";
 import { SalesDeskSidebar } from "./sales-desk-sidebar";
 
-function SalesDeskHeader({ title }: Readonly<{ title: string }>) {
+function SalesDeskHeader({
+    title,
+    description,
+}: Readonly<{ title: string; description?: string }>) {
     const { user } = useAuth();
     const fullName = user ? `${user.first_name} ${user.last_name}` : "Frank Mueke";
 
     return (
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-sd-border bg-sd-card px-6">
-            <h1 className="text-[13px] font-semibold text-sd-ink">{title}</h1>
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-sd-border bg-sd-card px-6 py-3">
+            {/*
+             * The page name and its description live here, as they do in every
+             * other module. Screens do not repeat them in their own content.
+             */}
+            <div className="min-w-0">
+                <h1 className="truncate text-base font-bold text-sd-ink">{title}</h1>
+                {description && (
+                    <p className="truncate text-xs text-sd-muted">{description}</p>
+                )}
+            </div>
 
+            {/*
+             * No global search here. Each screen searches its own records, so
+             * a second box in the chrome would either duplicate that or do
+             * nothing.
+             */}
             <div className="flex items-center gap-3">
-                {/*
-                 * Cross-module search is inert until there is a record set to
-                 * filter, so it stays disabled rather than silently swallowing
-                 * input.
-                 */}
-                <div className="hidden items-center gap-2 rounded-xl border border-sd-border bg-sd-surface px-3 py-1.5 sm:flex">
-                    <Search className="size-3.5 shrink-0 text-sd-muted" aria-hidden="true" />
-                    <input
-                        type="search"
-                        disabled
-                        aria-label="Search companies and deals"
-                        title="Search arrives with the Pipeline and Companies screens"
-                        placeholder="Search companies, deals…"
-                        className="w-40 bg-transparent text-xs text-sd-ink placeholder:text-sd-muted focus:outline-none"
-                    />
-                </div>
-
                 <button
                     type="button"
                     aria-label="Notifications"
@@ -62,15 +62,19 @@ function SalesDeskHeader({ title }: Readonly<{ title: string }>) {
 export default function SalesDeskLayout() {
     const matches = useMatches() as UIMatch<unknown, RouteHandle>[];
 
-    const title =
-        [...matches].reverse().find((m) => m.handle?.header)?.handle?.header?.title ??
-        "Sales Desk";
+    const header = [...matches].reverse().find((m) => m.handle?.header)?.handle?.header;
+    const title = header?.title ?? "Sales Desk";
 
+    /*
+     * `sales-desk` scopes the module's control metrics and interaction
+     * feedback (see index.css). The shared components keep their own sizing
+     * everywhere else in the app.
+     */
     return (
-        <div className="flex h-screen w-full overflow-hidden bg-sd-surface">
+        <div className="sales-desk flex h-screen w-full overflow-hidden bg-sd-surface">
             <SalesDeskSidebar />
             <div className="flex min-w-0 flex-1 flex-col">
-                <SalesDeskHeader title={title} />
+                <SalesDeskHeader title={title} description={header?.description} />
                 {/*
                  * `relative` so absolutely positioned descendants (the
                  * visually-hidden inputs behind styled checkboxes, say) resolve

@@ -39,17 +39,27 @@ const TAB_STYLES: Record<
     count: () => "ml-1 text-content-secondary",
   },
   "brand-filled": {
-    base: "rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
-    active: "bg-sd-brand text-white",
-    inactive: "text-sd-muted hover:bg-sd-surface",
+    base: cn(
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] font-semibold",
+      "cursor-pointer transition-colors duration-150",
+      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
+      "active:scale-[0.98]"
+    ),
+    active: "bg-sd-brand text-white hover:bg-sd-brand/90",
+    inactive: "text-sd-muted hover:bg-sd-surface hover:text-sd-ink",
     count: (active) => cn("ml-1", active ? "text-white/80" : "text-sd-faint"),
   },
   "brand-outline": {
     // 12px radius, not a full pill, and the active border is brand rather
     // than the hairline grey.
-    base: "rounded-xl border px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
-    active: "bg-sd-brand-bg text-sd-brand border-sd-brand",
-    inactive: "border-transparent text-sd-muted hover:bg-sd-surface",
+    base: cn(
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-xl border px-3 text-[13px] font-semibold",
+      "cursor-pointer transition-colors duration-150",
+      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
+      "active:scale-[0.98]"
+    ),
+    active: "bg-sd-brand-bg text-sd-brand border-sd-brand hover:bg-sd-brand-bg/70",
+    inactive: "border-transparent text-sd-muted hover:bg-sd-surface hover:text-sd-ink",
     count: (active) => cn("ml-1", active ? "text-sd-brand/70" : "text-sd-faint"),
   },
 };

@@ -97,6 +97,22 @@
   --color-sd-won: #16a34a;
   --color-sd-lost: #ef4444;
 
+  /*
+   * Control and cell metrics.
+   *
+   * There was no spacing scale to reuse, so the Sales Desk introduces one.
+   * These sit in the `--spacing-*` namespace, which means they generate real
+   * utilities (`h-control`, `px-cell-x`, `py-cell-y`) and a screen never has
+   * to restate the number.
+   *
+   * Every control a user can click or type into is the same height, so a
+   * filter, a search box and a primary button line up on one row without
+   * anyone nudging them.
+   */
+  --spacing-control: 2.75rem;
+  --spacing-cell-x: 0.75rem;
+  --spacing-cell-y: 0.5rem;
+
   /* Sales Desk shadows: card lift and the drawer's left edge. */
   --shadow-sd-card: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-sd-drawer: -8px 0 32px rgba(0, 0, 0, 0.1);
@@ -154,6 +170,68 @@
     box-shadow:
       0 0 0 1000px var(--color-gray-50) inset !important;
   }
+}
+
+/*
+ * Sales Desk control metrics and interaction feedback.
+ *
+ * Scoped to the module rather than pushed into the shared components, so the
+ * Business Central screens keep the sizing they were designed with. The desk
+ * puts every clickable or typable control on one height, which is what lets a
+ * filter, a search box and a primary button sit on a single row.
+ */
+.sales-desk :is(button, [role="button"]):not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/*
+ * Active state, matching the convention already used across the app: the
+ * border takes the brand colour with a 1px ring flush against it. No offset
+ * halo, so a focused control reads as active rather than outlined.
+ */
+.sales-desk :is(input, select, textarea):focus-visible {
+  outline: none;
+}
+
+.sales-desk .h-control:focus-within {
+  border-color: var(--color-sd-brand);
+  box-shadow: 0 0 0 1px var(--color-sd-brand);
+}
+
+/*
+ * Dropdown menus open with a short rise-and-fade. There is no animation
+ * plugin in this project, so the keyframes are declared here rather than
+ * relying on utilities that would silently do nothing.
+ */
+@keyframes sd-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sd-menu {
+  transform-origin: top center;
+  animation: sd-menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-menu {
+    animation: none;
+  }
+}
+
+/*
+ * The shared Input puts vertical padding on the field itself. Where the desk
+ * fixes the box height, that padding would fight it, so it is dropped for
+ * those controls only.
+ */
+.sales-desk .h-control .ui-input {
+  padding-block: 0;
 }
 
 .date-picker-overlay::-webkit-calendar-picker-indicator {
