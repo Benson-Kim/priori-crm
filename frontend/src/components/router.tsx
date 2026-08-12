@@ -532,6 +532,16 @@ const routes = [
                             },
                         ],
                     },
+                    {
+                        path: "onboarding",
+                        element: lazyPage(() => import("@/pages/sales-desk/onboarding")),
+                        handle: {
+                            header: {
+                                title: "Onboarding",
+                                description: "Post-sale delivery checklists for won deals.",
+                            },
+                        },
+                    },
                 ],
             },
         ],
