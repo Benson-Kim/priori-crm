@@ -15,6 +15,7 @@ import CompaniesIcon from "@/assets/icons/sales-desk/companies.svg?react";
 import DashboardIcon from "@/assets/icons/sales-desk/dashboard.svg?react";
 import FuturePipelineIcon from "@/assets/icons/sales-desk/future-pipeline.svg?react";
 import PipelineIcon from "@/assets/icons/sales-desk/pipeline.svg?react";
+import QuotesIcon from "@/assets/icons/sales-desk/quotes.svg?react";
 
 export type SalesDeskNavIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -41,5 +42,10 @@ export const salesDeskNavItems: SalesDeskNavItem[] = [
         label: "Future pipeline",
         path: `${SALES_DESK_ROOT}/future-pipeline`,
         icon: FuturePipelineIcon,
+    },
+    {
+        label: "Quotes & pricing",
+        path: `${SALES_DESK_ROOT}/quotes`,
+        icon: QuotesIcon,
     },
 ];
