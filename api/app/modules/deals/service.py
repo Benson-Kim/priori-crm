@@ -577,6 +577,23 @@ class DealService(StateMachineMixin, ServiceBase):
             version=deal.version,
         )
 
+    def _stage_probability(self, stage: DealStage) -> Decimal:
+        """Org-resolved stage probability (issue #45: settings, not constants).
+
+        Resolved once per service instance (i.e. once per request) so list
+        responses never pay a settings query per row. Defaults match
+        ``DealStage.probability`` when the org has never configured its own.
+        """
+        cache = getattr(self, "_stage_probability_cache", None)
+        if cache is None:
+            # Imported here to keep the deals module importable without the
+            # owner module during partial test collection.
+            from app.modules.owner.service import resolve_deal_stage_probabilities
+
+            cache = resolve_deal_stage_probabilities(self._db)
+            self._stage_probability_cache = cache
+        return cache[stage]
+
     @staticmethod
     def _owner_response(owner: User) -> DealOwnerResponse:
         name = f"{owner.first_name} {owner.last_name}".strip()
