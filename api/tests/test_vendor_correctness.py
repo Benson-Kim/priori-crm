@@ -9,6 +9,7 @@
 
 from datetime import date, timedelta
 
+from app.common.reporting_time import reporting_date
 from app.common.statement import (
     DEFAULT_STATEMENT_PERIOD_DAYS,
     default_statement_period,
