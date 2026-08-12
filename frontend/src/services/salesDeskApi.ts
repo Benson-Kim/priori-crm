@@ -59,6 +59,7 @@ import {
     findDeal,
     findProspect,
     getCompanies,
+    subscribeToStore,
     getDeals,
     getOnboarding as getOnboardingRecords,
     getProspects as getProspectRecords,
@@ -295,6 +296,29 @@ function stageLabelOf(deal: SeedDeal): string {
     return DEAL_STAGES[deal.stage] ?? DEAL_STAGES[0];
 }
 
+/**
+ * The furthest stage a deal actually recorded.
+ *
+ * A closed deal's `stage` is a sentinel past the end of the list, so it cannot
+ * say how far the deal got: the seeded lost deal is stored at 4 but never
+ * reached Negotiation. The history is the honest answer, and it is what the
+ * progress bar must draw, otherwise a deal that died at Proposal & Quote
+ * appears to have negotiated.
+ */
+function reachedStageIndex(deal: SeedDeal): number {
+    let reached = 0;
+    deal.history.forEach((record) => {
+        const index = DEAL_STAGES.indexOf(record.stage as (typeof DEAL_STAGES)[number]);
+        if (index > reached) reached = index;
+    });
+    return reached;
+}
+
+/** Index the UI should draw: the live stage while open, the furthest once closed. */
+function stageIndexOf(deal: SeedDeal): number {
+    return isOpen(deal) ? deal.stage : reachedStageIndex(deal);
+}
+
 function toDealRecord(record: { stage: string; note: string; daysAgo: number }): DealRecord {
     return { stage: record.stage, note: record.note, logged_on: isoDaysAgo(record.daysAgo) };
 }
@@ -317,7 +341,7 @@ function toPipelineDeal(
         value: convert(deal.valueUSD, currency),
         weighted_value: isOpen(deal) ? convert(weightedValue(deal), currency) : null,
         billing_currency: deal.currency,
-        stage_index: deal.stage,
+        stage_index: stageIndexOf(deal),
         stage_label: stageLabelOf(deal),
         status: deal.status,
         close_reason: deal.closeReason ?? null,
@@ -739,8 +763,8 @@ function toBillingProfile(
         code: profile.code,
         terms: profile.terms,
         tax: profile.tax,
-        // Credit limits are held in USD; each profile shows its own currency.
-        credit_limit: convert(profile.creditLimitUSD, currency),
+        // Already denominated in this profile's currency, so no conversion.
+        credit_limit: profile.creditLimit,
         synced: profile.synced,
         is_default: company.primaryCurrency === currency,
     };
@@ -805,10 +829,7 @@ export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyR
 }
 
 /** One company plus its deals, for the drawer. */
-export async function getCompanyDetail(
-    companyId: number,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<CompanyDetail> {
+export async function getCompanyDetail(companyId: number): Promise<CompanyDetail> {
     const company = findCompany(companyId);
     if (!company) throw new Error(`Company ${companyId} not found`);
 
@@ -820,8 +841,11 @@ export async function getCompanyDetail(
                 id: deal.id,
                 product: deal.product,
                 billing_currency: deal.currency,
-                value: convert(deal.valueUSD, currency),
-                stage_index: deal.stage,
+                // In the deal's own billing currency, which is what the card
+                // labels it with. Converting to the caller's currency here
+                // would print a USD figure beside a KES chip.
+                value: convert(deal.valueUSD, deal.currency),
+                stage_index: stageIndexOf(deal),
                 stage_label: stageLabelOf(deal),
                 status: deal.status,
                 close_reason: deal.closeReason ?? null,
@@ -834,7 +858,7 @@ export async function getCompanyDetail(
 export interface BillingProfilePatch {
     terms?: string;
     tax?: string;
-    /** In the profile's own currency; stored back in USD. */
+    /** In the profile's own currency, which is how it is stored. */
     credit_limit?: number;
 }
 
@@ -857,7 +881,7 @@ export async function updateBillingProfile(
         ...(patch.terms !== undefined ? { terms: patch.terms } : {}),
         ...(patch.tax !== undefined ? { tax: patch.tax } : {}),
         ...(patch.credit_limit !== undefined
-            ? { creditLimitUSD: patch.credit_limit / FX_RATES[currency] }
+            ? { creditLimit: patch.credit_limit }
             : {}),
     });
     return toCompanyRow(company);
@@ -894,6 +918,29 @@ export interface NewCompanyInput {
 }
 
 /**
+ * A profile code is an accounting identity, so it has to be unique even when
+ * two company names reduce to the same initials (Acme Logistics and Alpha
+ * Logistics both give AL). Suffixes the prefix until nothing else claims it,
+ * which is what the customers API does server-side.
+ */
+function uniqueCodePrefix(name: string): string {
+    const base = companyCodePrefix(name);
+    const taken = new Set(
+        getCompanies().flatMap((company) =>
+            BILLING_CURRENCIES.map((currency) => company.profiles[currency].code)
+        )
+    );
+    const isFree = (candidate: string) =>
+        BILLING_CURRENCIES.every((currency) => !taken.has(`${candidate}-${currency}`));
+
+    if (isFree(base)) return base;
+    for (let suffix = 2; ; suffix++) {
+        const candidate = `${base}${suffix}`;
+        if (isFree(candidate)) return candidate;
+    }
+}
+
+/**
  * Register a company. Both profiles are created unsynced: nothing exists in
  * accounting until someone pushes it, and the Companies screen surfaces that
  * through its "Needs sync" filter.
@@ -906,7 +953,7 @@ export async function createCompany(input: NewCompanyInput): Promise<CompanyRow>
         throw new Error("Enter a valid email address.");
     }
 
-    const prefix = companyCodePrefix(name);
+    const prefix = uniqueCodePrefix(name);
     const company = addCompany({
         id: allocateId(),
         owner: input.ownerId,
@@ -922,15 +969,15 @@ export async function createCompany(input: NewCompanyInput): Promise<CompanyRow>
             USD: {
                 code: `${prefix}-USD`,
                 terms: "30 days",
-                tax: "VAT 0%",
-                creditLimitUSD: 25_000,
+                tax: "Zero-rated (export)",
+                creditLimit: 25_000,
                 synced: false,
             },
             KES: {
                 code: `${prefix}-KES`,
                 terms: "14 days",
                 tax: "VAT 16%",
-                creditLimitUSD: 10_000,
+                creditLimit: 1_300_000,
                 synced: false,
             },
         },
@@ -1085,7 +1132,7 @@ export async function engageProspect(prospectId: number): Promise<{ dealId: numb
     const prospect = findProspect(prospectId);
     if (!prospect) throw new Error(`Prospect ${prospectId} not found`);
 
-    const prefix = companyCodePrefix(prospect.company);
+    const prefix = uniqueCodePrefix(prospect.company);
     const company = addCompany({
         id: allocateId(),
         owner: prospect.owner,
@@ -1101,15 +1148,15 @@ export async function engageProspect(prospectId: number): Promise<{ dealId: numb
             USD: {
                 code: `${prefix}-USD`,
                 terms: "30 days",
-                tax: "VAT 0%",
-                creditLimitUSD: 25_000,
+                tax: "Zero-rated (export)",
+                creditLimit: 25_000,
                 synced: false,
             },
             KES: {
                 code: `${prefix}-KES`,
                 terms: "14 days",
                 tax: "VAT 16%",
-                creditLimitUSD: 10_000,
+                creditLimit: 1_300_000,
                 synced: false,
             },
         },
@@ -1192,6 +1239,15 @@ export async function setOnboardingTask(
     completed: boolean
 ): Promise<OnboardingRow> {
     return toOnboardingRow(setOnboardingTaskRecord(onboardingId, taskIndex, completed));
+}
+
+/**
+ * Called whenever desk data changes, so views that outlive the screen doing
+ * the writing (the sidebar's queue counts) can re-read. Returns an
+ * unsubscribe. Becomes cache invalidation once the API is fetch-backed.
+ */
+export function subscribeToDeskChanges(listener: () => void): () => void {
+    return subscribeToStore(listener);
 }
 
 // Quotes & pricing endpoints
@@ -1279,6 +1335,8 @@ export interface PricedQuote {
     profile: BillingProfile | null;
     /** True when the quote can actually be saved. */
     can_save: boolean;
+    /** Why saving is blocked, for the button's title. Null when it is not. */
+    blocked_reason: string | null;
 }
 
 /**
@@ -1302,6 +1360,10 @@ export function priceQuote(
         company && isBillingCurrency(currency)
             ? (company.profiles.find((entry) => entry.currency === currency) ?? null)
             : null;
+
+    const hasSellableSeats =
+        lines.length > 0 &&
+        lines.every((line) => Number.isFinite(line.seats) && line.seats >= MIN_SEATS);
 
     // Totals are accumulated in USD alongside the display shape, so the
     // subtotal never re-derives itself from already-converted figures.
@@ -1343,8 +1405,21 @@ export function priceQuote(
         })),
         currency,
         profile,
-        can_save: profile !== null,
+        can_save: profile !== null && hasSellableSeats,
+        blocked_reason: blockedReason(profile !== null, hasSellableSeats),
     };
+}
+
+/**
+ * A line with no seats contributes nothing, so a quote made only of such
+ * lines totals zero. Saving that produces a document nobody can act on.
+ */
+const MIN_SEATS = 1;
+
+function blockedReason(hasProfile: boolean, hasSeats: boolean): string | null {
+    if (!hasProfile) return "Switch to USD or KES to save this quote";
+    if (!hasSeats) return `Every line needs at least ${MIN_SEATS} seat`;
+    return null;
 }
 
 const clampPercent = (value: number) =>

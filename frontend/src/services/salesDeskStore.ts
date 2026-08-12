@@ -61,6 +61,31 @@ let nextId =
         ...SEED_PROSPECTS.map((prospect) => prospect.id)
     ) + 1;
 
+/*
+ * Change notification.
+ *
+ * Anything derived from this store outside the screen that wrote it, the
+ * sidebar's queue counts above all, has no other way to learn that a write
+ * happened. Notifying here rather than at each API call site means a new
+ * mutation cannot forget to announce itself.
+ *
+ * When the real API lands this becomes query invalidation; the subscriber
+ * side of the contract does not change.
+ */
+type StoreListener = () => void;
+const listeners = new Set<StoreListener>();
+
+export function subscribeToStore(listener: StoreListener): () => void {
+    listeners.add(listener);
+    return () => {
+        listeners.delete(listener);
+    };
+}
+
+function notify(): void {
+    listeners.forEach((listener) => listener());
+}
+
 export const allocateId = () => nextId++;
 
 export const getDeals = (): SeedDeal[] => state.deals;
@@ -74,15 +99,18 @@ export const findProspect = (id: number): SeedProspect | undefined =>
 
 export function addProspect(prospect: SeedProspect): SeedProspect {
     state.prospects.push(prospect);
+    notify();
     return prospect;
 }
 
 export function removeProspect(id: number): void {
     state.prospects = state.prospects.filter((prospect) => prospect.id !== id);
+    notify();
 }
 
 export function addDeal(deal: SeedDeal): SeedDeal {
     state.deals.push(deal);
+    notify();
     return deal;
 }
 
@@ -100,6 +128,7 @@ export function setOnboardingTask(
         throw new Error(`Task ${taskIndex} is not on the checklist`);
     }
     record.completed[taskIndex] = completed;
+    notify();
     return record;
 }
 
@@ -108,6 +137,7 @@ export const getQuotes = (): SeedQuote[] => state.quotes;
 /** Newest first, so a saved quote lands at the top of the recent rail. */
 export function addQuote(quote: SeedQuote): SeedQuote {
     state.quotes.unshift(quote);
+    notify();
     return quote;
 }
 
@@ -115,6 +145,7 @@ export function patchQuote(id: string, patch: Partial<SeedQuote>): SeedQuote {
     const quote = state.quotes.find((candidate) => candidate.id === id);
     if (!quote) throw new Error(`Quote ${id} not found`);
     Object.assign(quote, patch);
+    notify();
     return quote;
 }
 
@@ -129,6 +160,7 @@ export function patchDeal(id: number, patch: Partial<SeedDeal>): SeedDeal {
     const deal = findDeal(id);
     if (!deal) throw new Error(`Deal ${id} not found`);
     Object.assign(deal, patch);
+    notify();
     return deal;
 }
 
@@ -137,12 +169,14 @@ export function appendRecord(id: number, record: Omit<SeedDealRecord, "daysAgo">
     const deal = findDeal(id);
     if (!deal) throw new Error(`Deal ${id} not found`);
     deal.history.push({ ...record, daysAgo: 0 });
+    notify();
     return deal;
 }
 
 /** Add a newly registered company to the book. Returns the stored record. */
 export function addCompany(company: SeedCompany): SeedCompany {
     state.companies.push(company);
+    notify();
     return company;
 }
 
@@ -164,6 +198,7 @@ export function patchBillingProfile(
     const profile = company.profiles[currency];
     const isTermsChange = Object.keys(patch).some((key) => key !== "synced");
     Object.assign(profile, patch, isTermsChange ? { synced: false } : {});
+    notify();
     return company;
 }
 
@@ -183,9 +218,11 @@ export function moveToNurture(id: number, note: string, engageInDays: number): v
         estimatedValueUSD: deal.valueUSD,
     });
     state.deals = state.deals.filter((candidate) => candidate.id !== id);
+    notify();
 }
 
 /** Discard every change and restore the seed. Used by tests and demo resets. */
 export function resetStore(): void {
     state = buildState();
+    notify();
 }

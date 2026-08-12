@@ -61,9 +61,21 @@ interface TableProps<T> {
    * Hide the header row visually while leaving it in the DOM, for panels whose
    * own title already names the columns. Screen readers still associate each
    * cell with its column, so this is not the same as omitting the header.
+   *
+   * Note this cannot be done with `sr-only`: that is `position: absolute`, and
+   * an absolutely positioned `thead` leaves table flow, lands at the foot of
+   * the document and extends the page. The header is instead collapsed in
+   * place, and each label clipped, so the row stays in flow at a hairline.
    */
   headerHidden?: boolean;
 }
+
+/**
+ * Collapses a header cell to a clipped hairline while keeping it in table
+ * flow, so the column association survives for assistive tech.
+ */
+const HIDDEN_HEADER_CELL =
+  "h-px overflow-hidden border-0 p-0 text-[0px] leading-none [clip-path:inset(50%)]";
 
 function SortIcon({
   columnKey,
@@ -120,7 +132,7 @@ export function Table<T>({
       )}
     >
       <table className="w-full min-w-150">
-        <thead className={cn(headerHidden && "sr-only")}>
+        <thead>
           <tr className={cn(!isSalesDesk && "border-b border-border ")}>
             {columns.map((col) => {
               const isSortable = sortable && onSort;
@@ -139,6 +151,7 @@ export function Table<T>({
                       ),
                     isSortable && "cursor-pointer select-none hover:bg-gray-100",
                     isActive && "text-priori-purple",
+                    headerHidden && HIDDEN_HEADER_CELL,
                     col.className
                   )}
                 >
@@ -159,7 +172,8 @@ export function Table<T>({
                   "w-8",
                   isSalesDesk
                     ? "bg-sd-surface p-3"
-                    : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg"
+                    : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg",
+                  headerHidden && HIDDEN_HEADER_CELL
                 )}
               />
             )}

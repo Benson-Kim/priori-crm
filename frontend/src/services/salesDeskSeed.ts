@@ -109,6 +109,13 @@ export interface SeedOnboarding {
     completed: boolean[];
 }
 
+/*
+ * Note: the Onboarding design shows deliveries for Acacia Insurance and
+ * Highlands Coffee Exporters, but the Pipeline design's six deals contain
+ * only one won deal (Acacia). The two frames disagree, so onboarding is not
+ * joined to won deals here; changing either set would break fidelity with the
+ * other. Worth a designer's ruling before the API defines the real link.
+ */
 export const SEED_ONBOARDING: SeedOnboarding[] = [
     {
         id: 71,
@@ -187,8 +194,12 @@ export interface SeedBillingProfile {
     code: string;
     terms: string;
     tax: string;
-    /** Credit ceiling, held in USD and converted for display. */
-    creditLimitUSD: number;
+    /**
+     * Credit ceiling in this profile's own currency, which is how the
+     * customers API stores it. A KES profile's limit is a KES figure and is
+     * never converted for display.
+     */
+    creditLimit: number;
     synced: boolean;
 }
 
@@ -210,9 +221,13 @@ export interface SeedCompany {
     profiles: Record<BillingCurrency, SeedBillingProfile>;
 }
 
-/** Payment terms a billing profile can be set to. */
+/**
+ * Payment terms a billing profile can be set to. These strings are the wire
+ * values the customers API validates against (BillingPaymentTerms), not
+ * display copy, so they must match it exactly.
+ */
 export const PAYMENT_TERMS = [
-    "Due on receipt",
+    "On receipt",
     "14 days",
     "30 days",
     "45 days",
@@ -221,19 +236,23 @@ export const PAYMENT_TERMS = [
 
 /**
  * Tax treatments. USD profiles are export sales and carry no VAT; KES
- * profiles settle locally at the standard rate.
+ * profiles settle locally at the standard rate. Wire values from the
+ * customers API's TaxTreatment enum.
  */
-export const TAX_TREATMENTS = ["VAT 0%", "VAT 16%", "Exempt"] as const;
+export const TAX_TREATMENTS = ["Zero-rated (export)", "VAT 16%", "Exempt"] as const;
 
-/** Industries offered when registering a company. */
+/**
+ * Industries offered when registering a company. Wire values from the
+ * customers API's Industry enum; offering anything outside it would let a
+ * user pick a value the real endpoint rejects.
+ */
 export const INDUSTRIES = [
     "Financial services",
     "Healthcare",
     "Education",
     "Logistics & transport",
-    "Hospitality & tourism",
+    "Hospitality",
     "Manufacturing",
-    "Agriculture & export",
     "Professional services",
     "NGO / Non-profit",
     "Retail",
@@ -397,26 +416,26 @@ export const SEED_REPS: SeedRep[] = [
 const usdProfile = (
     code: string,
     terms: string,
-    creditLimitUSD: number,
+    creditLimit: number,
     synced: boolean
 ): SeedBillingProfile => ({
     code: `${code}-USD`,
     terms,
-    tax: "VAT 0%",
-    creditLimitUSD,
+    tax: "Zero-rated (export)",
+    creditLimit,
     synced,
 });
 
 const kesProfile = (
     code: string,
     terms: string,
-    creditLimitUSD: number,
+    creditLimit: number,
     synced: boolean
 ): SeedBillingProfile => ({
     code: `${code}-KES`,
     terms,
     tax: "VAT 16%",
-    creditLimitUSD,
+    creditLimit,
     synced,
 });
 
@@ -434,7 +453,7 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 24,
         profiles: {
             USD: usdProfile("BL", "30 days", 25_000, true),
-            KES: kesProfile("BL", "14 days", 10_000, true),
+            KES: kesProfile("BL", "14 days", 1_300_000, true),
         },
     },
     {
@@ -450,7 +469,7 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 42,
         profiles: {
             USD: usdProfile("SM", "30 days", 40_000, true),
-            KES: kesProfile("SM", "30 days", 60_000, true),
+            KES: kesProfile("SM", "30 days", 7_800_000, true),
         },
     },
     {
@@ -467,14 +486,14 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 2,
         profiles: {
             USD: usdProfile("NDG", "30 days", 25_000, false),
-            KES: kesProfile("NDG", "14 days", 10_000, false),
+            KES: kesProfile("NDG", "14 days", 1_300_000, false),
         },
     },
     {
         id: 4,
         owner: "JN",
         name: "Kilifi Beach Resorts",
-        industry: "Hospitality & tourism",
+        industry: "Hospitality",
         contact: "Hassan Omar",
         email: "hassan@kilifibeach.com",
         phone: "+254 799 220 400",
@@ -483,7 +502,7 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 11,
         profiles: {
             USD: usdProfile("KBR", "30 days", 25_000, true),
-            KES: kesProfile("KBR", "14 days", 10_000, false),
+            KES: kesProfile("KBR", "14 days", 1_300_000, false),
         },
     },
     {
@@ -499,7 +518,7 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 95,
         profiles: {
             USD: usdProfile("AI", "45 days", 150_000, true),
-            KES: kesProfile("AI", "30 days", 80_000, true),
+            KES: kesProfile("AI", "30 days", 10_400_000, true),
         },
     },
     {
@@ -515,14 +534,14 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 62,
         profiles: {
             USD: usdProfile("TS", "30 days", 25_000, false),
-            KES: kesProfile("TS", "14 days", 10_000, true),
+            KES: kesProfile("TS", "14 days", 1_300_000, true),
         },
     },
     {
         id: 7,
         owner: "MW",
         name: "Highlands Coffee Exporters",
-        industry: "Agriculture & export",
+        industry: "Manufacturing",
         contact: "Lucy Wambui",
         email: "lucy@highlandscoffee.co.ke",
         phone: "+254 727 550 903",
@@ -531,7 +550,7 @@ export const SEED_COMPANIES: SeedCompany[] = [
         registeredDaysAgo: 140,
         profiles: {
             USD: usdProfile("HCE", "30 days", 30_000, true),
-            KES: kesProfile("HCE", "14 days", 10_000, true),
+            KES: kesProfile("HCE", "14 days", 1_300_000, true),
         },
     },
 ];
