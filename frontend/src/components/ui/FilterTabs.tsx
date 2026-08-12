@@ -45,8 +45,10 @@ const TAB_STYLES: Record<
     count: (active) => cn("ml-1", active ? "text-white/80" : "text-sd-faint"),
   },
   "brand-outline": {
-    base: "rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
-    active: "bg-sd-brand-bg text-sd-brand border-sd-border",
+    // 12px radius, not a full pill, and the active border is brand rather
+    // than the hairline grey.
+    base: "rounded-xl border px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
+    active: "bg-sd-brand-bg text-sd-brand border-sd-brand",
     inactive: "border-transparent text-sd-muted hover:bg-sd-surface",
     count: (active) => cn("ml-1", active ? "text-sd-brand/70" : "text-sd-faint"),
   },

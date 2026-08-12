@@ -133,7 +133,11 @@ export function Table<T>({
     >
       <table className="w-full min-w-150">
         <thead>
-          <tr className={cn(!isSalesDesk && "border-b border-border ")}>
+          <tr
+            className={cn(
+              isSalesDesk ? "border-b border-sd-border" : "border-b border-border "
+            )}
+          >
             {columns.map((col) => {
               const isSortable = sortable && onSort;
               const colSortKey = col.sortKey ?? col.key;
@@ -144,7 +148,7 @@ export function Table<T>({
                   onClick={isSortable ? () => handleHeaderClick(col) : undefined}
                   className={cn(
                     isSalesDesk
-                      ? "bg-sd-surface p-3 text-left text-[13px] font-semibold text-sd-ink"
+                      ? "bg-sd-card p-3 text-left text-[13px] font-bold text-sd-ink"
                       : cn(
                         "p-3 text-left text-base font-bold text-content-primary",
                         "bg-gray-50 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg"
@@ -171,7 +175,7 @@ export function Table<T>({
                 className={cn(
                   "w-8",
                   isSalesDesk
-                    ? "bg-sd-surface p-3"
+                    ? "bg-sd-card p-3"
                     : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg",
                   headerHidden && HIDDEN_HEADER_CELL
                 )}
