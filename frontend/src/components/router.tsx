@@ -449,6 +449,33 @@ const routes = [
                             },
                         ],
                     },
+                    {
+                        path: "companies",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/companies")),
+                                handle: {
+                                    header: {
+                                        title: "Companies",
+                                        description: "Who we sell to and how to reach them.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/companies/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Companies",
+                                        description: "Billing profiles and accounting sync.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
                 ],
             },
         ],
