@@ -1282,11 +1282,22 @@ export interface QuoteRow {
     status: QuoteStatus;
     /** ISO date (yyyy-mm-dd). */
     issued_on: string;
+    /** Deal the quote was raised from (deal drawer, #47), or null. */
+    deal_id: number | null;
 }
 
-/** Saved quotes, newest first. */
-export async function getQuoteList(): Promise<QuoteRow[]> {
-    return getQuoteRecords().map((quote) => ({
+/**
+ * Deal linkage for quotes saved this session. The seed record predates the
+ * deals↔quotes integration, so the link is held beside the store until the
+ * real API persists it on the quote itself.
+ *
+ * TODO(#44-wiring): drop this map — `deal_id` is a column on the quote
+ * record server-side and comes back on every quote response.
+ */
+const quoteDealLinks = new Map<string, number>();
+
+function toQuoteRow(quote: ReturnType<typeof getQuoteRecords>[number]): QuoteRow {
+    return {
         id: quote.id,
         company_id: quote.companyId,
         company_name: findCompany(quote.companyId)?.name ?? "Unknown company",
@@ -1295,7 +1306,13 @@ export async function getQuoteList(): Promise<QuoteRow[]> {
         total_usd: quote.totalUSD,
         status: quote.status,
         issued_on: isoDaysAgo(quote.daysAgo),
-    }));
+        deal_id: quoteDealLinks.get(quote.id) ?? null,
+    };
+}
+
+/** Saved quotes, newest first. */
+export async function getQuoteList(): Promise<QuoteRow[]> {
+    return getQuoteRecords().map(toQuoteRow);
 }
 
 /** How a quote line is billed. Annual trades a 15% discount for a year's commitment. */
@@ -1434,6 +1451,8 @@ export interface SaveQuoteInput {
     companyId: number;
     currency: QuoteCurrency;
     lines: QuoteLineInput[];
+    /** Deal the builder was opened from (deal drawer, #47). Optional. */
+    dealId?: number;
 }
 
 /**
@@ -1467,21 +1486,63 @@ export async function saveQuote(input: SaveQuoteInput): Promise<QuoteRow> {
         daysAgo: 0,
     });
 
-    return {
-        id: quote.id,
-        company_id: quote.companyId,
-        company_name: company.name,
-        profile_code: quote.profileCode,
-        currency: quote.currency,
-        total_usd: quote.totalUSD,
-        status: quote.status,
-        issued_on: isoDaysAgo(0),
-    };
+    // TODO(#44-wiring): send deal_id in the create payload instead; the
+    // quotes module persists the link and echoes it back on the response.
+    if (input.dealId !== undefined) quoteDealLinks.set(quote.id, input.dealId);
+
+    return toQuoteRow(quote);
 }
 
 /** Push a saved quote to the quotations module. */
 export async function syncQuote(quoteId: string): Promise<void> {
     patchQuote(quoteId, { status: "Synced" });
+}
+
+/**
+ * Thrown when a quote cannot be issued because the billing profile it posts
+ * against has never been pushed to accounting. Carries the company id so the
+ * UI can deep-link straight into the company drawer's sync flow (#46).
+ */
+export class UnsyncedProfileError extends Error {
+    readonly companyId: number;
+    readonly profileCode: string;
+
+    constructor(companyId: number, profileCode: string) {
+        super(
+            `Profile ${profileCode} has not been synced to accounting yet. ` +
+                "Push the profile first, then issue the quote."
+        );
+        this.name = "UnsyncedProfileError";
+        this.companyId = companyId;
+        this.profileCode = profileCode;
+    }
+}
+
+/**
+ * Issue a Draft quote to accounting — the issue/finalize transition.
+ *
+ * A quote can only post against a profile accounting knows about, so an
+ * unsynced profile fails with `UnsyncedProfileError` rather than a plain
+ * message: the caller routes the user into the sync flow instead of showing
+ * a dead end.
+ *
+ * TODO(#44-wiring): swap the body to the existing quotes module transition
+ * endpoint (issue/finalize), following `quoteApi.ts`.
+ */
+export async function pushQuoteToAccounting(quoteId: string): Promise<QuoteRow> {
+    const quote = getQuoteRecords().find((candidate) => candidate.id === quoteId);
+    if (!quote) throw new Error(`Quote ${quoteId} not found`);
+    if (quote.status !== "Draft") {
+        throw new Error("Only Draft quotes can be pushed to accounting.");
+    }
+
+    const company = findCompany(quote.companyId);
+    if (!company) throw new Error(`Company ${quote.companyId} not found`);
+
+    const profile = company.profiles[quote.currency];
+    if (!profile.synced) throw new UnsyncedProfileError(company.id, profile.code);
+
+    return toQuoteRow(patchQuote(quoteId, { status: "Synced" }));
 }
 
 // Formatting
