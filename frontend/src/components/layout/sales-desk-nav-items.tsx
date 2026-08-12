@@ -14,6 +14,7 @@ import type { ComponentType, SVGProps } from "react";
 import CompaniesIcon from "@/assets/icons/sales-desk/companies.svg?react";
 import DashboardIcon from "@/assets/icons/sales-desk/dashboard.svg?react";
 import FuturePipelineIcon from "@/assets/icons/sales-desk/future-pipeline.svg?react";
+import OnboardingIcon from "@/assets/icons/sales-desk/onboarding.svg?react";
 import PipelineIcon from "@/assets/icons/sales-desk/pipeline.svg?react";
 import QuotesIcon from "@/assets/icons/sales-desk/quotes.svg?react";
 
@@ -47,5 +48,10 @@ export const salesDeskNavItems: SalesDeskNavItem[] = [
         label: "Quotes & pricing",
         path: `${SALES_DESK_ROOT}/quotes`,
         icon: QuotesIcon,
+    },
+    {
+        label: "Onboarding",
+        path: `${SALES_DESK_ROOT}/onboarding`,
+        icon: OnboardingIcon,
     },
 ];
