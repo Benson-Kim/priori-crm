@@ -3,8 +3,8 @@
  *
  * A module-scoped rail. While the user is inside /sales-desk this replaces the
  * Business Central nav in `sidebar.tsx`, so the six desk destinations are the
- * only things competing for attention. The "Back to Priori" link is the way
- * out; without it the module would be a dead end.
+ * only things competing for attention. The "Back to Business Central" link is
+ * the way out; without it the module would be a dead end.
  */
 
 import { ArrowLeft } from "lucide-react";
@@ -31,7 +31,7 @@ export function SalesDeskSidebar() {
                 <Link to="/sales-desk" className="flex items-center gap-2.5 px-2 py-1">
                     <img
                         src="/Logo Priori.svg"
-                        alt="Priori Technologies"
+                        alt="Business Central"
                         className="h-8 w-auto shrink-0"
                     />
                     <span className="sr-only">Sales Desk</span>
@@ -51,7 +51,7 @@ export function SalesDeskSidebar() {
                                 cn(
                                     "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors",
                                     isActive
-                                        ? "bg-sd-brand-bg text-priori-purple"
+                                        ? "bg-sd-brand-bg text-sd-brand"
                                         : "text-sd-muted hover:bg-sd-surface hover:text-sd-ink"
                                 )
                             }
@@ -59,7 +59,7 @@ export function SalesDeskSidebar() {
                             <Icon className="size-4.5 shrink-0" aria-hidden="true" />
                             {label}
                             {count > 0 && (
-                                <span className="ml-auto flex size-4 items-center justify-center rounded-full bg-priori-purple text-[10px] font-bold text-white">
+                                <span className="ml-auto flex size-4 items-center justify-center rounded-full bg-sd-brand text-[10px] font-bold text-white">
                                     {count}
                                     <span className="sr-only"> needing attention</span>
                                 </span>
@@ -76,7 +76,7 @@ export function SalesDeskSidebar() {
                     className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-sd-muted transition-colors hover:bg-sd-surface hover:text-sd-ink"
                 >
                     <ArrowLeft className="size-4.5 shrink-0" aria-hidden="true" />
-                    Back to Priori
+                    Back to Business Central
                 </Link>
             </div>
 
@@ -90,10 +90,13 @@ export function SalesDeskSidebar() {
                     </div>
                 </div>
                 <p className="pt-3 text-[10px] text-sd-muted">
-                    &copy; 2026 Priori &middot; All Rights Reserved
+                    &copy; 2026 Business Central &mdash; All Rights Reserved
                 </p>
                 <p className="text-[10px] text-sd-muted">Version: 1.0.188-288</p>
             </div>
         </aside>
     );
 }
+
+
+
