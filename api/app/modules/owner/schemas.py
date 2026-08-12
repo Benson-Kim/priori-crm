@@ -17,6 +17,8 @@ from app.common.validators import (
 from app.constants.settings_defaults import (
     MAX_DEFAULT_SEND_MESSAGE_LENGTH,
     MAX_DEFAULT_TERMS_LENGTH,
+    MAX_ONBOARDING_TASK_LABEL_LENGTH,
+    MAX_ONBOARDING_TEMPLATE_TASKS,
 )
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
@@ -59,6 +61,16 @@ class OwnerProfileUpdate(BaseModel):
         alias="defaultSendMessage",
     )
     jurisdiction: str | None = Field(None, max_length=2)
+    # Onboarding task template (issue #41). Ordered list of task labels;
+    # null resets the org back to the built-in 7-task default. Applied to
+    # a checklist at create time only — editing the template never mutates
+    # existing checklists.
+    onboarding_task_template: list[str] | None = Field(
+        None,
+        min_length=1,
+        max_length=MAX_ONBOARDING_TEMPLATE_TASKS,
+        alias="onboardingTaskTemplate",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -76,6 +88,25 @@ class OwnerProfileUpdate(BaseModel):
     @classmethod
     def _blank_to_none(cls, v: str | None) -> str | None:
         return empty_str_to_none(v)
+
+    @field_validator("onboarding_task_template")
+    @classmethod
+    def _validate_template_labels(cls, v: list[str] | None) -> list[str] | None:
+        """Strip labels; reject blank or over-long entries."""
+        if v is None:
+            return None
+        cleaned: list[str] = []
+        for label in v:
+            stripped = (label or "").strip()
+            if not stripped:
+                raise ValueError("Onboarding task labels cannot be blank")
+            if len(stripped) > MAX_ONBOARDING_TASK_LABEL_LENGTH:
+                raise ValueError(
+                    "Onboarding task labels must be at most "
+                    f"{MAX_ONBOARDING_TASK_LABEL_LENGTH} characters"
+                )
+            cleaned.append(stripped)
+        return cleaned
 
     @field_validator("jurisdiction", mode="before")
     @classmethod
@@ -126,6 +157,10 @@ class OwnerProfileResponse(BaseModel):
     )
     default_send_message: str | None = Field(None, alias="defaultSendMessage")
     jurisdiction: str | None = None
+    # Resolved onboarding task template (persisted value, or the built-in
+    # 7-task default when never set) + its monotonic version (issue #41).
+    onboarding_task_template: list[str] = Field(alias="onboardingTaskTemplate")
+    onboarding_template_version: int = Field(alias="onboardingTemplateVersion")
     # True when a logo is set; the binary is served from a dedicated endpoint
     # so the JSON never carries a path.
     has_logo: bool = Field(False, alias="hasLogo")
@@ -159,6 +194,19 @@ class OwnerInfo(BaseModel):
     jurisdiction: str | None = None
 
     model_config = {"populate_by_name": True, "from_attributes": True}
+
+
+class OnboardingTemplate(BaseModel):
+    """Resolved onboarding task template + its version (issue #41).
+
+    Built by the owner service from the live profile, with the built-in
+    ``DEFAULT_ONBOARDING_TASKS`` substituted when the org never configured
+    its own. Consumed by ``OnboardingService.create_for_won_deal``, which
+    copies the labels (and snapshots the version) at create time only.
+    """
+
+    tasks: list[str]
+    version: int
 
 
 class PurchaseOrderSettingsDefaults(BaseModel):
