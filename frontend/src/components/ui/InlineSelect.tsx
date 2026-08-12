@@ -42,7 +42,7 @@ interface InlineSelectProps {
 const TRIGGER_STYLES = {
   default: [
     "px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
-    "text-base font-normal leading-6 text-gray-900",
+    "text-sm font-normal leading-6 text-gray-900",
     "hover:border-priori-purple/50",
   ].join(" "),
   /*
@@ -53,7 +53,7 @@ const TRIGGER_STYLES = {
    */
   "sales-desk": [
     "h-control px-3 rounded-lg border border-gray-300",
-    "text-base font-normal leading-6 text-gray-900",
+    "text-sm font-normal leading-6 text-gray-900",
     "hover:border-priori-purple/50",
   ].join(" "),
 } as const;

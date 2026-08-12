@@ -249,6 +249,16 @@
   padding-block: 0;
 }
 
+/*
+ * One type size for everything a user types into or picks from, so a select
+ * and a field beside it match. Declared here rather than per call site, which
+ * is how they drifted apart.
+ */
+.sales-desk :is(.h-control, .h-control .ui-input) {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
 .date-picker-overlay::-webkit-calendar-picker-indicator {
   position: absolute;
   inset: 0;
