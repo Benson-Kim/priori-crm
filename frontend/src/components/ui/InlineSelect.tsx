@@ -45,17 +45,23 @@ const TRIGGER_STYLES = {
     "text-base font-normal leading-6 text-gray-900",
     "hover:border-priori-purple/50",
   ].join(" "),
+  /*
+   * Matches the shared Input's box exactly: same border colour and radius,
+   * and the same value/placeholder colours. A select and a text field
+   * sitting next to each other should not read as two components. The fill
+   * is applied separately, since it depends on whether there is a value.
+   */
   "sales-desk": [
-    "h-control px-3 rounded-xl border border-sd-border bg-sd-card",
-    "text-[13px] font-medium text-sd-ink",
-    "hover:border-sd-brand/50 hover:bg-sd-surface",
+    "h-control px-3 rounded-lg border border-gray-300",
+    "text-base font-normal leading-6 text-gray-900",
+    "hover:border-priori-purple/50",
   ].join(" "),
 } as const;
 
 /** Open reads the same as focused: brand border with a flush 1px ring. */
 const OPEN_STYLES = {
   default: "border-priori-purple ring-1 ring-priori-purple/20",
-  "sales-desk": "border-sd-brand ring-1 ring-sd-brand",
+  "sales-desk": "border-priori-purple ring-1 ring-priori-purple",
 } as const;
 
 export function InlineSelect({
@@ -168,19 +174,21 @@ export function InlineSelect({
         className={cn(
           "flex w-full items-center justify-between gap-2 cursor-pointer",
           "transition-[border-color,box-shadow,background-color] duration-150",
-          "focus-visible:outline-none focus-visible:border-sd-brand focus-visible:ring-1 focus-visible:ring-sd-brand",
+          "focus-visible:outline-none focus-visible:border-priori-purple focus-visible:ring-1 focus-visible:ring-priori-purple",
           "disabled:cursor-not-allowed disabled:opacity-50",
           TRIGGER_STYLES[variant],
+          /* Empty reads as a waiting field; filled reads as answered. */
+          isDesk && (selected ? "bg-white" : "bg-gray-50"),
           isOpen && OPEN_STYLES[variant],
           triggerClassName
         )}
       >
-        <span className={cn("truncate", !selected && "text-sd-muted")}>{selectedLabel}</span>
+        <span className={cn("truncate", !selected && "text-gray-400")}>{selectedLabel}</span>
         <ChevronDown
           size={16}
           className={cn(
             "shrink-0 transition-transform duration-150",
-            isDesk ? "text-sd-muted" : "text-gray-400",
+            "text-gray-400",
             isOpen && "rotate-180"
           )}
         />
