@@ -57,6 +57,52 @@
   --color-gray-700: #344054;
   --color-gray-800: #1d2939;
 
+  /*
+   * Sales Desk module palette.
+   *
+   * The Sales Desk is a self-contained module with its own shell and a
+   * cooler, denser visual language than the Business Central pages (see
+   * the Figma "Co-copilot" file, node 3633:24227). Its greys are bluer
+   * than the shared gray-* ramp, so they are namespaced under `desk-*`
+   * rather than overriding the app-wide tokens. `priori-purple` is the
+   * one colour both systems share.
+   */
+  --color-desk-bg: #f6f7f9;
+  --color-desk-surface: #ffffff;
+  --color-desk-border: #e4e8ef;
+  --color-desk-ink: #16233a;
+  --color-desk-muted: #6b7688;
+  --color-desk-accent-soft: #fbf0fb;
+  --color-desk-blue: #2456e6;
+  --color-desk-blue-soft: #ebf0ff;
+  --color-desk-green: #0f7a38;
+  --color-desk-red: #c23434;
+  --color-desk-violet: #7c3aed;
+  --color-desk-teal: #0d9488;
+
+  /* Soft fills for stage pills and status chips. */
+  --color-desk-green-soft: #e6f5eb;
+  --color-desk-red-soft: #fbebeb;
+  --color-desk-amber-soft: #fbf1de;
+  --color-desk-amber: #b45309;
+  --color-desk-neutral-soft: #f3f4f6;
+
+  /*
+   * Deal-age signalling. A deal is "fresh" for its first two weeks, "warm"
+   * to six, and overdue past that; the same three tones mark how long since
+   * the last logged activity.
+   */
+  --color-desk-fresh-soft: #dcfce7;
+  --color-desk-fresh: #15803d;
+  --color-desk-warm-soft: #fef9c3;
+  --color-desk-warm: #854d0e;
+
+  /* Segmented stage-progress bar on a deal row. */
+  --color-desk-stage-done: #93c5fd;
+  --color-desk-stage-current: #1d4ed8;
+  --color-desk-stage-won: #16a34a;
+  --color-desk-stage-lost: #ef4444;
+
   --font-sans: "Poppins", sans-serif;
 }
 

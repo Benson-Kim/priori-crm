@@ -7,6 +7,7 @@ import {
     ReceiptText,
     ShoppingCart,
     Store,
+    Target,
     Users
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
@@ -46,6 +47,17 @@ export const navItems: NavItem[] = [
             { label: "Quotes", path: "/quotes", icon: FileText },
             { label: "Invoices", path: "/invoices", icon: Invoice },
         ],
+    },
+
+    /*
+     * The Sales Desk is a module, not a section: following this link leaves
+     * the Business Central shell for the desk's own layout and sidebar
+     * (components/layout/sales-desk-layout.tsx), so it has no children here.
+     */
+    {
+        label: "Sales Desk",
+        icon: Target,
+        path: "/sales-desk",
     },
 
     {

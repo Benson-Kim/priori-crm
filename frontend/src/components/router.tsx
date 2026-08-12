@@ -5,11 +5,12 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import LoginPage from "@/pages/auth/login";
 import RequireAuth from "./auth/RequireAuth";
 import DefaultLayout from "./layout/default-layout";
+import SalesDeskLayout from "./layout/sales-desk-layout";
 
 // Route-based code splitting: every page below is fetched on demand, so the
 // initial bundle only ships the shell (router, auth guard, layout) and the
 // login page. This is the single biggest lever for first paint on slow
-// (3G) networks — heavy dependencies like recharts (dashboard/statements)
+// (3G) networks: heavy dependencies like recharts (dashboard/statements)
 // and react-pdf (document previews) stay out of the entry chunk entirely.
 const lazyPage = (loader: () => Promise<{ default: ComponentType }>) => {
     const Page = lazy(loader);
@@ -398,6 +399,28 @@ const routes = [
                                 element: <Navigate to="/cashflow" replace />,
                             },
                         ],
+                    },
+                ],
+            },
+            /*
+             * Sales Desk, a sibling shell, not a section of DefaultLayout.
+             * The module owns the whole /sales-desk subtree and swaps in its
+             * own sidebar and header, so it mounts alongside the Business
+             * Central layout under the same auth guard.
+             */
+            {
+                path: "sales-desk",
+                element: <SalesDeskLayout />,
+                children: [
+                    {
+                        index: true,
+                        element: lazyPage(() => import("@/pages/sales-desk")),
+                        handle: {
+                            header: {
+                                title: "Dashboard",
+                                description: "Pipeline health, bookings and quota attainment.",
+                            },
+                        },
                     },
                 ],
             },
