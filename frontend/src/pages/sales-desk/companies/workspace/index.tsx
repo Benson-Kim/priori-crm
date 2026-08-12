@@ -49,6 +49,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
     const [isCreating, setIsCreating] = useState(false);
 
     const [allCompanies, setAllCompanies] = useState<CompanyRow[]>([]);
+    const [unsyncedCompanies, setUnsyncedCompanies] = useState<CompanyRow[]>([]);
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -62,11 +63,16 @@ export default function SalesDeskCompaniesWorkspacePage() {
     useEffect(() => {
         const seq = ++seqRef.current;
 
-        // Fetched unfiltered so the tab counts stay honest whichever tab shows.
-        getCompanyList({ search: debouncedSearch })
-            .then((rows) => {
+        // Both tab datasets come from the service, so the tab counts stay
+        // honest whichever tab shows and the filtering is server-driven.
+        Promise.all([
+            getCompanyList({ search: debouncedSearch }),
+            getCompanyList({ search: debouncedSearch, unsynced: true }),
+        ])
+            .then(([all, unsynced]) => {
                 if (seq !== seqRef.current) return;
-                setAllCompanies(rows);
+                setAllCompanies(all);
+                setUnsyncedCompanies(unsynced);
                 setError(null);
             })
             .catch((err) => {
@@ -116,14 +122,8 @@ export default function SalesDeskCompaniesWorkspacePage() {
         [setSearchParams]
     );
 
-    const needsSyncCount = allCompanies.filter((company) => company.needs_sync).length;
-    const rows = useMemo(
-        () =>
-            tab === "needs_sync"
-                ? allCompanies.filter((company) => company.needs_sync)
-                : allCompanies,
-        [allCompanies, tab]
-    );
+    const needsSyncCount = unsyncedCompanies.length;
+    const rows = tab === "needs_sync" ? unsyncedCompanies : allCompanies;
 
     /** Push both profiles straight from the row, then re-read. */
     const syncRow = useCallback(
