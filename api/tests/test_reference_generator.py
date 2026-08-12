@@ -4,13 +4,13 @@ Tests for the ReferenceGenerator deep module in common/reference.py.
 RED→GREEN cycle: generate() with date-scoped and non-date-scoped prefixes.
 """
 
-from datetime import date
 from unittest.mock import MagicMock
 
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.common.reference import ReferenceGenerator
+from app.common.reporting_time import reporting_date
 
 # Helpers
 
@@ -46,7 +46,9 @@ class TestReferenceGeneratorDateScoped:
             use_date_scope=True,
         )
 
-        today_str = date.today().strftime("%Y%m%d")
+        # Pin to the generator's clock (org-local reporting date), not UTC
+        # date.today() — they disagree between 21:00 and 00:00 UTC (#54).
+        today_str = reporting_date().strftime("%Y%m%d")
         assert result == f"INV-{today_str}-001"
 
     def test_sequential_increment(self):
@@ -65,7 +67,7 @@ class TestReferenceGeneratorDateScoped:
             use_date_scope=True,
         )
 
-        today_str = date.today().strftime("%Y%m%d")
+        today_str = reporting_date().strftime("%Y%m%d")
         assert result == f"EXP-{today_str}-006"
 
 
