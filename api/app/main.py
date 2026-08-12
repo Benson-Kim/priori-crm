@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """Application factory for the Priori Technologies API."""
+    """Application factory for the Business Central API."""
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
