@@ -42,7 +42,6 @@ from app.common.exceptions import (
     BadRequestException,
     NotFoundException,
     ReferenceCurrencyException,
-    UnsyncedBillingProfileException,
 )
 from app.common.fx import reference_conversions, usd_equivalent
 from app.common.reporting_time import reporting_date
