@@ -1045,14 +1045,21 @@ function toProspectRow(
     };
 }
 
+/** Prospects owned by `ownerId`, or every prospect when no owner is given. */
+const prospectsScopedTo = (ownerId?: string) =>
+    ownerId
+        ? getProspectRecords().filter((prospect) => prospect.owner === ownerId)
+        : getProspectRecords();
+
 /** Nurtured prospects, soonest engage-by date first. */
 export async function getProspects(
     search?: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
+    ownerId?: string
 ): Promise<ProspectRow[]> {
     const term = search?.trim().toLowerCase();
 
-    return [...getProspectRecords()]
+    return [...prospectsScopedTo(ownerId)]
         .sort((a, b) => a.engageInDays - b.engageInDays)
         .map((prospect) => toProspectRow(prospect, currency))
         .filter((row) =>
@@ -1064,9 +1071,10 @@ export async function getProspects(
 
 /** Headline counts for the future pipeline. */
 export async function getFuturePipelineSummary(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
+    ownerId?: string
 ): Promise<FuturePipelineSummary> {
-    const prospects = getProspectRecords();
+    const prospects = prospectsScopedTo(ownerId);
     return {
         prospect_count: prospects.length,
         due_count: prospects.filter((prospect) => prospect.engageInDays <= 0).length,

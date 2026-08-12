@@ -9,7 +9,7 @@
 
 import { ArrowRight, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -47,6 +47,11 @@ interface DuplicatePrompt {
 export default function SalesDeskFuturePipelineWorkspacePage() {
     const navigate = useNavigate();
 
+    // ?rep= scopes the table and its counts to one owner, the same
+    // URL-driven mechanism the pipeline workspace uses for ?deal=.
+    const [searchParams] = useSearchParams();
+    const repFilter = searchParams.get("rep") ?? undefined;
+
     const [prospects, setProspects] = useState<ProspectRow[]>([]);
     const [summary, setSummary] = useState<FuturePipelineSummary | null>(null);
     const [search, setSearch] = useState("");
@@ -62,7 +67,10 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
     useEffect(() => {
         let active = true;
 
-        Promise.all([getProspects(debouncedSearch), getFuturePipelineSummary()])
+        Promise.all([
+            getProspects(debouncedSearch, undefined, repFilter),
+            getFuturePipelineSummary(undefined, repFilter),
+        ])
             .then(([rows, next]) => {
                 if (!active) return;
                 setProspects(rows);
@@ -82,7 +90,7 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
         return () => {
             active = false;
         };
-    }, [debouncedSearch, revision]);
+    }, [debouncedSearch, repFilter, revision]);
 
     // Set when engaging hits an already-registered company; drives the
     // link-or-cancel dialog below.
