@@ -62,8 +62,8 @@ export function ChecklistRow({
                 htmlFor={id}
                 className={cn(
                     "flex flex-1 cursor-pointer items-center gap-3 select-none",
-                    "peer-focus-visible:[&_[data-box]]:ring-2",
-                    "peer-focus-visible:[&_[data-box]]:ring-sd-brand/40"
+                    "peer-focus-visible:[&_[data-box]]:ring-1",
+                    "peer-focus-visible:[&_[data-box]]:ring-sd-brand"
                 )}
             >
                 <span
