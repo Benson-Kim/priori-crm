@@ -12,6 +12,7 @@ from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
 from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
+    DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
@@ -42,6 +43,10 @@ def _to_response(profile) -> OwnerProfileResponse:
         ),
         default_send_message=profile.default_send_message,
         jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
+        onboarding_task_template=list(
+            profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS
+        ),
+        onboarding_template_version=profile.onboarding_template_version,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
         reporting_timezone=settings.REPORTING_TIMEZONE,
