@@ -684,7 +684,7 @@ def test_pipeline_export_escapes_csv_and_formula_injection(
     rows = _parse_csv(response.text)
     data = dict(zip(PIPELINE_EXPORT_COLUMNS, rows[1], strict=True))
     # Formula neutralised with a leading apostrophe; structure fully intact.
-    assert data["Company"] == "'=HYPERLINK(\"http://evil.example\")"
+    assert data["Company"] == '\'=HYPERLINK("http://evil.example")'
     assert data["Latest note"] == 'He said "call back", then hung up\nSecond line'
 
 
