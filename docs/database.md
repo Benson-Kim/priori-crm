@@ -1,6 +1,6 @@
 # Database & Migrations
 
-This document describes the PrioriTech data model: the key tables, the
+This document describes the Business Central data model: the key tables, the
 cross-cutting mechanisms (reference numbering, optimistic locking, audit
 events, the transactional email outbox), the financial-document
 relationships, an ERD, a review of the migration history, and a demo

@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADRs)
 
-This directory records the significant architectural decisions of **Priori CRM** — what the system does, how it does it, the business logic it enforces, how it can be improved, and the rules that keep it resilient and reliable within a **<1s response budget**.
+This directory records the significant architectural decisions of **Business Central** (formerly Priori CRM) — what the system does, how it does it, the business logic it enforces, how it can be improved, and the rules that keep it resilient and reliable within a **<1s response budget**.
 
 There was no prior ADR convention in this repo; this set establishes one. Decisions were previously captured as prose + Mermaid in the root `README.md`, `docs/database.md`, and rich inline docstrings — those remain authoritative for detail; ADRs capture the *decisions and their rationale*.
 
