@@ -8,7 +8,7 @@
  */
 
 import { CalendarDays, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
@@ -77,7 +77,10 @@ export default function SalesDeskFuturePipelinePage() {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
+
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     useEffect(() => {
         let active = true;
@@ -135,6 +138,8 @@ export default function SalesDeskFuturePipelinePage() {
                 </div>
             )}
 
+            {notice && <SuccessNotice message={notice} onDismiss={dismissNotice} />}
+
             {isLoading ? (
                 <LoadingState message="Loading the nurture list..." className="h-64" />
             ) : prospects.length === 0 ? (
@@ -159,4 +164,6 @@ export default function SalesDeskFuturePipelinePage() {
             />
         </div>
     );
+}
+;
 }
