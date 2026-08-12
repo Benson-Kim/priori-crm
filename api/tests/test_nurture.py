@@ -109,7 +109,7 @@ def _customer_payload(email=None, company="Coast Freight Ltd.") -> CustomerCreat
         company_name=company,
         first_name="Mary",
         last_name="Achieng",
-        email=email or f"{uuid4().hex[:10]}@customer.test",
+        email=email or f"{uuid4().hex[:10]}@baraka.co.ke",
         phone="+254720114220",
         country="KE",
     )
@@ -476,7 +476,7 @@ def test_engage_is_transactional_no_orphan_customer_on_deal_failure(db):
     prospect = _make_prospect(db, owner)
     svc = _svc(db, owner)
 
-    email = f"{uuid4().hex[:10]}@customer.test"
+    email = f"{uuid4().hex[:10]}@baraka.co.ke"
     # Unknown deal owner: DealService raises AFTER the customer insert.
     new_customer = _customer_payload(email=email)
     request = _engage_request(customer=new_customer, owner_id=uuid4())
@@ -493,7 +493,7 @@ def test_engage_duplicate_email_409_offers_customer_id_resubmit(db):
     prospect = _make_prospect(db, owner)
     svc = _svc(db, owner)
 
-    email = f"{uuid4().hex[:10]}@customer.test"
+    email = f"{uuid4().hex[:10]}@baraka.co.ke"
     existing = CustomerService(db).create(_customer_payload(email=email))
 
     # Case-insensitive dedup: the uppercased variant still conflicts.
@@ -521,7 +521,7 @@ def test_engage_endpoint_409_and_resubmit_link_path(db, client):
     _install_actor(owner)
     prospect = _make_prospect(db, owner)
 
-    email = f"{uuid4().hex[:10]}@customer.test"
+    email = f"{uuid4().hex[:10]}@baraka.co.ke"
     existing = CustomerService(db).create(_customer_payload(email=email))
 
     payload = {
@@ -578,7 +578,7 @@ def test_engage_requires_exactly_one_customer_source(db, client):
             "companyName": "X Ltd.",
             "firstName": "A",
             "lastName": "B",
-            "email": "x@x.test",
+            "email": "mary@baraka.co.ke",
             "phone": "+254720114220",
             "country": "KE",
         },
