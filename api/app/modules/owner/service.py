@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
 from app.constants.settings_defaults import (
+    DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
@@ -23,6 +24,7 @@ from app.modules.owner.models import (
     OwnerProfileSnapshot,
 )
 from app.modules.owner.schemas import (
+    OnboardingTemplate,
     OwnerInfo,
     OwnerProfileUpdate,
     PurchaseOrderSettingsDefaults,
@@ -120,11 +122,52 @@ class OwnerService:
     def update(self, data: OwnerProfileUpdate) -> OwnerProfile:
         """Apply validated profile fields to the live singleton."""
         profile = self.get_or_create()
-        for field, value in data.model_dump(exclude_unset=True).items():
+        updates = data.model_dump(exclude_unset=True)
+        template_sent = "onboarding_task_template" in updates
+        template = updates.pop("onboarding_task_template", None)
+        for field, value in updates.items():
             setattr(profile, field, value)
+        if template_sent:
+            self._apply_onboarding_template(profile, template)
         self._db.flush()
         logger.info("Owner profile updated")
         return profile
+
+    def _apply_onboarding_template(
+        self, profile: OwnerProfile, template: list[str] | None
+    ) -> None:
+        """Persist a new onboarding task template, bumping its version.
+
+        The version only advances when the RESOLVED template actually
+        changes (persisted value, or the built-in default when NULL), so
+        re-saving the settings screen unchanged never churns versions.
+        Existing checklists are never touched — they copied their tasks at
+        create time (template versioning, issue #41).
+        """
+        current = profile.onboarding_task_template or list(DEFAULT_ONBOARDING_TASKS)
+        new = template or list(DEFAULT_ONBOARDING_TASKS)
+        if new == current:
+            return
+        profile.onboarding_task_template = template
+        profile.onboarding_template_version += 1
+        logger.info(
+            "Onboarding task template updated",
+            extra={"template_version": profile.onboarding_template_version},
+        )
+
+    def onboarding_template(self) -> OnboardingTemplate:
+        """Resolve the org onboarding task template + version (issue #41).
+
+        Falls back to the built-in ``DEFAULT_ONBOARDING_TASKS`` (the
+        design's 7 seeded tasks, verbatim and in order) when the org never
+        configured its own. The onboarding service copies these labels at
+        create time only.
+        """
+        profile = self.get_or_create()
+        return OnboardingTemplate(
+            tasks=list(profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS),
+            version=profile.onboarding_template_version,
+        )
 
     # Snapshots (immutable)
 

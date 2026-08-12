@@ -97,6 +97,30 @@ class OwnerProfile(Base):
         comment="Org jurisdiction (ISO 3166-1 alpha-2), e.g. 'KE'",
     )
 
+    # Onboarding task template (issue #41). Ordered list of task labels
+    # copied onto each new onboarding checklist at CREATE TIME ONLY. NULL
+    # means "use the built-in DEFAULT_ONBOARDING_TASKS", so a never-touched
+    # profile still yields the design's 7 seeded tasks without a backfill.
+    onboarding_task_template: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Org onboarding checklist template (ordered task labels); "
+            "NULL = built-in 7-task default"
+        ),
+    )
+    # Bumped every time the resolved template CHANGES (template versioning):
+    # each onboarding snapshots the version it was created from, so editing
+    # the template never mutates existing checklists and the provenance of
+    # every checklist stays auditable.
+    onboarding_template_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="Monotonic version of the onboarding task template",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
