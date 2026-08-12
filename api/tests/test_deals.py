@@ -87,7 +87,7 @@ def _make_customer(db, name="Baraka Logistics"):
             company_name=name,
             first_name="Alice",
             last_name="Wanjiru",
-            email=f"{uuid4().hex[:10]}@customer.test",
+            email=f"{uuid4().hex[:10]}@baraka.co.ke",
             phone="+254720114220",
             country="KE",
         )
