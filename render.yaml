@@ -1,4 +1,4 @@
-# Render deployment configuration for Priori CRM
+# Render deployment configuration for Business Central (formerly Priori CRM)
 # https://render.com/docs/blueprint-spec
 
 services:
@@ -40,7 +40,7 @@ services:
       - key: DEBUG
         value: false
       - key: APP_NAME
-        value: Priori CRM
+        value: Business Central
 
       # Database - auto-populated by Render
       - key: DATABASE_URL

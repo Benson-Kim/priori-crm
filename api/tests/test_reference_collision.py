@@ -17,6 +17,7 @@ from decimal import Decimal
 import pytest
 
 from app.common.reference import ReferenceGenerator
+from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency, CustomerStatus, InvoiceStatus
 from app.modules.customers.models import Customer
 from app.modules.invoices.models import Invoice
@@ -66,7 +67,9 @@ def _invoice(db, customer, *, number: str, reference: str) -> Invoice:
 
 
 def _day_prefix() -> str:
-    return f"INV-{date.today().strftime('%Y%m%d')}"
+    # Match the generator's clock (org-local reporting date), not UTC
+    # date.today() — they disagree between 21:00 and 00:00 UTC (#54).
+    return f"INV-{reporting_date().strftime('%Y%m%d')}"
 
 
 def test_date_scoped_max_avoids_collision_after_delete(db):
