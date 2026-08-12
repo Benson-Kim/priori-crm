@@ -20,10 +20,9 @@ import {
 interface ChecklistCardProps {
     onboarding: OnboardingRow;
     onToggle: (taskIndex: number, completed: boolean) => void;
-    isSaving: boolean;
 }
 
-function ChecklistCard({ onboarding, onToggle, isSaving }: Readonly<ChecklistCardProps>) {
+function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
     const percent = Math.round(onboarding.progress * 100);
     const headingId = `onboarding-${onboarding.id}`;
 
@@ -64,7 +63,6 @@ function ChecklistCard({ onboarding, onToggle, isSaving }: Readonly<ChecklistCar
                         label={task.label}
                         done={task.completed}
                         step={task.index + 1}
-                        disabled={isSaving}
                         onToggle={(done) => onToggle(task.index, done)}
                     />
                 ))}
@@ -73,10 +71,32 @@ function ChecklistCard({ onboarding, onToggle, isSaving }: Readonly<ChecklistCar
     );
 }
 
+/**
+ * A copy of `row` with one task flipped and the derived count and share
+ * recomputed, so an optimistic flip (and its rollback) keeps the card's
+ * badge, bar and caption consistent with its checkboxes.
+ */
+function withTaskCompleted(
+    row: OnboardingRow,
+    taskIndex: number,
+    completed: boolean
+): OnboardingRow {
+    const tasks = row.tasks.map((task) =>
+        task.index === taskIndex ? { ...task, completed } : task
+    );
+    const done = tasks.filter((task) => task.completed).length;
+
+    return {
+        ...row,
+        tasks,
+        completed_count: done,
+        progress: tasks.length ? done / tasks.length : 0,
+    };
+}
+
 export default function SalesDeskOnboardingPage() {
     const [onboardings, setOnboardings] = useState<OnboardingRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -108,10 +128,23 @@ export default function SalesDeskOnboardingPage() {
      * Ticking a step updates that card in place rather than re-reading the
      * page, since re-sorting mid-checklist would move the next row out from
      * under the cursor.
+     *
+     * The flip is optimistic: the card updates before the save so the box
+     * never lags the click, and nothing else is locked while the save is in
+     * flight. On success the card is reconciled with the server's row; on
+     * failure the one flipped task is flipped back (restoring the count and
+     * percent with it), which also leaves any other in-flight flip on the
+     * same card untouched.
      */
     const toggle = useCallback(
         async (onboardingId: number, taskIndex: number, completed: boolean) => {
-            setIsSaving(true);
+            setOnboardings((previous) =>
+                previous.map((row) =>
+                    row.id === onboardingId
+                        ? withTaskCompleted(row, taskIndex, completed)
+                        : row
+                )
+            );
             try {
                 const updated = await setOnboardingTask(onboardingId, taskIndex, completed);
                 setOnboardings((previous) =>
@@ -119,9 +152,14 @@ export default function SalesDeskOnboardingPage() {
                 );
                 setError(null);
             } catch (err) {
+                setOnboardings((previous) =>
+                    previous.map((row) =>
+                        row.id === onboardingId
+                            ? withTaskCompleted(row, taskIndex, !completed)
+                            : row
+                    )
+                );
                 setError(err instanceof Error ? err.message : "Could not update that step.");
-            } finally {
-                setIsSaving(false);
             }
         },
         []
@@ -150,7 +188,6 @@ export default function SalesDeskOnboardingPage() {
                         <ChecklistCard
                             key={onboarding.id}
                             onboarding={onboarding}
-                            isSaving={isSaving}
                             onToggle={(taskIndex, completed) =>
                                 void toggle(onboarding.id, taskIndex, completed)
                             }
