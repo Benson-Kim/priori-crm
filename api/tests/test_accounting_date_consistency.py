@@ -5,7 +5,6 @@ from decimal import Decimal
 from uuid import uuid4
 
 import app.common.reporting_time as accounting_time
-import app.modules.invoices.schemas as invoice_schemas
 import app.modules.quotes.models as quote_models
 import app.modules.quotes.schemas as quote_schemas
 from app.common.reporting_time import (
@@ -42,9 +41,6 @@ def test_overdue_helpers_use_organization_date(monkeypatch):
 def test_invoice_overdue_values_use_organization_date(monkeypatch):
     today = date(2026, 7, 22)
     monkeypatch.setattr(accounting_time, "reporting_date", lambda: today)
-    # InvoiceSummary snapshots _as_of_date through the schemas module's
-    # binding (same pattern as quote_schemas below).
-    monkeypatch.setattr(invoice_schemas, "reporting_date", lambda: today)
 
     invoice = Invoice(
         status=InvoiceStatus.SENT,
@@ -68,6 +64,11 @@ def test_invoice_overdue_values_use_organization_date(monkeypatch):
         balance_due=Decimal("1.00"),
         created_at=datetime(2026, 7, 1, tzinfo=UTC),
     )
+    # InvoiceSummary._as_of_date is a PrivateAttr whose default_factory holds
+    # a direct reference to reporting_date captured at import time, which the
+    # monkeypatch above cannot reach — pin the as-of date explicitly so the
+    # expectation is deterministic regardless of the real clock (#54).
+    summary._as_of_date = today
     assert summary.is_overdue is True
     assert summary.days_overdue == 1
 

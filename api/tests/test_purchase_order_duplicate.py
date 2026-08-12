@@ -12,6 +12,7 @@ from decimal import Decimal
 import pytest
 
 from app.common.exceptions import NotFoundException
+from app.common.reporting_time import reporting_date
 from app.constants.enums import (
     Currency,
     DocumentSource,
@@ -115,8 +116,10 @@ def test_duplicate_copies_content_and_resets_order_date(db):
     assert dup.subtotal == original.subtotal
     assert dup.tax_total == original.tax_total
     assert dup.total == original.total
-    # order_date reset to today (not the original's date).
-    assert dup.order_date == date.today()
+    # order_date reset to today (not the original's date). The service uses
+    # the org-local reporting date, not UTC date.today() — they disagree
+    # between 21:00 and 00:00 UTC (#54).
+    assert dup.order_date == reporting_date()
 
     # Line items copied faithfully.
     assert len(dup.line_items) == len(original.line_items)

@@ -1,4 +1,4 @@
-# ADR-0009: Billing-profile "sync" is an internal posting/readiness flag
+# ADR-0010: Billing-profile "sync" is an internal posting/readiness flag
 
 - **Status:** Accepted
 - **Date:** 2026-08-09
@@ -69,6 +69,6 @@ avoid diverging from the prototype vocabulary the sales team already uses.
 
 ## Resilience & <1s response rules
 - Sync endpoints are single-row updates behind a row lock; no network I/O.
-- The unsynced filter is an indexed `EXISTS` probe
-  (`ix_customer_billing_profiles_synced` + customer FK index), safe on the
-  list hot path.
+- The unsynced filter is an indexed `EXISTS` probe served by the partial
+  index `ix_customer_billing_profiles_unsynced_customer`
+  (`(customer_id) WHERE NOT synced`), safe on the list hot path.
