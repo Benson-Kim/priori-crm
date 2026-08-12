@@ -1,9 +1,5 @@
 import { cn } from "@/lib/utils";
-import {
-    STAGE_STEP_LABELS,
-    STAGE_STEPS,
-    type DealStatus,
-} from "@/lib/sales-desk-stages";
+import { STAGE_STEPS, type DealStatus } from "@/lib/sales-desk-stages";
 
 /**
  * A deal's progress as discrete segments, because the stages are named steps
@@ -91,50 +87,5 @@ export function StagePath({
                 </p>
             )}
         </div>
-    );
-}
-
-/**
- * The drawer variant: the same steps as labelled pills. Every step is shown at
- * every stage, with the unreached ones muted, so the path reads the same
- * whatever stage the deal is in.
- */
-export function StageStepper({
-    stageIndex,
-    status,
-    className,
-}: Readonly<Pick<StageProgress, "stageIndex" | "status"> & { className?: string }>) {
-    return (
-        <ol className={cn("flex gap-0.5", className)}>
-            {STAGE_STEP_LABELS.map((label, index) => {
-                const isClosingStep = index === STAGE_STEPS - 1;
-                const reached = status !== "open" || index <= stageIndex;
-
-                let pillClass: string;
-                if (status !== "open" && isClosingStep) {
-                    pillClass = status === "won" ? "bg-sd-won text-white" : "bg-sd-lost text-white";
-                } else if (status !== "open" || index < stageIndex) {
-                    pillClass = "bg-sd-progress-done text-white";
-                } else if (index === stageIndex) {
-                    pillClass = "bg-sd-ink text-white";
-                } else {
-                    pillClass = "bg-sd-neutral-bg text-sd-faint";
-                }
-
-                return (
-                    <li
-                        key={label}
-                        aria-current={status === "open" && index === stageIndex ? "step" : undefined}
-                        className={cn(
-                            "flex-1 truncate rounded px-1.5 py-1.5 text-center text-[10px] font-semibold",
-                            pillClass
-                        )}
-                    >
-                        {label}
-                        {!reached && <span className="sr-only"> (not reached)</span>}
-                    </li>
-                );
-            })}
-        </ol>
     );
 }

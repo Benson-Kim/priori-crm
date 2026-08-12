@@ -24,15 +24,3 @@ export type DealStatus = "open" | "won" | "lost";
 
 /** Selling stages plus the closing step, which is what the path renders. */
 export const STAGE_STEPS = DEAL_STAGES.length + 1;
-
-/**
- * Drawer pill labels. "Proposal & Quote" is abbreviated because the pill row
- * has to fit the 390px drawer.
- */
-export const STAGE_STEP_LABELS: readonly string[] = [
-    "Activation",
-    "Qualification",
-    "Prop. & Quote",
-    "Negotiation",
-    "Close",
-];
