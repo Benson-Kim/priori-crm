@@ -476,6 +476,35 @@ const routes = [
                             },
                         ],
                     },
+                    {
+                        path: "future-pipeline",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/future-pipeline")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Future pipeline",
+                                        description: "Prospects and why we are waiting.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/future-pipeline/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Future pipeline",
+                                        description: "Planned prospects with engage-by dates.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
                 ],
             },
         ],
