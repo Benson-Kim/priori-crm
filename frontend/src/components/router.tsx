@@ -422,6 +422,33 @@ const routes = [
                             },
                         },
                     },
+                    {
+                        path: "pipeline",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/pipeline")),
+                                handle: {
+                                    header: {
+                                        title: "Pipeline",
+                                        description: "Every deal and what it is worth.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "workspace",
+                                element: lazyPage(
+                                    () => import("@/pages/sales-desk/pipeline/workspace")
+                                ),
+                                handle: {
+                                    header: {
+                                        title: "Pipeline",
+                                        description: "Work deals by owner, stage and activity.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
                 ],
             },
         ],
