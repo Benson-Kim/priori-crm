@@ -238,9 +238,7 @@ def test_prefill_creates_linked_quote_via_existing_service(db):
             ),
         ]
     )
-    quote = _quote_svc(db, owner).create_quote_for_deal(
-        deal.id, body, user_id=owner.id
-    )
+    quote = _quote_svc(db, owner).create_quote_for_deal(deal.id, body, user_id=owner.id)
 
     # Linkage + prefill: customer and currency come from the deal.
     assert quote.deal_id == deal.id
@@ -324,9 +322,7 @@ def test_prefill_rejects_unknown_catalog_product(db):
     customer = _make_customer(db)
     deal = _make_deal(db, owner, customer)
 
-    body = _body(
-        lines=[DealQuoteLineInput(product="Slack Enterprise Grid", seats=5)]
-    )
+    body = _body(lines=[DealQuoteLineInput(product="Slack Enterprise Grid", seats=5)])
     with pytest.raises(BadRequestException, match="not in the product catalog"):
         _quote_svc(db, owner).create_quote_for_deal(deal.id, body)
 
@@ -357,9 +353,7 @@ def test_reference_currency_rejected_typed(db, currency):
     deal = _make_deal(db, owner, customer)
 
     with pytest.raises(ReferenceCurrencyException) as exc_info:
-        _quote_svc(db, owner).create_quote_for_deal(
-            deal.id, _body(currency=currency)
-        )
+        _quote_svc(db, owner).create_quote_for_deal(deal.id, _body(currency=currency))
     assert exc_info.value.status_code == 400
     assert exc_info.value.error_code == "ReferenceCurrencyException"
     assert exc_info.value.extra["currency"] == currency
@@ -401,9 +395,7 @@ def test_unsynced_profile_blocks_issue_and_finalize(db, client, actor):
     assert resp.status_code == 409
     payload = resp.json()
     assert payload["error_code"] == "UnsyncedBillingProfileException"
-    assert payload["details"]["profile_code"] == _profile(
-        db, customer.id, "USD"
-    ).code
+    assert payload["details"]["profile_code"] == _profile(db, customer.id, "USD").code
     assert payload["details"]["currency"] == "USD"
 
     # Syncing the profile through the existing endpoint unblocks issuing.
@@ -731,9 +723,7 @@ def test_sales_pricing_settings_read(db, client, actor):
     assert payload["fx_units_per_usd"] == DEFAULT_FX_UNITS_PER_USD
 
     catalog = payload["catalog"]
-    assert [e["name"] for e in catalog] == [
-        e["name"] for e in DEFAULT_PRODUCT_CATALOG
-    ]
+    assert [e["name"] for e in catalog] == [e["name"] for e in DEFAULT_PRODUCT_CATALOG]
     # Derived columns match Quotes___Pricing.svg: Annual/seat = monthly x 12,
     # 10-seat ARR = monthly x 12 x 10 (raw list-price maths, no discounts).
     basic = catalog[0]

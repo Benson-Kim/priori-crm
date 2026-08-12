@@ -325,9 +325,7 @@ class DealQuoteService(ServiceBase):
                 multiplier *= Decimal("1") - annual_pct / Decimal("100")
             multiplier *= Decimal("1") - line.extra_discount_pct / Decimal("100")
 
-            discounted_per_user_month = quantize_money(
-                list_per_user_month * multiplier
-            )
+            discounted_per_user_month = quantize_money(list_per_user_month * multiplier)
             months = _PERIOD_MONTHS[line.billing_period]
             unit_price = discounted_per_user_month * months
 
