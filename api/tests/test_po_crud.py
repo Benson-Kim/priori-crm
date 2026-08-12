@@ -30,6 +30,7 @@ from app.common.exceptions import (
     ConflictException,
     NotFoundException,
 )
+from app.common.reporting_time import reporting_date
 from app.constants.enums import Currency, PurchaseOrderStatus, TaxType, VendorStatus
 from app.modules.purchase_orders.models import PurchaseOrder, PurchaseOrderLineItem
 from app.modules.purchase_orders.schemas import (
@@ -167,7 +168,9 @@ class TestReferenceGeneration:
         svc = PurchaseOrderService(db)
         po = svc.create(_create_payload(vendor_id=vendor.id))
 
-        day = date.today().strftime("%Y%m%d")
+        # Pin to the generator's clock (org-local reporting date), not UTC
+        # date.today() — they disagree between 21:00 and 00:00 UTC (#54).
+        day = reporting_date().strftime("%Y%m%d")
         assert po.po_number.startswith(f"PO-{day}-")
         # po_reference is the monotonic PO-NNNNNN form (6-wide suffix).
         assert po.po_reference.startswith("PO-")
