@@ -200,7 +200,7 @@ class SalesDeskRepository:
         """Open deals whose latest activity is older than ``stale_before``.
 
         Same predicate as the NO_ACTIVITY_30 hygiene list filter
-        (idle > 30 days ⇔ last activity date < today - 30d).
+        (idle > 30 days, i.e. last activity date < today - 30d).
         """
         last_activity = (
             select(func.max(DealActivity.activity_date))

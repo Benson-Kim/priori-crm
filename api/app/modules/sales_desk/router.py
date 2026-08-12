@@ -230,9 +230,7 @@ async def export_pipeline(
         _remove_export(path)
         raise
 
-    request.state.sales_desk_export_metrics = {
-        "exported_data_row_count": actual_count
-    }
+    request.state.sales_desk_export_metrics = {"exported_data_row_count": actual_count}
     request.state.sales_desk_export_path = path
     return _file_response(path, f"pipeline-export-{reporting_date()}.csv")
 
@@ -271,8 +269,6 @@ async def export_dashboard(
         _remove_export(path)
         raise
 
-    request.state.sales_desk_export_metrics = {
-        "exported_data_row_count": actual_count
-    }
+    request.state.sales_desk_export_metrics = {"exported_data_row_count": actual_count}
     request.state.sales_desk_export_path = path
     return _file_response(path, f"dashboard-export-{reporting_date()}.csv")

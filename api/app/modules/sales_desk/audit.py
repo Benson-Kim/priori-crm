@@ -58,9 +58,7 @@ def _payload(
     }
 
 
-def _append_audit(
-    db: DbSession, *, actor_id, export_type: str, payload: dict
-) -> None:
+def _append_audit(db: DbSession, *, actor_id, export_type: str, payload: dict) -> None:
     record_audit_event(
         db,
         actor_id=actor_id,

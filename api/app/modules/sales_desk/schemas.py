@@ -17,6 +17,7 @@ Conventions (matching the consuming screens):
 
 from datetime import date
 from decimal import Decimal
+
 from pydantic import BaseModel, Field
 
 from app.constants.enums import DealStage
@@ -26,14 +27,14 @@ from app.modules.deals.schemas import DealOwnerResponse
 
 
 class PipelineWeightedKpi(BaseModel):
-    """PIPELINE (WEIGHTED): Σ open value x stage probability + open count."""
+    """PIPELINE (WEIGHTED): sum of open value x stage probability + open count."""
 
     value: Decimal = Field(description="Weighted open pipeline, USD equivalent")
     open_deal_count: int = Field(description="Open deals (parked excluded)")
 
 
 class TotalArrPipelineKpi(BaseModel):
-    """TOTAL ARR PIPELINE: unweighted Σ of open deal values."""
+    """TOTAL ARR PIPELINE: unweighted sum of open deal values."""
 
     value: Decimal = Field(description="Unweighted open pipeline, USD equivalent")
 
@@ -218,5 +219,5 @@ class PipelineOverviewResponse(BaseModel):
     closed: ClosedStripColumn
     hygiene: HygieneCounts
     open_pipeline_total: Decimal = Field(
-        description="Unweighted Σ of open deal values in scope, USD equivalent"
+        description="Unweighted sum of open deal values in scope, USD equivalent"
     )
