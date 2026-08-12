@@ -9,7 +9,7 @@
 
 import { CalendarDays, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -72,6 +72,11 @@ function ProspectCard({ prospect }: Readonly<{ prospect: ProspectRow }>) {
 }
 
 export default function SalesDeskFuturePipelinePage() {
+    // ?rep= scopes both the cards and the summary line to one owner, the
+    // same URL-driven mechanism the pipeline workspace uses for ?deal=.
+    const [searchParams] = useSearchParams();
+    const repFilter = searchParams.get("rep") ?? undefined;
+
     const [prospects, setProspects] = useState<ProspectRow[]>([]);
     const [summary, setSummary] = useState<FuturePipelineSummary | null>(null);
     const [isCreating, setIsCreating] = useState(false);
@@ -85,7 +90,10 @@ export default function SalesDeskFuturePipelinePage() {
     useEffect(() => {
         let active = true;
 
-        Promise.all([getProspects(), getFuturePipelineSummary()])
+        Promise.all([
+            getProspects(undefined, undefined, repFilter),
+            getFuturePipelineSummary(undefined, repFilter),
+        ])
             .then(([rows, next]) => {
                 if (!active) return;
                 setProspects(rows);
@@ -105,7 +113,7 @@ export default function SalesDeskFuturePipelinePage() {
         return () => {
             active = false;
         };
-    }, [revision]);
+    }, [repFilter, revision]);
 
     return (
         <div className="flex flex-col gap-5">
