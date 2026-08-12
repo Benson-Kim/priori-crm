@@ -596,9 +596,7 @@ def test_sales_desk_service_starts_postgres_repeatable_read_snapshot():
 
 def _export_artifact(monkeypatch, tmp_path, name: str):
     artifact = tmp_path / name
-    monkeypatch.setattr(
-        sales_desk_router, "_temporary_csv_path", lambda: str(artifact)
-    )
+    monkeypatch.setattr(sales_desk_router, "_temporary_csv_path", lambda: str(artifact))
     return artifact
 
 
@@ -639,9 +637,7 @@ def test_pipeline_export_csv_success(client, db, monkeypatch, tmp_path):
     assert data["Close reason"] == ""
     assert data["Latest note"] == "Deal created."
 
-    event = (
-        db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
-    )
+    event = db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
     assert event.after["success"] is True
     assert event.after["export_type"] == "pipeline"
     assert event.after["filters"] == {"tab": "open"}
@@ -710,9 +706,7 @@ def test_pipeline_export_preflight_row_limit(client, db, monkeypatch, tmp_path):
     assert "more than 1 rows" in response.text
     assert not artifact.exists()  # cleaned up on the failure path
 
-    event = (
-        db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
-    )
+    event = db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
     assert event.after["success"] is False
     assert event.after["failure"] == "BadRequestException"
 
@@ -771,9 +765,7 @@ def test_dashboard_export_csv(client, db, monkeypatch, tmp_path):
     assert kpi_row[1] == "270.00"
     assert kpi_row[2] == "1"
 
-    event = (
-        db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
-    )
+    event = db.query(AuditEvent).filter(AuditEvent.action == "sales_desk_export").one()
     assert event.after["success"] is True
     assert event.after["export_type"] == "dashboard"
     assert event.after["export_metrics"] == {"exported_data_row_count": len(rows)}
@@ -799,7 +791,8 @@ def test_dashboard_and_notifications_endpoints(client, db):
     assert dashboard.status_code == 200
     body = dashboard.json()
     assert body["currency"] == "USD"
-    assert body["kpis"]["pipeline_weighted"]["value"] == "270.00"
+    weighted = body["kpis"]["pipeline_weighted"]
+    assert Decimal(str(weighted["value"])) == Decimal("270.00")
     assert body["kpis"]["pipeline_weighted"]["open_deal_count"] == 1
     assert len(body["bookings_12_months"]) == 12
     assert filtered.status_code == 200
@@ -814,4 +807,5 @@ def test_dashboard_and_notifications_endpoints(client, db):
     )
 
     assert overview.status_code == 200
-    assert overview.json()["open_pipeline_total"] == "2700.00"
+    total = overview.json()["open_pipeline_total"]
+    assert Decimal(str(total)) == Decimal("2700.00")
