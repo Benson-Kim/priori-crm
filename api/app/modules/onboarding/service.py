@@ -168,8 +168,7 @@ class OnboardingService(ServiceBase):
         if task is None:
             raise NotFoundException(
                 detail=(
-                    f"Onboarding '{onboarding_id}' has no task at "
-                    f"position {position}"
+                    f"Onboarding '{onboarding_id}' has no task at position {position}"
                 ),
                 resource="onboarding_task",
             )
