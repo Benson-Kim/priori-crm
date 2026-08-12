@@ -28,6 +28,8 @@ from app.modules.owner.schemas import (
     OwnerInfo,
     OwnerProfileUpdate,
     PurchaseOrderSettingsDefaults,
+    SalesPriceListEntry,
+    SalesPricingSettings,
 )
 
 logger = logging.getLogger(__name__)
@@ -231,6 +233,44 @@ class OwnerService:
             ),
             send_message=profile.default_send_message,
             jurisdiction=profile.jurisdiction or DEFAULT_ORG_JURISDICTION,
+        )
+
+    # Sales Desk pricing settings (issue #44)
+
+    @staticmethod
+    def sales_pricing_settings() -> SalesPricingSettings:
+        """Resolve the org sales pricing settings + derived price list.
+
+        The documented price-list source for the Quotes & pricing UI
+        (#49). Built from the seeded constants
+        (``app.constants.settings_defaults``); the derived Annual/seat
+        (monthly x 12 at list) and 10-seat ARR (monthly x 12 x 10) columns
+        match ``Quotes___Pricing.svg`` verbatim. Values are decimal
+        strings — no floats anywhere.
+        """
+        from decimal import Decimal
+
+        from app.constants.settings_defaults import (
+            DEFAULT_ANNUAL_BILLING_DISCOUNT_PCT,
+            DEFAULT_FX_UNITS_PER_USD,
+            DEFAULT_PRODUCT_CATALOG,
+        )
+
+        entries = []
+        for item in DEFAULT_PRODUCT_CATALOG:
+            monthly = Decimal(item["usd_per_seat_month"])
+            entries.append(
+                SalesPriceListEntry(
+                    name=item["name"],
+                    usd_per_seat_month=str(monthly),
+                    usd_per_seat_year=str(monthly * 12),
+                    usd_ten_seat_arr=str(monthly * 12 * 10),
+                )
+            )
+        return SalesPricingSettings(
+            catalog=entries,
+            annual_billing_discount_pct=DEFAULT_ANNUAL_BILLING_DISCOUNT_PCT,
+            fx_units_per_usd=dict(DEFAULT_FX_UNITS_PER_USD),
         )
 
     # Render DTO

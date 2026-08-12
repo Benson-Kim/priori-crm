@@ -55,6 +55,9 @@ class TestApproveQuoteAcquiresLock:
     def _fake_quote(self):
         return SimpleNamespace(
             id=uuid.uuid4(),
+            # deal_id None: standalone quote, so the billing-profile sync
+            # gate (issue #44) is skipped — this stub isolates the lock.
+            deal_id=None,
             status=QuoteStatus.SENT,
             is_expired=False,
             version=1,

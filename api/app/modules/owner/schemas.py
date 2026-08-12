@@ -220,3 +220,50 @@ class PurchaseOrderSettingsDefaults(BaseModel):
     terms_and_conditions: str
     send_message: str | None = None
     jurisdiction: str
+
+
+class SalesPriceListEntry(BaseModel):
+    """One product row of the Sales Desk price list (issue #44).
+
+    Raw catalog value plus the two derived display columns of
+    ``Quotes___Pricing.svg`` ("Annual / seat" = monthly x 12 at list,
+    "10-seat ARR" = monthly x 12 x 10), server-derived so the UI renders
+    them verbatim.
+    """
+
+    name: str
+    usd_per_seat_month: str = Field(
+        description="List price per seat per month in USD (decimal string)"
+    )
+    usd_per_seat_year: str = Field(
+        description="Annual / seat column: usd_per_seat_month x 12 (list, decimal string)"
+    )
+    usd_ten_seat_arr: str = Field(
+        description="10-seat ARR column: usd_per_seat_month x 12 x 10 (decimal string)"
+    )
+
+
+class SalesPricingSettings(BaseModel):
+    """Org sales pricing settings + derived price list (issue #44).
+
+    This settings read IS the documented price-list source for the Quotes
+    & pricing UI (#49): the seeded product catalog with the derived
+    Annual/seat and 10-seat ARR columns, the annual billing discount
+    applied by the quote builder, and the display-only FX conventions
+    (units of currency per 1 USD) used for the USD-equivalent column and
+    the reference-currency conversions row.
+    """
+
+    catalog: list[SalesPriceListEntry]
+    annual_billing_discount_pct: str = Field(
+        description=(
+            "Discount (percentage points) applied to the per-user/month "
+            "price when a quote line is billed annually"
+        )
+    )
+    fx_units_per_usd: dict[str, str] = Field(
+        description=(
+            "Display-only FX conventions: units of each currency per 1 "
+            "USD. EUR/GBP are reference (display-only) currencies."
+        )
+    )
