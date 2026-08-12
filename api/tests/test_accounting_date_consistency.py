@@ -64,6 +64,11 @@ def test_invoice_overdue_values_use_organization_date(monkeypatch):
         balance_due=Decimal("1.00"),
         created_at=datetime(2026, 7, 1, tzinfo=UTC),
     )
+    # InvoiceSummary._as_of_date is a PrivateAttr whose default_factory holds
+    # a direct reference to reporting_date captured at import time, which the
+    # monkeypatch above cannot reach — pin the as-of date explicitly so the
+    # expectation is deterministic regardless of the real clock (#54).
+    summary._as_of_date = today
     assert summary.is_overdue is True
     assert summary.days_overdue == 1
 

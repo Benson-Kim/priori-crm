@@ -1,6 +1,6 @@
 """Add Sales Desk future pipeline: nurture_prospects
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: e6f7a8b9c0d1
 Revises: f8a9b0c1d2e3
 Create Date: 2026-08-12 10:00:00.000000
 
@@ -27,7 +27,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "e6f7a8b9c0d1"
 down_revision: Union[str, None] = "f8a9b0c1d2e3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
