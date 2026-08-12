@@ -142,9 +142,13 @@ export function InlineSelect({
       {label && (
         <span
           id={labelId}
+          /*
+           * Same treatment as the shared Label, so a select and a text field
+           * sitting side by side in a form read as the same kind of control.
+           */
           className={cn(
             isDesk
-              ? "text-[10px] font-bold tracking-[1px] text-sd-muted uppercase"
+              ? "text-sm font-medium text-sd-ink"
               : "text-sm font-semibold text-content-priori-purple"
           )}
         >
