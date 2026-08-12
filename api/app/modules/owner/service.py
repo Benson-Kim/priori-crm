@@ -3,18 +3,23 @@
 import hashlib
 import logging
 import secrets
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import BinaryIO
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
+from app.constants.enums import DealStage
 from app.constants.settings_defaults import (
+    DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
+    DEFAULT_REP_QUARTERLY_TARGET_USD,
 )
 from app.lib.config import settings
 from app.lib.storage import StorageService, storage_service
@@ -370,3 +375,51 @@ class OwnerService:
         if presigned:
             return LogoDownload(presigned_url=presigned)
         return LogoDownload(stream=self._storage.download_stream(key))
+
+
+# Sales Desk analytics settings resolution (issue #45)
+#
+# Module-level, read-only resolvers so read-side consumers (deal responses,
+# the Sales Desk dashboard under its READ ONLY snapshot transaction) can
+# resolve the org settings WITHOUT ever creating the singleton row.
+
+
+def resolve_deal_stage_probabilities(db: Session) -> dict[DealStage, Decimal]:
+    """Per-stage win probabilities: persisted owner setting or the defaults.
+
+    Values are validated on write (OwnerProfileUpdate); any missing or
+    malformed persisted entry falls back to the built-in default for that
+    stage so a partial/legacy value can never break the read side.
+    """
+    profile = db.get(OwnerProfile, SINGLETON_PROFILE_ID)
+    raw = (profile.deal_stage_probabilities if profile else None) or {}
+    resolved: dict[DealStage, Decimal] = {}
+    for stage in DealStage:
+        value = raw.get(stage.value, DEFAULT_DEAL_STAGE_PROBABILITIES[stage.value])
+        try:
+            probability = Decimal(str(value))
+        except ArithmeticError:
+            probability = Decimal(DEFAULT_DEAL_STAGE_PROBABILITIES[stage.value])
+        resolved[stage] = probability
+    return resolved
+
+
+def resolve_rep_quarterly_targets(
+    db: Session,
+) -> tuple[dict[uuid.UUID, Decimal], Decimal]:
+    """Per-rep quarterly won-value targets (USD) + the default for the rest.
+
+    Returns ``(targets, default)``: reps without an entry use ``default``
+    (DEFAULT_REP_QUARTERLY_TARGET_USD). Malformed persisted entries are
+    skipped (write-side validation makes them unreachable in practice).
+    """
+    profile = db.get(OwnerProfile, SINGLETON_PROFILE_ID)
+    raw = (profile.rep_quarterly_targets if profile else None) or {}
+    targets: dict[uuid.UUID, Decimal] = {}
+    for key, value in raw.items():
+        try:
+            targets[uuid.UUID(str(key))] = Decimal(str(value))
+        except (ValueError, ArithmeticError):
+            logger.warning("Skipping malformed rep quarterly target entry")
+            continue
+    return targets, Decimal(DEFAULT_REP_QUARTERLY_TARGET_USD)

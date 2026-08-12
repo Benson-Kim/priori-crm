@@ -51,6 +51,11 @@ def _to_response(profile) -> OwnerProfileResponse:
             profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS
         ),
         onboarding_template_version=profile.onboarding_template_version,
+        deal_stage_probabilities=dict(
+            profile.deal_stage_probabilities or DEFAULT_DEAL_STAGE_PROBABILITIES
+        ),
+        rep_quarterly_targets=dict(profile.rep_quarterly_targets or {}),
+        default_rep_quarterly_target=DEFAULT_REP_QUARTERLY_TARGET_USD,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
         reporting_timezone=settings.REPORTING_TIMEZONE,
