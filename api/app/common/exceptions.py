@@ -190,6 +190,49 @@ class ServiceUnavailableException(AppException):
         )
 
 
+class ReferenceCurrencyException(AppException):
+    """Attempt to bill in a reference (display-only) currency (400).
+
+    Sales Desk contract (issue #44): EUR/GBP exist for display/conversion
+    only — a customer has billing profiles solely in USD/KES, so a quote
+    can never be created in a reference currency. Typed (distinct
+    ``error_code``) so the UI can render the specific builder error state.
+    """
+
+    def __init__(self, currency: str, billable: list[str]) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"'{currency}' is a reference (display-only) currency. "
+                f"Quotes can only be billed in a customer billing-profile "
+                f"currency: {billable}."
+            ),
+            extra={"field": "currency", "currency": currency, "billable": billable},
+        )
+
+
+class UnsyncedBillingProfileException(AppException):
+    """Issuing/finalizing a document against an unsynced billing profile (409).
+
+    Sales Desk contract (issue #44): a deal-linked quote posts to a customer
+    billing profile; it cannot be issued (sent) or finalized (approved)
+    until that profile has been pushed to accounting (``synced``, ADR 0010).
+    Typed (distinct ``error_code``) so the UI can offer the "push profile
+    to accounting" affordance.
+    """
+
+    def __init__(self, profile_code: str, currency: str) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Billing profile '{profile_code}' ({currency}) has not been "
+                "pushed to accounting. Sync the profile before issuing or "
+                "finalizing this quote."
+            ),
+            extra={"profile_code": profile_code, "currency": currency},
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers for consistent error responses."""
 

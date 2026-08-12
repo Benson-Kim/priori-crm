@@ -14,12 +14,16 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.constants.enums import (
     BillingCurrency,
+    BillingPeriod,
+    Currency,
     DealHygieneBucket,
     DealLostReason,
     DealStage,
     DealStatus,
     DealTab,
     DealWonReason,
+    QuoteDisplayStatus,
+    QuoteStatus,
 )
 
 #: Drawer copy — the single validation message for note-less transitions.
@@ -271,6 +275,14 @@ class DealResponse(BaseModel):
         )
     )
 
+    quotes: list["DealQuoteSummary"] = Field(
+        default_factory=list,
+        description=(
+            "Quotes created from this deal (deal-detail embed only; empty "
+            "on list responses). Quotes survive deal closure unchanged."
+        ),
+    )
+
     created_at: datetime
     updated_at: datetime
     version: int
@@ -284,3 +296,177 @@ class DealStatusCounts(BaseModel):
     won: int
     lost: int
     parked: int
+
+
+# QUOTES INTEGRATION (issue #44) — Sales Desk front-end over the EXISTING
+# quotes module. No parallel quote entity: these schemas only shape the
+# prefill request and the screen-contract projections of existing quotes.
+
+
+class DealQuoteLineInput(BaseModel):
+    """One quote-builder line: product + seats + billing period + discount.
+
+    The server derives all prices (catalog list price, FX conversion,
+    annual/extra discounts); the client never sends an amount.
+    """
+
+    product: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Catalog product name (must match the org price list)",
+    )
+    seats: int = Field(..., gt=0, description="Number of seats/licences")
+    billing_period: BillingPeriod = Field(
+        BillingPeriod.MONTHLY,
+        alias="billingPeriod",
+        description="monthly (list price x 1 month) or annual (-15%, x 12 months)",
+    )
+    extra_discount_pct: Decimal = Field(
+        Decimal("0"),
+        ge=0,
+        lt=100,
+        decimal_places=2,
+        alias="extraDiscountPct",
+        description="Extra discount % applied on top of the billing-period price",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class DealQuoteCreateRequest(BaseModel):
+    """Request body for POST /deals/{id}/quotes (prefill flow).
+
+    Customer, reference and totals are server-derived; the currency
+    defaults to the deal currency and must map to one of the customer's
+    billing profiles (EUR/GBP reference currencies are rejected with the
+    typed ReferenceCurrencyException).
+    """
+
+    lines: list[DealQuoteLineInput] = Field(
+        ..., min_length=1, description="Quote-builder lines (at least one)"
+    )
+    currency: Currency | None = Field(
+        None,
+        description=(
+            "Billing currency; defaults to the deal currency. Must be a "
+            "customer billing-profile currency (USD/KES) — EUR/GBP are "
+            "reference (display-only) currencies and are rejected."
+        ),
+    )
+    due_date: date | None = Field(
+        None,
+        alias="dueDate",
+        description="Quote expiry date; defaults to 30 days from today",
+    )
+    notes: str | None = Field(
+        None, max_length=5000, description="Customer-facing notes/terms"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class DealQuoteLinePreview(BaseModel):
+    """Builder support fields for one line (all server-computed)."""
+
+    product: str
+    seats: int
+    billing_period: BillingPeriod
+    extra_discount_pct: Decimal
+    list_price_per_user_month: Decimal = Field(
+        description="Catalog list price per user/month in the quote currency"
+    )
+    discounted_price_per_user_month: Decimal = Field(
+        description=(
+            "Per user/month after the annual billing discount (annual "
+            "lines) and the extra discount"
+        )
+    )
+    months: int = Field(description="Months billed: 1 (monthly) or 12 (annual)")
+    unit_price: Decimal = Field(
+        description="Per-seat price for the billing period (discounted x months)"
+    )
+    line_total: Decimal = Field(
+        description="seats x unit_price, computed by the quotes service"
+    )
+    period_label: str = Field(description='"per month" or "per year"')
+    tax_type: str = Field(
+        description="Line tax treatment derived from the billing profile"
+    )
+
+
+class DealQuoteConversionsRow(BaseModel):
+    """Reference-currency conversions row for the totals block.
+
+    Display-only FX conventions; nothing here is persisted
+    (design: "~= $1,489.44 * (EUR)1,370.28 * (GBP)1,176.66").
+    """
+
+    usd: Decimal
+    eur: Decimal
+    gbp: Decimal
+
+
+class DealQuotePreviewResponse(BaseModel):
+    """Builder support payload: per-line prices + totals + profile banner.
+
+    Totals are produced exclusively by the existing
+    BaseDocumentService.calculate_totals delegation — this response only
+    projects them for the screen.
+    """
+
+    currency: str
+    lines: list[DealQuoteLinePreview]
+    subtotal: Decimal
+    tax_label: str = Field(
+        description='VAT line label from the billing profile (e.g. "VAT 16%")'
+    )
+    tax_total: Decimal
+    total_due: Decimal
+    conversions: DealQuoteConversionsRow
+    billing_profile: DealBillingProfileResponse = Field(
+        description=(
+            'Profile banner data ("Posts to {code} * {terms} * {tax} * synced")'
+        )
+    )
+
+
+class DealQuoteSummary(BaseModel):
+    """A linked quote as the deal detail / quotes rail renders it.
+
+    Projection of an EXISTING quote row: reference, company,
+    billing-profile code, currency chip, total in the quote currency AND
+    its server-computed USD equivalent, date and status.
+    """
+
+    id: UUID
+    quote_number: str
+    quote_reference: str = Field(description='User-facing reference ("Q-2031" style)')
+    deal_id: UUID | None
+    customer_id: UUID
+    company_name: str
+    billing_profile_code: str | None = Field(
+        description=(
+            "Accounting code of the billing profile matching the quote "
+            "currency; null when the customer has none in that currency"
+        )
+    )
+    currency: str
+    total_due: Decimal
+    total_usd_equivalent: Decimal = Field(
+        description=(
+            "Server-computed USD equivalent of total_due per the org FX "
+            "display conventions"
+        )
+    )
+    transaction_date: date
+    due_date: date
+    status: QuoteStatus
+    display_status: QuoteDisplayStatus = Field(
+        description=(
+            "Sales Desk display state: Draft <- draft|expired, Pending <- "
+            "sent|approved, Synced <- invoiced. Display-only; `status` "
+            "remains the source of truth."
+        )
+    )
+    created_at: datetime
