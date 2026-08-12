@@ -157,9 +157,28 @@ class DealService(StateMachineMixin, ServiceBase):
         self, params: PaginationParams, filters: DealFilterParams
     ) -> PaginatedResponse[DealResponse]:
         """List deals with tab/owner/hygiene/search filters + pagination."""
-        query = self._apply_filters(self._db.query(Deal), filters)
+        total = None
+        if params.with_total:
+            total = self._apply_filters(self._db.query(Deal), filters).count()
 
-        total = query.count() if params.with_total else None
+        rows = (
+            self.pipeline_query(filters)
+            .offset(params.offset)
+            .limit(params.fetch_limit)
+            .all()
+        )
+
+        items = [self.build_response(deal) for deal in rows]
+        return PaginatedResponse.create_from_window(items, params, total=total)
+
+    def pipeline_query(self, filters: DealFilterParams):
+        """Filtered + ordered pipeline query.
+
+        Single source of truth for the pipeline list AND the Sales Desk CSV
+        export (issue #45): both read the same rows in the same order (open
+        by stage, then parked, won, lost; value desc within a rank).
+        """
+        query = self._apply_filters(self._db.query(Deal), filters)
 
         stage_rank = case(
             (Deal.stage == DealStage.ACTIVATION.value, 1),
@@ -175,20 +194,12 @@ class DealService(StateMachineMixin, ServiceBase):
             else_=3,
         )
 
-        rows = (
-            query.order_by(
-                status_rank,
-                stage_rank,
-                Deal.value.desc(),
-                Deal.created_at.desc(),
-            )
-            .offset(params.offset)
-            .limit(params.fetch_limit)
-            .all()
+        return query.order_by(
+            status_rank,
+            stage_rank,
+            Deal.value.desc(),
+            Deal.created_at.desc(),
         )
-
-        items = [self.build_response(deal) for deal in rows]
-        return PaginatedResponse.create_from_window(items, params, total=total)
 
     def get_status_counts(self, owner_id: uuid.UUID | None = None) -> DealStatusCounts:
         """Counts per tab (All / Open / Won / Lost) + parked."""

@@ -180,6 +180,9 @@ def _register_routers(app: FastAPI) -> None:
         dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
     )
     app.include_router(reports_router, prefix=f"{api_prefix}/reports", tags=["Reports"])
+    app.include_router(
+        sales_desk_router, prefix=f"{api_prefix}/sales-desk", tags=["Sales Desk"]
+    )
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore
