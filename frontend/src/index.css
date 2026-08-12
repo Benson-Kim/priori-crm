@@ -58,6 +58,48 @@
   --color-gray-800: #1d2939;
 
   --font-sans: "Poppins", sans-serif;
+  /* Menlo for codes/IDs (Sales Desk: profile codes, quote IDs, tenant domains). */
+  --font-mono: "Menlo", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /*
+   * Sales Desk palette.
+   *
+   * The Sales Desk is a self-contained module with a cooler, denser visual
+   * language than the Business Central pages: its greys are bluer than the
+   * shared gray-* ramp, and `--color-border`, `--color-success` and
+   * `--color-danger` all differ. It is namespaced `sd-` rather than
+   * overriding the app-wide tokens. Brand purple is the one colour both
+   * systems share.
+   */
+  --color-sd-brand: #912b90;
+  --color-sd-brand-bg: #fbf0fb;
+  --color-sd-ink: #16233a;
+  --color-sd-muted: #6b7688;
+  --color-sd-faint: #9ca3af;
+  --color-sd-border: #e4e8ef;
+  --color-sd-surface: #f6f7f9;
+  --color-sd-card: #ffffff;
+  --color-sd-info: #2456e6;
+  --color-sd-info-bg: #ebf0ff;
+  --color-sd-neutral-bg: #f3f4f6;
+  --color-sd-success: #0f7a38;
+  --color-sd-success-bg: #e6f5eb;
+  --color-sd-warn: #b45309;
+  --color-sd-warn-bg: #fbf1de;
+  --color-sd-danger: #c23434;
+  --color-sd-danger-bg: #fbebeb;
+  --color-sd-fresh: #15803d;
+  --color-sd-fresh-bg: #dcfce7;
+  --color-sd-aging: #854d0e;
+  --color-sd-aging-bg: #fef9c3;
+  --color-sd-progress-current: #1d4ed8;
+  --color-sd-progress-done: #93c5fd;
+  --color-sd-won: #16a34a;
+  --color-sd-lost: #ef4444;
+
+  /* Sales Desk shadows: card lift and the drawer's left edge. */
+  --shadow-sd-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-sd-drawer: -8px 0 32px rgba(0, 0, 0, 0.1);
 }
 
 ::marker {

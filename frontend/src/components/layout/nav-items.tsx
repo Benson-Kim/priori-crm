@@ -7,6 +7,7 @@ import {
     ReceiptText,
     ShoppingCart,
     Store,
+    Target,
     Users
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
@@ -25,6 +26,12 @@ export type NavChild = {
     path: string;
     label: string;
     icon?: NavIcon;
+    /**
+     * Key into the server-driven nav badge counts (issue #45's notifications
+     * endpoint). Items with a badgeKey render a 16px brand count badge when
+     * the sidebar receives a positive count, and stay hidden until then.
+     */
+    badgeKey?: string;
 }
 
 export type NavItem =
@@ -46,6 +53,17 @@ export const navItems: NavItem[] = [
             { label: "Quotes", path: "/quotes", icon: FileText },
             { label: "Invoices", path: "/invoices", icon: Invoice },
         ],
+    },
+
+    /*
+     * The Sales Desk is a module, not a section: following this link leaves
+     * the Business Central shell for the desk's own layout and sidebar
+     * (components/layout/sales-desk-layout.tsx), so it has no children here.
+     */
+    {
+        label: "Sales Desk",
+        icon: Target,
+        path: "/sales-desk",
     },
 
     {
