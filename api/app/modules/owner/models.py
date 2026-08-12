@@ -17,9 +17,11 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
+    Integer,
     Numeric,
     String,
     Text,

@@ -19,6 +19,7 @@ import app.modules.customers.models
 import app.modules.deals.models
 import app.modules.expenses.models
 import app.modules.invoices.models
+import app.modules.onboarding.models
 import app.modules.owner.models
 import app.modules.purchase_orders.models
 import app.modules.quotes.models
@@ -41,6 +42,7 @@ from app.modules.deals.router import router as deals_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
+from app.modules.onboarding.router import router as onboarding_router
 from app.modules.owner.router import router as owner_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
