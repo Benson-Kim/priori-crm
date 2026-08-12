@@ -152,7 +152,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
                                 className={cn(
                                     "block text-[13px] font-semibold",
                                     company.id === selectedCompanyId
-                                        ? "text-priori-purple"
+                                        ? "text-sd-brand"
                                         : "text-sd-ink"
                                 )}
                             >
