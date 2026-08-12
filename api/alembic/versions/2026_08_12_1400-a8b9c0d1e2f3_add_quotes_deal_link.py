@@ -1,7 +1,7 @@
 """Link quotes to Sales Desk deals: nullable quotes.deal_id FK + index
 
-Revision ID: c3d4e5f6a7b8
-Revises: b2c3d4e5f6a7
+Revision ID: a8b9c0d1e2f3
+Revises: f7a8b9c0d1e2
 Create Date: 2026-08-12 14:00:00.000000
 
 Sales Desk <-> Quotes integration (issue #44):
@@ -13,8 +13,10 @@ Sales Desk <-> Quotes integration (issue #44):
 - ix_quotes_deal_id: serves the deal-detail embed ("quotes created from
   this deal") and the reverse lookup from the quote list.
 
-Chained onto b2c3d4e5f6a7 (#41 onboarding) per the agreed wave-2
+Chained onto f7a8b9c0d1e2 (#41 onboarding) per the agreed wave-2
 migration order (#40 -> #41 -> #44) to keep a single Alembic head.
+Re-keyed from c3d4e5f6a7b8, which collided with develop's June 2026
+customer_email_ci_unique revision (alembic refuses duplicate ids).
 """
 
 from typing import Sequence, Union
@@ -24,8 +26,8 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
-revision: str = "c3d4e5f6a7b8"
-down_revision: Union[str, None] = "b2c3d4e5f6a7"
+revision: str = "a8b9c0d1e2f3"
+down_revision: Union[str, None] = "f7a8b9c0d1e2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
