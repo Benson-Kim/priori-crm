@@ -54,7 +54,10 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
+
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     useEffect(() => {
         let active = true;
@@ -225,6 +228,8 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 </div>
             )}
 
+            {notice && <SuccessNotice message={notice} onDismiss={dismissNotice} />}
+
             {/* Heading and search share the line; the card starts at the table. */}
             <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
                 <h2 className="text-[13px] font-semibold text-sd-ink">Planned prospects</h2>
@@ -266,6 +271,7 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 onClose={() => setIsCreating(false)}
                 onCreated={() => {
                     setIsCreating(false);
+                    setNotice("Planned deal added — you'll be notified when it's due");
                     setRevision((value) => value + 1);
                 }}
             />
