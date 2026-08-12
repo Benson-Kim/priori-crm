@@ -505,6 +505,33 @@ const routes = [
                             },
                         ],
                     },
+                    {
+                        path: "quotes",
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/quotes")),
+                                handle: {
+                                    header: {
+                                        title: "Quotes & pricing",
+                                        description:
+                                            "Active quotes and the partner price list.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "new",
+                                element: lazyPage(() => import("@/pages/sales-desk/quotes/new")),
+                                handle: {
+                                    header: {
+                                        title: "Quotes & pricing",
+                                        description:
+                                            "Per-user pricing, billing period and currency.",
+                                    },
+                                },
+                            },
+                        ],
+                    },
                 ],
             },
         ],
