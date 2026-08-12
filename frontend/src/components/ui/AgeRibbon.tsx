@@ -7,24 +7,23 @@ import { Chip, type ChipTone } from "./Chip";
  * both tone-coded so a rep can spot a deal that has gone quiet without doing
  * arithmetic on dates.
  *
- * Age and silence run on different scales: a deal can sit in the pipeline for
- * six weeks and still be healthy, but a month of silence never is. Closed
- * deals show a neutral total, since age stops being actionable once the deal
- * has resolved.
+ * Age and silence run on different scales, and only silence escalates. A deal
+ * can sit in the pipeline for months and still be worth working, so age reads
+ * fresh or ageing and never alarms; a month of no contact is a problem, so the
+ * activity line turns red. Closed deals show a neutral total, since age stops
+ * being actionable once the deal has resolved.
  *
  * Both numbers are server-computed. Ages are never derived client-side from
  * dates, so every screen agrees on the same day boundary.
  */
 
-/** Days in pipeline: healthy for a fortnight, ageing to six weeks, then late. */
-const AGE_FRESH_DAYS = 14;
-const AGE_WARM_DAYS = 45;
+/** Days in pipeline before a deal reads as ageing rather than fresh. */
+const AGE_FRESH_DAYS = 7;
 
 /** Days of silence before the activity line escalates to red. */
 const IDLE_STALE_DAYS = 30;
 
-const ageTone = (days: number): ChipTone =>
-    days <= AGE_FRESH_DAYS ? "fresh" : days <= AGE_WARM_DAYS ? "aging" : "danger";
+const ageTone = (days: number): ChipTone => (days <= AGE_FRESH_DAYS ? "fresh" : "aging");
 
 interface AgeRibbonProps {
     /** Server-computed days in pipeline. */

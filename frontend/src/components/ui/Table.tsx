@@ -57,6 +57,12 @@ interface TableProps<T> {
    * announces; `true` falls back to a generic label.
    */
   chevron?: boolean | ((item: T) => string);
+  /**
+   * Hide the header row visually while leaving it in the DOM, for panels whose
+   * own title already names the columns. Screen readers still associate each
+   * cell with its column, so this is not the same as omitting the header.
+   */
+  headerHidden?: boolean;
 }
 
 function SortIcon({
@@ -92,6 +98,7 @@ export function Table<T>({
   variant = "default",
   selectedKey,
   chevron = false,
+  headerHidden = false,
 }: Readonly<TableProps<T>>) {
   const isSalesDesk = variant === "sales-desk";
 
@@ -113,7 +120,7 @@ export function Table<T>({
       )}
     >
       <table className="w-full min-w-150">
-        <thead>
+        <thead className={cn(headerHidden && "sr-only")}>
           <tr className={cn(!isSalesDesk && "border-b border-border ")}>
             {columns.map((col) => {
               const isSortable = sortable && onSort;

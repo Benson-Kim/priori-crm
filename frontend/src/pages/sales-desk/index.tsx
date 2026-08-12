@@ -174,7 +174,7 @@ function RecentCompaniesPanel({ companies }: Readonly<{ companies: RecentCompany
                 data={companies}
                 rowKey={(company) => String(company.id)}
                 variant="sales-desk"
-                className="[&_th]:bg-sd-card"
+                headerHidden
                 emptyMessage="No companies registered yet."
             />
         </DeskPanel>

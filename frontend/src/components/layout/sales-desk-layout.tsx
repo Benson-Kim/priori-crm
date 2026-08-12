@@ -14,14 +14,14 @@
 import { Bell, Search } from "lucide-react";
 import { Outlet, useMatches, type UIMatch } from "react-router-dom";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/hooks/auth-context";
 import type { RouteHandle } from "@/lib/types";
 import { SalesDeskSidebar } from "./sales-desk-sidebar";
 
 function SalesDeskHeader({ title }: Readonly<{ title: string }>) {
     const { user } = useAuth();
-    const initials =
-        `${user?.first_name?.[0] ?? ""}${user?.last_name?.[0] ?? ""}`.toUpperCase() || "FM";
+    const fullName = user ? `${user.first_name} ${user.last_name}` : "Frank Mueke";
 
     return (
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-sd-border bg-sd-card px-6">
@@ -53,9 +53,7 @@ function SalesDeskHeader({ title }: Readonly<{ title: string }>) {
                     <Bell className="size-3.5" aria-hidden="true" />
                 </button>
 
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-priori-purple text-xs font-bold text-white">
-                    {initials}
-                </span>
+                <Avatar name={fullName} size={32} color="var(--color-sd-brand)" />
             </div>
         </header>
     );
