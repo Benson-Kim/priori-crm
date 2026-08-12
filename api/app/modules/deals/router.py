@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.common.dependencies import DealServiceDep
+from app.common.dependencies import DealQuoteServiceDep, DealServiceDep
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.constants.enums import DealHygieneBucket, DealTab
 from app.modules.deals.schemas import (
@@ -16,10 +16,13 @@ from app.modules.deals.schemas import (
     DealCreate,
     DealFilterParams,
     DealParkRequest,
+    DealQuoteCreateRequest,
+    DealQuotePreviewResponse,
     DealResponse,
     DealStatusCounts,
     DealUpdate,
 )
+from app.modules.quotes.schemas import QuoteResponse
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +155,75 @@ def get_deal_counts(
     },
 )
 def get_deal(deal_id: UUID, service: DealServiceDep) -> DealResponse:
-    """Get detailed deal information by ID."""
+    """Get detailed deal information by ID (linked quotes embedded)."""
     deal = service.get_by_id(deal_id)
-    return service.build_response(deal)
+    return service.build_response(deal, include_quotes=True)
+
+
+@router.post(
+    "/{deal_id}/quotes",
+    response_model=QuoteResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a quote from a deal (prefill flow)",
+    description=(
+        "Create a quote in the EXISTING quotes module, prefilled from the "
+        "deal: customer from the deal, currency from the matching customer "
+        "billing profile (defaults to the deal currency; EUR/GBP reference "
+        "currencies are rejected with the typed ReferenceCurrencyException), "
+        "line prices derived server-side from the org product catalog "
+        "(annual billing -15%, extra discount %), line tax treatment from "
+        "the billing profile, reference from the existing reference "
+        "sequence, and all totals/VAT computed by the existing document "
+        "services. The created quote is linked via deal_id and survives "
+        "deal closure unchanged."
+    ),
+    responses={
+        201: {"description": "Quote created and linked to the deal"},
+        400: {
+            "description": (
+                "Reference (EUR/GBP) currency, unknown catalog product, "
+                "closed deal, or invalid dates"
+            )
+        },
+        404: {"description": "Deal or billing profile not found"},
+    },
+)
+def create_deal_quote(
+    deal_id: UUID,
+    body: DealQuoteCreateRequest,
+    service: DealQuoteServiceDep,
+) -> QuoteResponse:
+    """Create a quote from a deal via the existing quotes service."""
+    quote = service.create_quote_for_deal(deal_id, body, user_id=service.actor_id)
+    return QuoteResponse.model_validate(quote)
+
+
+@router.post(
+    "/{deal_id}/quotes/preview",
+    response_model=DealQuotePreviewResponse,
+    summary="Preview quote-builder pricing for a deal",
+    description=(
+        "Builder support (nothing persisted): per-line server-computed "
+        "discounted per-user/month + list price, line totals with billing "
+        "period, the totals block (subtotal, VAT line per the billing "
+        "profile's tax treatment, grand total), the reference-currency "
+        "conversions row (USD/EUR/GBP display equivalents) and the profile "
+        "banner data. Totals are produced exclusively by the existing "
+        "BaseDocumentService.calculate_totals delegation."
+    ),
+    responses={
+        200: {"description": "Server-computed builder pricing"},
+        400: {"description": "Reference currency or unknown catalog product"},
+        404: {"description": "Deal or billing profile not found"},
+    },
+)
+def preview_deal_quote(
+    deal_id: UUID,
+    body: DealQuoteCreateRequest,
+    service: DealQuoteServiceDep,
+) -> DealQuotePreviewResponse:
+    """Preview server-computed quote pricing for the builder."""
+    return service.preview_quote_for_deal(deal_id, body)
 
 
 @router.put(

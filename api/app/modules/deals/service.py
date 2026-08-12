@@ -500,8 +500,13 @@ class DealService(StateMachineMixin, ServiceBase):
 
     # RESPONSE BUILDING (server-computed derived fields)
 
-    def build_response(self, deal: Deal) -> DealResponse:
-        """Serialize a deal exactly as the screens consume it."""
+    def build_response(self, deal: Deal, include_quotes: bool = False) -> DealResponse:
+        """Serialize a deal exactly as the screens consume it.
+
+        ``include_quotes`` embeds the quotes created from this deal
+        (issue #44) — deal detail only, so list responses never pay an
+        extra query per row.
+        """
         today = reporting_date()
         # Sort explicitly (oldest → newest) so derived values never depend
         # on the in-session collection order after same-request appends.
@@ -533,6 +538,14 @@ class DealService(StateMachineMixin, ServiceBase):
             None,
         )
 
+        quotes = []
+        if include_quotes:
+            from app.modules.deals.quotes_integration import DealQuoteService
+
+            quotes = DealQuoteService(
+                self._db, current_user=self._current_user
+            ).quotes_for_deal(deal)
+
         return DealResponse(
             id=deal.id,
             customer_id=deal.customer_id,
@@ -558,6 +571,7 @@ class DealService(StateMachineMixin, ServiceBase):
             latest_record=history[-1] if history else None,
             stage_history=history,
             billing_profile=billing_profile,
+            quotes=quotes,
             created_at=deal.created_at,
             updated_at=deal.updated_at,
             version=deal.version,

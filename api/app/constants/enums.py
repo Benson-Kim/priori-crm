@@ -320,6 +320,56 @@ class QuoteStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class QuoteDisplayStatus(StrEnum):
+    """Sales Desk display state of a quote (Quotes & pricing screen, #44).
+
+    The design exports (``Quotes___Pricing.svg`` / ``App__3_.svg``) render
+    exactly three states, mapped from the existing quote lifecycle:
+
+    - ``Draft``   <- ``draft`` (still being built) and ``expired``
+      (the offer lapsed; it needs rework before it can be re-sent)
+    - ``Pending`` <- ``sent`` and ``approved`` (in flight with the
+      customer; not yet posted to accounting)
+    - ``Synced``  <- ``invoiced`` (converted to an invoice, i.e. pushed
+      through to accounting)
+
+    Display-only: the persisted lifecycle (:class:`QuoteStatus`) remains
+    the source of truth and is always returned alongside this value.
+    """
+
+    DRAFT = "Draft"
+    PENDING = "Pending"
+    SYNCED = "Synced"
+
+    @classmethod
+    def from_quote_status(cls, status: "QuoteStatus | str") -> "QuoteDisplayStatus":
+        """Map the persisted quote lifecycle onto the 3 display states."""
+        return _QUOTE_STATUS_TO_DISPLAY[QuoteStatus(status)]
+
+
+#: Lifecycle -> display-state mapping (kept next to the enums so a change
+#: to either is reviewed against the other). Exhaustive over QuoteStatus.
+_QUOTE_STATUS_TO_DISPLAY: dict[QuoteStatus, QuoteDisplayStatus] = {
+    QuoteStatus.DRAFT: QuoteDisplayStatus.DRAFT,
+    QuoteStatus.SENT: QuoteDisplayStatus.PENDING,
+    QuoteStatus.APPROVED: QuoteDisplayStatus.PENDING,
+    QuoteStatus.INVOICED: QuoteDisplayStatus.SYNCED,
+    QuoteStatus.EXPIRED: QuoteDisplayStatus.DRAFT,
+}
+
+
+class BillingPeriod(StrEnum):
+    """Billing period of a quote-builder line (Sales Desk, issue #44).
+
+    ``annual`` applies the org's annual billing discount
+    (``annual_billing_discount_pct``, default 15) to the per-user/month
+    price and bills 12 months per seat; ``monthly`` bills 1 month at list.
+    """
+
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
+
+
 class VendorStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
