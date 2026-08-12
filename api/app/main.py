@@ -154,6 +154,9 @@ def _register_routers(app: FastAPI) -> None:
         invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"]
     )
     app.include_router(deals_router, prefix=f"{api_prefix}/deals", tags=["Deals"])
+    app.include_router(
+        onboarding_router, prefix=f"{api_prefix}/onboardings", tags=["Onboarding"]
+    )
     app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
     app.include_router(
