@@ -113,7 +113,9 @@ def upgrade() -> None:
         ),
     )
     # Due/notification hot path: engage_on <= today and the <=14d window.
-    op.create_index("ix_nurture_prospects_engage_on", "nurture_prospects", ["engage_on"])
+    op.create_index(
+        "ix_nurture_prospects_engage_on", "nurture_prospects", ["engage_on"]
+    )
     op.create_index("ix_nurture_prospects_owner_id", "nurture_prospects", ["owner_id"])
 
 
