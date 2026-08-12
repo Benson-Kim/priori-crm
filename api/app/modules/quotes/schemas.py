@@ -16,6 +16,7 @@ from app.common.reporting_time import check_is_overdue, reporting_date
 from app.constants.enums import (
     Currency,
     DiscountType,
+    QuoteDisplayStatus,
     QuoteStatus,
     TaxType,
 )
@@ -378,6 +379,13 @@ class QuoteResponse(BaseModel):
     quote_number: str
     quote_reference: str
     customer_id: UUID
+    deal_id: UUID | None = Field(
+        None,
+        description=(
+            "Sales Desk deal this quote was created from, if any. Survives "
+            "deal closure; null for standalone quotes or after deal deletion."
+        ),
+    )
 
     transaction_date: date
     due_date: date
@@ -451,17 +459,40 @@ class QuoteResponse(BaseModel):
             and self.related_invoice_id is None  # already-converted guard
         )
 
+    @computed_field(
+        description=(
+            "Sales Desk display state (Quotes & pricing screen), mapped "
+            "from the persisted lifecycle: Draft <- draft|expired, "
+            "Pending <- sent|approved, Synced <- invoiced. Display-only; "
+            "`status` remains the source of truth."
+        )
+    )
+    @property
+    def display_status(self) -> QuoteDisplayStatus:
+        """Sales Desk 3-state display mapping of the quote lifecycle."""
+        return QuoteDisplayStatus.from_quote_status(self.status)
+
     model_config = {"from_attributes": True}
 
 
 class QuoteSummary(BaseModel):
-    """Lightweight quote summary for list views."""
+    """Lightweight quote summary for list views.
+
+    Carries the Sales Desk quote-list screen contract (issue #44):
+    reference, company, billing-profile code, currency chip, total in the
+    quote currency AND its server-computed USD equivalent, date and the
+    3-state display status.
+    """
 
     id: UUID
     quote_number: str
     quote_reference: str
     customer_id: UUID
     customer_name: str  # Joined from customer table
+    deal_id: UUID | None = Field(
+        None,
+        description="Sales Desk deal this quote was created from, if any",
+    )
 
     transaction_date: date
     due_date: date
@@ -469,8 +500,37 @@ class QuoteSummary(BaseModel):
     status: str
     currency: str
     total_due: Decimal
+    total_usd_equivalent: Decimal | None = Field(
+        None,
+        description=(
+            "Server-computed USD equivalent of total_due ('Total (USD eq.)' "
+            "column) per the org FX display conventions; equals total_due "
+            "for USD quotes"
+        ),
+    )
+    billing_profile_code: str | None = Field(
+        None,
+        description=(
+            "Accounting code of the customer billing profile matching the "
+            "quote currency (e.g. BAR-0007-USD); null when the customer "
+            "has no profile in this currency"
+        ),
+    )
 
     created_at: datetime
+
+    @computed_field(
+        description=(
+            "Sales Desk display state (Quotes & pricing screen), mapped "
+            "from the persisted lifecycle: Draft <- draft|expired, "
+            "Pending <- sent|approved, Synced <- invoiced. Display-only; "
+            "`status` remains the source of truth."
+        )
+    )
+    @property
+    def display_status(self) -> QuoteDisplayStatus:
+        """Sales Desk 3-state display mapping of the quote lifecycle."""
+        return QuoteDisplayStatus.from_quote_status(self.status)
 
     @computed_field
     @property
