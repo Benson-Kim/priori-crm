@@ -9,10 +9,14 @@
  * know what any particular count means.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-import { getCompanyList, getFuturePipelineSummary } from "@/services/salesDeskApi";
+import {
+    getCompanyList,
+    getFuturePipelineSummary,
+    subscribeToDeskChanges,
+} from "@/services/salesDeskApi";
 
 export type SalesDeskBadges = Record<string, number>;
 
@@ -20,12 +24,7 @@ export function useSalesDeskBadges(): SalesDeskBadges {
     const { pathname } = useLocation();
     const [badges, setBadges] = useState<SalesDeskBadges>({});
 
-    /*
-     * Re-read on navigation. The desk's data lives in an in-memory store with
-     * no change notifications, and every mutation happens on one of these
-     * screens, so a route change is the cheapest honest refresh point.
-     */
-    useEffect(() => {
+    const read = useCallback(() => {
         let active = true;
 
         Promise.all([getCompanyList(), getFuturePipelineSummary()])
@@ -45,7 +44,18 @@ export function useSalesDeskBadges(): SalesDeskBadges {
         return () => {
             active = false;
         };
-    }, [pathname]);
+    }, []);
+
+    /*
+     * Re-read on navigation, and again whenever desk data changes. Navigation
+     * alone is not enough: clearing the needs-sync queue happens on the
+     * companies workspace without leaving it, and the count beside that very
+     * nav item would otherwise stay stale until the user navigated away and
+     * back.
+     */
+    useEffect(read, [pathname, read]);
+
+    useEffect(() => subscribeToDeskChanges(read), [read]);
 
     return badges;
 }

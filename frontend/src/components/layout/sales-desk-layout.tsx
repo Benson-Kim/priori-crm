@@ -71,7 +71,13 @@ export default function SalesDeskLayout() {
             <SalesDeskSidebar />
             <div className="flex min-w-0 flex-1 flex-col">
                 <SalesDeskHeader title={title} />
-                <main className="flex-1 overflow-auto p-6">
+                {/*
+                 * `relative` so absolutely positioned descendants (the
+                 * visually-hidden inputs behind styled checkboxes, say) resolve
+                 * against this scroller rather than the document, which would
+                 * otherwise let them stretch the page and scroll the shell.
+                 */}
+                <main className="relative flex-1 overflow-auto p-6">
                     <Outlet />
                 </main>
             </div>

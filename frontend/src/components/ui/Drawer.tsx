@@ -75,6 +75,19 @@ export function Drawer({
 }: Readonly<DrawerProps>) {
     const panelRef = useRef<HTMLElement>(null);
 
+    /*
+     * Held in a ref so the effect below can run once per open rather than once
+     * per `onClose` identity. Callers routinely pass an inline arrow, and with
+     * `onClose` as a dependency every parent render (typing in the search box
+     * behind the panel, say) would tear the effect down and re-run it, pulling
+     * focus back into the panel and out of whatever the user was using. That
+     * would defeat the point of leaving the page interactive.
+     */
+    const onCloseRef = useRef(onClose);
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
     useEffect(() => {
         const previouslyFocused = document.activeElement as HTMLElement | null;
         // Captured now: by cleanup time the ref may already point elsewhere.
@@ -82,7 +95,7 @@ export function Drawer({
         panel?.focus();
 
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") onClose();
+            if (event.key === "Escape") onCloseRef.current();
         };
         window.addEventListener("keydown", onKeyDown);
 
@@ -94,7 +107,7 @@ export function Drawer({
                 previouslyFocused?.focus?.();
             }
         };
-    }, [onClose]);
+    }, []);
 
     return (
         <aside

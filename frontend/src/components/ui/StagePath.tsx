@@ -26,7 +26,12 @@ function segmentClass(index: number, status: DealStatus, stageIndex: number): st
 
     if (status !== "open") {
         if (isClosingSegment) return status === "won" ? "bg-sd-won" : "bg-sd-lost";
-        return "bg-sd-progress-done";
+        /*
+         * Only the stages the deal actually reached are filled. A deal that
+         * died at Proposal & Quote must not show Negotiation as cleared, or
+         * the bar misreports the path it took.
+         */
+        return index <= stageIndex ? "bg-sd-progress-done" : "bg-sd-border";
     }
 
     if (index < stageIndex) return "bg-sd-progress-done";
