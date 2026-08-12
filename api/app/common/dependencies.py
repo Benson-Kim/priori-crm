@@ -137,6 +137,16 @@ def get_deal_service(db: DbSession, current_user: CurrentUser):
 DealServiceDep = Annotated["DealService", Depends(get_deal_service)]  # noqa: F821
 
 
+def get_nurture_service(db: DbSession, current_user: CurrentUser):
+    """Provide a NurtureService scoped to the current request and acting user."""
+    from app.modules.nurture.service import NurtureService
+
+    return NurtureService(db, current_user=current_user)
+
+
+NurtureServiceDep = Annotated["NurtureService", Depends(get_nurture_service)]  # noqa: F821
+
+
 def get_expense_service(db: DbSession, current_user: CurrentUser) -> "ExpenseService":  # noqa: F821
     """Provide an ExpenseService scoped to the current request and acting user."""
     from app.modules.expenses.service import ExpenseService
