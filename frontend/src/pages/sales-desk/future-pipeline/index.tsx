@@ -24,6 +24,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { AddProspectDialog } from "./components/AddProspectDialog";
 import { DueBadge } from "./components/DueBadge";
+import { SuccessNotice } from "./components/SuccessNotice";
 
 /*
  * The whole card links through to the prospect table, matching how a row opens
@@ -167,11 +168,10 @@ export default function SalesDeskFuturePipelinePage() {
                 onClose={() => setIsCreating(false)}
                 onCreated={() => {
                     setIsCreating(false);
+                    setNotice("Planned deal added — you'll be notified when it's due");
                     setRevision((value) => value + 1);
                 }}
             />
         </div>
     );
-}
-;
 }

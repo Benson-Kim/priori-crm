@@ -29,6 +29,7 @@ import {
 } from "@/services/salesDeskApi";
 import { AddProspectDialog } from "../components/AddProspectDialog";
 import { DueBadge, UrgencyDot } from "../components/DueBadge";
+import { SuccessNotice } from "../components/SuccessNotice";
 
 const CELL_CLASS = "align-top";
 const TABLE_OVERRIDES =
