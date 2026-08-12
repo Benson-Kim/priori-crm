@@ -107,8 +107,7 @@ class NurtureEngageRequest(BaseModel):
         None,
         max_length=5000,
         description=(
-            "First stage-record note of the deal; defaults to the "
-            "prospect's note"
+            "First stage-record note of the deal; defaults to the prospect's note"
         ),
     )
 
