@@ -90,7 +90,7 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <img
               src="/Logo Priori.svg"
-              alt="Priori Technologies"
+              alt="Business Central"
               className="h-20 object-contain"
             />
           </div>

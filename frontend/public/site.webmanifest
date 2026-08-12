@@ -1,6 +1,6 @@
 {
-  "name": "Priori Accounting & CRM",
-  "short_name": "Priori CRM",
+  "name": "Business Central",
+  "short_name": "Business Central",
   "description": "Accounting and CRM platform: customers, vendors, quotes, invoices, purchase orders, expenses and payments.",
   "id": "/",
   "start_url": "/",

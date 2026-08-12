@@ -121,13 +121,13 @@ class VendorBase(BaseModel):
         "populate_by_name": True,
         "json_schema_extra": {
             "example": {
-                "vendorName": "Priori Virtual Studio Ltd",
+                "vendorName": "Acme Virtual Studio Ltd",
                 "address": "Watermark Business Park, Nairobi",
-                "email": "accounts@prioritech.com",
+                "email": "accounts@example.com",
                 "country": "Kenya",
                 "phonePrimary": "+254700000000",
                 "phoneSecondary": None,
-                "website": "www.prioritech.com",
+                "website": "www.example.com",
                 "currency": "KES",
                 "vatNumber": "V0012345X",
                 "taxIdPin": "P09GIDHWOKD",
@@ -148,13 +148,13 @@ class VendorCreate(VendorBase):
         "populate_by_name": True,
         "json_schema_extra": {
             "example": {
-                "vendorName": "Priori Virtual Studio Ltd",
+                "vendorName": "Acme Virtual Studio Ltd",
                 "address": "Watermark",
-                "email": "finance@prioritech.com",
+                "email": "finance@example.com",
                 "country": "Kenya",
                 "phonePrimary": "+254 700 000 000",
                 "phoneSecondary": "+254 711 000 000",
-                "website": "www.prioritech.com",
+                "website": "www.example.com",
                 "vatNumber": "VAT-001",
                 "taxIdPin": "P09GIDHWOKD",
                 "currency": "KES",
