@@ -602,7 +602,7 @@ class InvoiceSendRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "toEmail": "customer@example.com",
-                "subject": "Invoice IN-0101 from Priori Technologies",
+                "subject": "Invoice IN-0101 from Business Central",
                 "body": "Please find attached your invoice.",
                 "attachPdf": True,
             }

@@ -561,7 +561,7 @@ class QuoteSendRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "toEmail": "customer@example.com",
-                "subject": "Quote QT-0101 from Priori Technologies",
+                "subject": "Quote QT-0101 from Business Central",
                 "body": "Please find attached your quote.",
                 "attachPdf": True,
             }

@@ -743,7 +743,7 @@ class PurchaseOrderSendRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "toEmail": "vendor@example.com",
-                "subject": "Purchase Order PO-000042 from Priori Technologies",
+                "subject": "Purchase Order PO-000042 from Business Central",
                 "body": "Please find attached our purchase order.",
                 "attachPdf": True,
             }
