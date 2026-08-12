@@ -1,7 +1,7 @@
 [project]
 name = "prioritech-api"
 version = "1.0.0"
-description = "Priori Technologies Accounting Software API"
+description = "Business Central Accounting Software API"
 requires-python = ">=3.12"
 
 [tool.ruff]

@@ -16,8 +16,11 @@ import app.common.reference_sequence
 import app.common.reference_triggers
 import app.modules.auth.models
 import app.modules.customers.models
+import app.modules.deals.models
 import app.modules.expenses.models
 import app.modules.invoices.models
+import app.modules.nurture.models
+import app.modules.onboarding.models
 import app.modules.owner.models
 import app.modules.purchase_orders.models
 import app.modules.quotes.models
@@ -36,9 +39,12 @@ from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.deals.router import router as deals_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.health.router import router as health_router
 from app.modules.invoices.router import router as invoices_router
+from app.modules.nurture.router import router as nurture_router
+from app.modules.onboarding.router import router as onboarding_router
 from app.modules.owner.router import router as owner_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
@@ -86,7 +92,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """Application factory for the Priori Technologies API."""
+    """Application factory for the Business Central API."""
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
@@ -150,6 +156,11 @@ def _register_routers(app: FastAPI) -> None:
     )
     app.include_router(
         invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"]
+    )
+    app.include_router(deals_router, prefix=f"{api_prefix}/deals", tags=["Deals"])
+    app.include_router(nurture_router, prefix=f"{api_prefix}/nurture", tags=["Nurture"])
+    app.include_router(
+        onboarding_router, prefix=f"{api_prefix}/onboardings", tags=["Onboarding"]
     )
     app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
     app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])

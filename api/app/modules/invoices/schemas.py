@@ -507,11 +507,7 @@ class InvoiceSummary(BaseModel):
 
     created_at: datetime
 
-    # Late-bound (lambda) so the module-level `reporting_date` is resolved at
-    # instantiation time, keeping the snapshot patchable in tests (mirrors the
-    # QuoteSummary pattern) instead of freezing the function reference at
-    # class-definition time.
-    _as_of_date: date = PrivateAttr(default_factory=lambda: reporting_date())
+    _as_of_date: date = PrivateAttr(default_factory=reporting_date)
 
     @computed_field
     @property
@@ -606,7 +602,7 @@ class InvoiceSendRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "toEmail": "customer@example.com",
-                "subject": "Invoice IN-0101 from Priori Technologies",
+                "subject": "Invoice IN-0101 from Business Central",
                 "body": "Please find attached your invoice.",
                 "attachPdf": True,
             }
