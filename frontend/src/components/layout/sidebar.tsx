@@ -77,7 +77,7 @@ export function Sidebar() {
                         {!collapsed && (
                             <img
                                 src="/Logo Priori.svg"
-                                alt="Priori logo"
+                                alt="Business Central logo"
                                 className="px-2 min-w-0"
                             />
                         )}
@@ -250,7 +250,7 @@ export function Sidebar() {
                     </button>
                     {!collapsed && (
                         <p className="pt-4 text-xs text-gray-600">
-                            &copy; 2026 Priori — All Rights Reserved Version: 1.0.188-288
+                            &copy; 2026 Business Central — All Rights Reserved Version: 1.0.188-288
                         </p>
                     )}
                 </div>

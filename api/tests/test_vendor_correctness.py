@@ -9,6 +9,7 @@
 
 from datetime import date, timedelta
 
+from app.common.reporting_time import reporting_date
 from app.common.statement import (
     DEFAULT_STATEMENT_PERIOD_DAYS,
     default_statement_period,
@@ -63,7 +64,10 @@ class TestDefaultStatementPeriod:
 
     def test_defaults_to_last_twelve_months(self):
         start, end = default_statement_period(None, None)
-        assert end == date.today()
+        # default_statement_period resolves "today" via the org-local
+        # reporting date, not UTC date.today() — they disagree between
+        # 21:00 and 00:00 UTC (#54).
+        assert end == reporting_date()
         assert start == end - timedelta(days=DEFAULT_STATEMENT_PERIOD_DAYS)
 
     def test_explicit_bounds_are_preserved(self):
@@ -82,4 +86,4 @@ class TestDefaultStatementPeriod:
         start_in = date(2025, 1, 1)
         start, end = default_statement_period(start_in, None)
         assert start == start_in
-        assert end == date.today()
+        assert end == reporting_date()
