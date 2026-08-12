@@ -127,6 +127,16 @@ def get_quote_service(db: DbSession, current_user: CurrentUser):
 QuoteServiceDep = Annotated["QuoteService", Depends(get_quote_service)]  # noqa: F821
 
 
+def get_deal_service(db: DbSession, current_user: CurrentUser):
+    """Provide a DealService scoped to the current request and acting user."""
+    from app.modules.deals.service import DealService
+
+    return DealService(db, current_user=current_user)
+
+
+DealServiceDep = Annotated["DealService", Depends(get_deal_service)]  # noqa: F821
+
+
 def get_expense_service(db: DbSession, current_user: CurrentUser) -> "ExpenseService":  # noqa: F821
     """Provide an ExpenseService scoped to the current request and acting user."""
     from app.modules.expenses.service import ExpenseService
