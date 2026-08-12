@@ -420,6 +420,19 @@ class DealService(StateMachineMixin, ServiceBase):
                 "close_note": note,
             },
         )
+
+        if new_status == DealStatus.WON:
+            # Issue #41: winning a deal creates its onboarding checklist
+            # INSIDE THIS SAME TRANSACTION (both services flush only; the
+            # request-scoped commit/rollback governs the pair atomically).
+            # Imported here to keep the deals module importable without the
+            # onboarding module during partial test collection.
+            from app.modules.onboarding.service import OnboardingService
+
+            OnboardingService(
+                self._db, current_user=self._current_user
+            ).create_for_won_deal(deal)
+
         return deal
 
     def park(self, deal_id: uuid.UUID, parked_until: date, note: str) -> Deal:

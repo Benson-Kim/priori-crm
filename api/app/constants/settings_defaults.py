@@ -32,6 +32,26 @@ MAX_DEFAULT_TERMS_LENGTH: int = 2000
 # Matches the PurchaseOrderSendRequest.body cap.
 MAX_DEFAULT_SEND_MESSAGE_LENGTH: int = 5000
 
+# Default onboarding task template (issue #41). Seeded verbatim, in this
+# exact order, from the Onboarding.svg design export. Used whenever the
+# organisation has never configured its own template (the owner_profiles
+# column is NULL). Copied onto each onboarding checklist at CREATE TIME
+# ONLY (template versioning): editing the template never mutates existing
+# checklists.
+DEFAULT_ONBOARDING_TASKS: tuple[str, ...] = (
+    "Kick-off meeting",
+    "Tenant & domain setup",
+    "Licenses assigned",
+    "Data migration",
+    "Security baseline",
+    "User training",
+    "Handover to support",
+)
+
+# Bounds for a configurable onboarding task template (schema-enforced).
+MAX_ONBOARDING_TEMPLATE_TASKS: int = 20
+MAX_ONBOARDING_TASK_LABEL_LENGTH: int = 255
+
 # Seed values for the dual USD/KES customer billing profiles (deal-desk
 # parity). Applied when a customer is created AND by the one-off backfill
 # migration for pre-existing customers. Credit limits are expressed in the
