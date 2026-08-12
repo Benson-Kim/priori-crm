@@ -13,6 +13,7 @@ import type { ComponentType, SVGProps } from "react";
 
 import CompaniesIcon from "@/assets/icons/sales-desk/companies.svg?react";
 import DashboardIcon from "@/assets/icons/sales-desk/dashboard.svg?react";
+import FuturePipelineIcon from "@/assets/icons/sales-desk/future-pipeline.svg?react";
 import PipelineIcon from "@/assets/icons/sales-desk/pipeline.svg?react";
 
 export type SalesDeskNavIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -36,4 +37,9 @@ export const salesDeskNavItems: SalesDeskNavItem[] = [
     { label: "Dashboard", path: SALES_DESK_ROOT, icon: DashboardIcon, end: true },
     { label: "Pipeline", path: `${SALES_DESK_ROOT}/pipeline`, icon: PipelineIcon },
     { label: "Companies", path: `${SALES_DESK_ROOT}/companies`, icon: CompaniesIcon },
+    {
+        label: "Future pipeline",
+        path: `${SALES_DESK_ROOT}/future-pipeline`,
+        icon: FuturePipelineIcon,
+    },
 ];
