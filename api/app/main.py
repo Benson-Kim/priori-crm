@@ -26,6 +26,7 @@ import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
 from app.common.database import engine
+from app.common.dependencies import require_module
 from app.common.exceptions import register_exception_handlers
 from app.common.logging import setup_logging
 from app.common.middleware import (
@@ -180,6 +181,40 @@ def _register_routers(app: FastAPI) -> None:
         dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
     )
     app.include_router(reports_router, prefix=f"{api_prefix}/reports", tags=["Reports"])
+    logger.info(
+        "Registered routers: %s",
+        [route.path for route in app.routes],  # type: ignore
+    )
+
+
+app = create_app()
+   expenses_router,
+        prefix=f"{api_prefix}/expenses",
+        tags=["Expenses"],
+        dependencies=_module_gate(ModuleKey.EXPENSES),
+    )
+    app.include_router(
+        purchase_orders_router,
+        prefix=f"{api_prefix}/purchase-orders",
+        tags=["Purchase Orders"],
+        dependencies=_module_gate(ModuleKey.PURCHASE_ORDERS),
+    )
+    app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
+    app.include_router(
+        statements_router,
+        prefix=f"{api_prefix}/statements",
+        tags=["Statements"],
+        dependencies=_module_gate(ModuleKey.STATEMENTS),
+    )
+    app.include_router(
+        dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
+    )
+    app.include_router(
+        reports_router,
+        prefix=f"{api_prefix}/reports",
+        tags=["Reports"],
+        dependencies=_module_gate(ModuleKey.REPORTS),
+    )
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore

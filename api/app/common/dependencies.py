@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.common.database import get_db
 from app.common.exceptions import ForbiddenException, UnauthorizedException
 from app.common.security import decode_access_token
-from app.constants.enums import PRIVILEGED_ROLES, UserRole
+from app.constants.enums import ESSENTIAL_MODULES, PRIVILEGED_ROLES, ModuleKey, UserRole
 from app.lib.config import settings
 
 # Type alias for database session dependency
@@ -74,6 +74,49 @@ def require_privileged():
                 required_permission="/".join(sorted(r.value for r in PRIVILEGED_ROLES)),
             )
         return current_user
+
+    return _check
+
+
+def require_module(module_key: ModuleKey):
+    """Build a router-wide dependency rejecting requests to a disabled module.
+
+    Per-owner module entitlements: a missing ``owner_module_settings`` row
+    means ENABLED (default-on), so the gate only rejects when an explicit
+    ``enabled = false`` override exists. Attach at router level::
+
+        app.include_router(
+            invoices_router, ..., dependencies=[Depends(require_module(ModuleKey.INVOICES))]
+        )
+
+    Deliberately independent of the JWT (no ``CurrentUser``): gated routers
+    also host internal-secret scheduler endpoints, and module availability
+    is org state, not a per-user permission. Essential modules are never
+    gated (defense in depth — their routers should not attach this at all).
+    """
+
+    def _check(db: DbSession) -> None:
+        if module_key in ESSENTIAL_MODULES:
+            return
+
+        from app.modules.owner.models import SINGLETON_PROFILE_ID, OwnerModuleSetting
+
+        row = (
+            db.query(OwnerModuleSetting.enabled)
+            .filter(
+                OwnerModuleSetting.owner_profile_id == SINGLETON_PROFILE_ID,
+                OwnerModuleSetting.module_key == module_key.value,
+            )
+            .first()
+        )
+        if row is not None and not row.enabled:
+            raise ForbiddenException(
+                detail=(
+                    f"The '{module_key.value}' module is disabled for this "
+                    "organisation. Contact an administrator to enable it."
+                ),
+                required_permission=f"module:{module_key.value}",
+            )
 
     return _check
 
