@@ -37,6 +37,7 @@ from app.modules.deals.schemas import DealFilterParams
 from app.modules.sales_desk.audit import audit_sales_desk_export
 from app.modules.sales_desk.schemas import (
     DeskCompaniesResponse,
+    DeskCompanyRow,
     PipelineOverviewResponse,
     SalesDeskDashboardResponse,
     SalesDeskNotificationsResponse,
