@@ -146,11 +146,6 @@ class TestSalesDeskModule:
         member = _seed_user(db, "member@mail.com", UserRole.MEMBER)
         headers = _auth(admin)
 
-        assert (
-            client.get("/api/v1/sales-desk/dashboard", headers=headers).status_code
-            == 200
-        )
-
         resp = client.patch(
             "/api/v1/owner/modules/sales_desk",
             json={"enabled": False},
@@ -170,6 +165,20 @@ class TestSalesDeskModule:
         # Deals/nurture/onboarding keep their own independent keys: disabling
         # the Sales Desk shell does not disable the underlying deals module.
         assert client.get("/api/v1/deals", headers=headers).status_code == 200
+
+        # Re-enabling restores access. The successful GET comes LAST: the
+        # sales-desk service opens a read-only REPEATABLE READ snapshot on
+        # the request session (like reports), so no write may follow it.
+        resp = client.patch(
+            "/api/v1/owner/modules/sales_desk",
+            json={"enabled": True},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert (
+            client.get("/api/v1/sales-desk/dashboard", headers=headers).status_code
+            == 200
+        )
 
 
 class TestEssentialModules:
