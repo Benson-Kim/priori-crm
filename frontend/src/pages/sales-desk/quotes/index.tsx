@@ -102,7 +102,7 @@ export default function SalesDeskQuotesPage() {
                 header: "Quote ID",
                 className: CELL_CLASS,
                 render: (quote) => (
-                    <span className="font-mono font-bold text-priori-purple">{quote.id}</span>
+                    <span className="font-mono font-bold text-sd-brand">{quote.id}</span>
                 ),
             },
             {
