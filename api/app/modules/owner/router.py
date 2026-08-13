@@ -18,8 +18,8 @@ from app.constants.settings_defaults import (
 )
 from app.lib.config import settings
 from app.modules.owner.schemas import (
-    ModuleSettingState,
     ModuleSettingsResponse,
+    ModuleSettingState,
     ModuleSettingUpdate,
     OwnerProfileResponse,
     OwnerProfileUpdate,
@@ -192,4 +192,3 @@ def serve_owner_logo(service: OwnerServiceDep):
         )
 
     return StreamingResponse(download.stream, media_type=download.media_type)
-ponse(download.stream, media_type=download.media_type)

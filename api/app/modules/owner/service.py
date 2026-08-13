@@ -11,12 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
+from app.constants.enums import ModuleKey
 from app.constants.settings_defaults import (
     DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
 )
-from app.constants.enums import ModuleKey
 from app.lib.config import settings
 from app.lib.storage import StorageService, storage_service
 from app.modules.owner.models import (
