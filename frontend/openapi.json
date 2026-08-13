@@ -442,6 +442,163 @@
         "title": "AgingBuckets",
         "type": "object"
       },
+      "BillingCurrency": {
+        "description": "Currencies for which a customer billing profile exists in accounting.\n\nDeliberately a strict subset of :class:`Currency`: every customer is\nregistered once with exactly one USD and one KES billing profile\n(deal-desk parity). EUR/GBP remain display/conversion-only.",
+        "enum": [
+          "USD",
+          "KES"
+        ],
+        "title": "BillingCurrency",
+        "type": "string"
+      },
+      "BillingPaymentTerms": {
+        "description": "Payment-terms options offered on a customer billing profile.",
+        "enum": [
+          "On receipt",
+          "14 days",
+          "30 days",
+          "45 days",
+          "60 days"
+        ],
+        "title": "BillingPaymentTerms",
+        "type": "string"
+      },
+      "BillingPeriod": {
+        "description": "Billing period of a quote-builder line (Sales Desk, issue #44).\n\n``annual`` applies the org's annual billing discount\n(``annual_billing_discount_pct``, default 15) to the per-user/month\nprice and bills 12 months per seat; ``monthly`` bills 1 month at list.",
+        "enum": [
+          "monthly",
+          "annual"
+        ],
+        "title": "BillingPeriod",
+        "type": "string"
+      },
+      "BillingProfileResponse": {
+        "description": "One per-currency billing profile of a customer.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credit_limit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Limit",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_id": {
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payment_terms": {
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "synced": {
+            "title": "Synced",
+            "type": "boolean"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At"
+          },
+          "tax_treatment": {
+            "title": "Tax Treatment",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "customer_id",
+          "currency",
+          "code",
+          "payment_terms",
+          "tax_treatment",
+          "credit_limit",
+          "synced",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "BillingProfileResponse",
+        "type": "object"
+      },
+      "BillingProfileUpdate": {
+        "description": "PATCH body for a customer billing profile. All fields optional.\n\nAny accepted change flips the profile back to unsynced server-side;\n``code`` and ``currency`` are immutable once issued (the code is the\naccounting identity of the profile).",
+        "properties": {
+          "creditLimit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credit limit in the profile's own currency",
+            "title": "Creditlimit"
+          },
+          "paymentTerms": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingPaymentTerms"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payment terms"
+          },
+          "taxTreatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaxTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tax treatment"
+          }
+        },
+        "title": "BillingProfileUpdate",
+        "type": "object"
+      },
       "Body_attach_expense_document_api_v1_expenses__expense_id__documents_post": {
         "properties": {
           "file": {
@@ -958,12 +1115,36 @@
             "title": "Firstname",
             "type": "string"
           },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Industry classification"
+          },
           "lastName": {
             "description": "Last name",
             "maxLength": 100,
             "minLength": 1,
             "title": "Lastname",
             "type": "string"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Account owner (sales rep) user ID",
+            "title": "Ownerid"
           },
           "phone": {
             "description": "Phone number in international format",
@@ -984,6 +1165,17 @@
             "description": "Postal code",
             "title": "Postalcode"
           },
+          "primaryCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which billing profile (USD|KES) is the default"
+          },
           "province": {
             "anyOf": [
               {
@@ -997,6 +1189,19 @@
             ],
             "description": "State/Province",
             "title": "Province"
+          },
+          "tenantDomain": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Microsoft 365 tenant domain",
+            "title": "Tenantdomain"
           },
           "vatNumber": {
             "anyOf": [
@@ -1218,6 +1423,13 @@
             "title": "Balance",
             "type": "string"
           },
+          "billing_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/BillingProfileResponse"
+            },
+            "title": "Billing Profiles",
+            "type": "array"
+          },
           "city": {
             "anyOf": [
               {
@@ -1277,9 +1489,32 @@
             "title": "Id",
             "type": "string"
           },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
           "last_name": {
             "title": "Last Name",
             "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
           },
           "phone": {
             "title": "Phone",
@@ -1296,6 +1531,17 @@
             ],
             "title": "Postal Code"
           },
+          "primary_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Currency"
+          },
           "province": {
             "anyOf": [
               {
@@ -1310,6 +1556,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "tenant_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Domain"
           },
           "updated_at": {
             "format": "date-time",
@@ -1607,6 +1864,16 @@
             ],
             "title": "Firstname"
           },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "lastName": {
             "anyOf": [
               {
@@ -1619,6 +1886,18 @@
               }
             ],
             "title": "Lastname"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownerid"
           },
           "phone": {
             "anyOf": [
@@ -1642,6 +1921,16 @@
             ],
             "title": "Postalcode"
           },
+          "primaryCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "province": {
             "anyOf": [
               {
@@ -1652,6 +1941,18 @@
               }
             ],
             "title": "Province"
+          },
+          "tenantDomain": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenantdomain"
           },
           "vatNumber": {
             "anyOf": [
@@ -1833,6 +2134,1003 @@
           "items"
         ],
         "title": "DashboardTransactionsResponse",
+        "type": "object"
+      },
+      "DealActivityCreate": {
+        "description": "Request body for logging an activity at the current stage.",
+        "properties": {
+          "note": {
+            "description": "What happened \u2014 every stage keeps a record",
+            "maxLength": 5000,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "DealActivityCreate",
+        "type": "object"
+      },
+      "DealActivityResponse": {
+        "description": "One stage-record entry (stage label, ISO date, note).",
+        "properties": {
+          "activity_date": {
+            "format": "date",
+            "title": "Activity Date",
+            "type": "string"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stage_label",
+          "note",
+          "activity_date",
+          "author_id",
+          "created_at"
+        ],
+        "title": "DealActivityResponse",
+        "type": "object"
+      },
+      "DealAdvanceRequest": {
+        "description": "Request body for advancing a deal one stage. The note is mandatory.",
+        "properties": {
+          "note": {
+            "description": "A note is required to advance or close.",
+            "maxLength": 5000,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "DealAdvanceRequest",
+        "type": "object"
+      },
+      "DealBillingProfileResponse": {
+        "description": "Drawer billing line, joined from the customer's billing profile\n\nmatching the deal currency (e.g. \"Billing to NDG-KES \u00b7 14 days \u00b7\nVAT 16% \u00b7 Not synced\").",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "payment_terms": {
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "synced": {
+            "title": "Synced",
+            "type": "boolean"
+          },
+          "tax_treatment": {
+            "title": "Tax Treatment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "payment_terms",
+          "tax_treatment",
+          "synced"
+        ],
+        "title": "DealBillingProfileResponse",
+        "type": "object"
+      },
+      "DealCloseRequest": {
+        "description": "Request body for closing a deal won or lost.\n\nThe reason must come from the enumerated won/lost list matching the\nresult, and the note is mandatory.",
+        "properties": {
+          "note": {
+            "description": "A note is required to advance or close.",
+            "maxLength": 5000,
+            "title": "Note",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Main reason we won/lost (enumerated list)",
+            "maxLength": 50,
+            "title": "Reason",
+            "type": "string"
+          },
+          "result": {
+            "description": "Close outcome: won or lost",
+            "enum": [
+              "won",
+              "lost"
+            ],
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result",
+          "reason",
+          "note"
+        ],
+        "title": "DealCloseRequest",
+        "type": "object"
+      },
+      "DealCreate": {
+        "description": "Request body for creating a new deal.",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/BillingCurrency",
+            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies"
+          },
+          "customerId": {
+            "description": "Customer (company) this deal belongs to",
+            "format": "uuid",
+            "title": "Customerid",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional first stage-record note; defaults to 'Deal created.'",
+            "title": "Note"
+          },
+          "ownerId": {
+            "description": "Sales rep who owns this deal",
+            "format": "uuid",
+            "title": "Ownerid",
+            "type": "string"
+          },
+          "product": {
+            "description": "Product being sold",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Product",
+            "type": "string"
+          },
+          "seats": {
+            "description": "Number of seats/licences",
+            "exclusiveMinimum": 0.0,
+            "title": "Seats",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "description": "Annual deal value (ARR) in the deal currency",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "customerId",
+          "ownerId",
+          "product",
+          "seats",
+          "value",
+          "currency"
+        ],
+        "title": "DealCreate",
+        "type": "object"
+      },
+      "DealHygieneBucket": {
+        "description": "Activity-hygiene list filters for the pipeline (open deals only).\n\nMirrors the design's filter chips: Active this week / 8-30 days quiet /\nNo activity 30d+ / Open 45d+.",
+        "enum": [
+          "active_week",
+          "quiet_8_30",
+          "no_activity_30",
+          "open_45"
+        ],
+        "title": "DealHygieneBucket",
+        "type": "string"
+      },
+      "DealOwnerResponse": {
+        "description": "Owner as the deal list renders it: id, name, initials.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initials": {
+            "title": "Initials",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "initials"
+        ],
+        "title": "DealOwnerResponse",
+        "type": "object"
+      },
+      "DealParkRequest": {
+        "description": "Request body for parking a deal into the future pipeline.",
+        "properties": {
+          "note": {
+            "description": "Why the deal is parked \u2014 every stage keeps a record",
+            "maxLength": 5000,
+            "title": "Note",
+            "type": "string"
+          },
+          "parkedUntil": {
+            "description": "Re-engage date (must be in the future)",
+            "format": "date",
+            "title": "Parkeduntil",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parkedUntil",
+          "note"
+        ],
+        "title": "DealParkRequest",
+        "type": "object"
+      },
+      "DealQuoteConversionsRow": {
+        "description": "Reference-currency conversions row for the totals block.\n\nDisplay-only FX conventions; nothing here is persisted\n(design: \"~= $1,489.44 * (EUR)1,370.28 * (GBP)1,176.66\").",
+        "properties": {
+          "eur": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Eur",
+            "type": "string"
+          },
+          "gbp": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gbp",
+            "type": "string"
+          },
+          "usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Usd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "usd",
+          "eur",
+          "gbp"
+        ],
+        "title": "DealQuoteConversionsRow",
+        "type": "object"
+      },
+      "DealQuoteCreateRequest": {
+        "description": "Request body for POST /deals/{id}/quotes (prefill flow).\n\nCustomer, reference and totals are server-derived; the currency\ndefaults to the deal currency and must map to one of the customer's\nbilling profiles (EUR/GBP reference currencies are rejected with the\ntyped ReferenceCurrencyException).",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Billing currency; defaults to the deal currency. Must be a customer billing-profile currency (USD/KES) \u2014 EUR/GBP are reference (display-only) currencies and are rejected."
+          },
+          "dueDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quote expiry date; defaults to 30 days from today",
+            "title": "Duedate"
+          },
+          "lines": {
+            "description": "Quote-builder lines (at least one)",
+            "items": {
+              "$ref": "#/components/schemas/DealQuoteLineInput"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Customer-facing notes/terms",
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "title": "DealQuoteCreateRequest",
+        "type": "object"
+      },
+      "DealQuoteLineInput": {
+        "description": "One quote-builder line: product + seats + billing period + discount.\n\nThe server derives all prices (catalog list price, FX conversion,\nannual/extra discounts); the client never sends an amount.",
+        "properties": {
+          "billingPeriod": {
+            "$ref": "#/components/schemas/BillingPeriod",
+            "default": "monthly",
+            "description": "monthly (list price x 1 month) or annual (-15%, x 12 months)"
+          },
+          "extraDiscountPct": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "description": "Extra discount % applied on top of the billing-period price",
+            "title": "Extradiscountpct"
+          },
+          "product": {
+            "description": "Catalog product name (must match the org price list)",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Product",
+            "type": "string"
+          },
+          "seats": {
+            "description": "Number of seats/licences",
+            "exclusiveMinimum": 0.0,
+            "title": "Seats",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product",
+          "seats"
+        ],
+        "title": "DealQuoteLineInput",
+        "type": "object"
+      },
+      "DealQuoteLinePreview": {
+        "description": "Builder support fields for one line (all server-computed).",
+        "properties": {
+          "billing_period": {
+            "$ref": "#/components/schemas/BillingPeriod"
+          },
+          "discounted_price_per_user_month": {
+            "description": "Per user/month after the annual billing discount (annual lines) and the extra discount",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discounted Price Per User Month",
+            "type": "string"
+          },
+          "extra_discount_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Extra Discount Pct",
+            "type": "string"
+          },
+          "line_total": {
+            "description": "seats x unit_price, computed by the quotes service",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Line Total",
+            "type": "string"
+          },
+          "list_price_per_user_month": {
+            "description": "Catalog list price per user/month in the quote currency",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "List Price Per User Month",
+            "type": "string"
+          },
+          "months": {
+            "description": "Months billed: 1 (monthly) or 12 (annual)",
+            "title": "Months",
+            "type": "integer"
+          },
+          "period_label": {
+            "description": "\"per month\" or \"per year\"",
+            "title": "Period Label",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "seats": {
+            "title": "Seats",
+            "type": "integer"
+          },
+          "tax_type": {
+            "description": "Line tax treatment derived from the billing profile",
+            "title": "Tax Type",
+            "type": "string"
+          },
+          "unit_price": {
+            "description": "Per-seat price for the billing period (discounted x months)",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "seats",
+          "billing_period",
+          "extra_discount_pct",
+          "list_price_per_user_month",
+          "discounted_price_per_user_month",
+          "months",
+          "unit_price",
+          "line_total",
+          "period_label",
+          "tax_type"
+        ],
+        "title": "DealQuoteLinePreview",
+        "type": "object"
+      },
+      "DealQuotePreviewResponse": {
+        "description": "Builder support payload: per-line prices + totals + profile banner.\n\nTotals are produced exclusively by the existing\nBaseDocumentService.calculate_totals delegation \u2014 this response only\nprojects them for the screen.",
+        "properties": {
+          "billing_profile": {
+            "$ref": "#/components/schemas/DealBillingProfileResponse",
+            "description": "Profile banner data (\"Posts to {code} * {terms} * {tax} * synced\")"
+          },
+          "conversions": {
+            "$ref": "#/components/schemas/DealQuoteConversionsRow"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DealQuoteLinePreview"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "subtotal": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_label": {
+            "description": "VAT line label from the billing profile (e.g. \"VAT 16%\")",
+            "title": "Tax Label",
+            "type": "string"
+          },
+          "tax_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "total_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Due",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "lines",
+          "subtotal",
+          "tax_label",
+          "tax_total",
+          "total_due",
+          "conversions",
+          "billing_profile"
+        ],
+        "title": "DealQuotePreviewResponse",
+        "type": "object"
+      },
+      "DealQuoteSummary": {
+        "description": "A linked quote as the deal detail / quotes rail renders it.\n\nProjection of an EXISTING quote row: reference, company,\nbilling-profile code, currency chip, total in the quote currency AND\nits server-computed USD equivalent, date and status.",
+        "properties": {
+          "billing_profile_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Accounting code of the billing profile matching the quote currency; null when the customer has none in that currency",
+            "title": "Billing Profile Code"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_id": {
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "deal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deal Id"
+          },
+          "display_status": {
+            "$ref": "#/components/schemas/QuoteDisplayStatus",
+            "description": "Sales Desk display state: Draft <- draft|expired, Pending <- sent|approved, Synced <- invoiced. Display-only; `status` remains the source of truth."
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quote_number": {
+            "title": "Quote Number",
+            "type": "string"
+          },
+          "quote_reference": {
+            "description": "User-facing reference (\"Q-2031\" style)",
+            "title": "Quote Reference",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/QuoteStatus"
+          },
+          "total_due": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Due",
+            "type": "string"
+          },
+          "total_usd_equivalent": {
+            "description": "Server-computed USD equivalent of total_due per the org FX display conventions",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Usd Equivalent",
+            "type": "string"
+          },
+          "transaction_date": {
+            "format": "date",
+            "title": "Transaction Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "quote_number",
+          "quote_reference",
+          "deal_id",
+          "customer_id",
+          "company_name",
+          "billing_profile_code",
+          "currency",
+          "total_due",
+          "total_usd_equivalent",
+          "transaction_date",
+          "due_date",
+          "status",
+          "display_status",
+          "created_at"
+        ],
+        "title": "DealQuoteSummary",
+        "type": "object"
+      },
+      "DealResponse": {
+        "description": "A deal exactly as the pipeline list and drawer consume it.\n\n``age_days``, ``idle_days``, ``weighted_value``, ``latest_record`` and\n``stage_history`` are server-computed \u2014 the UI never derives them.",
+        "properties": {
+          "age_days": {
+            "description": "Days since the first record (UI: 'Nd in pipeline' / 'Nd total')",
+            "title": "Age Days",
+            "type": "integer"
+          },
+          "billing_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealBillingProfileResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Customer billing profile matching the deal currency (drawer billing line); null if the customer has none"
+          },
+          "close_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Note"
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_id": {
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idle_days": {
+            "description": "Days since the latest record (UI: 'Last activity Nd ago')",
+            "title": "Idle Days",
+            "type": "integer"
+          },
+          "latest_record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealActivityResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/DealOwnerResponse"
+          },
+          "parked_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parked Until"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "quotes": {
+            "description": "Quotes created from this deal (deal-detail embed only; empty on list responses). Quotes survive deal closure unchanged.",
+            "items": {
+              "$ref": "#/components/schemas/DealQuoteSummary"
+            },
+            "title": "Quotes",
+            "type": "array"
+          },
+          "resume_stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seats": {
+            "title": "Seats",
+            "type": "integer"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/DealStage"
+          },
+          "stage_history": {
+            "items": {
+              "$ref": "#/components/schemas/DealActivityResponse"
+            },
+            "title": "Stage History",
+            "type": "array"
+          },
+          "stage_index": {
+            "description": "1-based stage position (Stage N of 5)",
+            "title": "Stage Index",
+            "type": "integer"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "stage_total": {
+            "description": "Total pipeline steps the UI renders (5)",
+            "title": "Stage Total",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DealStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "weighted_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "value x stage probability while the deal is in play; null once closed (UI renders '\u2014')",
+            "title": "Weighted Value"
+          }
+        },
+        "required": [
+          "id",
+          "customer_id",
+          "company_name",
+          "owner",
+          "product",
+          "seats",
+          "value",
+          "currency",
+          "stage",
+          "stage_index",
+          "stage_total",
+          "stage_label",
+          "status",
+          "parked_until",
+          "resume_stage",
+          "close_reason",
+          "close_note",
+          "closed_at",
+          "age_days",
+          "idle_days",
+          "weighted_value",
+          "latest_record",
+          "stage_history",
+          "billing_profile",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "DealResponse",
+        "type": "object"
+      },
+      "DealStage": {
+        "description": "Open-pipeline stages of a Sales Desk deal, in order.\n\nA deal moves strictly one stage at a time (no skipping) and every\nadvance requires a note. The UI renders \"Stage N of 5\" where the fifth\nstep is the closed (won/lost) state carried by :class:`DealStatus`, so\nthe stage enum itself only holds the four open stages.",
+        "enum": [
+          "activation",
+          "qualification",
+          "proposal_quote",
+          "negotiation"
+        ],
+        "title": "DealStage",
+        "type": "string"
+      },
+      "DealStatus": {
+        "description": "Lifecycle status of a deal.\n\nOPEN deals sit in the pipeline; PARKED deals live in the future\npipeline (with ``parked_until``/``resume_stage``); WON/LOST are the\nterminal closed states carrying a close reason + note.",
+        "enum": [
+          "open",
+          "won",
+          "lost",
+          "parked"
+        ],
+        "title": "DealStatus",
+        "type": "string"
+      },
+      "DealStatusCounts": {
+        "description": "Tab header counts: All (6) \u00b7 Open (4) \u00b7 Won (1) \u00b7 Lost (1).",
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "lost": {
+            "title": "Lost",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "parked": {
+            "title": "Parked",
+            "type": "integer"
+          },
+          "won": {
+            "title": "Won",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "open",
+          "won",
+          "lost",
+          "parked"
+        ],
+        "title": "DealStatusCounts",
+        "type": "object"
+      },
+      "DealTab": {
+        "description": "Pipeline list tabs: All (6) \u00b7 Open (4) \u00b7 Won (1) \u00b7 Lost (1).",
+        "enum": [
+          "all",
+          "open",
+          "won",
+          "lost"
+        ],
+        "title": "DealTab",
+        "type": "string"
+      },
+      "DealUpdate": {
+        "description": "Request body for updating an open/parked deal's commercial fields.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New deal currency; must be one of the customer's billing-profile currencies"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownerid"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product"
+          },
+          "seats": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seats"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "DealUpdate",
         "type": "object"
       },
       "DetailedHealthResponse": {
@@ -3093,6 +4391,25 @@
         "title": "IncomeStatementSection",
         "type": "object"
       },
+      "Industry": {
+        "description": "Customer industry classification (ratified design vocabulary).\n\nThe 12 values ratified from the Sales Desk design exports\n(``docs/sales-desk-designs/`` on branch ``sales-desk-designs``; see the\nreview on !38 and issue #53): the deal-desk prototype's original list\nwith 'Hospitality' renamed to 'Hospitality & tourism' plus\n'Agriculture & export' and 'Insurance'. Must stay identical to the\nIN-list in migration ``d5e6f7a8b9c0``.",
+        "enum": [
+          "Financial services",
+          "Healthcare",
+          "Education",
+          "Logistics & transport",
+          "Hospitality & tourism",
+          "Agriculture & export",
+          "Insurance",
+          "Manufacturing",
+          "Professional services",
+          "NGO / Non-profit",
+          "Retail",
+          "Other"
+        ],
+        "title": "Industry",
+        "type": "string"
+      },
       "InvoiceCalculationResponse": {
         "description": "Response for invoice total calculations (preview).",
         "properties": {
@@ -3741,7 +5058,7 @@
         "example": {
           "attachPdf": true,
           "body": "Please find attached your invoice.",
-          "subject": "Invoice IN-0101 from Priori Technologies",
+          "subject": "Invoice IN-0101 from Business Central",
           "toEmail": "customer@example.com"
         },
         "properties": {
@@ -4277,6 +5594,523 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "NurtureDueState": {
+        "description": "Server-computed due badge, rendered directly by the UI.\n\n``state`` is ``overdue`` / ``today`` / ``in_days`` (with ``in_days``\ncarrying N), computed against the org-local accounting date boundary.\n``label`` is the chip text verbatim: \"Overdue\", \"Today\", \"45d\".",
+        "properties": {
+          "in_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Days until engage_on when state == 'in_days'",
+            "title": "In Days"
+          },
+          "label": {
+            "description": "Chip text: 'Overdue' | 'Today' | 'Nd'",
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "overdue",
+              "today",
+              "in_days"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "label"
+        ],
+        "title": "NurtureDueState",
+        "type": "object"
+      },
+      "NurtureEngageRequest": {
+        "description": "Request body for the 'Start engaging \u2192' action.\n\nEngaging atomically creates a customer + an open deal at stage\nActivation and removes the prospect. Either a full ``customer`` payload\n(validated/deduplicated by the existing customers service) or a\n``customer_id`` linking an existing customer must be provided \u2014 the\nlatter is the re-submit path after a duplicate-email 409.",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/BillingCurrency",
+            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomerCreate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New-customer payload (existing customers-service validation and dedup apply, incl. case-insensitive email uniqueness)"
+          },
+          "customerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Link the deal to this existing customer instead of creating one \u2014 the re-submit option offered by the duplicate-email 409",
+            "title": "Customerid"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First stage-record note of the deal; defaults to the prospect's note",
+            "title": "Note"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deal owner; defaults to the prospect's owner",
+            "title": "Ownerid"
+          },
+          "product": {
+            "description": "Product being sold",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Product",
+            "type": "string"
+          },
+          "seats": {
+            "description": "Number of seats/licences",
+            "exclusiveMinimum": 0.0,
+            "title": "Seats",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Annual deal value (ARR); defaults to the prospect's est. ARR",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "product",
+          "seats",
+          "currency"
+        ],
+        "title": "NurtureEngageRequest",
+        "type": "object"
+      },
+      "NurtureNotificationCounts": {
+        "description": "Due counts feeding the sidebar badge / notification bell (#45).",
+        "properties": {
+          "due_nurture": {
+            "description": "Prospects with engage_on <= org-local today",
+            "title": "Due Nurture",
+            "type": "integer"
+          },
+          "due_parked": {
+            "description": "Parked deals with parked_until <= org-local today",
+            "title": "Due Parked",
+            "type": "integer"
+          },
+          "upcoming_nurture": {
+            "description": "Prospects due within the next 14 days (exclusive of today)",
+            "title": "Upcoming Nurture",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "due_nurture",
+          "upcoming_nurture",
+          "due_parked"
+        ],
+        "title": "NurtureNotificationCounts",
+        "type": "object"
+      },
+      "NurtureProspectCreate": {
+        "description": "Request body for the '+ Add planned deal' form (``App__2_.svg``).",
+        "properties": {
+          "company": {
+            "description": "Company we plan to engage (required)",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contact person at the company",
+            "title": "Contact"
+          },
+          "engageOn": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Engage-by date; the UI defaults it to +90 days and the server applies the same org-local default when omitted",
+            "title": "Engageon"
+          },
+          "estArr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Estimated annual value (est. ARR) if we win the company",
+            "title": "Estarr"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why/when to engage",
+            "title": "Note"
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sales rep who owns this prospect",
+            "title": "Ownerid"
+          }
+        },
+        "required": [
+          "company"
+        ],
+        "title": "NurtureProspectCreate",
+        "type": "object"
+      },
+      "NurtureProspectResponse": {
+        "description": "One nurture-list / planned-prospects row, exactly as rendered.",
+        "properties": {
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dot_state": {
+            "description": "Status dot: due=amber / planned=green (prospects table)",
+            "enum": [
+              "due",
+              "planned"
+            ],
+            "title": "Dot State",
+            "type": "string"
+          },
+          "due_state": {
+            "$ref": "#/components/schemas/NurtureDueState",
+            "description": "Server-computed badge \u2014 the UI never does date math"
+          },
+          "engage_on": {
+            "description": "Engage-by date (ISO)",
+            "format": "date",
+            "title": "Engage On",
+            "type": "string"
+          },
+          "est_arr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Estimated annual value (est. ARR); null if unknown",
+            "title": "Est Arr"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealOwnerResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Owner (id/name/initials); null if unassigned"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "company",
+          "contact",
+          "note",
+          "engage_on",
+          "est_arr",
+          "owner",
+          "due_state",
+          "dot_state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NurtureProspectResponse",
+        "type": "object"
+      },
+      "NurtureSummary": {
+        "description": "Header aggregates for the nurture list / planned-prospects table.\n\nRenders \"Nurture list \u2014 4 companies \u00b7 est. $67,020 potential ARR\" and\nthe \"3\" / \"1 due now\" header counts.",
+        "properties": {
+          "count": {
+            "description": "Number of prospects (companies)",
+            "title": "Count",
+            "type": "integer"
+          },
+          "due_now": {
+            "description": "Prospects due now (engage_on <= org-local today)",
+            "title": "Due Now",
+            "type": "integer"
+          },
+          "total_est_arr": {
+            "description": "Sum of est. ARR across the prospects",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Est Arr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "total_est_arr",
+          "due_now"
+        ],
+        "title": "NurtureSummary",
+        "type": "object"
+      },
+      "OnboardingResponse": {
+        "description": "An onboarding checklist exactly as the Onboarding screen consumes it.\n\n``percent_complete`` and the ``tasks_completed`` / ``tasks_total``\ncounts are server-computed on every read AND every mutation \u2014 the UI\nnever derives them.",
+        "properties": {
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer_id": {
+            "format": "uuid",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "deal_id": {
+            "format": "uuid",
+            "title": "Deal Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_complete": {
+            "title": "Is Complete",
+            "type": "boolean"
+          },
+          "percent_complete": {
+            "description": "Server-computed completion percent (e.g. 43, 86)",
+            "title": "Percent Complete",
+            "type": "integer"
+          },
+          "plan_label": {
+            "description": "Plan line captured at creation: '{product} \u00b7 {seats} seats'",
+            "title": "Plan Label",
+            "type": "string"
+          },
+          "steps": {
+            "description": "Ordered steps: {position, label, done, completed_at}",
+            "items": {
+              "$ref": "#/components/schemas/OnboardingTaskResponse"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "tasks_completed": {
+            "description": "Number of done steps (the N in 'N of 7 tasks complete')",
+            "title": "Tasks Completed",
+            "type": "integer"
+          },
+          "tasks_total": {
+            "description": "Total steps on this checklist (the 7 in 'N of 7')",
+            "title": "Tasks Total",
+            "type": "integer"
+          },
+          "template_version": {
+            "description": "Owner template version this checklist was created from (template versioning: later template edits never mutate it)",
+            "title": "Template Version",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deal_id",
+          "customer_id",
+          "company_name",
+          "plan_label",
+          "percent_complete",
+          "tasks_completed",
+          "tasks_total",
+          "steps",
+          "template_version",
+          "is_complete",
+          "completed_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OnboardingResponse",
+        "type": "object"
+      },
+      "OnboardingTaskResponse": {
+        "description": "One ordered checklist step exactly as the screen renders it.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "position": {
+            "description": "1-based step order ('Step N')",
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "label",
+          "done",
+          "completed_at"
+        ],
+        "title": "OnboardingTaskResponse",
+        "type": "object"
+      },
       "OverviewMetric": {
         "description": "A money metric with its previous-period baseline and delta.",
         "properties": {
@@ -4388,6 +6222,17 @@
             ],
             "title": "Locationwatermark"
           },
+          "onboardingTaskTemplate": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Onboardingtasktemplate",
+            "type": "array"
+          },
+          "onboardingTemplateVersion": {
+            "title": "Onboardingtemplateversion",
+            "type": "integer"
+          },
           "phone": {
             "anyOf": [
               {
@@ -4460,6 +6305,8 @@
         },
         "required": [
           "fullName",
+          "onboardingTaskTemplate",
+          "onboardingTemplateVersion",
           "reportingTimezone",
           "reportingDate"
         ],
@@ -4547,6 +6394,22 @@
               }
             ],
             "title": "Locationwatermark"
+          },
+          "onboardingTaskTemplate": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboardingtasktemplate"
           },
           "phone": {
             "anyOf": [
@@ -4666,6 +6529,26 @@
         "title": "PaginatedResponse[CustomerSummary]",
         "type": "object"
       },
+      "PaginatedResponse_DealResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[DealResponse]",
+        "type": "object"
+      },
       "PaginatedResponse_ExcludedTaxTransaction_": {
         "properties": {
           "items": {
@@ -4724,6 +6607,46 @@
           "metadata"
         ],
         "title": "PaginatedResponse[InvoiceSummary]",
+        "type": "object"
+      },
+      "PaginatedResponse_NurtureProspectResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NurtureProspectResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[NurtureProspectResponse]",
+        "type": "object"
+      },
+      "PaginatedResponse_OnboardingResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OnboardingResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[OnboardingResponse]",
         "type": "object"
       },
       "PaginatedResponse_PurchaseOrderSummary_": {
@@ -6112,7 +8035,7 @@
         "example": {
           "attachPdf": true,
           "body": "Please find attached our purchase order.",
-          "subject": "Purchase Order PO-000042 from Priori Technologies",
+          "subject": "Purchase Order PO-000042 from Business Central",
           "toEmail": "vendor@example.com"
         },
         "properties": {
@@ -6904,6 +8827,16 @@
         "title": "QuoteCreate",
         "type": "object"
       },
+      "QuoteDisplayStatus": {
+        "description": "Sales Desk display state of a quote (Quotes & pricing screen, #44).\n\nThe design exports (``Quotes___Pricing.svg`` / ``App__3_.svg``) render\nexactly three states, mapped from the existing quote lifecycle:\n\n- ``Draft``   <- ``draft`` (still being built) and ``expired``\n  (the offer lapsed; it needs rework before it can be re-sent)\n- ``Pending`` <- ``sent`` and ``approved`` (in flight with the\n  customer; not yet posted to accounting)\n- ``Synced``  <- ``invoiced`` (converted to an invoice, i.e. pushed\n  through to accounting)\n\nDisplay-only: the persisted lifecycle (:class:`QuoteStatus`) remains\nthe source of truth and is always returned alongside this value.",
+        "enum": [
+          "Draft",
+          "Pending",
+          "Synced"
+        ],
+        "title": "QuoteDisplayStatus",
+        "type": "string"
+      },
       "QuoteLineItemCreate": {
         "description": "Schema for creating a quote line item.",
         "example": {
@@ -7130,6 +9063,19 @@
             "title": "Days Until Expiry",
             "type": "integer"
           },
+          "deal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sales Desk deal this quote was created from, if any. Survives deal closure; null for standalone quotes or after deal deletion.",
+            "title": "Deal Id"
+          },
           "discount_amount": {
             "anyOf": [
               {
@@ -7164,6 +9110,11 @@
               }
             ],
             "title": "Discount Type"
+          },
+          "display_status": {
+            "$ref": "#/components/schemas/QuoteDisplayStatus",
+            "description": "Sales Desk display state (Quotes & pricing screen), mapped from the persisted lifecycle: Draft <- draft|expired, Pending <- sent|approved, Synced <- invoiced. Display-only; `status` remains the source of truth.",
+            "readOnly": true
           },
           "due_date": {
             "format": "date",
@@ -7342,7 +9293,8 @@
           "is_editable",
           "is_expired",
           "days_until_expiry",
-          "can_convert_to_invoice"
+          "can_convert_to_invoice",
+          "display_status"
         ],
         "title": "QuoteResponse",
         "type": "object"
@@ -7352,7 +9304,7 @@
         "example": {
           "attachPdf": true,
           "body": "Please find attached your quote.",
-          "subject": "Quote QT-0101 from Priori Technologies",
+          "subject": "Quote QT-0101 from Business Central",
           "toEmail": "customer@example.com"
         },
         "properties": {
@@ -7529,6 +9481,18 @@
         "title": "QuoteStatisticsResponse",
         "type": "object"
       },
+      "QuoteStatus": {
+        "description": "Quote status values.",
+        "enum": [
+          "draft",
+          "sent",
+          "approved",
+          "invoiced",
+          "expired"
+        ],
+        "title": "QuoteStatus",
+        "type": "string"
+      },
       "QuoteStatusCounts": {
         "description": "Quote counts by status for dashboard.",
         "properties": {
@@ -7567,8 +9531,20 @@
         "type": "object"
       },
       "QuoteSummary": {
-        "description": "Lightweight quote summary for list views.",
+        "description": "Lightweight quote summary for list views.\n\nCarries the Sales Desk quote-list screen contract (issue #44):\nreference, company, billing-profile code, currency chip, total in the\nquote currency AND its server-computed USD equivalent, date and the\n3-state display status.",
         "properties": {
+          "billing_profile_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Accounting code of the customer billing profile matching the quote currency (e.g. BAR-0007-USD); null when the customer has no profile in this currency",
+            "title": "Billing Profile Code"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -7592,6 +9568,24 @@
             "readOnly": true,
             "title": "Days Until Expiry",
             "type": "integer"
+          },
+          "deal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sales Desk deal this quote was created from, if any",
+            "title": "Deal Id"
+          },
+          "display_status": {
+            "$ref": "#/components/schemas/QuoteDisplayStatus",
+            "description": "Sales Desk display state (Quotes & pricing screen), mapped from the persisted lifecycle: Draft <- draft|expired, Pending <- sent|approved, Synced <- invoiced. Display-only; `status` remains the source of truth.",
+            "readOnly": true
           },
           "due_date": {
             "format": "date",
@@ -7626,6 +9620,19 @@
             "title": "Total Due",
             "type": "string"
           },
+          "total_usd_equivalent": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Server-computed USD equivalent of total_due ('Total (USD eq.)' column) per the org FX display conventions; equals total_due for USD quotes",
+            "title": "Total Usd Equivalent"
+          },
           "transaction_date": {
             "format": "date",
             "title": "Transaction Date",
@@ -7644,6 +9651,7 @@
           "currency",
           "total_due",
           "created_at",
+          "display_status",
           "is_expired",
           "days_until_expiry"
         ],
@@ -8119,6 +10127,70 @@
         "title": "SalesLedgerEntry",
         "type": "object"
       },
+      "SalesPriceListEntry": {
+        "description": "One product row of the Sales Desk price list (issue #44).\n\nRaw catalog value plus the two derived display columns of\n``Quotes___Pricing.svg`` (\"Annual / seat\" = monthly x 12 at list,\n\"10-seat ARR\" = monthly x 12 x 10), server-derived so the UI renders\nthem verbatim.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "usd_per_seat_month": {
+            "description": "List price per seat per month in USD (decimal string)",
+            "title": "Usd Per Seat Month",
+            "type": "string"
+          },
+          "usd_per_seat_year": {
+            "description": "Annual / seat column: usd_per_seat_month x 12 (list, decimal string)",
+            "title": "Usd Per Seat Year",
+            "type": "string"
+          },
+          "usd_ten_seat_arr": {
+            "description": "10-seat ARR column: usd_per_seat_month x 12 x 10 (decimal string)",
+            "title": "Usd Ten Seat Arr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "usd_per_seat_month",
+          "usd_per_seat_year",
+          "usd_ten_seat_arr"
+        ],
+        "title": "SalesPriceListEntry",
+        "type": "object"
+      },
+      "SalesPricingSettings": {
+        "description": "Org sales pricing settings + derived price list (issue #44).\n\nThis settings read IS the documented price-list source for the Quotes\n& pricing UI (#49): the seeded product catalog with the derived\nAnnual/seat and 10-seat ARR columns, the annual billing discount\napplied by the quote builder, and the display-only FX conventions\n(units of currency per 1 USD) used for the USD-equivalent column and\nthe reference-currency conversions row.",
+        "properties": {
+          "annual_billing_discount_pct": {
+            "description": "Discount (percentage points) applied to the per-user/month price when a quote line is billed annually",
+            "title": "Annual Billing Discount Pct",
+            "type": "string"
+          },
+          "catalog": {
+            "items": {
+              "$ref": "#/components/schemas/SalesPriceListEntry"
+            },
+            "title": "Catalog",
+            "type": "array"
+          },
+          "fx_units_per_usd": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Display-only FX conventions: units of each currency per 1 USD. EUR/GBP are reference (display-only) currencies.",
+            "title": "Fx Units Per Usd",
+            "type": "object"
+          }
+        },
+        "required": [
+          "catalog",
+          "annual_billing_discount_pct",
+          "fx_units_per_usd"
+        ],
+        "title": "SalesPricingSettings",
+        "type": "object"
+      },
       "SalesReportSummaryResponse": {
         "description": "Sales report overview: metrics + breakdowns.",
         "properties": {
@@ -8517,6 +10589,16 @@
         "title": "TaxSummaryMetrics",
         "type": "object"
       },
+      "TaxTreatment": {
+        "description": "Tax treatment of a customer billing profile.\n\nDisplay values from the deal-desk prototype; each maps 1:1 onto an\nexisting document-level :class:`TaxType` so profile settings can drive\nline-item taxation without a second taxonomy.",
+        "enum": [
+          "VAT 16%",
+          "Zero-rated (export)",
+          "Exempt"
+        ],
+        "title": "TaxTreatment",
+        "type": "string"
+      },
       "TaxType": {
         "description": "Tax types for invoice line items.",
         "enum": [
@@ -8896,13 +10978,13 @@
           "address": "Watermark",
           "country": "Kenya",
           "currency": "KES",
-          "email": "finance@prioritech.com",
+          "email": "finance@example.com",
           "phonePrimary": "+254 700 000 000",
           "phoneSecondary": "+254 711 000 000",
           "taxIdPin": "P09GIDHWOKD",
           "vatNumber": "VAT-001",
-          "vendorName": "Priori Virtual Studio Ltd",
-          "website": "www.prioritech.com"
+          "vendorName": "Acme Virtual Studio Ltd",
+          "website": "www.example.com"
         },
         "properties": {
           "address": {
@@ -9624,12 +11706,12 @@
           "address": "Watermark Business Park, Nairobi",
           "country": "Kenya",
           "currency": "KES",
-          "email": "accounts@prioritech.com",
+          "email": "accounts@example.com",
           "phonePrimary": "+254700000000",
           "taxIdPin": "P09GIDHWOKD",
           "vatNumber": "V0012345X",
-          "vendorName": "Priori Virtual Studio Ltd",
-          "website": "www.prioritech.com"
+          "vendorName": "Acme Virtual Studio Ltd",
+          "website": "www.example.com"
         },
         "properties": {
           "address": {
@@ -10002,7 +12084,7 @@
   },
   "info": {
     "description": "Enterprise CRM and Accounting Platform",
-    "title": "Priori Technologies",
+    "title": "Business Central",
     "version": "1.0.0"
   },
   "openapi": "3.1.0",
@@ -10378,6 +12460,18 @@
               "default": false,
               "description": "Include total/total_pages (runs a COUNT(*); off by default)",
               "title": "Withtotal",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only customers with at least one billing profile not yet pushed to accounting",
+            "in": "query",
+            "name": "unsynced",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only customers with at least one billing profile not yet pushed to accounting",
+              "title": "Unsynced",
               "type": "boolean"
             }
           }
@@ -11005,6 +13099,206 @@
           }
         ],
         "summary": "Get customer invoices",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/profiles/sync-all": {
+      "post": {
+        "description": "Flip every billing profile of the customer to synced.",
+        "operationId": "sync_all_billing_profiles_api_v1_customers__customer_id__profiles_sync_all_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillingProfileResponse"
+                  },
+                  "title": "Response Sync All Billing Profiles Api V1 Customers  Customer Id  Profiles Sync All Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "All billing profiles marked synced"
+          },
+          "404": {
+            "description": "Customer or billing profiles not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark all billing profiles as posted to accounting",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/profiles/{currency}": {
+      "patch": {
+        "description": "Update payment terms, tax treatment or credit limit of one per-currency billing profile. Any accepted change marks the profile out of sync until it is pushed to accounting again.",
+        "operationId": "update_billing_profile_api_v1_customers__customer_id__profiles__currency__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "currency",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BillingCurrency"
+            }
+          },
+          {
+            "description": "Pass the profile version from your last GET response. If the profile has been modified since, a 409 is returned.",
+            "in": "query",
+            "name": "expectedVersion",
+            "required": true,
+            "schema": {
+              "description": "Pass the profile version from your last GET response. If the profile has been modified since, a 409 is returned.",
+              "title": "Expectedversion",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingProfileResponse"
+                }
+              }
+            },
+            "description": "Billing profile updated (now unsynced)"
+          },
+          "404": {
+            "description": "Customer or billing profile not found"
+          },
+          "409": {
+            "description": "Profile modified by another user (stale version)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit a billing profile",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/{customer_id}/profiles/{currency}/sync": {
+      "post": {
+        "description": "Flip one per-currency billing profile to synced and stamp synced_at. Idempotent: re-syncing an already-synced profile refreshes the timestamp.",
+        "operationId": "sync_billing_profile_api_v1_customers__customer_id__profiles__currency__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "currency",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BillingCurrency"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingProfileResponse"
+                }
+              }
+            },
+            "description": "Billing profile marked synced"
+          },
+          "404": {
+            "description": "Customer or billing profile not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark a billing profile as posted to accounting",
         "tags": [
           "Customers"
         ]
@@ -11727,6 +14021,866 @@
         "summary": "Recent transactions",
         "tags": [
           "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/deals": {
+      "get": {
+        "description": "Paginated pipeline list with tab (all|open|won|lost), owner, activity-hygiene bucket, show-closed and search filters. All derived fields (age_days, idle_days, weighted_value, latest record, stage history) are server-computed.",
+        "operationId": "list_deals_api_v1_deals_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pipeline tab: all | open | won | lost",
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DealTab",
+              "default": "all",
+              "description": "Pipeline tab: all | open | won | lost"
+            }
+          },
+          {
+            "description": "Filter by deal owner (sales rep)",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by deal owner (sales rep)",
+              "title": "Ownerid"
+            }
+          },
+          {
+            "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
+            "in": "query",
+            "name": "hygiene",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DealHygieneBucket"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
+              "title": "Hygiene"
+            }
+          },
+          {
+            "description": "On the 'all' tab, include closed (won/lost) deals",
+            "in": "query",
+            "name": "showClosed",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "On the 'all' tab, include closed (won/lost) deals",
+              "title": "Showclosed",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Search company name, contact or product",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search company name, contact or product",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_DealResponse_"
+                }
+              }
+            },
+            "description": "List of deals"
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List deals",
+        "tags": [
+          "Deals"
+        ]
+      },
+      "post": {
+        "description": "Create a pipeline deal for an existing customer. The deal currency must be one of the customer's billing-profile currencies (USD/KES).",
+        "operationId": "create_deal_api_v1_deals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal created successfully"
+          },
+          "400": {
+            "description": "Customer inactive or currency not among the customer's billing profiles"
+          },
+          "404": {
+            "description": "Customer or owner not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a new deal",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/counts": {
+      "get": {
+        "description": "Counts per pipeline tab: All (n) \u00b7 Open (n) \u00b7 Won (n) \u00b7 Lost (n).",
+        "operationId": "get_deal_counts_api_v1_deals_counts_get",
+        "parameters": [
+          {
+            "description": "Restrict counts to one owner",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict counts to one owner",
+              "title": "Ownerid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealStatusCounts"
+                }
+              }
+            },
+            "description": "Deal counts by status"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get deal status counts",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}": {
+      "delete": {
+        "description": "Delete an open/parked deal. Closed deals are history and stay.",
+        "operationId": "delete_deal_api_v1_deals__deal_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deal deleted successfully"
+          },
+          "400": {
+            "description": "Deal is closed (won/lost)"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete deal",
+        "tags": [
+          "Deals"
+        ]
+      },
+      "get": {
+        "description": "Full deal for the drawer: stage history, latest record, derived values and the billing line joined from the customer's billing profile matching the deal currency.",
+        "operationId": "get_deal_api_v1_deals__deal_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal details"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get deal details",
+        "tags": [
+          "Deals"
+        ]
+      },
+      "put": {
+        "description": "Update commercial fields (owner, product, seats, value, currency) of an open or parked deal. Closed deals are read-only.",
+        "operationId": "update_deal_api_v1_deals__deal_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Expected version number for optimistic locking",
+            "in": "query",
+            "name": "expected_version",
+            "required": true,
+            "schema": {
+              "description": "Expected version number for optimistic locking",
+              "title": "Expected Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal updated successfully"
+          },
+          "400": {
+            "description": "Deal closed or currency has no billing profile"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "409": {
+            "description": "Version conflict (concurrent edit detected)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update deal",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/activities": {
+      "post": {
+        "description": "Append a stage record at the current stage of an open deal.",
+        "operationId": "log_deal_activity_api_v1_deals__deal_id__activities_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealActivityCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Activity logged"
+          },
+          "400": {
+            "description": "Deal is not open"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "description": "Note missing or empty"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Log deal activity",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/advance": {
+      "post": {
+        "description": "Move an open deal to the next stage (no skipping). A non-empty note is required \u2014 every stage keeps a record.",
+        "operationId": "advance_deal_stage_api_v1_deals__deal_id__advance_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealAdvanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal advanced"
+          },
+          "400": {
+            "description": "Deal closed/parked or already at the final stage"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "description": "Note missing or empty"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Advance deal one stage",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/close": {
+      "post": {
+        "description": "Close an open deal with an enumerated won/lost reason and a mandatory note.",
+        "operationId": "close_deal_api_v1_deals__deal_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealCloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal closed"
+          },
+          "400": {
+            "description": "Deal not open or invalid reason for the result"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "description": "Note missing or empty"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Close deal won or lost",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/park": {
+      "post": {
+        "description": "Park an open deal until a future re-engage date. The deal keeps its stage as resume_stage and returns there on resume.",
+        "operationId": "park_deal_api_v1_deals__deal_id__park_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealParkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal parked"
+          },
+          "400": {
+            "description": "Deal not open or re-engage date not in the future"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "description": "Note missing or empty"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Park deal (move to future pipeline)",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/quotes": {
+      "post": {
+        "description": "Create a quote in the EXISTING quotes module, prefilled from the deal: customer from the deal, currency from the matching customer billing profile (defaults to the deal currency; EUR/GBP reference currencies are rejected with the typed ReferenceCurrencyException), line prices derived server-side from the org product catalog (annual billing -15%, extra discount %), line tax treatment from the billing profile, reference from the existing reference sequence, and all totals/VAT computed by the existing document services. The created quote is linked via deal_id and survives deal closure unchanged.",
+        "operationId": "create_deal_quote_api_v1_deals__deal_id__quotes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealQuoteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
+              }
+            },
+            "description": "Quote created and linked to the deal"
+          },
+          "400": {
+            "description": "Reference (EUR/GBP) currency, unknown catalog product, closed deal, or invalid dates"
+          },
+          "404": {
+            "description": "Deal or billing profile not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a quote from a deal (prefill flow)",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/quotes/preview": {
+      "post": {
+        "description": "Builder support (nothing persisted): per-line server-computed discounted per-user/month + list price, line totals with billing period, the totals block (subtotal, VAT line per the billing profile's tax treatment, grand total), the reference-currency conversions row (USD/EUR/GBP display equivalents) and the profile banner data. Totals are produced exclusively by the existing BaseDocumentService.calculate_totals delegation.",
+        "operationId": "preview_deal_quote_api_v1_deals__deal_id__quotes_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealQuoteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealQuotePreviewResponse"
+                }
+              }
+            },
+            "description": "Server-computed builder pricing"
+          },
+          "400": {
+            "description": "Reference currency or unknown catalog product"
+          },
+          "404": {
+            "description": "Deal or billing profile not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview quote-builder pricing for a deal",
+        "tags": [
+          "Deals"
+        ]
+      }
+    },
+    "/api/v1/deals/{deal_id}/resume": {
+      "post": {
+        "description": "Re-engage a parked deal back to the stage it was parked at.",
+        "operationId": "resume_deal_api_v1_deals__deal_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Deal resumed"
+          },
+          "400": {
+            "description": "Deal is not parked"
+          },
+          "404": {
+            "description": "Deal not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resume parked deal",
+        "tags": [
+          "Deals"
         ]
       }
     },
@@ -14299,6 +17453,653 @@
         ]
       }
     },
+    "/api/v1/nurture": {
+      "get": {
+        "description": "Paginated nurture list, soonest-due first, with search (company, contact) and owner filters. Every due badge (due_state: overdue / today / in_days: N) and status dot (dot_state) is computed server-side against the org-local date boundary \u2014 the UI never does date math.",
+        "operationId": "list_prospects_api_v1_nurture_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by prospect owner (sales rep)",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by prospect owner (sales rep)",
+              "title": "Ownerid"
+            }
+          },
+          {
+            "description": "Search company or contact",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search company or contact",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_NurtureProspectResponse_"
+                }
+              }
+            },
+            "description": "List of nurture prospects"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List nurture prospects",
+        "tags": [
+          "Nurture"
+        ]
+      },
+      "post": {
+        "description": "Add a company to the future pipeline nurture list ('+ Add planned deal'): company (required), contact, owner, engage-by date (defaults to +90 days server-side when omitted), est. annual value and note.",
+        "operationId": "create_prospect_api_v1_nurture_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NurtureProspectCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NurtureProspectResponse"
+                }
+              }
+            },
+            "description": "Prospect created successfully"
+          },
+          "404": {
+            "description": "Owner not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a planned prospect",
+        "tags": [
+          "Nurture"
+        ]
+      }
+    },
+    "/api/v1/nurture/counts": {
+      "get": {
+        "description": "Notification counts for the sidebar badge / bell (#45): due nurture (engage_on <= today), upcoming nurture (due within 14 days) and due parked deals (parked_until <= today), all against the org-local date boundary.",
+        "operationId": "get_nurture_counts_api_v1_nurture_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NurtureNotificationCounts"
+                }
+              }
+            },
+            "description": "Due counts"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get future pipeline due counts",
+        "tags": [
+          "Nurture"
+        ]
+      }
+    },
+    "/api/v1/nurture/summary": {
+      "get": {
+        "description": "Count, total est. ARR and due-now count over the same filtered set as the list ('Nurture list \u2014 4 companies \u00b7 est. $67,020 potential ARR', '1 due now').",
+        "operationId": "get_nurture_summary_api_v1_nurture_summary_get",
+        "parameters": [
+          {
+            "description": "Restrict aggregates to one owner",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict aggregates to one owner",
+              "title": "Ownerid"
+            }
+          },
+          {
+            "description": "Search company or contact",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search company or contact",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NurtureSummary"
+                }
+              }
+            },
+            "description": "Nurture list aggregates"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get nurture list header aggregates",
+        "tags": [
+          "Nurture"
+        ]
+      }
+    },
+    "/api/v1/nurture/{prospect_id}": {
+      "delete": {
+        "description": "Remove a prospect from the nurture list without engaging it.",
+        "operationId": "delete_prospect_api_v1_nurture__prospect_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prospect_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Prospect Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Prospect deleted successfully"
+          },
+          "404": {
+            "description": "Prospect not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete nurture prospect",
+        "tags": [
+          "Nurture"
+        ]
+      },
+      "get": {
+        "description": "Get a nurture prospect by ID.",
+        "operationId": "get_prospect_api_v1_nurture__prospect_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prospect_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Prospect Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NurtureProspectResponse"
+                }
+              }
+            },
+            "description": "Prospect details"
+          },
+          "404": {
+            "description": "Prospect not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get nurture prospect details",
+        "tags": [
+          "Nurture"
+        ]
+      }
+    },
+    "/api/v1/nurture/{prospect_id}/engage": {
+      "post": {
+        "description": "Atomically create a customer (via the existing customers service, reusing its validation and case-insensitive email dedup) plus an open deal at stage Activation, then remove the prospect. On a duplicate email the 409 response carries the existing customer's id in details.customer_id \u2014 re-submit with customer_id to link the deal to that customer instead. No orphan customer is left behind if deal creation fails.",
+        "operationId": "engage_prospect_api_v1_nurture__prospect_id__engage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prospect_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Prospect Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NurtureEngageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealResponse"
+                }
+              }
+            },
+            "description": "Customer + deal created, prospect removed"
+          },
+          "400": {
+            "description": "No owner/value to engage with, or the deal currency has no billing profile"
+          },
+          "404": {
+            "description": "Prospect, linked customer or owner not found"
+          },
+          "409": {
+            "description": "Duplicate customer email \u2014 details.customer_id offers the re-submit-linking option"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Engage a prospect ('Start engaging \u2192')",
+        "tags": [
+          "Nurture"
+        ]
+      }
+    },
+    "/api/v1/onboardings": {
+      "get": {
+        "description": "Paginated onboarding list (newest first) with optional search on company name, contact or plan label. Percent complete and the 'N of 7 tasks complete' counts are server-computed.",
+        "operationId": "list_onboardings_api_v1_onboardings_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Search company name, contact or plan label",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search company name, contact or plan label",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_OnboardingResponse_"
+                }
+              }
+            },
+            "description": "List of onboarding checklists"
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List onboarding checklists",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboardings/{onboarding_id}/complete": {
+      "post": {
+        "description": "Mark every remaining step done and stamp the checklist complete. Returns the updated record with server-recomputed percent + counts.",
+        "operationId": "complete_onboarding_api_v1_onboardings__onboarding_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "onboarding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Onboarding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            },
+            "description": "Onboarding marked complete"
+          },
+          "400": {
+            "description": "Onboarding is already complete"
+          },
+          "404": {
+            "description": "Onboarding not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark an onboarding complete",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboardings/{onboarding_id}/tasks/{position}/toggle": {
+      "post": {
+        "description": "Flip the done flag of the step at the given 1-based position. Returns the updated record with server-recomputed percent and 'N of 7' counts so an optimistic UI update can reconcile.",
+        "operationId": "toggle_onboarding_task_api_v1_onboardings__onboarding_id__tasks__position__toggle_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "onboarding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Onboarding Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-based step position",
+            "in": "path",
+            "name": "position",
+            "required": true,
+            "schema": {
+              "description": "1-based step position",
+              "minimum": 1,
+              "title": "Position",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            },
+            "description": "Task toggled; updated record returned"
+          },
+          "404": {
+            "description": "Onboarding or task position not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Toggle one checklist task",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
     "/api/v1/owner": {
       "get": {
         "description": "Return the live owner profile (seeded from settings on first use).",
@@ -14468,6 +18269,33 @@
           }
         ],
         "summary": "Upload / replace the owner logo",
+        "tags": [
+          "Owner"
+        ]
+      }
+    },
+    "/api/v1/owner/settings/sales-pricing": {
+      "get": {
+        "description": "The documented price-list source for the Quotes & pricing UI (issue #44): the seeded product catalog with server-derived Annual/seat (monthly x 12 at list) and 10-seat ARR (monthly x 12 x 10) columns, the annual billing discount applied by the quote builder, and the display-only FX conventions (units per 1 USD) behind USD-equivalent totals and the conversions row. All values are decimal strings.",
+        "operationId": "get_sales_pricing_settings_api_v1_owner_settings_sales_pricing_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesPricingSettings"
+                }
+              }
+            },
+            "description": "Sales pricing settings + price list"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get the Sales Desk pricing settings + price list",
         "tags": [
           "Owner"
         ]

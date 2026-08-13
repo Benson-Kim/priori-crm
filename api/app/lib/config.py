@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables with validation."""
 
-    APP_NAME: str = "Priori Technologies"
+    APP_NAME: str = "Business Central"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: Literal["development", "test", "staging", "production"] = "production"
     DEBUG: bool = Field(default=False)
