@@ -3,15 +3,13 @@ import { cn } from "@/lib/utils";
 import { avatarColor, avatarInitials } from "./avatar-utils";
 
 /**
- * Avatar — Sales Desk shared presentational primitive.
+ * Initials disc, tinted per person so a column of them reads as a book of
+ * owners rather than a column of letters.
  *
- * Circular initials avatar with the deterministic per-user palette from
- * `docs/sales-desk-designs/style-reference.md` §1 (TK `#2456E6`,
- * MW `#7C3AED`, JN `#0D9488`); white bold initials; sizes 24/28/32/36px.
- * The colour is derived from a stable hash of `name` (see avatar-utils.ts),
- * so a given user always renders the same colour. Pass `color` to pin an
- * exact colour (e.g. the signed-in user's brand `#912B90` avatar in the
- * sidebar footer / topbar, or a server-provided rep colour once available).
+ * The colour comes from a stable hash of `name`, so a given person always
+ * renders the same colour without anyone having to assign one. Pass `color`
+ * to pin an exact colour instead, which is what the reps do: their colours
+ * come from the record, not the hash.
  */
 
 export type AvatarSize = 24 | 28 | 32 | 36;
@@ -25,7 +23,7 @@ const SIZE_STYLES: Record<AvatarSize, string> = {
 };
 
 interface AvatarProps {
-  /** Full name (or stable identifier) — drives initials + palette colour. */
+  /** Full name, or any stable identifier. Drives the initials and the colour. */
   name: string;
   /** Override the derived initials (e.g. server-provided). */
   initials?: string;

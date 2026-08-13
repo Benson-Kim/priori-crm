@@ -1,57 +1,69 @@
 import { cn } from "@/lib/utils";
 
-import { Chip } from "./Chip";
+import { Chip, type ChipTone } from "./Chip";
 
 /**
- * AgeRibbon — Sales Desk deal age / idleness indicator.
+ * How long a deal has been in play, and how long since anyone touched it,
+ * both tone-coded so a rep can spot a deal that has gone quiet without doing
+ * arithmetic on dates.
  *
- * Verbatim to `docs/sales-desk-designs/style-reference.md` §3/§5:
- * chip `Nd in pipeline` (green fresh ≤7d, amber aging >7d, gray
- * `Nd total` when closed) + line "Last activity Nd ago" (red `#C23434`
- * when stale, i.e. 30d+).
+ * Age and silence run on different scales, and only silence escalates. A deal
+ * can sit in the pipeline for months and still be worth working, so age reads
+ * fresh or ageing and never alarms; a month of no contact is a problem, so the
+ * activity line turns red. Closed deals show a neutral total, since age stops
+ * being actionable once the deal has resolved.
  *
- * IMPORTANT: driven ONLY by the server-computed `age_days` / `idle_days`
- * values — never compute ages client-side from dates.
+ * Both numbers are server-computed. Ages are never derived client-side from
+ * dates, so every screen agrees on the same day boundary.
  */
 
-/** "No activity 30d+" hygiene bucket — idle line turns red from here. */
-const STALE_IDLE_DAYS = 30;
-/** Fresh (green) chip threshold — aging (amber) beyond this. */
-const FRESH_AGE_DAYS = 7;
+/** Days in pipeline before a deal reads as ageing rather than fresh. */
+const AGE_FRESH_DAYS = 7;
+
+/** Days of silence before the activity line escalates to red. */
+const IDLE_STALE_DAYS = 30;
+
+const ageTone = (days: number): ChipTone => (days <= AGE_FRESH_DAYS ? "fresh" : "aging");
 
 interface AgeRibbonProps {
-  /** Server-computed days in pipeline (`age_days`). */
-  ageDays: number;
-  /** Server-computed days since last activity (`idle_days`). */
-  idleDays?: number;
-  /** Closed deals render the gray `Nd total` chip. */
-  closed?: boolean;
-  className?: string;
+    /** Server-computed days in pipeline. */
+    ageDays: number;
+    /** Server-computed days since last activity. Omitted on closed deals. */
+    idleDays?: number;
+    /** Closed deals render the neutral total instead. */
+    closed?: boolean;
+    className?: string;
 }
 
 export function AgeRibbon({
-  ageDays,
-  idleDays,
-  closed = false,
-  className,
+    ageDays,
+    idleDays,
+    closed = false,
+    className,
 }: Readonly<AgeRibbonProps>) {
-  const tone = closed ? "neutral" : ageDays <= FRESH_AGE_DAYS ? "fresh" : "aging";
-  const label = closed ? `${ageDays}d total` : `${ageDays}d in pipeline`;
-  const stale = idleDays !== undefined && idleDays >= STALE_IDLE_DAYS;
+    if (closed) {
+        return (
+            <Chip tone="neutral" className={className}>
+                {ageDays}d total
+            </Chip>
+        );
+    }
 
-  return (
-    <div className={cn("flex flex-col items-start gap-1", className)}>
-      <Chip tone={tone}>{label}</Chip>
-      {idleDays !== undefined && (
-        <p
-          className={cn(
-            "text-[11px]",
-            stale ? "font-medium text-sd-danger" : "text-sd-muted"
-          )}
-        >
-          Last activity {idleDays}d ago
-        </p>
-      )}
-    </div>
-  );
+    return (
+        <div className={cn("flex flex-col items-start gap-1.5", className)}>
+            <Chip tone={ageTone(ageDays)}>{ageDays}d in pipeline</Chip>
+            {idleDays !== undefined && (
+                <p
+                    className={cn(
+                        "text-[11px]",
+                        idleDays >= IDLE_STALE_DAYS
+                            ? "font-medium text-sd-danger"
+                            : "text-sd-muted"
+                    )}
+                >
+                    Last activity {idleDays}d ago
+                </p>
+            )}
+        </div>
+    );
 }

@@ -176,10 +176,11 @@ class DealParkRequest(BaseModel):
 
 
 class DealFilterParams(BaseModel):
-    """List filters for the pipeline (tab, owner, hygiene, search)."""
+    """List filters for the pipeline (tab, owner, customer, hygiene, search)."""
 
     tab: DealTab = DealTab.ALL
     owner_id: UUID | None = None
+    customer_id: UUID | None = None
     hygiene: DealHygieneBucket | None = None
     show_closed: bool = True
     search: str | None = None

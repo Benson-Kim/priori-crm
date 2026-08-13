@@ -1,7 +1,17 @@
 import { cva } from "class-variance-authority";
 
 export const buttonVariants = cva(
-  "inline-flex gap-1.5 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-0 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  [
+    "inline-flex gap-1.5 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium",
+    "transition-colors duration-150",
+    /*
+     * The ring was previously set to both `ring-2` and `ring-0`, so the later
+     * rule won and keyboard focus drew nothing at all. A flush 1px ring, no
+     * offset, matching how the app already marks an active field.
+     */
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-priori-purple",
+    "disabled:pointer-events-none disabled:opacity-50",
+  ].join(" "),
   {
     variants: {
       variant: {

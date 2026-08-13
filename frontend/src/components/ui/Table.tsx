@@ -42,19 +42,40 @@ interface TableProps<T> {
   onSort?: (key: string, direction: SortDirection) => void;
   /**
    * `default` keeps the pre-existing accounting look. `sales-desk` is the
-   * shared Sales Desk table shell (style-reference.md §3): rounded-16
-   * container with 1px `sd-border`, `#F6F7F9` header row with 600/13 ink
-   * labels, hairline row dividers.
+   * denser Sales Desk shell: rounded container, tinted header row, hairline
+   * dividers and smaller type.
    */
   variant?: "default" | "sales-desk";
   /**
-   * Row key of the currently selected row (sales-desk drawers): renders the
-   * `#FBF0FB` background + 3px `#912B90` inner-left border highlight.
+   * Row key of the currently selected row, for the drawer screens: tints the
+   * row and marks it with a brand rule down its left edge.
    */
   selectedKey?: string;
-  /** Append a trailing muted `›` chevron cell to every row. */
-  chevron?: boolean;
+  /**
+   * Append a trailing chevron cell marking the row as openable. Pass a
+   * function to name the destination per row, which is what a screen reader
+   * announces; `true` falls back to a generic label.
+   */
+  chevron?: boolean | ((item: T) => string);
+  /**
+   * Hide the header row visually while leaving it in the DOM, for panels whose
+   * own title already names the columns. Screen readers still associate each
+   * cell with its column, so this is not the same as omitting the header.
+   *
+   * Note this cannot be done with `sr-only`: that is `position: absolute`, and
+   * an absolutely positioned `thead` leaves table flow, lands at the foot of
+   * the document and extends the page. The header is instead collapsed in
+   * place, and each label clipped, so the row stays in flow at a hairline.
+   */
+  headerHidden?: boolean;
 }
+
+/**
+ * Collapses a header cell to a clipped hairline while keeping it in table
+ * flow, so the column association survives for assistive tech.
+ */
+const HIDDEN_HEADER_CELL =
+  "h-px overflow-hidden border-0 p-0 text-[0px] leading-none [clip-path:inset(50%)]";
 
 function SortIcon({
   columnKey,
@@ -89,6 +110,7 @@ export function Table<T>({
   variant = "default",
   selectedKey,
   chevron = false,
+  headerHidden = false,
 }: Readonly<TableProps<T>>) {
   const isSalesDesk = variant === "sales-desk";
 
@@ -111,7 +133,11 @@ export function Table<T>({
     >
       <table className="w-full min-w-150">
         <thead>
-          <tr className={cn(!isSalesDesk && "border-b border-border ")}>
+          <tr
+            className={cn(
+              isSalesDesk ? "border-b border-sd-border" : "border-b border-border "
+            )}
+          >
             {columns.map((col) => {
               const isSortable = sortable && onSort;
               const colSortKey = col.sortKey ?? col.key;
@@ -122,13 +148,14 @@ export function Table<T>({
                   onClick={isSortable ? () => handleHeaderClick(col) : undefined}
                   className={cn(
                     isSalesDesk
-                      ? "bg-sd-surface p-3 text-left text-[13px] font-semibold text-sd-ink"
+                      ? "bg-sd-surface px-cell-x py-cell-y text-left text-[13px] font-bold text-sd-ink"
                       : cn(
                         "p-3 text-left text-base font-bold text-content-primary",
                         "bg-gray-50 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg"
                       ),
                     isSortable && "cursor-pointer select-none hover:bg-gray-100",
                     isActive && "text-priori-purple",
+                    headerHidden && HIDDEN_HEADER_CELL,
                     col.className
                   )}
                 >
@@ -145,12 +172,12 @@ export function Table<T>({
             })}
             {chevron && (
               <th
-                aria-label="Open row"
                 className={cn(
                   "w-8",
                   isSalesDesk
-                    ? "bg-sd-surface p-3"
-                    : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg"
+                    ? "bg-sd-surface px-cell-x py-cell-y"
+                    : "bg-gray-50 border-b border-gray-100 p-3 last:rounded-tr-lg",
+                  headerHidden && HIDDEN_HEADER_CELL
                 )}
               />
             )}
@@ -176,7 +203,10 @@ export function Table<T>({
                   onClick={() => onRowClick?.(item)}
                   className={cn(
                     isSalesDesk
-                      ? "border-b border-sd-border transition-colors last:border-b-0 hover:bg-sd-surface/60"
+                      ? cn(
+                        "border-b border-sd-border transition-colors duration-150 last:border-b-0",
+                        onRowClick && "hover:bg-sd-surface active:bg-sd-surface/80"
+                      )
                       : cn(
                         "border-b border-gray-100 py-4 px-3",
                         "hover:bg-surface-app/50 transition-colors"
@@ -193,7 +223,7 @@ export function Table<T>({
                       key={col.key}
                       className={cn(
                         isSalesDesk
-                          ? "px-4 py-3 text-[13px] leading-5 text-sd-ink"
+                          ? "px-cell-x py-cell-y text-[13px] leading-5 text-sd-ink"
                           : "px-4 py-3 text-base text-content-primary leading-6",
                         col.className
                       )}
@@ -210,9 +240,12 @@ export function Table<T>({
                       <ChevronRight
                         size={16}
                         className={cn(
+                          "ml-auto",
                           isSalesDesk ? "text-sd-faint" : "text-gray-400"
                         )}
-                        aria-hidden="true"
+                        aria-label={
+                          typeof chevron === "function" ? chevron(item) : "Open row"
+                        }
                       />
                     </td>
                   )}

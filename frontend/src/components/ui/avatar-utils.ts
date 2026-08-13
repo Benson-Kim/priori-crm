@@ -1,15 +1,15 @@
 /**
- * Avatar palette helpers — kept separate from Avatar.tsx (like
+ * Avatar palette helpers, kept separate from Avatar.tsx (like
  * button-variants.ts) so the component file only exports components
  * (eslint react-refresh/only-export-components). Pages also import these
  * directly, e.g. to colour the rep-quota ProgressBar with the rep's
  * avatar colour.
  */
 
-/** Deterministic avatar palette (style-reference.md §1). */
+/** Fallback palette for people who have no colour of their own. */
 export const AVATAR_PALETTE = ["#2456E6", "#7C3AED", "#0D9488"] as const;
 
-/** Stable string hash (djb2) — keeps user → colour assignment deterministic. */
+/** Stable string hash (djb2), so a person always maps to the same colour. */
 function hashString(value: string): number {
   let hash = 5381;
   for (let i = 0; i < value.length; i++) {

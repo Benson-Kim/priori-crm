@@ -92,6 +92,25 @@ DEFAULT_PRODUCT_CATALOG: list[dict[str, str]] = [
 # annually ("Annual -15%" toggle in the quote builder). Percentage points.
 DEFAULT_ANNUAL_BILLING_DISCOUNT_PCT: str = "15"
 
+# Sales Desk analytics (issue #45). Default per-stage win probabilities used
+# for the weighted pipeline value, calibrated against the Pipeline.svg
+# "Weighted" column ($2,700→$270, $5,760→$1,440, $11,880→$5,940,
+# $51,840→$38,880). These are *seed* defaults: an organisation can override
+# them via the owner settings (owner_profiles.deal_stage_probabilities);
+# the persisted value wins. Kept as decimal strings — no floats anywhere.
+DEFAULT_DEAL_STAGE_PROBABILITIES: dict[str, str] = {
+    "activation": "0.10",
+    "qualification": "0.25",
+    "proposal_quote": "0.50",
+    "negotiation": "0.75",
+}
+
+# Default quarterly won-value target (USD) for the Dashboard's
+# "Rep pipeline vs. quota" panel (issue #45), applied to any rep without an
+# explicit entry in the owner rep_quarterly_targets setting. Calibrated
+# against Dashboard.svg ("$6,210 / $90,000").
+DEFAULT_REP_QUARTERLY_TARGET_USD: str = "90000.00"
+
 # Display/conversion FX conventions (Sales Desk). Units of each currency
 # per 1 USD, calibrated against the design exports (``App__3_.svg`` totals
 # row: KSh 192,882.48 = $1,489.44 = (EUR)1,370.28 = (GBP)1,176.66).

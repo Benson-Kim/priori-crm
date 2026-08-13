@@ -3,12 +3,10 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * KpiCard — Sales Desk dashboard KPI tile.
+ * A single headline number, its name, and the qualifier that keeps it honest:
+ * "$46,530" means little until "4 open deals" sits under it.
  *
- * Verbatim to `docs/sales-desk-designs/style-reference.md` §3: white card
- * (radius 16, hairline border, card shadow), label (uppercase 12/600/0.3px
- * muted) → value (Bold 25.6, semantic colour) → sub-line (12 muted).
- * e.g. `PIPELINE (WEIGHTED)` — $46,530 (info) — "4 open deals".
+ * The tone colours the value, not the card, so a row of tiles stays calm.
  */
 export type KpiTone = "ink" | "info" | "success" | "danger";
 
@@ -22,7 +20,7 @@ const TONE_STYLES: Record<KpiTone, string> = {
 interface KpiCardProps {
   label: string;
   value: string;
-  /** Semantic value colour — weighted pipeline info, won success, … */
+  /** Colours the figure, not the card. */
   tone?: KpiTone;
   /** Muted 12px sub-line, e.g. "4 open deals" / "Unweighted". */
   subline?: ReactNode;

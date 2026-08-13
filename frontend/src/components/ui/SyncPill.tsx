@@ -1,12 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * SyncPill — Sales Desk accounting-sync indicator.
- *
- * 8px dot + label per `docs/sales-desk-designs/style-reference.md` §3:
- * green filled ● "In accounting" when synced, gray hollow ○ "Not synced"
- * (`#9CA3AF`) otherwise. Labels can be overridden for contexts like the
- * quote builder's "Posts to BL-KES · … · ● Not synced" line.
+ * Whether a record has reached accounting. Dot plus label, never dot alone:
+ * the word carries the meaning and the colour only reinforces it.
  */
 interface SyncPillProps {
   synced: boolean;

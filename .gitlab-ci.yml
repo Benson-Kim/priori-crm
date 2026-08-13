@@ -157,7 +157,24 @@ api:test:
     - until pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 1; done
     - PGPASSWORD="$POSTGRES_PASSWORD" psql -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto;'
   script:
-    - pytest -v --tb=short
+    # Prove the Alembic chain applies cleanly from an empty database on a
+    # copy of the current head (issue #43 acceptance criterion: migration +
+    # backfill), and that the newest migration downgrades and re-upgrades.
+    # The test suite itself builds its schema via create_all, so this is the
+    # only place the actual DDL chain is executed.
+    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'CREATE DATABASE migration_check;'
+    - export MIGRATION_DATABASE_URL="postgresql+psycopg2://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres:5432/migration_check"
+    - DATABASE_URL="$MIGRATION_DATABASE_URL" alembic upgrade head
+    - DATABASE_URL="$MIGRATION_DATABASE_URL" alembic downgrade -1
+    - DATABASE_URL="$MIGRATION_DATABASE_URL" alembic upgrade head
+    - pytest -v --tb=short --junitxml=junit.xml
+  # JUnit report so failures are inspectable via the pipeline test-report
+  # API/UI even when the raw job log is unavailable.
+  artifacts:
+    when: always
+    reports:
+      junit: api/junit.xml
+    expire_in: 1 week
 
 # Contract types
 #

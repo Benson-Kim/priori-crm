@@ -1,11 +1,9 @@
 import { cn } from "@/lib/utils";
 
 /**
- * SegmentedControl — Sales Desk 28px segmented switch.
- *
- * Verbatim to `docs/sales-desk-designs/style-reference.md` §3:
- * `Monthly | Annual −15%` and `USD | KES | EUR | GBP` — active segment
- * filled (`brand` or `ink`), 28px tall.
+ * A small set of mutually exclusive choices shown side by side, for switches
+ * that change how the same figures are expressed rather than which records
+ * are shown: billing period, display currency.
  */
 export interface SegmentedOption {
   value: string;
@@ -32,7 +30,7 @@ export function SegmentedControl({
 }: Readonly<SegmentedControlProps>) {
   return (
     <div
-      role="group"
+      role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
         "inline-flex h-7 items-center rounded-lg border border-sd-border bg-sd-surface p-0.5",
@@ -45,15 +43,18 @@ export function SegmentedControl({
           <button
             key={option.value}
             type="button"
-            aria-pressed={active}
+            role="radio"
+            aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-full cursor-pointer rounded-md px-2.5 text-xs font-semibold whitespace-nowrap transition-colors",
+              "h-full cursor-pointer rounded-md px-2.5 text-xs font-semibold whitespace-nowrap",
+              "transition-colors duration-150 active:scale-[0.98]",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
               active
                 ? tone === "brand"
                   ? "bg-sd-brand text-white"
                   : "bg-sd-ink text-white"
-                : "text-sd-muted hover:text-sd-ink"
+                : "text-sd-muted hover:bg-sd-card hover:text-sd-ink"
             )}
           >
             {option.label}

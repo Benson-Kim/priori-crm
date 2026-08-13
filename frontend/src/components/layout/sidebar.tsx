@@ -18,7 +18,7 @@ const COLLAPSED_STORAGE_KEY = "sidebar:collapsed";
 
 /**
  * Server-driven nav badge counts keyed by `NavChild.badgeKey` (issue #45's
- * notifications endpoint — never computed client-side). Undefined/zero
+ * notifications endpoint, never computed client-side). Undefined/zero
  * entries render no badge, so the sidebar stays clean until #45 lands.
  */
 export type NavBadgeCounts = Partial<Record<string, number>>;
@@ -306,7 +306,7 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                                 </div>
                             )}
                             <p className="px-1 text-[10px] leading-relaxed text-sd-muted">
-                                &copy; 2026 Business Central — All Rights Reserved
+                                &copy; 2026 Business Central &middot; All Rights Reserved
                                 <br />
                                 Version: 1.0.188-288
                             </p>

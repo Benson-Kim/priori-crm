@@ -31,13 +31,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             className={cn(
               "h-4 w-4 rounded border border-border flex items-center justify-center transition-colors",
               "peer-checked:bg-priori-purple peer-checked:border-primary",
-              "peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30"
+              "peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30",
+              // The tick is a descendant of this box, not a sibling of the
+              // input, so `peer-checked:` cannot target it directly.
+              "peer-checked:[&_svg]:opacity-100"
             )}
           >
-            <Check
-              size={12}
-              className="text-white opacity-0 peer-checked:opacity-100 transition-opacity"
-            />
+            <Check size={12} className="text-white opacity-0 transition-opacity" />
           </div>
         </div>
         {label && (

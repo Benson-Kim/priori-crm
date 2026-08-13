@@ -31,7 +31,7 @@ const DefaultLayout = () => {
     // Chrome badge counts (sidebar nav badges + topbar bell) are served by
     // issue #45's notifications endpoint and must never be computed
     // client-side. Until that endpoint lands, both stay undefined/zero and
-    // the badges render hidden — replace with the notifications hook then.
+    // the badges render hidden. Replace with the notifications hook then.
     const navBadgeCounts = undefined;
     const notificationCount = 0;
 

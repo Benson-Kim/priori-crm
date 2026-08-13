@@ -7,10 +7,9 @@ interface FilterTab {
 }
 
 /**
- * `default` keeps the pre-existing accounting look. The Sales Desk pill
- * variants follow docs/sales-desk-designs/style-reference.md §3:
- * - `brand-filled`: active tab = `#912B90` filled, white text (table views);
- * - `brand-outline`: active tab = `#FBF0FB` outline pill (board views).
+ * `default` keeps the pre-existing accounting look. The two Sales Desk pill
+ * variants differ in weight: `brand-filled` is the primary filter on a table
+ * view, `brand-outline` the lighter secondary filter alongside it.
  */
 type FilterTabsVariant = "default" | "brand-filled" | "brand-outline";
 
@@ -40,15 +39,27 @@ const TAB_STYLES: Record<
     count: () => "ml-1 text-content-secondary",
   },
   "brand-filled": {
-    base: "rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
-    active: "bg-sd-brand text-white",
-    inactive: "text-sd-muted hover:bg-sd-surface",
+    base: cn(
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] font-semibold",
+      "cursor-pointer transition-colors duration-150",
+      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
+      "active:scale-[0.98]"
+    ),
+    active: "bg-sd-brand text-white hover:bg-sd-brand/90",
+    inactive: "text-sd-muted hover:bg-sd-surface hover:text-sd-ink",
     count: (active) => cn("ml-1", active ? "text-white/80" : "text-sd-faint"),
   },
   "brand-outline": {
-    base: "rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer",
-    active: "bg-sd-brand-bg text-sd-brand border-sd-border",
-    inactive: "border-transparent text-sd-muted hover:bg-sd-surface",
+    // 12px radius, not a full pill, and the active border is brand rather
+    // than the hairline grey.
+    base: cn(
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-xl border px-3 text-[13px] font-semibold",
+      "cursor-pointer transition-colors duration-150",
+      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
+      "active:scale-[0.98]"
+    ),
+    active: "bg-sd-brand-bg text-sd-brand border-sd-brand hover:bg-sd-brand-bg/70",
+    inactive: "border-transparent text-sd-muted hover:bg-sd-surface hover:text-sd-ink",
     count: (active) => cn("ml-1", active ? "text-sd-brand/70" : "text-sd-faint"),
   },
 };

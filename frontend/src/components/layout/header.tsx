@@ -7,12 +7,12 @@ type HeaderProps = {
   title: string;
   description?: string;
   /**
-   * Unread notification count from issue #45's notifications endpoint —
+   * Unread notification count from issue #45's notifications endpoint;
    * never computed client-side. Renders the brand bell count badge
    * (16px `#912B90` circle, white bold 10); hidden while zero/unwired.
    */
   notificationCount?: number;
-  /** Global search pill (`#F6F7F9` bg) — rendered only when wired. */
+  /** Global search pill, rendered only when wired. */
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;

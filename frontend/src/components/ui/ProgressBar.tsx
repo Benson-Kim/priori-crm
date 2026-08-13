@@ -1,24 +1,28 @@
 import { cn } from "@/lib/utils";
 
 /**
- * ProgressBar — Sales Desk rounded progress bar.
+ * A proportion as a filled track.
  *
- * Verbatim to `docs/sales-desk-designs/style-reference.md` §3:
- * - Onboarding: 6px rounded bar, brand fill (pair with "N of 7 tasks
- *   complete" + a brand-bg % chip rendered by the page).
- * - Rep quota: 8px bar filled in the rep's avatar colour.
- * Track is the `sd-border` hairline colour.
+ * The bar is never the only carrier of the number: callers pair it with the
+ * count or percentage in text, and the bar itself reports the value through
+ * `role="progressbar"`.
  */
 interface ProgressBarProps {
-  /** 0–100. Values outside the range are clamped. */
+  /** 0 to 100. Values outside the range are clamped, since a rep can beat quota. */
   percent: number;
-  /** 6px (onboarding, default) or 8px (rep quota). */
+  /** 6px for checklists, 8px for the heavier quota rows. */
   height?: 6 | 8;
-  /** Fill colour override (e.g. the rep's avatar colour). Default: brand. */
+  /** Raw CSS fill colour, e.g. a rep's own colour. Defaults to brand. */
   color?: string;
   className?: string;
   "aria-label"?: string;
 }
+
+/**
+ * A share this small would round to nothing, so it is floored to a hairline:
+ * "barely any" and "none at all" have to look different.
+ */
+const MIN_VISIBLE_PERCENT = 1.5;
 
 export function ProgressBar({
   percent,
@@ -28,11 +32,12 @@ export function ProgressBar({
   "aria-label": ariaLabel,
 }: Readonly<ProgressBarProps>) {
   const clamped = Math.min(100, Math.max(0, percent));
+  const width = clamped > 0 ? Math.max(clamped, MIN_VISIBLE_PERCENT) : 0;
 
   return (
     <div
       role="progressbar"
-      aria-valuenow={clamped}
+      aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={ariaLabel}
@@ -43,8 +48,11 @@ export function ProgressBar({
       )}
     >
       <div
-        className={cn("h-full rounded-full", !color && "bg-sd-brand")}
-        style={{ width: `${clamped}%`, ...(color ? { backgroundColor: color } : {}) }}
+        className={cn(
+          "h-full rounded-full transition-[width] duration-300",
+          !color && "bg-sd-brand"
+        )}
+        style={{ width: `${width}%`, ...(color ? { backgroundColor: color } : {}) }}
       />
     </div>
   );

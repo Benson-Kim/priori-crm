@@ -32,7 +32,13 @@ function buildUrl(
   if (!appConfig.apiUrl || appConfig.apiUrl.startsWith("undefined")) {
     throw new ApiError("Server is not responding", 0);
   }
-  const url = new URL(path, appConfig.apiUrl);
+  /*
+   * `apiUrl` carries the version prefix ("/api/v1/"), and `new URL` treats a
+   * path beginning with "/" as absolute, which would silently drop that
+   * prefix and send every request to the host root. Callers write endpoint
+   * paths either way, so the leading slash is trimmed rather than trusted.
+   */
+  const url = new URL(path.replace(/^\/+/, ""), appConfig.apiUrl);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== "") {
@@ -241,6 +247,15 @@ export async function apiPostPublic<T>(path: string, body: unknown): Promise<T> 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const response = await authedFetch(buildUrl(path), {
     method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return handleResponse<T>(response);
+}
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const response = await authedFetch(buildUrl(path), {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

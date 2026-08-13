@@ -82,6 +82,10 @@ def list_deals(
         UUID | None,
         Query(description="Filter by deal owner (sales rep)", alias="ownerId"),
     ] = None,
+    customer_id: Annotated[
+        UUID | None,
+        Query(description="Filter by customer (company)", alias="customerId"),
+    ] = None,
     hygiene: Annotated[
         DealHygieneBucket | None,
         Query(
@@ -115,6 +119,7 @@ def list_deals(
     filters = DealFilterParams(
         tab=tab,
         owner_id=owner_id,
+        customer_id=customer_id,
         hygiene=hygiene,
         show_closed=show_closed,
         search=search,
