@@ -206,7 +206,9 @@ class OwnerService:
         """module_key -> effective enabled state, for the bootstrap response."""
         return {s.module_key: s.enabled for s in self.module_settings()}
 
-    def set_module_enabled(self, module_key: ModuleKey, enabled: bool) -> ModuleSettingState:
+    def set_module_enabled(
+        self, module_key: ModuleKey, enabled: bool
+    ) -> ModuleSettingState:
         """Upsert one module override (admin only; audited).
 
         Disabling an essential module is a 422 — those are core
