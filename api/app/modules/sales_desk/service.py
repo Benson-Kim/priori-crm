@@ -42,6 +42,9 @@ from app.modules.owner.service import (
 from app.modules.sales_desk.queries import SalesDeskRepository
 from app.modules.sales_desk.schemas import (
     BookingsMonth,
+    DeskCompaniesResponse,
+    DeskCompanyProfile,
+    DeskCompanyRow,
     ClosedPeriodKpi,
     ClosedStripColumn,
     DashboardKpis,
@@ -628,6 +631,88 @@ class SalesDeskService:
     def _idle_days(row, today: date) -> int:
         last = row.last_activity or _org_local_date(row.created_at)
         return (today - last).days
+
+    # Companies directory (Companies.svg, #46)
+
+    def get_companies(
+        self,
+        owner_id: uuid.UUID | None = None,
+        search: str | None = None,
+        unsynced_only: bool = False,
+        limit: int = 200,
+    ) -> DeskCompaniesResponse:
+        """The companies directory with profiles, owner and deal counts.
+
+        Profiles, owners and deal counts are each fetched in one batched
+        query keyed by the page's customer ids, so the row count does not
+        drive the query count.
+        """
+        rows, total = self.repo.desk_companies(owner_id, search, unsynced_only, limit)
+        customer_ids = [row.id for row in rows]
+
+        profiles_by_customer: dict[uuid.UUID, list] = {}
+        for profile in self.repo.billing_profiles_for(customer_ids):
+            profiles_by_customer.setdefault(profile.customer_id, []).append(profile)
+
+        owners = {
+            user.id: self._user_response(user)
+            for user in self.repo.users_by_id(
+                [row.owner_id for row in rows if row.owner_id]
+            )
+        }
+
+        open_counts: dict[uuid.UUID, int] = {}
+        closed_counts: dict[uuid.UUID, int] = {}
+        total_counts: dict[uuid.UUID, int] = {}
+        for customer_id, status, count in self.repo.deal_counts_for(customer_ids):
+            total_counts[customer_id] = total_counts.get(customer_id, 0) + count
+            if status == DealStatus.OPEN.value:
+                open_counts[customer_id] = open_counts.get(customer_id, 0) + count
+            elif status in (DealStatus.WON.value, DealStatus.LOST.value):
+                closed_counts[customer_id] = closed_counts.get(customer_id, 0) + count
+
+        items = []
+        for row in rows:
+            default_currency = row.primary_currency or row.currency
+            profiles = profiles_by_customer.get(row.id, [])
+            # Primary currency leads, matching the order the table renders.
+            profiles.sort(key=lambda profile: profile.currency != default_currency)
+
+            items.append(
+                DeskCompanyRow(
+                    id=str(row.id),
+                    name=(
+                        row.company_name
+                        or f"{row.first_name} {row.last_name}".strip()
+                    ),
+                    industry=row.industry,
+                    contact=f"{row.first_name} {row.last_name}".strip(),
+                    email=row.email,
+                    phone=row.phone,
+                    tenant=row.tenant_domain,
+                    primary_currency=default_currency,
+                    registered_on=_org_local_date(row.created_at),
+                    owner=owners.get(row.owner_id) if row.owner_id else None,
+                    profiles=[
+                        DeskCompanyProfile(
+                            currency=profile.currency,
+                            code=profile.code,
+                            payment_terms=profile.payment_terms,
+                            tax_treatment=profile.tax_treatment,
+                            credit_limit=profile.credit_limit,
+                            synced=profile.synced,
+                            is_default=profile.currency == default_currency,
+                        )
+                        for profile in profiles
+                    ],
+                    needs_sync=any(not profile.synced for profile in profiles),
+                    open_deal_count=open_counts.get(row.id, 0),
+                    closed_deal_count=closed_counts.get(row.id, 0),
+                    total_deal_count=total_counts.get(row.id, 0),
+                )
+            )
+
+        return DeskCompaniesResponse(items=items, total=total)
 
     @staticmethod
     def _user_response(row) -> DealOwnerResponse:

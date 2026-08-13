@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { InlineSelect } from "@/components/ui/InlineSelect";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, plural } from "@/lib/utils";
 import {
     DEAL_STAGES,
     LOST_REASONS,
@@ -149,7 +149,7 @@ export function DealDrawer({
                             {deal.company_name}
                         </h2>
                         <p className="pt-0.5 text-[11px] leading-relaxed text-sd-muted">
-                            {deal.contact} · {deal.product} · {deal.seats} seats
+                            {deal.product} · {plural(deal.seats, "seat")}
                         </p>
                         <p className="text-[11px] text-sd-muted">Owned by {deal.owner_name}</p>
                     </div>

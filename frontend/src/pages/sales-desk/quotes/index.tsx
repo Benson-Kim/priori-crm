@@ -67,19 +67,20 @@ export default function SalesDeskQuotesPage() {
     const navigate = useNavigate();
 
     const [quotes, setQuotes] = useState<QuoteRow[]>([]);
+    const [priceList, setPriceList] = useState<PriceListRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // The price list is a static reference table, so no fetch is needed.
-    const priceList = useMemo(() => getPriceList(), []);
-
+    // Both tables load together: the catalogue is the org's own price list, so
+    // it is read from the settings API rather than held as a reference table.
     useEffect(() => {
         let active = true;
 
-        getQuoteList()
-            .then((rows) => {
+        Promise.all([getQuoteList(), getPriceList()])
+            .then(([quoteRows, priceRows]) => {
                 if (active) {
-                    setQuotes(rows);
+                    setQuotes(quoteRows);
+                    setPriceList(priceRows);
                     setError(null);
                 }
             })
@@ -102,7 +103,9 @@ export default function SalesDeskQuotesPage() {
                 header: "Quote ID",
                 className: CELL_CLASS,
                 render: (quote) => (
-                    <span className="font-mono font-bold text-sd-brand">{quote.id}</span>
+                    <span className="font-mono font-bold text-sd-brand">
+                        {quote.quote_number}
+                    </span>
                 ),
             },
             {
@@ -198,14 +201,19 @@ export default function SalesDeskQuotesPage() {
 
             <section className="overflow-hidden rounded-2xl border border-sd-border bg-sd-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
                 <h2 className="border-b border-sd-border px-5 py-4 text-[13px] font-semibold text-sd-ink">
-                    Microsoft 365 · list prices (USD/seat/month)
+                    Product catalogue · list prices (USD/seat/month)
                 </h2>
-                <Table
-                    columns={PRICE_COLUMNS}
-                    data={priceList}
-                    rowKey={(row) => row.name}
-                    variant="sales-desk"
-                />
+                {isLoading ? (
+                    <LoadingState message="Loading the price list..." className="h-40" />
+                ) : (
+                    <Table
+                        columns={PRICE_COLUMNS}
+                        data={priceList}
+                        rowKey={(row) => row.name}
+                        variant="sales-desk"
+                        emptyMessage="No products in the catalogue."
+                    />
+                )}
             </section>
         </div>
     );

@@ -19,7 +19,7 @@ import {
 
 interface ChecklistCardProps {
     onboarding: OnboardingRow;
-    onToggle: (taskIndex: number, completed: boolean) => void;
+    onToggle: (position: number, completed: boolean) => void;
 }
 
 function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
@@ -58,12 +58,12 @@ function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
             <ul className="border-t border-sd-border">
                 {onboarding.tasks.map((task) => (
                     <ChecklistRow
-                        key={task.index}
-                        id={`${headingId}-task-${task.index}`}
+                        key={task.position}
+                        id={`${headingId}-task-${task.position}`}
                         label={task.label}
                         done={task.completed}
-                        step={task.index + 1}
-                        onToggle={(done) => onToggle(task.index, done)}
+                        step={task.position}
+                        onToggle={(done) => onToggle(task.position, done)}
                     />
                 ))}
             </ul>
@@ -78,11 +78,11 @@ function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
  */
 function withTaskCompleted(
     row: OnboardingRow,
-    taskIndex: number,
+    position: number,
     completed: boolean
 ): OnboardingRow {
     const tasks = row.tasks.map((task) =>
-        task.index === taskIndex ? { ...task, completed } : task
+        task.position === position ? { ...task, completed } : task
     );
     const done = tasks.filter((task) => task.completed).length;
 
@@ -137,16 +137,16 @@ export default function SalesDeskOnboardingPage() {
      * same card untouched.
      */
     const toggle = useCallback(
-        async (onboardingId: number, taskIndex: number, completed: boolean) => {
+        async (onboardingId: string, position: number, completed: boolean) => {
             setOnboardings((previous) =>
                 previous.map((row) =>
                     row.id === onboardingId
-                        ? withTaskCompleted(row, taskIndex, completed)
+                        ? withTaskCompleted(row, position, completed)
                         : row
                 )
             );
             try {
-                const updated = await setOnboardingTask(onboardingId, taskIndex, completed);
+                const updated = await setOnboardingTask(onboardingId, position);
                 setOnboardings((previous) =>
                     previous.map((row) => (row.id === updated.id ? updated : row))
                 );
@@ -155,7 +155,7 @@ export default function SalesDeskOnboardingPage() {
                 setOnboardings((previous) =>
                     previous.map((row) =>
                         row.id === onboardingId
-                            ? withTaskCompleted(row, taskIndex, !completed)
+                            ? withTaskCompleted(row, position, !completed)
                             : row
                     )
                 );
@@ -188,8 +188,8 @@ export default function SalesDeskOnboardingPage() {
                         <ChecklistCard
                             key={onboarding.id}
                             onboarding={onboarding}
-                            onToggle={(taskIndex, completed) =>
-                                void toggle(onboarding.id, taskIndex, completed)
+                            onToggle={(position, completed) =>
+                                void toggle(onboarding.id, position, completed)
                             }
                         />
                     ))}

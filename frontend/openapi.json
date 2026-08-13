@@ -3246,6 +3246,193 @@
         "title": "DealUpdate",
         "type": "object"
       },
+      "DeskCompaniesResponse": {
+        "description": "The companies directory, newest registration first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeskCompanyRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "description": "Rows matching the filters, before the limit",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "DeskCompaniesResponse",
+        "type": "object"
+      },
+      "DeskCompanyProfile": {
+        "description": "One currency's billing profile as the Companies table renders it.\n\n``synced`` is the internal posting flag toward accounting (ADR 0010): any\nedit flips it back to false until the profile is pushed again.",
+        "properties": {
+          "code": {
+            "description": "Profile code, slug + sequence (#43)",
+            "title": "Code",
+            "type": "string"
+          },
+          "credit_limit": {
+            "description": "Ceiling in this profile's currency",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Limit",
+            "type": "string"
+          },
+          "currency": {
+            "description": "Billing currency of this profile",
+            "title": "Currency",
+            "type": "string"
+          },
+          "is_default": {
+            "description": "The company's primary transacting currency",
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "payment_terms": {
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "synced": {
+            "description": "Pushed to accounting",
+            "title": "Synced",
+            "type": "boolean"
+          },
+          "tax_treatment": {
+            "title": "Tax Treatment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "code",
+          "payment_terms",
+          "tax_treatment",
+          "credit_limit",
+          "synced",
+          "is_default"
+        ],
+        "title": "DeskCompanyProfile",
+        "type": "object"
+      },
+      "DeskCompanyRow": {
+        "description": "One row of the Sales Desk companies directory.\n\nThe customers list endpoint returns a lean summary built for the\naccounting screens; the desk table additionally shows industry, the\ncontact, both billing profiles with their sync state, the owning rep and\nthe company's deal counts, which is why this row exists separately.",
+        "properties": {
+          "closed_deal_count": {
+            "title": "Closed Deal Count",
+            "type": "integer"
+          },
+          "contact": {
+            "description": "Contact person full name",
+            "title": "Contact",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "description": "Customer id",
+            "title": "Id",
+            "type": "string"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_sync": {
+            "description": "Any profile still unpushed to accounting",
+            "title": "Needs Sync",
+            "type": "boolean"
+          },
+          "open_deal_count": {
+            "title": "Open Deal Count",
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealOwnerResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "primary_currency": {
+            "title": "Primary Currency",
+            "type": "string"
+          },
+          "profiles": {
+            "description": "One entry per billing currency, primary currency first",
+            "items": {
+              "$ref": "#/components/schemas/DeskCompanyProfile"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "registered_on": {
+            "description": "Org-local date the company was added",
+            "format": "date",
+            "title": "Registered On",
+            "type": "string"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Microsoft tenant domain, when set",
+            "title": "Tenant"
+          },
+          "total_deal_count": {
+            "title": "Total Deal Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "industry",
+          "contact",
+          "email",
+          "phone",
+          "tenant",
+          "primary_currency",
+          "registered_on",
+          "owner",
+          "profiles",
+          "needs_sync",
+          "open_deal_count",
+          "closed_deal_count",
+          "total_deal_count"
+        ],
+        "title": "DeskCompanyRow",
+        "type": "object"
+      },
       "DetailedHealthResponse": {
         "properties": {
           "database": {
@@ -5787,8 +5974,15 @@
         "description": "Request body for the 'Start engaging \u2192' action.\n\nEngaging atomically creates a customer + an open deal at stage\nActivation and removes the prospect. Either a full ``customer`` payload\n(validated/deduplicated by the existing customers service) or a\n``customer_id`` linking an existing customer must be provided \u2014 the\nlatter is the re-submit path after a duplicate-email 409.",
         "properties": {
           "currency": {
-            "$ref": "#/components/schemas/BillingCurrency",
-            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies. Defaults to the customer's primary billing currency."
           },
           "customer": {
             "anyOf": [
@@ -5841,17 +6035,31 @@
             "title": "Ownerid"
           },
           "product": {
-            "description": "Product being sold",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Product",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Product being sold; defaults to the first entry of the org's sales-pricing catalog, since 'Start engaging' is a one-click action that collects nothing (#40, #48)",
+            "title": "Product"
           },
           "seats": {
-            "description": "Number of seats/licences",
-            "exclusiveMinimum": 0.0,
-            "title": "Seats",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Number of seats/licences; defaults to 1",
+            "title": "Seats"
           },
           "value": {
             "anyOf": [
@@ -5871,11 +6079,6 @@
             "title": "Value"
           }
         },
-        "required": [
-          "product",
-          "seats",
-          "currency"
-        ],
         "title": "NurtureEngageRequest",
         "type": "object"
       },
@@ -23210,6 +23413,108 @@
         "summary": "Export VAT reconciliation estimate to Excel",
         "tags": [
           "Reports"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/companies": {
+      "get": {
+        "description": "The Companies table (Companies.svg) in one round trip: each company with its industry, primary contact, both billing profiles and their accounting sync state, the owning rep and its deal counts. The customers list endpoint returns a leaner summary built for the accounting screens, which is why the desk has its own row shape. `unsynced=true` narrows to companies with at least one profile not yet pushed to accounting, the same semantics as the Needs sync tab and the sidebar badge.",
+        "operationId": "get_companies_api_v1_sales_desk_companies_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          },
+          {
+            "description": "Match company, contact, industry or tenant",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Match company, contact, industry or tenant",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Only companies with an unsynced billing profile",
+            "in": "query",
+            "name": "unsynced",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only companies with an unsynced billing profile",
+              "title": "Unsynced",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Maximum rows",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "description": "Maximum rows",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskCompaniesResponse"
+                }
+              }
+            },
+            "description": "Companies directory"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales Desk companies directory",
+        "tags": [
+          "Sales Desk"
         ]
       }
     },

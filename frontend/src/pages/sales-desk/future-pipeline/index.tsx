@@ -92,8 +92,8 @@ export default function SalesDeskFuturePipelinePage() {
         let active = true;
 
         Promise.all([
-            getProspects(undefined, undefined, repFilter),
-            getFuturePipelineSummary(undefined, repFilter),
+            getProspects(undefined, repFilter),
+            getFuturePipelineSummary(repFilter),
         ])
             .then(([rows, next]) => {
                 if (!active) return;

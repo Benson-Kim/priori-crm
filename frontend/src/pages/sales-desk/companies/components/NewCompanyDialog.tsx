@@ -6,7 +6,7 @@
  * new company lands straight in the "Needs sync" filter.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { InlineSelect } from "@/components/ui/InlineSelect";
@@ -16,9 +16,10 @@ import {
     BILLING_CURRENCIES,
     INDUSTRIES,
     createCompany,
-    getSalesReps,
+    
     type BillingCurrency,
 } from "@/services/salesDeskApi";
+import { useSalesReps } from "@/hooks/useSalesReps";
 
 interface NewCompanyDialogProps {
     isOpen: boolean;
@@ -28,8 +29,9 @@ interface NewCompanyDialogProps {
 
 const EMPTY_FORM = {
     name: "",
-    industry: INDUSTRIES[0],
-    contact: "",
+    industry: INDUSTRIES[0] as string,
+    firstName: "",
+    lastName: "",
     email: "",
     phone: "",
     tenant: "",
@@ -42,10 +44,17 @@ export function NewCompanyDialog({
     onClose,
     onCreated,
 }: Readonly<NewCompanyDialogProps>) {
-    const reps = getSalesReps();
+    const { reps } = useSalesReps();
     const [form, setForm] = useState({ ...EMPTY_FORM, ownerId: reps[0]?.id ?? "" });
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // The roster arrives after first paint, so the default owner is applied
+    // when it lands rather than read during render.
+    useEffect(() => {
+        const first = reps[0]?.id;
+        if (first) setForm((previous) => (previous.ownerId ? previous : { ...previous, ownerId: first }));
+    }, [reps]);
 
     const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
         setForm((previous) => ({ ...previous, [key]: value }));
@@ -114,14 +123,27 @@ export function NewCompanyDialog({
                 />
 
                 <div>
-                    <Label htmlFor="company-contact">Primary contact</Label>
+                    <Label htmlFor="company-first-name">Contact first name</Label>
                     <Input
                         wrapperClassName="h-control"
-                        id="company-contact"
-                        value={form.contact}
-                        onChange={(event) => set("contact", event.target.value)}
-                        placeholder="Alice Wanjiru"
-                        autoComplete="name"
+                        id="company-first-name"
+                        value={form.firstName}
+                        onChange={(event) => set("firstName", event.target.value)}
+                        placeholder="Alice"
+                        autoComplete="given-name"
+                        required
+                    />
+                </div>
+
+                <div>
+                    <Label htmlFor="company-last-name">Contact last name</Label>
+                    <Input
+                        wrapperClassName="h-control"
+                        id="company-last-name"
+                        value={form.lastName}
+                        onChange={(event) => set("lastName", event.target.value)}
+                        placeholder="Wanjiru"
+                        autoComplete="family-name"
                         required
                     />
                 </div>

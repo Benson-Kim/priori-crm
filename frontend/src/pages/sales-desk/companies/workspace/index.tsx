@@ -41,7 +41,7 @@ type CompanyTabKey = "all" | "needs_sync";
 
 export default function SalesDeskCompaniesWorkspacePage() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const selectedCompanyId = Number(searchParams.get("company")) || null;
+    const selectedCompanyId = searchParams.get("company") || null;
 
     const [tab, setTab] = useState<CompanyTabKey>("all");
     const [search, setSearch] = useState("");
@@ -104,7 +104,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
     }, [selectedCompanyId, revision]);
 
     const selectCompany = useCallback(
-        (companyId: number | null) => {
+        (companyId: string | null) => {
             setSearchParams(
                 (params) => {
                     if (companyId === null) params.delete("company");
@@ -127,7 +127,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
 
     /** Push both profiles straight from the row, then re-read. */
     const syncRow = useCallback(
-        async (companyId: number) => {
+        async (companyId: string) => {
             await syncBothProfiles(companyId);
             refresh();
         },

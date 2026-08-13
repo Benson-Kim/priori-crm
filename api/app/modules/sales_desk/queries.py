@@ -156,6 +156,105 @@ class SalesDeskRepository:
             query = query.filter(Customer.owner_id == owner_id)
         return query.scalar() or 0
 
+    def desk_companies(
+        self,
+        owner_id: uuid.UUID | None = None,
+        search: str | None = None,
+        unsynced_only: bool = False,
+        limit: int = 200,
+    ):
+        """Companies for the desk directory, newest registration first.
+
+        Returns ``(rows, total)``. ``total`` counts every match before the
+        limit so the caller can show a truthful count without a second query.
+        """
+        query = self.db.query(
+            Customer.id,
+            Customer.company_name,
+            Customer.first_name,
+            Customer.last_name,
+            Customer.email,
+            Customer.phone,
+            Customer.industry,
+            Customer.tenant_domain,
+            Customer.owner_id,
+            Customer.currency,
+            Customer.primary_currency,
+            Customer.created_at,
+        )
+
+        if owner_id:
+            query = query.filter(Customer.owner_id == owner_id)
+
+        if unsynced_only:
+            # Served directly by ix_customer_billing_profiles_unsynced_customer.
+            query = query.filter(
+                exists().where(
+                    CustomerBillingProfile.customer_id == Customer.id,
+                    CustomerBillingProfile.synced.is_(False),
+                )
+            )
+
+        if search:
+            term = f"%{search.strip().lower()}%"
+            query = query.filter(
+                func.lower(
+                    func.coalesce(Customer.company_name, "")
+                    + " "
+                    + Customer.first_name
+                    + " "
+                    + Customer.last_name
+                    + " "
+                    + func.coalesce(Customer.industry, "")
+                    + " "
+                    + func.coalesce(Customer.tenant_domain, "")
+                ).like(term)
+            )
+
+        total = query.count()
+        rows = (
+            query.order_by(Customer.created_at.desc(), Customer.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return rows, total
+
+    def users_by_id(self, user_ids: list[uuid.UUID]):
+        """Owner rows for the given ids, for rendering the owner column."""
+        if not user_ids:
+            return []
+        return (
+            self.db.query(User.id, User.first_name, User.last_name)
+            .filter(User.id.in_(user_ids))
+            .all()
+        )
+
+    def billing_profiles_for(self, customer_ids: list[uuid.UUID]):
+        """Every billing profile for the given customers, in one query."""
+        if not customer_ids:
+            return []
+        return (
+            self.db.query(CustomerBillingProfile)
+            .filter(CustomerBillingProfile.customer_id.in_(customer_ids))
+            .order_by(CustomerBillingProfile.currency)
+            .all()
+        )
+
+    def deal_counts_for(self, customer_ids: list[uuid.UUID]):
+        """``(customer_id, status, count)`` triples for the given customers."""
+        if not customer_ids:
+            return []
+        return (
+            self.db.query(
+                Deal.customer_id,
+                Deal.status,
+                func.count(Deal.id),
+            )
+            .filter(Deal.customer_id.in_(customer_ids))
+            .group_by(Deal.customer_id, Deal.status)
+            .all()
+        )
+
     # Future pipeline (nurture prospects + parked deals, #40)
 
     def nurture_due_counts(

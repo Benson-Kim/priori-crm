@@ -221,3 +221,57 @@ class PipelineOverviewResponse(BaseModel):
     open_pipeline_total: Decimal = Field(
         description="Unweighted sum of open deal values in scope, USD equivalent"
     )
+
+
+# Companies directory (Companies.svg, #46)
+
+
+class DeskCompanyProfile(BaseModel):
+    """One currency's billing profile as the Companies table renders it.
+
+    ``synced`` is the internal posting flag toward accounting (ADR 0010): any
+    edit flips it back to false until the profile is pushed again.
+    """
+
+    currency: str = Field(description="Billing currency of this profile")
+    code: str = Field(description="Profile code, slug + sequence (#43)")
+    payment_terms: str
+    tax_treatment: str
+    credit_limit: Decimal = Field(description="Ceiling in this profile's currency")
+    synced: bool = Field(description="Pushed to accounting")
+    is_default: bool = Field(description="The company's primary transacting currency")
+
+
+class DeskCompanyRow(BaseModel):
+    """One row of the Sales Desk companies directory.
+
+    The customers list endpoint returns a lean summary built for the
+    accounting screens; the desk table additionally shows industry, the
+    contact, both billing profiles with their sync state, the owning rep and
+    the company's deal counts, which is why this row exists separately.
+    """
+
+    id: str = Field(description="Customer id")
+    name: str
+    industry: str | None
+    contact: str = Field(description="Contact person full name")
+    email: str
+    phone: str
+    tenant: str | None = Field(description="Microsoft tenant domain, when set")
+    primary_currency: str
+    registered_on: date = Field(description="Org-local date the company was added")
+    owner: DealOwnerResponse | None
+    profiles: list[DeskCompanyProfile] = Field(
+        description="One entry per billing currency, primary currency first"
+    )
+    needs_sync: bool = Field(description="Any profile still unpushed to accounting")
+    open_deal_count: int
+    closed_deal_count: int
+    total_deal_count: int
+
+
+class DeskCompaniesResponse(BaseModel):
+    """The companies directory, newest registration first."""
+
+    items: list[DeskCompanyRow]
+    total: int = Field(description="Rows matching the filters, before the limit")

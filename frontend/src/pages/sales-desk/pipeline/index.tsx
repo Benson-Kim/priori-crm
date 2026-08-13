@@ -69,8 +69,13 @@ export default function SalesDeskPipelinePage() {
         };
     }, []);
 
-    const openInWorkspace = (deal: PipelineDeal) =>
-        navigate(`/sales-desk/pipeline/workspace?deal=${deal.id}`);
+    /*
+     * A row leads to the workspace, where deals are actually worked. The deal
+     * is not carried across: opening a drawer the user has not asked for hides
+     * the list they arrived to read, so the workspace opens on its own list and
+     * they pick a row there.
+     */
+    const openInWorkspace = () => navigate("/sales-desk/pipeline/workspace");
 
     const tabs = STATUS_TAB_LABELS.map((entry) => ({
         ...entry,
@@ -110,7 +115,7 @@ export default function SalesDeskPipelinePage() {
                 className: CELL_CLASS,
                 render: (deal) => (
                     <span className="font-medium text-sd-ink">
-                        {formatDeskMoney(deal.value)}
+                        {formatDeskMoney(deal.value, deal.billing_currency)}
                     </span>
                 ),
             },
@@ -122,7 +127,7 @@ export default function SalesDeskPipelinePage() {
                     <span className="text-sd-muted">
                         {deal.weighted_value === null
                             ? "—"
-                            : formatDeskMoney(deal.weighted_value)}
+                            : formatDeskMoney(deal.weighted_value, deal.billing_currency)}
                     </span>
                 ),
             },
@@ -179,7 +184,7 @@ export default function SalesDeskPipelinePage() {
                     onRowClick={openInWorkspace}
                     variant="sales-desk"
                     className="shadow-sd-card"
-                    chevron={(deal) => `Open ${deal.company_name} in the workspace`}
+                    chevron={() => "Open the pipeline workspace"}
                     emptyMessage="No deals match this filter."
                 />
             )}

@@ -60,8 +60,13 @@ export default function SalesDeskCompaniesPage() {
         };
     }, [debouncedSearch, revision]);
 
-    const openInWorkspace = (company: CompanyRow) =>
-        navigate(`/sales-desk/companies/workspace?company=${company.id}`);
+    /*
+     * A row leads to the workspace, where the profiles are actually worked.
+     * The company is not carried across: opening a drawer the user has not
+     * asked for hides the list they arrived to read, so the workspace opens
+     * on its own list and they pick a row there.
+     */
+    const openInWorkspace = () => navigate("/sales-desk/companies/workspace");
 
     const columns = useMemo<Column<CompanyRow>[]>(
         () => [
@@ -184,7 +189,7 @@ export default function SalesDeskCompaniesPage() {
                     onRowClick={openInWorkspace}
                     variant="sales-desk"
                     className="shadow-sd-card [&_table]:min-w-[1100px]"
-                    chevron={(company) => `Open ${company.name} billing profiles`}
+                    chevron={() => "Open the companies workspace"}
                     emptyMessage="No companies match that search."
                 />
             )}
