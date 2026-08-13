@@ -232,6 +232,9 @@ class DealService(StateMachineMixin, ServiceBase):
         if filters.owner_id:
             query = query.filter(Deal.owner_id == filters.owner_id)
 
+        if filters.customer_id:
+            query = query.filter(Deal.customer_id == filters.customer_id)
+
         if filters.hygiene:
             query = self._apply_hygiene_filter(query, filters.hygiene)
 
