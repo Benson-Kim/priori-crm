@@ -527,6 +527,63 @@ export async function getPipelineDeals(
         .map((deal) => toPipelineDeal(deal, companyOf(deal), currency));
 }
 
+/** Escape a CSV field: wrap in quotes and double any embedded quote. */
+const csvField = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+/**
+ * The pipeline as a CSV file, honoring the same filters as the deal list.
+ *
+ * TODO(#45-wiring): replace with GET /sales-desk/exports/pipeline — the
+ * server builds the file (issue #47 mandates the server export from #45), so
+ * this body becomes a fetch that resolves with the response blob and the
+ * client-side generation below is deleted. Callers only ever see a Blob, so
+ * the swap is body-only.
+ *
+ * Columns follow #47's export spec as far as the mock data allows. Parked
+ * deals leave the pipeline entirely in the mock store, so the
+ * "Stage / Parked until" column only ever carries a stage here; the server
+ * fills in the parked-until date.
+ */
+export async function exportPipelineCsv(
+    query: PipelineQuery = {},
+    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+): Promise<Blob> {
+    const deals = await getPipelineDeals(query, currency);
+
+    const header = [
+        "Company",
+        "Contact",
+        "Owner",
+        "Product",
+        "Seats",
+        "Currency",
+        "Annual value",
+        "Status",
+        "Stage / Parked until",
+        "Days in pipeline",
+        "Days idle",
+        "Close reason",
+        "Latest note",
+    ];
+    const rows = deals.map((deal) => [
+        deal.company_name,
+        deal.contact,
+        deal.owner_name,
+        deal.product,
+        deal.seats,
+        deal.billing_currency,
+        Math.round(deal.value),
+        deal.status,
+        deal.stage_label,
+        deal.age_days,
+        deal.idle_days,
+        deal.close_reason ?? "",
+        deal.latest_record.note,
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(csvField).join(",")).join("\n");
+    return new Blob([csv], { type: "text/csv;charset=utf-8" });
+}
+
 /** Rep cards, stage strip, filter counts and the open-pipeline total. */
 export async function getPipelineOverview(
     ownerId?: string,
