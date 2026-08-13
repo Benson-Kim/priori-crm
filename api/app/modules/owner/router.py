@@ -12,9 +12,11 @@ from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
 from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
+    DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
     DEFAULT_PURCHASE_ORDER_TERMS,
+    DEFAULT_REP_QUARTERLY_TARGET_USD,
 )
 from app.lib.config import settings
 from app.modules.owner.schemas import (
@@ -51,6 +53,11 @@ def _to_response(profile) -> OwnerProfileResponse:
             profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS
         ),
         onboarding_template_version=profile.onboarding_template_version,
+        deal_stage_probabilities=dict(
+            profile.deal_stage_probabilities or DEFAULT_DEAL_STAGE_PROBABILITIES
+        ),
+        rep_quarterly_targets=dict(profile.rep_quarterly_targets or {}),
+        default_rep_quarterly_target=DEFAULT_REP_QUARTERLY_TARGET_USD,
         has_logo=bool(profile.logo_storage_key),
         updated_at=profile.updated_at,
         reporting_timezone=settings.REPORTING_TIMEZONE,
