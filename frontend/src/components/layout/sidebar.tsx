@@ -288,10 +288,3 @@ export function Sidebar() {
         </aside>
     );
 }
-p>
-                    )}
-                </div>
-            </div>
-        </aside>
-    );
-}
