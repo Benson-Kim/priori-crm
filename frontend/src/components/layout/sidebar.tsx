@@ -28,7 +28,18 @@ function readInitialCollapsed(): boolean {
 export function Sidebar() {
     const { pathname } = useLocation();
     const navigate = useNavigate();
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
+
+    // Per-owner module entitlements: hide nav entries for disabled modules
+    // (fail-open while the bootstrap loads). Groups whose children are all
+    // hidden disappear entirely.
+    const { enabledModules } = useEnabledModules();
+    const items = useMemo(
+        () => visibleNavItems(enabledModules),
+        [enabledModules]
+    );
+
+    const isAdmin = user?.role?.toLowerCase() === "admin";
 
     const isActive = (path: string) =>
         pathname === path || pathname.startsWith(path + "/");
@@ -216,6 +227,23 @@ export function Sidebar() {
                 </div>
 
                 <div className="flex flex-col gap-1">
+                    {isAdmin && (
+                        <Link
+                            to="/settings/modules"
+                            aria-label="Module Settings"
+                            title={collapsed ? "Module Settings" : undefined}
+                            className={cn(
+                                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                                collapsed && "justify-center px-0",
+                                isActive("/settings/modules")
+                                    ? "bg-white text-priori-purple font-semibold"
+                                    : "text-gray-600 hover:bg-white/50"
+                            )}
+                        >
+                            <Settings size={18} />
+                            {!collapsed && "Module Settings"}
+                        </Link>
+                    )}
                     <Link
                         to="help"
                         aria-label="Help"

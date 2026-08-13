@@ -42,9 +42,9 @@ export const navItems: NavItem[] = [
         label: "Income / Sales",
         icon: Briefcase,
         children: [
-            { label: "Customers", path: "/customers", icon: Users },
-            { label: "Quotes", path: "/quotes", icon: FileText },
-            { label: "Invoices", path: "/invoices", icon: Invoice },
+            { label: "Customers", path: "/customers", icon: Users, moduleKey: "customers" },
+            { label: "Quotes", path: "/quotes", icon: FileText, moduleKey: "quotes" },
+            { label: "Invoices", path: "/invoices", icon: Invoice, moduleKey: "invoices" },
         ],
     },
 
@@ -84,4 +84,34 @@ export const navItems: NavItem[] = [
             { label: "Tax Report", path: "/reports/taxes", icon: ReceiptText },
         ],
     },
-];
+];Report", path: "/reports/taxes", icon: ReceiptText },
+        ],
+    },
+];Entries without a moduleKey are always visible; a null/undefined map
+ * (bootstrap still loading, or older API) shows everything (fail-open,
+ * mirroring the backend's missing-row-=-enabled default). Groups whose
+ * children are ALL hidden disappear entirely.
+ */
+export function visibleNavItems(
+    enabledModules: Record<string, boolean> | null | undefined
+): NavItem[] {
+    const isEnabled = (moduleKey?: string) =>
+        !moduleKey || !enabledModules || enabledModules[moduleKey] !== false;
+
+    const result: NavItem[] = [];
+    for (const item of navItems) {
+        if (!item.children) {
+            if (isEnabled(item.moduleKey)) {
+                result.push(item);
+            }
+            continue;
+        }
+        const children = item.children.filter((child) =>
+            isEnabled(child.moduleKey)
+        );
+        if (children.length > 0) {
+            result.push({ ...item, children });
+        }
+    }
+    return result;
+}
