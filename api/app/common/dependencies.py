@@ -311,3 +311,22 @@ def get_reports_service(db: DbSession, current_user: CurrentUser):
 
 
 ReportsServiceDep = Annotated["ReportsService", Depends(get_reports_service)]  # noqa: F821
+
+
+def get_sales_desk_service(db: DbSession, current_user: CurrentUser):
+    """Provide the Sales Desk analytics service on one read snapshot.
+
+    Same contract as :func:`get_reports_service` (issue #45 mirrors the
+    reports module): on PostgreSQL every dashboard / notification /
+    overview / export request runs inside ONE read-only ``REPEATABLE
+    READ`` transaction, so all its numbers are mutually consistent.
+    """
+    from app.modules.sales_desk.service import SalesDeskService
+
+    _start_report_snapshot(db)
+    return SalesDeskService(db, current_user=current_user)
+
+
+SalesDeskServiceDep = Annotated[
+    "SalesDeskService", Depends(get_sales_desk_service)  # noqa: F821
+]

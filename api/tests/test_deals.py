@@ -716,6 +716,35 @@ def test_list_tabs_owner_and_show_closed(db):
     }
 
 
+def test_list_customer_filter_returns_only_that_customers_deals(db):
+    """customer_id narrows the list to one company's deals, whatever their
+    status: open, won, lost and parked all stay visible (the companies
+    drawer reads its deal cards through this filter, #46)."""
+    owner = _make_owner(db)
+    svc = _svc(db, owner)
+    params = PaginationParams(page=1, per_page=50)
+
+    company = _make_customer(db, name="Baraka Logistics")
+    other = _make_customer(db, name="Baraka Logistics East")  # shared prefix
+
+    open_deal = _make_deal(db, owner, company, value=Decimal("2700.00"))
+    won = _make_deal(db, owner, company, value=Decimal("5000.00"))
+    svc.close(won.id, "won", DealWonReason.PRODUCT_FIT.value, "Won.")
+    lost = _make_deal(db, owner, company, value=Decimal("1000.00"))
+    svc.close(lost.id, "lost", DealLostReason.PRICE_TOO_HIGH.value, "Too dear.")
+    parked = _make_deal(db, owner, company, value=Decimal("800.00"))
+    svc.park(parked.id, reporting_date() + timedelta(days=30), "Parked.")
+    _make_deal(db, owner, other, value=Decimal("9999.00"))  # must be excluded
+
+    page = svc.list_deals(params, DealFilterParams(customer_id=company.id))
+    assert _ids(page) == {
+        str(open_deal.id),
+        str(won.id),
+        str(lost.id),
+        str(parked.id),
+    }
+
+
 def test_list_hygiene_buckets(db):
     fx = _pipeline_fixture(db)
     params = PaginationParams(page=1, per_page=50)

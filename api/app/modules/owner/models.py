@@ -125,6 +125,28 @@ class OwnerProfile(Base):
         comment="Monotonic version of the onboarding task template",
     )
 
+    # Sales Desk analytics settings (issue #45). Both are org-scoped and
+    # resolved read-side with built-in fallbacks (see
+    # app.constants.settings_defaults), so a never-touched profile still
+    # yields the calibrated design values without a backfill.
+    deal_stage_probabilities: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Per-stage win probabilities for the weighted pipeline "
+            "(stage value -> decimal string 0..1); NULL = built-in "
+            "0.10/0.25/0.50/0.75 defaults"
+        ),
+    )
+    rep_quarterly_targets: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Per-rep quarterly won-value targets in USD (user id -> decimal "
+            "string); reps without an entry fall back to the built-in default"
+        ),
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

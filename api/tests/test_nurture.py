@@ -451,6 +451,134 @@ def test_engage_defaults_value_note_and_owner_from_prospect(db):
     )
 
 
+def test_engage_defaults_product_seats_and_customer_primary_currency(db):
+    """The relaxed engage contract (#53 item 11): product, seats and
+    currency are optional — 'Start engaging' is one click that collects
+    nothing — so the server opens the deal on the org's first catalogued
+    product, at a single seat, in the customer's primary currency."""
+    from app.constants.settings_defaults import DEFAULT_PRODUCT_CATALOG
+
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    customer_payload = _customer_payload()
+    customer_payload.primary_currency = BillingCurrency.USD
+    deal = svc.engage(prospect.id, NurtureEngageRequest(customer=customer_payload))
+
+    assert deal.product == DEFAULT_PRODUCT_CATALOG[0]["name"]
+    assert deal.seats == 1
+    assert deal.currency == "USD"  # the customer's primary currency
+
+
+def test_engage_currency_falls_back_to_customer_default_currency(db):
+    """Without a primary billing currency on the customer, the defaulted
+    deal currency is the customer's own default transaction currency."""
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    deal = svc.engage(prospect.id, NurtureEngageRequest(customer=_customer_payload()))
+
+    customer = db.query(Customer).filter(Customer.id == deal.customer_id).one()
+    assert customer.primary_currency is None
+    assert deal.currency == customer.currency == "KES"
+
+
+def test_engage_default_product_follows_org_customized_catalog(db, monkeypatch):
+    """The engage default resolves through the owner settings path (#44):
+    an org that customized its catalog gets deals opened on ITS first
+    product, never on the seed constant's."""
+    from app.constants.settings_defaults import DEFAULT_PRODUCT_CATALOG
+    from app.modules.owner.schemas import SalesPriceListEntry, SalesPricingSettings
+    from app.modules.owner.service import OwnerService
+
+    org_catalog = SalesPricingSettings(
+        catalog=[
+            SalesPriceListEntry(
+                name="Nairobi Cloud Suite",
+                usd_per_seat_month="9.90",
+                usd_per_seat_year="118.80",
+                usd_ten_seat_arr="1188.00",
+            ),
+            SalesPriceListEntry(
+                name="Coast Backup Plan",
+                usd_per_seat_month="4.50",
+                usd_per_seat_year="54.00",
+                usd_ten_seat_arr="540.00",
+            ),
+        ],
+        annual_billing_discount_pct="15",
+        fx_units_per_usd={},
+    )
+    monkeypatch.setattr(
+        OwnerService, "sales_pricing_settings", staticmethod(lambda: org_catalog)
+    )
+
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    deal = svc.engage(prospect.id, NurtureEngageRequest(customer=_customer_payload()))
+
+    assert deal.product == "Nairobi Cloud Suite"
+    assert deal.product != DEFAULT_PRODUCT_CATALOG[0]["name"]
+
+
+def test_engage_default_product_falls_back_to_seed_when_catalog_unset(db, monkeypatch):
+    """An org without a resolved catalog (settings return no entries)
+    falls back to the seed constant's first entry."""
+    from app.constants.settings_defaults import DEFAULT_PRODUCT_CATALOG
+    from app.modules.owner.schemas import SalesPricingSettings
+    from app.modules.owner.service import OwnerService
+
+    empty = SalesPricingSettings(
+        catalog=[], annual_billing_discount_pct="15", fx_units_per_usd={}
+    )
+    monkeypatch.setattr(
+        OwnerService, "sales_pricing_settings", staticmethod(lambda: empty)
+    )
+
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    deal = svc.engage(prospect.id, NurtureEngageRequest(customer=_customer_payload()))
+
+    assert deal.product == DEFAULT_PRODUCT_CATALOG[0]["name"]
+
+
+def test_engage_defaults_product_to_subscription_on_empty_catalog(db, monkeypatch):
+    """An empty product catalog cannot block a one-click engage: the deal
+    opens on the generic 'Subscription' placeholder instead."""
+    import app.constants.settings_defaults as settings_defaults
+
+    monkeypatch.setattr(settings_defaults, "DEFAULT_PRODUCT_CATALOG", [])
+
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    deal = svc.engage(prospect.id, NurtureEngageRequest(customer=_customer_payload()))
+
+    assert deal.product == "Subscription"
+    assert deal.seats == 1
+
+
+def test_engage_explicit_terms_still_win_over_defaults(db):
+    """Anything the caller does send is honoured — the defaults only fill
+    what the request omits."""
+    owner = _make_owner(db)
+    prospect = _make_prospect(db, owner)
+    svc = _svc(db, owner)
+
+    deal = svc.engage(prospect.id, _engage_request())
+
+    assert deal.product == "Microsoft 365 Business Premium"
+    assert deal.seats == 45
+    assert deal.currency == "USD"
+
+
 def test_engage_requires_an_owner_and_a_value(db):
     owner = _make_owner(db)
     svc = _svc(db, owner)

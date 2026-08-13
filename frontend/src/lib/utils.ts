@@ -42,6 +42,10 @@ export function createSearchParams(
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Pluralise a count against its noun: "1 deal", "4 deals". */
+export const plural = (count: number, noun: string) =>
+  `${count} ${noun}${count === 1 ? "" : "s"}`;
+
 export const getNameInitials = (name: string) => {
   return name
     .split(" ")
@@ -76,9 +80,25 @@ export const validateInt = (value: string | null | undefined) => {
   return value;
 };
 
-export const formatDate = (dateString: string) => {
+/**
+ * The single date-formatting helper (#53 ratified rule): `D MMM YYYY` in
+ * cards/chips (the default), `YYYY-MM-DD` in tables and logs. Rendering all
+ * dates through one helper is what prevents the off-by-one and mixed-format
+ * drift the design exports showed.
+ */
+export const formatDate = (
+  dateString: string,
+  style: "chip" | "table" = "chip"
+) => {
   if (!dateString) return "";
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  if (style === "table") {
+    // UTC getters so an ISO timestamp never renders as the previous local day.
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${date.getUTCFullYear()}-${month}-${day}`;
+  }
   return date.toLocaleDateString("en-KE", {
     year: "numeric",
     month: "short",

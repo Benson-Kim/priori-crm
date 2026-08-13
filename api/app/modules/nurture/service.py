@@ -63,6 +63,28 @@ UPCOMING_WINDOW_DAYS = 14
 _DEFAULT_ENGAGE_NOTE = "Engaged from the future pipeline nurture list."
 
 
+def _default_engage_product(db) -> str:
+    """First product of the org catalog, the default a one-click engage opens on.
+
+    Resolution mirrors ``GET /owner/settings/sales-pricing`` (issue #44):
+    the org's settings-resolved catalog first — so an org that customized
+    its catalog never gets a deal opened on a product it does not sell —
+    then the seed constant, then a generic 'Subscription' placeholder so a
+    one-click engage can never fail on catalog configuration.
+    """
+    from app.constants.settings_defaults import DEFAULT_PRODUCT_CATALOG
+    from app.modules.owner.service import OwnerService
+
+    entry = next(iter(OwnerService(db).sales_pricing_settings().catalog), None)
+    if entry is not None and entry.name:
+        return entry.name
+
+    first = next(iter(DEFAULT_PRODUCT_CATALOG), None)
+    if first is None:
+        return "Subscription"
+    return first["name"] if isinstance(first, dict) else str(first)
+
+
 class NurtureService(ServiceBase):
     """Service layer for the Sales Desk future pipeline."""
 
@@ -267,6 +289,13 @@ class NurtureService(ServiceBase):
             or _DEFAULT_ENGAGE_NOTE
         )
 
+        # "Start engaging" is one click on the nurture card (#40, #48): the
+        # screen collects nothing, so the deal opens on the org's first
+        # catalogued product at a single seat and the rep adjusts both in the
+        # deal drawer. Anything the caller does send still wins.
+        product = data.product or _default_engage_product(self._db)
+        seats = data.seats or 1
+
         customer_service = CustomerService(self._db, current_user=self._current_user)
         deal_service = DealService(self._db, current_user=self._current_user)
         snapshot = self._snapshot(prospect)
@@ -278,14 +307,18 @@ class NurtureService(ServiceBase):
                 else:
                     customer = customer_service.create(data.customer)
 
+                currency = data.currency or (
+                    customer.primary_currency or customer.currency
+                )
+
                 deal = deal_service.create(
                     DealCreate(
                         customer_id=customer.id,
                         owner_id=owner_id,
-                        product=data.product,
-                        seats=data.seats,
+                        product=product,
+                        seats=seats,
                         value=value,
-                        currency=data.currency,
+                        currency=currency,
                         note=note,
                     ),
                     user_id=self.actor_id,

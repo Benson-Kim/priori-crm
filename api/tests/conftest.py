@@ -3,6 +3,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from app.common.database import Base, get_db
@@ -16,7 +17,29 @@ from app.main import app
 DATABASE_URL = os.getenv("DATABASE_URL")
 USING_POSTGRES = bool(DATABASE_URL) and DATABASE_URL.startswith("postgresql")
 
+
+def _require_test_database(url: str) -> None:
+    """Fail closed before the suite can drop_all a non-test database.
+
+    ``setup_db`` runs ``Base.metadata.drop_all`` against whatever
+    ``DATABASE_URL`` points at. Running the suite with a dev or prod URL
+    exported would silently wipe that database, so we refuse to build an
+    engine at all unless the database *name* clearly marks it as a test
+    database (CI uses ``prioritech_test``).
+    """
+    db_name = make_url(url).database or ""
+    if "test" not in db_name.lower():
+        raise RuntimeError(
+            "Refusing to run the test suite against DATABASE_URL database "
+            f"{db_name!r}: the suite drops and recreates every table, and the "
+            "database name does not contain 'test'. Point DATABASE_URL at a "
+            "dedicated test database (e.g. 'prioritech_test'), or unset it "
+            "to run against in-memory SQLite."
+        )
+
+
 if USING_POSTGRES:
+    _require_test_database(DATABASE_URL)
     engine = create_engine(DATABASE_URL, future=True)
 else:
     engine = create_engine(

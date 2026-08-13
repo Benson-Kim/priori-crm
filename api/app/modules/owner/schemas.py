@@ -5,7 +5,9 @@ normaliser) rather than re-implementing them.
 """
 
 import re
+import uuid
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -14,6 +16,7 @@ from app.common.validators import (
     normalize_phone,
     validate_country_code,
 )
+from app.constants.enums import DealStage
 from app.constants.settings_defaults import (
     MAX_DEFAULT_SEND_MESSAGE_LENGTH,
     MAX_DEFAULT_TERMS_LENGTH,
@@ -71,6 +74,26 @@ class OwnerProfileUpdate(BaseModel):
         max_length=MAX_ONBOARDING_TEMPLATE_TASKS,
         alias="onboardingTaskTemplate",
     )
+    # Sales Desk analytics settings (issue #45). Null resets the org back
+    # to the built-in defaults; both are resolved read-side.
+    deal_stage_probabilities: dict[str, str] | None = Field(
+        None,
+        alias="dealStageProbabilities",
+        description=(
+            "Per-stage win probabilities (stage value -> decimal string "
+            "0..1). All four open stages required when set; null resets to "
+            "the built-in 0.10/0.25/0.50/0.75 defaults."
+        ),
+    )
+    rep_quarterly_targets: dict[str, str] | None = Field(
+        None,
+        alias="repQuarterlyTargets",
+        description=(
+            "Per-rep quarterly won-value targets in USD (user id -> "
+            "non-negative decimal string). Reps without an entry fall back "
+            "to the built-in default; null resets every rep to it."
+        ),
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -107,6 +130,62 @@ class OwnerProfileUpdate(BaseModel):
                 )
             cleaned.append(stripped)
         return cleaned
+
+    @field_validator("deal_stage_probabilities")
+    @classmethod
+    def _validate_stage_probabilities(
+        cls, v: dict[str, str] | None
+    ) -> dict[str, str] | None:
+        """Require all four open stages, each with a decimal in [0, 1]."""
+        if v is None:
+            return None
+        expected = {stage.value for stage in DealStage}
+        if set(v) != expected:
+            raise ValueError(
+                "Stage probabilities must cover exactly the open stages: "
+                f"{sorted(expected)}"
+            )
+        normalised: dict[str, str] = {}
+        for stage, raw in v.items():
+            try:
+                probability = Decimal(str(raw).strip())
+            except (InvalidOperation, ValueError) as e:
+                raise ValueError(
+                    f"Probability for stage '{stage}' is not a decimal number"
+                ) from e
+            if not Decimal("0") <= probability <= Decimal("1"):
+                raise ValueError(
+                    f"Probability for stage '{stage}' must be between 0 and 1"
+                )
+            normalised[stage] = str(probability)
+        return normalised
+
+    @field_validator("rep_quarterly_targets")
+    @classmethod
+    def _validate_rep_targets(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        """Keys must be user UUIDs; values non-negative USD decimals."""
+        if v is None:
+            return None
+        normalised: dict[str, str] = {}
+        for key, raw in v.items():
+            try:
+                user_id = uuid.UUID(str(key))
+            except ValueError as e:
+                raise ValueError(
+                    f"Rep target key '{key}' is not a valid user id"
+                ) from e
+            try:
+                target = Decimal(str(raw).strip())
+            except (InvalidOperation, ValueError) as e:
+                raise ValueError(
+                    f"Quarterly target for rep '{key}' is not a decimal number"
+                ) from e
+            if target < 0:
+                raise ValueError(
+                    f"Quarterly target for rep '{key}' must be non-negative"
+                )
+            normalised[str(user_id)] = str(target)
+        return normalised
 
     @field_validator("jurisdiction", mode="before")
     @classmethod
@@ -161,6 +240,13 @@ class OwnerProfileResponse(BaseModel):
     # 7-task default when never set) + its monotonic version (issue #41).
     onboarding_task_template: list[str] = Field(alias="onboardingTaskTemplate")
     onboarding_template_version: int = Field(alias="onboardingTemplateVersion")
+    # Sales Desk analytics settings (issue #45), resolved: probabilities are
+    # returned with the built-in defaults applied; targets are the persisted
+    # per-rep mapping (empty when never set) plus the default applied to any
+    # rep without an entry.
+    deal_stage_probabilities: dict[str, str] = Field(alias="dealStageProbabilities")
+    rep_quarterly_targets: dict[str, str] = Field(alias="repQuarterlyTargets")
+    default_rep_quarterly_target: str = Field(alias="defaultRepQuarterlyTarget")
     # True when a logo is set; the binary is served from a dedicated endpoint
     # so the JSON never carries a path.
     has_logo: bool = Field(False, alias="hasLogo")

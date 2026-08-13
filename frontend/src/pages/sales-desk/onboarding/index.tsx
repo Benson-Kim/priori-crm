@@ -1,0 +1,200 @@
+/**
+ * Onboarding, post-sale delivery checklists.
+ *
+ * One card per won deal, tracking the same seven steps every time. The fixed
+ * list is what lets one delivery be compared against another. Ordered least
+ * complete first, so whatever needs pushing leads the page.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+
+import { ChecklistRow } from "@/components/ui/ChecklistRow";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import {
+    getOnboardingList,
+    setOnboardingTask,
+    type OnboardingRow,
+} from "@/services/salesDeskApi";
+
+interface ChecklistCardProps {
+    onboarding: OnboardingRow;
+    onToggle: (position: number, completed: boolean) => void;
+}
+
+function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
+    const percent = Math.round(onboarding.progress * 100);
+    const headingId = `onboarding-${onboarding.id}`;
+
+    return (
+        <section
+            aria-labelledby={headingId}
+            className="overflow-hidden rounded-2xl border border-sd-border bg-sd-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+        >
+            <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 id={headingId} className="text-[15px] font-bold text-sd-ink">
+                            {onboarding.company_name}
+                        </h2>
+                        <p className="pt-0.5 text-[13px] text-sd-muted">{onboarding.plan}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-sd-brand-bg px-2.5 py-0.5 text-xs font-semibold text-priori-purple">
+                        {percent}%
+                    </span>
+                </div>
+
+                <ProgressBar
+                    percent={percent}
+                    className="mt-4"
+                    aria-label={`${onboarding.company_name} delivery progress`}
+                />
+
+                <p className="pt-2 text-[13px] text-sd-muted">
+                    {onboarding.completed_count} of {onboarding.total_count} tasks complete
+                </p>
+            </div>
+
+            <ul className="border-t border-sd-border">
+                {onboarding.tasks.map((task) => (
+                    <ChecklistRow
+                        key={task.position}
+                        id={`${headingId}-task-${task.position}`}
+                        label={task.label}
+                        done={task.completed}
+                        step={task.position}
+                        onToggle={(done) => onToggle(task.position, done)}
+                    />
+                ))}
+            </ul>
+        </section>
+    );
+}
+
+/**
+ * A copy of `row` with one task flipped and the derived count and share
+ * recomputed, so an optimistic flip (and its rollback) keeps the card's
+ * badge, bar and caption consistent with its checkboxes.
+ */
+function withTaskCompleted(
+    row: OnboardingRow,
+    position: number,
+    completed: boolean
+): OnboardingRow {
+    const tasks = row.tasks.map((task) =>
+        task.position === position ? { ...task, completed } : task
+    );
+    const done = tasks.filter((task) => task.completed).length;
+
+    return {
+        ...row,
+        tasks,
+        completed_count: done,
+        progress: tasks.length ? done / tasks.length : 0,
+    };
+}
+
+export default function SalesDeskOnboardingPage() {
+    const [onboardings, setOnboardings] = useState<OnboardingRow[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let active = true;
+
+        getOnboardingList()
+            .then((rows) => {
+                if (active) {
+                    setOnboardings(rows);
+                    setError(null);
+                }
+            })
+            .catch((err) => {
+                if (active)
+                    setError(
+                        err instanceof Error ? err.message : "Failed to load onboarding"
+                    );
+            })
+            .finally(() => {
+                if (active) setIsLoading(false);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    /*
+     * Ticking a step updates that card in place rather than re-reading the
+     * page, since re-sorting mid-checklist would move the next row out from
+     * under the cursor.
+     *
+     * The flip is optimistic: the card updates before the save so the box
+     * never lags the click, and nothing else is locked while the save is in
+     * flight. On success the card is reconciled with the server's row; on
+     * failure the one flipped task is flipped back (restoring the count and
+     * percent with it), which also leaves any other in-flight flip on the
+     * same card untouched.
+     */
+    const toggle = useCallback(
+        async (onboardingId: string, position: number, completed: boolean) => {
+            setOnboardings((previous) =>
+                previous.map((row) =>
+                    row.id === onboardingId
+                        ? withTaskCompleted(row, position, completed)
+                        : row
+                )
+            );
+            try {
+                const updated = await setOnboardingTask(onboardingId, position);
+                setOnboardings((previous) =>
+                    previous.map((row) => (row.id === updated.id ? updated : row))
+                );
+                setError(null);
+            } catch (err) {
+                setOnboardings((previous) =>
+                    previous.map((row) =>
+                        row.id === onboardingId
+                            ? withTaskCompleted(row, position, !completed)
+                            : row
+                    )
+                );
+                setError(err instanceof Error ? err.message : "Could not update that step.");
+            }
+        },
+        []
+    );
+
+    return (
+        <div className="flex flex-col gap-5">
+            {error && (
+                <div
+                    role="alert"
+                    className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                >
+                    {error}
+                </div>
+            )}
+
+            {isLoading ? (
+                <LoadingState message="Loading onboarding..." className="h-64" />
+            ) : onboardings.length === 0 ? (
+                <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-[13px] text-sd-muted">
+                    Nothing in delivery.
+                </p>
+            ) : (
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                    {onboardings.map((onboarding) => (
+                        <ChecklistCard
+                            key={onboarding.id}
+                            onboarding={onboarding}
+                            onToggle={(position, completed) =>
+                                void toggle(onboarding.id, position, completed)
+                            }
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}

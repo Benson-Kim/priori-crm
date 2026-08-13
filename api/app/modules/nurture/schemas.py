@@ -86,21 +86,33 @@ class NurtureEngageRequest(BaseModel):
         description="Deal owner; defaults to the prospect's owner",
         alias="ownerId",
     )
-    product: str = Field(
-        ..., min_length=1, max_length=255, description="Product being sold"
+    product: str | None = Field(
+        None,
+        min_length=1,
+        max_length=255,
+        description=(
+            "Product being sold; defaults to the first entry of the org's "
+            "sales-pricing catalog, since 'Start engaging' is a one-click "
+            "action that collects nothing (#40, #48)"
+        ),
     )
-    seats: int = Field(..., gt=0, description="Number of seats/licences")
+    seats: int | None = Field(
+        None,
+        gt=0,
+        description="Number of seats/licences; defaults to 1",
+    )
     value: Decimal | None = Field(
         None,
         ge=0,
         decimal_places=2,
         description="Annual deal value (ARR); defaults to the prospect's est. ARR",
     )
-    currency: BillingCurrency = Field(
-        ...,
+    currency: BillingCurrency | None = Field(
+        None,
         description=(
             "Deal currency (USD|KES); must be one of the customer's "
-            "billing-profile currencies"
+            "billing-profile currencies. Defaults to the customer's primary "
+            "billing currency."
         ),
     )
     note: str | None = Field(

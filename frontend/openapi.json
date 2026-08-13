@@ -668,6 +668,35 @@
         "title": "Body_upload_purchase_order_document_api_v1_purchase_orders__po_id__documents_post",
         "type": "object"
       },
+      "BookingsMonth": {
+        "description": "One month of the Bookings \u2014 12 months chart (rolling window).",
+        "properties": {
+          "label": {
+            "description": "Month label as rendered (e.g. 'Sep')",
+            "title": "Label",
+            "type": "string"
+          },
+          "lost_value": {
+            "description": "Lost value closed this month, USD",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lost Value",
+            "type": "string"
+          },
+          "won_value": {
+            "description": "Won value closed this month, USD",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Won Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "won_value",
+          "lost_value"
+        ],
+        "title": "BookingsMonth",
+        "type": "object"
+      },
       "CashflowBucket": {
         "description": "One zero-filled chart bucket (closed date sub-window).",
         "properties": {
@@ -841,6 +870,65 @@
           "buckets"
         ],
         "title": "CashflowSeriesResponse",
+        "type": "object"
+      },
+      "ClosedPeriodKpi": {
+        "description": "WON/LOST THIS PERIOD: closed value + count for the current quarter.",
+        "properties": {
+          "deal_count": {
+            "description": "Deals closed this period",
+            "title": "Deal Count",
+            "type": "integer"
+          },
+          "value": {
+            "description": "Closed value this period, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "deal_count"
+        ],
+        "title": "ClosedPeriodKpi",
+        "type": "object"
+      },
+      "ClosedStripColumn": {
+        "description": "The CLOSED column of the stage strip (counts, not totals).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "lost_count": {
+            "title": "Lost Count",
+            "type": "integer"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Won share of closed deals, 0..1; null when nothing closed",
+            "title": "Win Rate"
+          },
+          "won_count": {
+            "title": "Won Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "win_rate",
+          "won_count",
+          "lost_count"
+        ],
+        "title": "ClosedStripColumn",
         "type": "object"
       },
       "ContactSearchResponse": {
@@ -1980,6 +2068,31 @@
           }
         },
         "title": "CustomerUpdate",
+        "type": "object"
+      },
+      "DashboardKpis": {
+        "description": "The four KPI cards across the top of the dashboard.",
+        "properties": {
+          "lost_this_period": {
+            "$ref": "#/components/schemas/ClosedPeriodKpi"
+          },
+          "pipeline_weighted": {
+            "$ref": "#/components/schemas/PipelineWeightedKpi"
+          },
+          "total_arr_pipeline": {
+            "$ref": "#/components/schemas/TotalArrPipelineKpi"
+          },
+          "won_this_period": {
+            "$ref": "#/components/schemas/ClosedPeriodKpi"
+          }
+        },
+        "required": [
+          "pipeline_weighted",
+          "total_arr_pipeline",
+          "won_this_period",
+          "lost_this_period"
+        ],
+        "title": "DashboardKpis",
         "type": "object"
       },
       "DashboardSummaryResponse": {
@@ -3131,6 +3244,193 @@
           }
         },
         "title": "DealUpdate",
+        "type": "object"
+      },
+      "DeskCompaniesResponse": {
+        "description": "The companies directory, newest registration first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeskCompanyRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "description": "Rows matching the filters, before the limit",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "DeskCompaniesResponse",
+        "type": "object"
+      },
+      "DeskCompanyProfile": {
+        "description": "One currency's billing profile as the Companies table renders it.\n\n``synced`` is the internal posting flag toward accounting (ADR 0010): any\nedit flips it back to false until the profile is pushed again.",
+        "properties": {
+          "code": {
+            "description": "Profile code, slug + sequence (#43)",
+            "title": "Code",
+            "type": "string"
+          },
+          "credit_limit": {
+            "description": "Ceiling in this profile's currency",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Limit",
+            "type": "string"
+          },
+          "currency": {
+            "description": "Billing currency of this profile",
+            "title": "Currency",
+            "type": "string"
+          },
+          "is_default": {
+            "description": "The company's primary transacting currency",
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "payment_terms": {
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "synced": {
+            "description": "Pushed to accounting",
+            "title": "Synced",
+            "type": "boolean"
+          },
+          "tax_treatment": {
+            "title": "Tax Treatment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "code",
+          "payment_terms",
+          "tax_treatment",
+          "credit_limit",
+          "synced",
+          "is_default"
+        ],
+        "title": "DeskCompanyProfile",
+        "type": "object"
+      },
+      "DeskCompanyRow": {
+        "description": "One row of the Sales Desk companies directory.\n\nThe customers list endpoint returns a lean summary built for the\naccounting screens; the desk table additionally shows industry, the\ncontact, both billing profiles with their sync state, the owning rep and\nthe company's deal counts, which is why this row exists separately.",
+        "properties": {
+          "closed_deal_count": {
+            "title": "Closed Deal Count",
+            "type": "integer"
+          },
+          "contact": {
+            "description": "Contact person full name",
+            "title": "Contact",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "description": "Customer id",
+            "title": "Id",
+            "type": "string"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_sync": {
+            "description": "Any profile still unpushed to accounting",
+            "title": "Needs Sync",
+            "type": "boolean"
+          },
+          "open_deal_count": {
+            "title": "Open Deal Count",
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealOwnerResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "primary_currency": {
+            "title": "Primary Currency",
+            "type": "string"
+          },
+          "profiles": {
+            "description": "One entry per billing currency, primary currency first",
+            "items": {
+              "$ref": "#/components/schemas/DeskCompanyProfile"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "registered_on": {
+            "description": "Org-local date the company was added",
+            "format": "date",
+            "title": "Registered On",
+            "type": "string"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Microsoft tenant domain, when set",
+            "title": "Tenant"
+          },
+          "total_deal_count": {
+            "title": "Total Deal Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "industry",
+          "contact",
+          "email",
+          "phone",
+          "tenant",
+          "primary_currency",
+          "registered_on",
+          "owner",
+          "profiles",
+          "needs_sync",
+          "open_deal_count",
+          "closed_deal_count",
+          "total_deal_count"
+        ],
+        "title": "DeskCompanyRow",
         "type": "object"
       },
       "DetailedHealthResponse": {
@@ -4299,6 +4599,45 @@
           "timestamp"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HygieneCounts": {
+        "description": "Live counts behind the activity filter chips (list-filter semantics).",
+        "properties": {
+          "active_week": {
+            "description": "Open, last activity within 7 days",
+            "title": "Active Week",
+            "type": "integer"
+          },
+          "all": {
+            "description": "Every deal in scope, any status",
+            "title": "All",
+            "type": "integer"
+          },
+          "no_activity_30": {
+            "description": "Open, no activity for 30+ days",
+            "title": "No Activity 30",
+            "type": "integer"
+          },
+          "open_45": {
+            "description": "Open, in the pipeline for more than 45 days",
+            "title": "Open 45",
+            "type": "integer"
+          },
+          "quiet_8_30": {
+            "description": "Open, last activity 8-30 days ago",
+            "title": "Quiet 8 30",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "active_week",
+          "quiet_8_30",
+          "no_activity_30",
+          "open_45"
+        ],
+        "title": "HygieneCounts",
         "type": "object"
       },
       "IncomeStatementLine": {
@@ -5635,8 +5974,15 @@
         "description": "Request body for the 'Start engaging \u2192' action.\n\nEngaging atomically creates a customer + an open deal at stage\nActivation and removes the prospect. Either a full ``customer`` payload\n(validated/deduplicated by the existing customers service) or a\n``customer_id`` linking an existing customer must be provided \u2014 the\nlatter is the re-submit path after a duplicate-email 409.",
         "properties": {
           "currency": {
-            "$ref": "#/components/schemas/BillingCurrency",
-            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BillingCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deal currency (USD|KES); must be one of the customer's billing-profile currencies. Defaults to the customer's primary billing currency."
           },
           "customer": {
             "anyOf": [
@@ -5689,17 +6035,31 @@
             "title": "Ownerid"
           },
           "product": {
-            "description": "Product being sold",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Product",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Product being sold; defaults to the first entry of the org's sales-pricing catalog, since 'Start engaging' is a one-click action that collects nothing (#40, #48)",
+            "title": "Product"
           },
           "seats": {
-            "description": "Number of seats/licences",
-            "exclusiveMinimum": 0.0,
-            "title": "Seats",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Number of seats/licences; defaults to 1",
+            "title": "Seats"
           },
           "value": {
             "anyOf": [
@@ -5719,11 +6079,6 @@
             "title": "Value"
           }
         },
-        "required": [
-          "product",
-          "seats",
-          "currency"
-        ],
         "title": "NurtureEngageRequest",
         "type": "object"
       },
@@ -6158,6 +6513,17 @@
             ],
             "title": "Address"
           },
+          "dealStageProbabilities": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Dealstageprobabilities",
+            "type": "object"
+          },
+          "defaultRepQuarterlyTarget": {
+            "title": "Defaultrepquarterlytarget",
+            "type": "string"
+          },
           "defaultSendMessage": {
             "anyOf": [
               {
@@ -6244,6 +6610,13 @@
             ],
             "title": "Phone"
           },
+          "repQuarterlyTargets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Repquarterlytargets",
+            "type": "object"
+          },
           "reportingDate": {
             "title": "Reportingdate",
             "type": "string"
@@ -6307,6 +6680,9 @@
           "fullName",
           "onboardingTaskTemplate",
           "onboardingTemplateVersion",
+          "dealStageProbabilities",
+          "repQuarterlyTargets",
+          "defaultRepQuarterlyTarget",
           "reportingTimezone",
           "reportingDate"
         ],
@@ -6327,6 +6703,21 @@
               }
             ],
             "title": "Address"
+          },
+          "dealStageProbabilities": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-stage win probabilities (stage value -> decimal string 0..1). All four open stages required when set; null resets to the built-in 0.10/0.25/0.50/0.75 defaults.",
+            "title": "Dealstageprobabilities"
           },
           "defaultSendMessage": {
             "anyOf": [
@@ -6422,6 +6813,21 @@
               }
             ],
             "title": "Phone"
+          },
+          "repQuarterlyTargets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-rep quarterly won-value targets in USD (user id -> non-negative decimal string). Reps without an entry fall back to the built-in default; null resets every rep to it.",
+            "title": "Repquarterlytargets"
           },
           "taxPin": {
             "anyOf": [
@@ -6971,6 +7377,78 @@
           "created_at"
         ],
         "title": "PaymentResponse",
+        "type": "object"
+      },
+      "PipelineOverviewResponse": {
+        "description": "Pipeline workspace aggregates (App.svg) under one read snapshot.\n\nRep cards and the team card are never owner-scoped (they ARE the\nselector); the stage strip, closed column, hygiene counts and the\nopen-pipeline total honour the ``owner`` filter.",
+        "properties": {
+          "closed": {
+            "$ref": "#/components/schemas/ClosedStripColumn"
+          },
+          "currency": {
+            "description": "Reporting currency (always USD)",
+            "title": "Currency",
+            "type": "string"
+          },
+          "hygiene": {
+            "$ref": "#/components/schemas/HygieneCounts"
+          },
+          "open_pipeline_total": {
+            "description": "Unweighted sum of open deal values in scope, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Open Pipeline Total",
+            "type": "string"
+          },
+          "reps": {
+            "items": {
+              "$ref": "#/components/schemas/RepScoreboardCard"
+            },
+            "title": "Reps",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageStripColumn"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamScoreboardCard"
+          }
+        },
+        "required": [
+          "currency",
+          "reps",
+          "team",
+          "stages",
+          "closed",
+          "hygiene",
+          "open_pipeline_total"
+        ],
+        "title": "PipelineOverviewResponse",
+        "type": "object"
+      },
+      "PipelineWeightedKpi": {
+        "description": "PIPELINE (WEIGHTED): sum of open value x stage probability + open count.",
+        "properties": {
+          "open_deal_count": {
+            "description": "Open deals (parked excluded)",
+            "title": "Open Deal Count",
+            "type": "integer"
+          },
+          "value": {
+            "description": "Weighted open pipeline, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "open_deal_count"
+        ],
+        "title": "PipelineWeightedKpi",
         "type": "object"
       },
       "ProfitMarginMetric": {
@@ -9834,6 +10312,57 @@
         "title": "RangePreset",
         "type": "string"
       },
+      "RecentCompany": {
+        "description": "One row of Recently added companies (newest first).",
+        "properties": {
+          "contact": {
+            "description": "Contact person full name",
+            "title": "Contact",
+            "type": "string"
+          },
+          "created_date": {
+            "description": "Org-local date the company was added",
+            "format": "date",
+            "title": "Created Date",
+            "type": "string"
+          },
+          "currency": {
+            "description": "The company's primary billing currency",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "description": "Customer id",
+            "title": "Id",
+            "type": "string"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "industry",
+          "contact",
+          "currency",
+          "created_date"
+        ],
+        "title": "RecentCompany",
+        "type": "object"
+      },
       "RefreshResponse": {
         "description": "Response for token refresh.\n\nReturns a rotated token pair: the presented refresh token is\nrevoked server-side, so the new refresh token must be persisted by the\nclient and used for the next refresh.",
         "properties": {
@@ -9870,6 +10399,84 @@
           "refresh_token"
         ],
         "title": "RefreshTokenRequest",
+        "type": "object"
+      },
+      "RepQuotaLine": {
+        "description": "One row of Rep pipeline vs. quota: won value against quarterly target.",
+        "properties": {
+          "percent": {
+            "description": "won_value as a share of quota, 0..1 (drives bar width; may exceed 1). 0 when the quota is 0.",
+            "title": "Percent",
+            "type": "number"
+          },
+          "quota": {
+            "description": "Quarterly won-value target (owner setting), USD",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quota",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/DealOwnerResponse"
+          },
+          "won_value": {
+            "description": "Value won by this rep in the current quarter, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Won Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user",
+          "won_value",
+          "quota",
+          "percent"
+        ],
+        "title": "RepQuotaLine",
+        "type": "object"
+      },
+      "RepScoreboardCard": {
+        "description": "One rep card of the pipeline scoreboard.",
+        "properties": {
+          "cold_count": {
+            "description": "Open deals with no activity for more than 30 days",
+            "title": "Cold Count",
+            "type": "integer"
+          },
+          "open_count": {
+            "description": "Open deals (parked excluded)",
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "open_value": {
+            "description": "Open value, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Open Value",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/DealOwnerResponse"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Won share of closed deals, 0..1; null when nothing closed",
+            "title": "Win Rate"
+          }
+        },
+        "required": [
+          "user",
+          "open_count",
+          "open_value",
+          "win_rate",
+          "cold_count"
+        ],
+        "title": "RepScoreboardCard",
         "type": "object"
       },
       "ReportCompleteness": {
@@ -10038,6 +10645,97 @@
           "amount"
         ],
         "title": "RevenueByCustomer",
+        "type": "object"
+      },
+      "SalesDeskDashboardResponse": {
+        "description": "Everything Dashboard.svg renders, computed under ONE read snapshot.",
+        "properties": {
+          "bookings_12_months": {
+            "description": "Rolling 12 org-local months ending with the current month",
+            "items": {
+              "$ref": "#/components/schemas/BookingsMonth"
+            },
+            "title": "Bookings 12 Months",
+            "type": "array"
+          },
+          "currency": {
+            "description": "Reporting currency (always USD)",
+            "title": "Currency",
+            "type": "string"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/DashboardKpis"
+          },
+          "pipeline_by_stage": {
+            "items": {
+              "$ref": "#/components/schemas/StagePipelineLine"
+            },
+            "title": "Pipeline By Stage",
+            "type": "array"
+          },
+          "recent_companies": {
+            "items": {
+              "$ref": "#/components/schemas/RecentCompany"
+            },
+            "title": "Recent Companies",
+            "type": "array"
+          },
+          "rep_quota": {
+            "items": {
+              "$ref": "#/components/schemas/RepQuotaLine"
+            },
+            "title": "Rep Quota",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "kpis",
+          "bookings_12_months",
+          "pipeline_by_stage",
+          "rep_quota",
+          "recent_companies"
+        ],
+        "title": "SalesDeskDashboardResponse",
+        "type": "object"
+      },
+      "SalesDeskNotificationsResponse": {
+        "description": "Bell badge total + the grouped counts feeding the sidebar badges.\n\n``total`` is ALWAYS the sum of the four groups \u2014 the single source of\ntruth for the shared-chrome badges.",
+        "properties": {
+          "companies_unsynced": {
+            "description": "Companies with at least one unsynced billing profile (#43)",
+            "title": "Companies Unsynced",
+            "type": "integer"
+          },
+          "future_pipeline_due": {
+            "description": "Due nurture prospects + due parked deals (#40)",
+            "title": "Future Pipeline Due",
+            "type": "integer"
+          },
+          "stale_deals": {
+            "description": "Open deals with no activity for more than 30 days",
+            "title": "Stale Deals",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Bell badge: sum of the four groups below",
+            "title": "Total",
+            "type": "integer"
+          },
+          "upcoming": {
+            "description": "Nurture prospects and parked deals due within the next 14 days (exclusive of today \u2014 those are already due)",
+            "title": "Upcoming",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "companies_unsynced",
+          "future_pipeline_due",
+          "upcoming",
+          "stale_deals"
+        ],
+        "title": "SalesDeskNotificationsResponse",
         "type": "object"
       },
       "SalesLedgerEntry": {
@@ -10350,6 +11048,79 @@
         "title": "SpendByVendor",
         "type": "object"
       },
+      "StagePipelineLine": {
+        "description": "One row of Active pipeline by stage (open stages only).",
+        "properties": {
+          "deal_count": {
+            "title": "Deal Count",
+            "type": "integer"
+          },
+          "share": {
+            "description": "Share of the total open pipeline, 0..1 (drives bar width)",
+            "title": "Share",
+            "type": "number"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/DealStage"
+          },
+          "stage_label": {
+            "description": "Display label (design vocabulary)",
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "Open value at this stage, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "stage_label",
+          "value",
+          "deal_count",
+          "share"
+        ],
+        "title": "StagePipelineLine",
+        "type": "object"
+      },
+      "StageStripColumn": {
+        "description": "One open-stage column of the stage summary strip.",
+        "properties": {
+          "avg_days_in_stage": {
+            "description": "Mean days-in-pipeline of the open deals at this stage",
+            "title": "Avg Days In Stage",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/DealStage"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "Open value at this stage, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "stage_label",
+          "count",
+          "value",
+          "avg_days_in_stage"
+        ],
+        "title": "StageStripColumn",
+        "type": "object"
+      },
       "StatementOverviewResponse": {
         "description": "Overview cards shared by the income statement and cashflow pages.",
         "properties": {
@@ -10613,6 +11384,43 @@
         "title": "TaxType",
         "type": "string"
       },
+      "TeamScoreboardCard": {
+        "description": "The 'Whole team' card (never owner-scoped).",
+        "properties": {
+          "cold_count": {
+            "title": "Cold Count",
+            "type": "integer"
+          },
+          "open_count": {
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "open_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Open Value",
+            "type": "string"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
+          }
+        },
+        "required": [
+          "open_count",
+          "open_value",
+          "win_rate",
+          "cold_count"
+        ],
+        "title": "TeamScoreboardCard",
+        "type": "object"
+      },
       "TokenResponse": {
         "description": "JWT token pair returned after successful OTP verification.",
         "properties": {
@@ -10697,6 +11505,22 @@
           "items"
         ],
         "title": "TopSalesResponse",
+        "type": "object"
+      },
+      "TotalArrPipelineKpi": {
+        "description": "TOTAL ARR PIPELINE: unweighted sum of open deal values.",
+        "properties": {
+          "value": {
+            "description": "Unweighted open pipeline, USD equivalent",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "TotalArrPipelineKpi",
         "type": "object"
       },
       "UserResponse": {
@@ -22589,6 +23413,455 @@
         "summary": "Export VAT reconciliation estimate to Excel",
         "tags": [
           "Reports"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/companies": {
+      "get": {
+        "description": "The Companies table (Companies.svg) in one round trip: each company with its industry, primary contact, both billing profiles and their accounting sync state, the owning rep and its deal counts. The customers list endpoint returns a leaner summary built for the accounting screens, which is why the desk has its own row shape. `unsynced=true` narrows to companies with at least one profile not yet pushed to accounting, the same semantics as the Needs sync tab and the sidebar badge.",
+        "operationId": "get_companies_api_v1_sales_desk_companies_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          },
+          {
+            "description": "Match company, contact, industry or tenant",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Match company, contact, industry or tenant",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Only companies with an unsynced billing profile",
+            "in": "query",
+            "name": "unsynced",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only companies with an unsynced billing profile",
+              "title": "Unsynced",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Maximum rows",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "description": "Maximum rows",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskCompaniesResponse"
+                }
+              }
+            },
+            "description": "Companies directory"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales Desk companies directory",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/dashboard": {
+      "get": {
+        "description": "Everything the Sales Desk dashboard renders, computed server-side under one read snapshot: the four KPI cards (weighted pipeline, total ARR pipeline, won/lost this period \u2014 current org-local quarter), the rolling 12-month bookings chart (real close dates, org-local month boundaries), the active pipeline by stage (open stages only; parked deals excluded), each rep's won value against their quarterly target (owner settings), and the most recently added companies. All values are USD equivalents.",
+        "operationId": "get_dashboard_api_v1_sales_desk_dashboard_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesDeskDashboardResponse"
+                }
+              }
+            },
+            "description": "Dashboard payload"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sales Desk dashboard aggregates",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/exports/dashboard": {
+      "get": {
+        "description": "Download the dashboard payload (KPIs, 12-month bookings, pipeline by stage, rep vs. quota, recently added companies) as a sectioned CSV, honouring the owner filter. Computed under one read snapshot.",
+        "operationId": "export_dashboard_api_v1_sales_desk_exports_dashboard_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV download"
+          },
+          "400": {
+            "description": "Export exceeds the row limit"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Export capacity exhausted; retry shortly"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export the dashboard aggregates to CSV",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/exports/pipeline": {
+      "get": {
+        "description": "Download the pipeline list as CSV, honouring the active list filters (tab, owner, activity-hygiene bucket, show-closed, search). Reads the exact filtered + ordered query the list serves, under one read snapshot.",
+        "operationId": "export_pipeline_api_v1_sales_desk_exports_pipeline_get",
+        "parameters": [
+          {
+            "description": "Pipeline tab: all | open | won | lost",
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DealTab",
+              "default": "all",
+              "description": "Pipeline tab: all | open | won | lost"
+            }
+          },
+          {
+            "description": "Filter by deal owner (sales rep)",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by deal owner (sales rep)",
+              "title": "Ownerid"
+            }
+          },
+          {
+            "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
+            "in": "query",
+            "name": "hygiene",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DealHygieneBucket"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
+              "title": "Hygiene"
+            }
+          },
+          {
+            "description": "On the 'all' tab, include closed (won/lost) deals",
+            "in": "query",
+            "name": "showClosed",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "On the 'all' tab, include closed (won/lost) deals",
+              "title": "Showclosed",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Search company name, contact or product",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search company name, contact or product",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV download"
+          },
+          "400": {
+            "description": "Export exceeds the row limit"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Export capacity exhausted; retry shortly"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export the pipeline deal list to CSV",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/notifications": {
+      "get": {
+        "description": "The bell badge total and the grouped counts feeding the sidebar badges: companies with unsynced billing profiles, due future-pipeline items (due nurture prospects + due parked deals), items due within the next 14 days, and open deals idle for more than 30 days. The total always equals the sum of the four groups \u2014 the single source of truth for the shared-chrome badges.",
+        "operationId": "get_notifications_api_v1_sales_desk_notifications_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesDeskNotificationsResponse"
+                }
+              }
+            },
+            "description": "Notification counts"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Notification bell + sidebar badge counts",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/pipeline/overview": {
+      "get": {
+        "description": "The Pipeline page header in one round trip: per-rep scoreboard cards and the whole-team card (never owner-scoped \u2014 they are the selector), the per-stage summary strip with the CLOSED column, the activity-hygiene chip counts (same semantics as the list filters) and the open-pipeline total. Parked deals are excluded from every open aggregate.",
+        "operationId": "get_pipeline_overview_api_v1_sales_desk_pipeline_overview_get",
+        "parameters": [
+          {
+            "description": "Filter to one sales rep (deal/company owner)",
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one sales rep (deal/company owner)",
+              "title": "Owner"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineOverviewResponse"
+                }
+              }
+            },
+            "description": "Pipeline workspace aggregates"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pipeline workspace aggregates",
+        "tags": [
+          "Sales Desk"
         ]
       }
     },

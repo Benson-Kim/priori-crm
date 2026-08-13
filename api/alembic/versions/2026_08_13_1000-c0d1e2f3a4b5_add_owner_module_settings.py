@@ -1,7 +1,7 @@
 """Per-owner module entitlements: owner_module_settings table
 
-Revision ID: b9c0d1e2f3a4
-Revises: a8b9c0d1e2f3
+Revision ID: c0d1e2f3a4b5
+Revises: b9c0d1e2f3a4
 Create Date: 2026-08-13 10:00:00.000000
 
 Per-owner module entitlements / feature toggles (session 6341101 restore):
@@ -12,8 +12,10 @@ Per-owner module entitlements / feature toggles (session 6341101 restore):
 - unique (owner_profile_id, module_key) so a module has at most one
   override per owner; FK cascades with the owner profile.
 
-Chained onto a8b9c0d1e2f3 (quotes<->deals link), the single Alembic head
-at branch time (verified by parsing revision/down_revision, per #55).
+Chained onto b9c0d1e2f3a4 (!46's Sales Desk analytics settings), the single
+Alembic head after !46 merged (verified by parsing revision/down_revision,
+per #55). Re-keyed from b9c0d1e2f3a4 to resolve the revision-id collision
+with !46's migration.
 """
 
 from typing import Sequence, Union
@@ -23,8 +25,8 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
-revision: str = "b9c0d1e2f3a4"
-down_revision: Union[str, None] = "a8b9c0d1e2f3"
+revision: str = "c0d1e2f3a4b5"
+down_revision: Union[str, None] = "b9c0d1e2f3a4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
