@@ -130,6 +130,18 @@ class Quote(Base):
         comment="Customer receiving this quote",
     )
 
+    # Sales Desk linkage (issue #44): a quote may originate from a pipeline
+    # deal. Nullable — standalone quotes stay untouched — and SET NULL on
+    # deal deletion so quotes always survive their deal (deal *closure*
+    # doesn't touch this row at all; won/lost deals keep their quotes).
+    deal_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("deals.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Deal this quote was created from (Sales Desk), if any",
+    )
+
     # Dates
     transaction_date: Mapped[date] = mapped_column(
         Date,

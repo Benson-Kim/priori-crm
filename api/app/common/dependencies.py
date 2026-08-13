@@ -127,6 +127,51 @@ def get_quote_service(db: DbSession, current_user: CurrentUser):
 QuoteServiceDep = Annotated["QuoteService", Depends(get_quote_service)]  # noqa: F821
 
 
+def get_deal_service(db: DbSession, current_user: CurrentUser):
+    """Provide a DealService scoped to the current request and acting user."""
+    from app.modules.deals.service import DealService
+
+    return DealService(db, current_user=current_user)
+
+
+DealServiceDep = Annotated["DealService", Depends(get_deal_service)]  # noqa: F821
+
+
+def get_deal_quote_service(db: DbSession, current_user: CurrentUser):
+    """Provide a DealQuoteService (deals <-> quotes integration, #44)."""
+    from app.modules.deals.quotes_integration import DealQuoteService
+
+    return DealQuoteService(db, current_user=current_user)
+
+
+DealQuoteServiceDep = Annotated[
+    "DealQuoteService",  # noqa: F821
+    Depends(get_deal_quote_service),
+]
+
+
+def get_nurture_service(db: DbSession, current_user: CurrentUser):
+    """Provide a NurtureService scoped to the current request and acting user."""
+    from app.modules.nurture.service import NurtureService
+
+    return NurtureService(db, current_user=current_user)
+
+
+NurtureServiceDep = Annotated["NurtureService", Depends(get_nurture_service)]  # noqa: F821
+
+
+def get_onboarding_service(db: DbSession, current_user: CurrentUser):
+    """Provide an OnboardingService scoped to the current request and acting user."""
+    from app.modules.onboarding.service import OnboardingService
+
+    return OnboardingService(db, current_user=current_user)
+
+
+OnboardingServiceDep = Annotated[
+    "OnboardingService", Depends(get_onboarding_service)  # noqa: F821
+]
+
+
 def get_expense_service(db: DbSession, current_user: CurrentUser) -> "ExpenseService":  # noqa: F821
     """Provide an ExpenseService scoped to the current request and acting user."""
     from app.modules.expenses.service import ExpenseService

@@ -1,5 +1,6 @@
 """Application-wide enumerations for type safety."""
 
+from decimal import Decimal
 from enum import StrEnum
 
 
@@ -66,13 +67,23 @@ class BillingCurrency(StrEnum):
 
 
 class Industry(StrEnum):
-    """Customer industry classification (deal-desk prototype's 10 values)."""
+    """Customer industry classification (ratified design vocabulary).
+
+    The 12 values ratified from the Sales Desk design exports
+    (``docs/sales-desk-designs/`` on branch ``sales-desk-designs``; see the
+    review on !38 and issue #53): the deal-desk prototype's original list
+    with 'Hospitality' renamed to 'Hospitality & tourism' plus
+    'Agriculture & export' and 'Insurance'. Must stay identical to the
+    IN-list in migration ``d5e6f7a8b9c0``.
+    """
 
     FINANCIAL_SERVICES = "Financial services"
     HEALTHCARE = "Healthcare"
     EDUCATION = "Education"
     LOGISTICS_TRANSPORT = "Logistics & transport"
-    HOSPITALITY = "Hospitality"
+    HOSPITALITY_TOURISM = "Hospitality & tourism"
+    AGRICULTURE_EXPORT = "Agriculture & export"
+    INSURANCE = "Insurance"
     MANUFACTURING = "Manufacturing"
     PROFESSIONAL_SERVICES = "Professional services"
     NGO_NON_PROFIT = "NGO / Non-profit"
@@ -106,6 +117,137 @@ class BillingPaymentTerms(StrEnum):
     NET_30 = "30 days"
     NET_45 = "45 days"
     NET_60 = "60 days"
+
+
+class DealStage(StrEnum):
+    """Open-pipeline stages of a Sales Desk deal, in order.
+
+    A deal moves strictly one stage at a time (no skipping) and every
+    advance requires a note. The UI renders "Stage N of 5" where the fifth
+    step is the closed (won/lost) state carried by :class:`DealStatus`, so
+    the stage enum itself only holds the four open stages.
+    """
+
+    ACTIVATION = "activation"
+    QUALIFICATION = "qualification"
+    PROPOSAL_QUOTE = "proposal_quote"
+    NEGOTIATION = "negotiation"
+
+    @property
+    def pipeline_index(self) -> int:
+        """1-based position in the pipeline (UI: "Stage N of 5").
+
+        Named ``pipeline_index`` (not ``index``) to avoid shadowing
+        ``str.index`` on this str-mixin enum.
+        """
+        return _DEAL_STAGE_ORDER.index(self) + 1
+
+    @property
+    def label(self) -> str:
+        """Human display label (verbatim from the Sales Desk designs)."""
+        return _DEAL_STAGE_LABELS[self]
+
+    @property
+    def probability(self) -> Decimal:
+        """Win probability used for the weighted pipeline value.
+
+        Calibrated against the Pipeline.svg "Weighted" column:
+        $2,700→$270 (10%), $5,760→$1,440 (25%), $11,880→$5,940 (50%),
+        $51,840→$38,880 (75%).
+        """
+        return _DEAL_STAGE_PROBABILITIES[self]
+
+    @property
+    def next_stage(self) -> "DealStage | None":
+        """The following stage, or None from the final open stage."""
+        idx = _DEAL_STAGE_ORDER.index(self)
+        if idx + 1 >= len(_DEAL_STAGE_ORDER):
+            return None
+        return _DEAL_STAGE_ORDER[idx + 1]
+
+
+#: Canonical stage ordering — the single source for index/next-stage logic.
+_DEAL_STAGE_ORDER: tuple["DealStage", ...] = (
+    DealStage.ACTIVATION,
+    DealStage.QUALIFICATION,
+    DealStage.PROPOSAL_QUOTE,
+    DealStage.NEGOTIATION,
+)
+
+_DEAL_STAGE_LABELS: dict["DealStage", str] = {
+    DealStage.ACTIVATION: "Activation",
+    DealStage.QUALIFICATION: "Qualification",
+    DealStage.PROPOSAL_QUOTE: "Proposal & Quote",
+    DealStage.NEGOTIATION: "Negotiation",
+}
+
+_DEAL_STAGE_PROBABILITIES: dict["DealStage", Decimal] = {
+    DealStage.ACTIVATION: Decimal("0.10"),
+    DealStage.QUALIFICATION: Decimal("0.25"),
+    DealStage.PROPOSAL_QUOTE: Decimal("0.50"),
+    DealStage.NEGOTIATION: Decimal("0.75"),
+}
+
+#: Total steps the pipeline UI renders ("Stage N of 5"): the four open
+#: stages plus the terminal closed (won/lost) step.
+DEAL_PIPELINE_TOTAL_STEPS: int = len(_DEAL_STAGE_ORDER) + 1
+
+
+class DealStatus(StrEnum):
+    """Lifecycle status of a deal.
+
+    OPEN deals sit in the pipeline; PARKED deals live in the future
+    pipeline (with ``parked_until``/``resume_stage``); WON/LOST are the
+    terminal closed states carrying a close reason + note.
+    """
+
+    OPEN = "open"
+    WON = "won"
+    LOST = "lost"
+    PARKED = "parked"
+
+
+class DealWonReason(StrEnum):
+    """Enumerated 'main reason we won' options (deal-desk parity)."""
+
+    PRICE_PACKAGING = "Price & packaging"
+    RELATIONSHIP_TRUST = "Relationship / trust"
+    PRODUCT_FIT = "Product fit"
+    MIGRATION_SUPPORT_OFFER = "Migration & support offer"
+    FASTER_RESPONSE = "Faster response than competitor"
+
+
+class DealLostReason(StrEnum):
+    """Enumerated 'main reason we lost' options (deal-desk parity)."""
+
+    PRICE_TOO_HIGH = "Price too high"
+    LOST_TO_COMPETITOR = "Lost to competitor"
+    BAD_TIMING = "Bad timing"
+    NO_BUDGET = "No budget"
+    WENT_DIRECT_TO_MICROSOFT = "Went direct to Microsoft"
+    NO_DECISION = "No decision / went silent"
+
+
+class DealHygieneBucket(StrEnum):
+    """Activity-hygiene list filters for the pipeline (open deals only).
+
+    Mirrors the design's filter chips: Active this week / 8-30 days quiet /
+    No activity 30d+ / Open 45d+.
+    """
+
+    ACTIVE_WEEK = "active_week"  # last activity within 7 days
+    QUIET_8_30 = "quiet_8_30"  # last activity 8-30 days ago
+    NO_ACTIVITY_30 = "no_activity_30"  # last activity more than 30 days ago
+    OPEN_45 = "open_45"  # in the pipeline for more than 45 days
+
+
+class DealTab(StrEnum):
+    """Pipeline list tabs: All (6) · Open (4) · Won (1) · Lost (1)."""
+
+    ALL = "all"
+    OPEN = "open"
+    WON = "won"
+    LOST = "lost"
 
 
 class TransactionType(StrEnum):
@@ -176,6 +318,56 @@ class QuoteStatus(StrEnum):
     APPROVED = "approved"
     INVOICED = "invoiced"
     EXPIRED = "expired"
+
+
+class QuoteDisplayStatus(StrEnum):
+    """Sales Desk display state of a quote (Quotes & pricing screen, #44).
+
+    The design exports (``Quotes___Pricing.svg`` / ``App__3_.svg``) render
+    exactly three states, mapped from the existing quote lifecycle:
+
+    - ``Draft``   <- ``draft`` (still being built) and ``expired``
+      (the offer lapsed; it needs rework before it can be re-sent)
+    - ``Pending`` <- ``sent`` and ``approved`` (in flight with the
+      customer; not yet posted to accounting)
+    - ``Synced``  <- ``invoiced`` (converted to an invoice, i.e. pushed
+      through to accounting)
+
+    Display-only: the persisted lifecycle (:class:`QuoteStatus`) remains
+    the source of truth and is always returned alongside this value.
+    """
+
+    DRAFT = "Draft"
+    PENDING = "Pending"
+    SYNCED = "Synced"
+
+    @classmethod
+    def from_quote_status(cls, status: "QuoteStatus | str") -> "QuoteDisplayStatus":
+        """Map the persisted quote lifecycle onto the 3 display states."""
+        return _QUOTE_STATUS_TO_DISPLAY[QuoteStatus(status)]
+
+
+#: Lifecycle -> display-state mapping (kept next to the enums so a change
+#: to either is reviewed against the other). Exhaustive over QuoteStatus.
+_QUOTE_STATUS_TO_DISPLAY: dict[QuoteStatus, QuoteDisplayStatus] = {
+    QuoteStatus.DRAFT: QuoteDisplayStatus.DRAFT,
+    QuoteStatus.SENT: QuoteDisplayStatus.PENDING,
+    QuoteStatus.APPROVED: QuoteDisplayStatus.PENDING,
+    QuoteStatus.INVOICED: QuoteDisplayStatus.SYNCED,
+    QuoteStatus.EXPIRED: QuoteDisplayStatus.DRAFT,
+}
+
+
+class BillingPeriod(StrEnum):
+    """Billing period of a quote-builder line (Sales Desk, issue #44).
+
+    ``annual`` applies the org's annual billing discount
+    (``annual_billing_discount_pct``, default 15) to the per-user/month
+    price and bills 12 months per seat; ``monthly`` bills 1 month at list.
+    """
+
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
 
 
 class VendorStatus(StrEnum):

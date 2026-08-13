@@ -15,10 +15,10 @@ interface SendQuoteModalProps {
 export function SendQuoteModal({ isOpen, onClose, quote, onSuccess }: SendQuoteModalProps) {
     const [toEmail, setToEmail] = useState(quote.customer?.email ?? "");
     const [subject, setSubject] = useState(
-        `Quote ${quote.quote_reference} from Priori Technologies`
+        `Quote ${quote.quote_reference} from Business Central`
     );
     const [body, setBody] = useState(
-        `Dear Customer,\n\nPlease find attached Quote ${quote.quote_reference} for the amount of ${quote.total_due}.\n\nThank you for considering our proposal.\n\nPriori Technologies`
+        `Dear Customer,\n\nPlease find attached Quote ${quote.quote_reference} for the amount of ${quote.total_due}.\n\nThank you for considering our proposal.\n\nBusiness Central`
     );
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
