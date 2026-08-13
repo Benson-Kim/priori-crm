@@ -274,6 +274,7 @@ const routes = [
                     },
                     {
                         path: "purchase-orders",
+                        element: <RequireModule moduleKey="purchase_orders" />,
                         children: [
                             {
                                 index: true,
@@ -318,27 +319,35 @@ const routes = [
                         ],
                     },
                     {
-                        path: "income-statement",
-                        element: lazyPage(() => import("@/pages/statements/income-statement")),
-                        handle: {
-                            header: {
-                                title: "Income Statements",
-                                description: "Explore your business's net profit; your revenues and expenses in a given time period.",
+                        // Both statement pages share the single 'statements'
+                        // module key via one pathless layout guard.
+                        element: <RequireModule moduleKey="statements" />,
+                        children: [
+                            {
+                                path: "income-statement",
+                                element: lazyPage(() => import("@/pages/statements/income-statement")),
+                                handle: {
+                                    header: {
+                                        title: "Income Statements",
+                                        description: "Explore your business's net profit; your revenues and expenses in a given time period.",
+                                    },
+                                },
                             },
-                        },
-                    },
-                    {
-                        path: "cashflow",
-                        element: lazyPage(() => import("@/pages/statements/cashflow")),
-                        handle: {
-                            header: {
-                                title: "Cashflow",
-                                description: "Explore your business's cash position; money in and money out over a given time period.",
+                            {
+                                path: "cashflow",
+                                element: lazyPage(() => import("@/pages/statements/cashflow")),
+                                handle: {
+                                    header: {
+                                        title: "Cashflow",
+                                        description: "Explore your business's cash position; money in and money out over a given time period.",
+                                    },
+                                },
                             },
-                        },
+                        ],
                     },
                     {
                         path: "reports",
+                        element: <RequireModule moduleKey="reports" />,
                         children: [
                             {
                                 index: true,
