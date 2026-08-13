@@ -1,12 +1,18 @@
 import {
     BarChart2,
+    Building2,
+    CalendarClock,
+    ClipboardCheck,
     ClipboardList,
     DollarSign,
     FileText,
+    LayoutDashboard,
     Receipt,
     ReceiptText,
     ShoppingCart,
     Store,
+    Tags,
+    TrendingUp,
     Users
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
@@ -25,6 +31,12 @@ export type NavChild = {
     path: string;
     label: string;
     icon?: NavIcon;
+    /**
+     * Key into the server-driven nav badge counts (issue #45's notifications
+     * endpoint). Items with a badgeKey render a 16px brand count badge when
+     * the sidebar receives a positive count — hidden until then.
+     */
+    badgeKey?: string;
 }
 
 export type NavItem =
@@ -36,6 +48,41 @@ export const navItems: NavItem[] = [
         label: "Dashboard",
         icon: Home,
         path: "/dashboard",
+    },
+
+    {
+        label: "Sales Desk",
+        icon: TrendingUp,
+        children: [
+            {
+                label: "Dashboard",
+                path: "/sales-desk/dashboard",
+                icon: LayoutDashboard,
+            },
+            { label: "Pipeline", path: "/sales-desk/pipeline", icon: TrendingUp },
+            {
+                label: "Companies",
+                path: "/sales-desk/companies",
+                icon: Building2,
+                badgeKey: "companies",
+            },
+            {
+                label: "Future pipeline",
+                path: "/sales-desk/future-pipeline",
+                icon: CalendarClock,
+                badgeKey: "future_pipeline",
+            },
+            {
+                label: "Quotes & pricing",
+                path: "/sales-desk/quotes",
+                icon: Tags,
+            },
+            {
+                label: "Onboarding",
+                path: "/sales-desk/onboarding",
+                icon: ClipboardCheck,
+            },
+        ],
     },
 
     {
