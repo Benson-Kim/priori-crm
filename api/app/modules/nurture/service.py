@@ -63,9 +63,21 @@ UPCOMING_WINDOW_DAYS = 14
 _DEFAULT_ENGAGE_NOTE = "Engaged from the future pipeline nurture list."
 
 
-def _default_engage_product() -> str:
-    """First product of the org catalog, the default a one-click engage opens on."""
+def _default_engage_product(db) -> str:
+    """First product of the org catalog, the default a one-click engage opens on.
+
+    Resolution mirrors ``GET /owner/settings/sales-pricing`` (issue #44):
+    the org's settings-resolved catalog first — so an org that customized
+    its catalog never gets a deal opened on a product it does not sell —
+    then the seed constant, then a generic 'Subscription' placeholder so a
+    one-click engage can never fail on catalog configuration.
+    """
     from app.constants.settings_defaults import DEFAULT_PRODUCT_CATALOG
+    from app.modules.owner.service import OwnerService
+
+    entry = next(iter(OwnerService(db).sales_pricing_settings().catalog), None)
+    if entry is not None and entry.name:
+        return entry.name
 
     first = next(iter(DEFAULT_PRODUCT_CATALOG), None)
     if first is None:
@@ -281,7 +293,7 @@ class NurtureService(ServiceBase):
         # screen collects nothing, so the deal opens on the org's first
         # catalogued product at a single seat and the rep adjusts both in the
         # deal drawer. Anything the caller does send still wins.
-        product = data.product or _default_engage_product()
+        product = data.product or _default_engage_product(self._db)
         seats = data.seats or 1
 
         customer_service = CustomerService(self._db, current_user=self._current_user)
