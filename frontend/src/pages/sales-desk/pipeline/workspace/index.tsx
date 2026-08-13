@@ -5,8 +5,9 @@
  * book sits by stage, then filter rows by how much attention each deal is
  * owed. Selecting a row opens the drawer, the only place a deal changes.
  *
- * The selected deal lives in the query string, so a deal is linkable and the
- * back button steps out of the drawer.
+ * The whole view state lives in the query string — selected deal, owner,
+ * activity chip, closed toggle and search — so a filtered view is shareable,
+ * survives reload, and the back button steps out of the drawer.
  */
 
 import { Download } from "lucide-react";
@@ -24,6 +25,7 @@ import { cn, formatDate, saveBlob } from "@/lib/utils";
 import {
     advanceDeal,
     closeDeal,
+    exportPipelineCsv,
     formatDeskMoneyCompact,
     getDealDetail,
     getPipelineDeals,
@@ -56,51 +58,53 @@ const CELL_CLASS = "align-top";
 const TABLE_OVERRIDES =
     "[&_th]:py-3 [&_table]:min-w-[1240px]";
 
-/** Escape a CSV field: wrap in quotes and double any embedded quote. */
-const csvField = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+/** Runtime list of the activity chips, for validating the URL param. */
+const ACTIVITY_KEYS: readonly ActivityFilterKey[] = [
+    "all",
+    "active_this_week",
+    "quiet_8_30",
+    "no_activity_30",
+    "open_45",
+];
 
-function exportDealsCsv(deals: PipelineDeal[]) {
-    const header = [
-        "Company",
-        "Product",
-        "Seats",
-        "Value",
-        "Weighted",
-        "Billing currency",
-        "Stage",
-        "Status",
-        "Owner",
-        "Days in pipeline",
-        "Days idle",
-        "Latest record",
-    ];
-    const rows = deals.map((deal) => [
-        deal.company_name,
-        deal.product,
-        deal.seats,
-        Math.round(deal.value),
-        deal.weighted_value === null ? "" : Math.round(deal.weighted_value),
-        deal.billing_currency,
-        deal.stage_label,
-        deal.status,
-        deal.owner_name,
-        deal.age_days,
-        deal.idle_days,
-        deal.latest_record.note,
-    ]);
-    const csv = [header, ...rows].map((row) => row.map(csvField).join(",")).join("\n");
-    saveBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "pipeline.csv");
-}
+const isActivityKey = (value: string | null): value is ActivityFilterKey =>
+    ACTIVITY_KEYS.includes(value as ActivityFilterKey);
 
 export default function SalesDeskPipelineWorkspacePage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedDealId = Number(searchParams.get("deal")) || null;
 
-    const [ownerId, setOwnerId] = useState<string | null>(null);
-    const [activity, setActivity] = useState<ActivityFilterKey>("all");
-    const [showClosed, setShowClosed] = useState(true);
-    const [search, setSearch] = useState("");
+    /*
+     * Filter state is read straight from the URL (issue #47 scope 6), with
+     * defaults left out of the query string so a pristine view has a clean
+     * address. An unrecognised activity value degrades to "all" rather than
+     * breaking a stale shared link.
+     */
+    const ownerId = searchParams.get("owner");
+    const activityParam = searchParams.get("activity");
+    const activity: ActivityFilterKey = isActivityKey(activityParam) ? activityParam : "all";
+    const showClosed = searchParams.get("closed") !== "0";
+    const search = searchParams.get("q") ?? "";
     const debouncedSearch = useDebounce(search, 250);
+
+    /**
+     * Write one view param, dropping it at its default. Filter changes tune
+     * the current view rather than navigating, so they replace instead of
+     * stacking a history entry per keystroke.
+     */
+    const setViewParam = useCallback(
+        (key: string, value: string | null) => {
+            setSearchParams(
+                (params) => {
+                    if (value === null) params.delete(key);
+                    else params.set(key, value);
+                    return params;
+                },
+                { replace: true }
+            );
+        },
+        [setSearchParams]
+    );
 
     const [overview, setOverview] = useState<PipelineOverview | null>(null);
     const [deals, setDeals] = useState<PipelineDeal[]>([]);
@@ -206,7 +210,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                                 className={cn(
                                     "block text-[13px] font-semibold",
                                     deal.id === selectedDealId
-                                        ? "text-priori-purple"
+                                        ? "text-sd-brand"
                                         : "text-sd-ink"
                                 )}
                             >
@@ -285,12 +289,22 @@ export default function SalesDeskPipelineWorkspacePage() {
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <span className="text-[13px] font-semibold text-sd-ink">
                         Open pipeline{" "}
-                        <span className="text-priori-purple">{openPipelineLabel}</span>
+                        <span className="text-sd-brand">{openPipelineLabel}</span>
                     </span>
                     <Button
                         variant="outline-secondary"
                         className="h-control"
-                        onClick={() => exportDealsCsv(deals)}
+                        onClick={() =>
+                            // TODO(#45-wiring): swaps to the server export via
+                            // GET /sales-desk/exports/pipeline inside
+                            // exportPipelineCsv; this call site is final.
+                            void exportPipelineCsv({
+                                ownerId: ownerId ?? undefined,
+                                activity,
+                                includeClosed: showClosed,
+                                search: debouncedSearch,
+                            }).then((blob) => saveBlob(blob, "pipeline.csv"))
+                        }
                     >
                         <Download size={16} /> Export CSV
                     </Button>
@@ -307,7 +321,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                         <RepFilterCards
                             overview={overview}
                             selectedOwnerId={ownerId}
-                            onSelect={setOwnerId}
+                            onSelect={(id) => setViewParam("owner", id)}
                         />
                         <StageSummaryStrip overview={overview} />
                     </>
@@ -327,20 +341,24 @@ export default function SalesDeskPipelineWorkspacePage() {
                                     count: filter.count,
                                 }))}
                             activeTab={activity}
-                            onTabChange={(key) => setActivity(key as ActivityFilterKey)}
+                            onTabChange={(key) =>
+                                setViewParam("activity", key === "all" ? null : key)
+                            }
                         />
                     )}
 
                     <Checkbox
                         label="Show closed"
                         checked={showClosed}
-                        onChange={(event) => setShowClosed(event.target.checked)}
+                        onChange={(event) =>
+                            setViewParam("closed", event.target.checked ? null : "0")
+                        }
                         className="ml-auto shrink-0"
                     />
 
                     <SearchInput
                         value={search}
-                        onSearchChange={setSearch}
+                        onSearchChange={(value) => setViewParam("q", value || null)}
                         aria-label="Search deals"
                         placeholder="Search deals…"
                         className="h-control w-56 shrink-0 bg-sd-card px-3 [&_svg]:size-4"
