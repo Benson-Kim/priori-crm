@@ -111,7 +111,7 @@ export default function OTPPage() {
       <div className="w-full max-w-156 bg-gray-100 border border-gray-200 rounded-4xl flex flex-col gap-8 p-12 z-10">
         <div className="space-y-8">
           <div className="flex justify-center">
-            <img src="/Logo Priori.svg" alt="Business Central"
+            <img src="/logo.svg" alt="Business Central"
               className="h-20 object-contain"
             />
           </div>
