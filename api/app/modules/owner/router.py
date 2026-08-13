@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
-from app.constants.enums import UserRole
+from app.constants.enums import ModuleKey, UserRole
 from app.constants.settings_defaults import (
     DEFAULT_ONBOARDING_TASKS,
     DEFAULT_ORG_JURISDICTION,
@@ -18,6 +18,9 @@ from app.constants.settings_defaults import (
 )
 from app.lib.config import settings
 from app.modules.owner.schemas import (
+    ModuleSettingState,
+    ModuleSettingsResponse,
+    ModuleSettingUpdate,
     OwnerProfileResponse,
     OwnerProfileUpdate,
     SalesPricingSettings,
@@ -61,7 +64,7 @@ def _to_response(profile) -> OwnerProfileResponse:
 @router.get("", response_model=OwnerProfileResponse, summary="Get the owner profile")
 def get_owner_profile(service: OwnerServiceDep) -> OwnerProfileResponse:
     """Return the live owner profile (seeded from settings on first use)."""
-    return _to_response(service.get_or_create())
+    return _to_response(service.get_or_create(), service)
 
 
 @router.get(
@@ -82,6 +85,46 @@ def get_owner_profile(service: OwnerServiceDep) -> OwnerProfileResponse:
 def get_sales_pricing_settings(service: OwnerServiceDep) -> SalesPricingSettings:
     """Return the org sales pricing settings and derived price list."""
     return service.sales_pricing_settings()
+
+
+@router.get(
+    "/modules",
+    response_model=ModuleSettingsResponse,
+    summary="List every module with its effective entitlement state",
+    description=(
+        "Per-owner module entitlements: every ModuleKey with its RESOLVED "
+        "enabled state (missing override row = enabled) and whether it is "
+        "essential (never disableable). Admin only."
+    ),
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+def list_module_settings(service: OwnerServiceDep) -> ModuleSettingsResponse:
+    """Return the effective entitlement state of every module (admin only)."""
+    return ModuleSettingsResponse(modules=service.module_settings())
+
+
+@router.patch(
+    "/modules/{module_key}",
+    response_model=ModuleSettingState,
+    summary="Enable or disable one module",
+    description=(
+        "Upsert the per-owner override for one toggleable module. Disabling "
+        "an essential module (auth, owner, health, dashboard) returns 422. "
+        "Admin only; every change is audited."
+    ),
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    responses={
+        403: {"description": "Caller is not an admin"},
+        422: {"description": "Unknown module key, or essential module"},
+    },
+)
+def update_module_setting(
+    module_key: ModuleKey,
+    body: ModuleSettingUpdate,
+    service: OwnerServiceDep,
+) -> ModuleSettingState:
+    """Enable/disable one module for the organisation (admin only)."""
+    return service.set_module_enabled(module_key, body.enabled)
 
 
 @router.put(
@@ -148,3 +191,4 @@ def serve_owner_logo(service: OwnerServiceDep):
         )
 
     return StreamingResponse(download.stream, media_type=download.media_type)
+ponse(download.stream, media_type=download.media_type)
