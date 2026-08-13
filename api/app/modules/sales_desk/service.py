@@ -27,7 +27,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.common.exceptions import BadRequestException
+from app.common.exceptions import BadRequestException, NotFoundException
 from app.common.fx import usd_equivalent
 from app.common.reporting_time import reporting_date, reporting_timezone
 from app.constants.enums import DealStage, DealStatus
@@ -648,6 +648,29 @@ class SalesDeskService:
         drive the query count.
         """
         rows, total = self.repo.desk_companies(owner_id, search, unsynced_only, limit)
+        return DeskCompaniesResponse(items=self._company_rows(rows), total=total)
+
+    def get_company(self, company_id: uuid.UUID) -> DeskCompanyRow:
+        """One directory row by id, or 404 — the drawer's read (#46).
+
+        Assembled by the exact same batched path as the directory, so the
+        drawer and the table can never disagree about a company.
+        """
+        row = self.repo.desk_company_by_id(company_id)
+        if row is None:
+            raise NotFoundException(
+                detail=f"Company with ID '{company_id}' not found",
+                resource="company",
+            )
+        return self._company_rows([row])[0]
+
+    def _company_rows(self, rows) -> list[DeskCompanyRow]:
+        """Assemble directory rows from slim company rows.
+
+        Profiles, owners and deal counts are each fetched in one batched
+        query keyed by the given customer ids, so the row count does not
+        drive the query count.
+        """
         customer_ids = [row.id for row in rows]
 
         profiles_by_customer: dict[uuid.UUID, list] = {}
@@ -711,7 +734,7 @@ class SalesDeskService:
                 )
             )
 
-        return DeskCompaniesResponse(items=items, total=total)
+        return items
 
     @staticmethod
     def _user_response(row) -> DealOwnerResponse:

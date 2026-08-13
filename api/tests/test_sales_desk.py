@@ -809,3 +809,53 @@ def test_dashboard_and_notifications_endpoints(client, db):
     assert overview.status_code == 200
     total = overview.json()["open_pipeline_total"]
     assert Decimal(str(total)) == Decimal("2700.00")
+
+
+# Companies directory: single-row lookup (#46)
+
+
+def test_get_company_matches_directory_row(db):
+    """The single-company read returns byte-for-byte the row the directory
+    lists — same batched profile/owner/deal-count assembly — so the drawer
+    and the table can never disagree about a company."""
+    owner = _make_owner(db)
+    customer = _make_customer(db, name="Baraka Logistics", owner=owner)
+    _make_customer(db, name="Savannah Microfinance")  # directory noise
+    _make_deal(db, owner, customer, value=Decimal("2700.00"))
+    closed = _make_deal(db, owner, customer, value=Decimal("500.00"))
+    _deal_svc(db, owner).close(
+        closed.id, "lost", DealLostReason.PRICE_TOO_HIGH.value, "Too dear."
+    )
+
+    svc = _svc(db)
+    directory_row = next(
+        row for row in svc.get_companies().items if row.id == str(customer.id)
+    )
+    single = svc.get_company(customer.id)
+
+    assert single == directory_row
+    assert single.open_deal_count == 1
+    assert single.closed_deal_count == 1
+    assert single.total_deal_count == 2
+    assert single.owner is not None and single.owner.id == owner.id
+    assert {profile.currency for profile in single.profiles} == {"USD", "KES"}
+
+
+def test_get_company_endpoint_and_404(client, db):
+    owner = _make_owner(db)
+    customer = _make_customer(db, name="Baraka Logistics", owner=owner)
+
+    _install_actor(owner)
+    try:
+        found = client.get(f"{API}/companies/{customer.id}")
+        missing = client.get(f"{API}/companies/{uuid4()}")
+    finally:
+        _clear_actor()
+
+    assert found.status_code == 200
+    body = found.json()
+    assert body["id"] == str(customer.id)
+    assert body["name"] == "Baraka Logistics"
+    assert body["needs_sync"] is True  # fresh profiles start unsynced
+
+    assert missing.status_code == 404

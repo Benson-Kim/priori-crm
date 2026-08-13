@@ -156,19 +156,12 @@ class SalesDeskRepository:
             query = query.filter(Customer.owner_id == owner_id)
         return query.scalar() or 0
 
-    def desk_companies(
-        self,
-        owner_id: uuid.UUID | None = None,
-        search: str | None = None,
-        unsynced_only: bool = False,
-        limit: int = 200,
-    ):
-        """Companies for the desk directory, newest registration first.
+    def _desk_company_query(self):
+        """The slim company row shared by the directory and the single-row
 
-        Returns ``(rows, total)``. ``total`` counts every match before the
-        limit so the caller can show a truthful count without a second query.
+        lookup, so the two can never disagree about a company's shape.
         """
-        query = self.db.query(
+        return self.db.query(
             Customer.id,
             Customer.company_name,
             Customer.first_name,
@@ -182,6 +175,24 @@ class SalesDeskRepository:
             Customer.primary_currency,
             Customer.created_at,
         )
+
+    def desk_company_by_id(self, customer_id: uuid.UUID):
+        """One company row for the desk, or ``None`` when absent."""
+        return self._desk_company_query().filter(Customer.id == customer_id).first()
+
+    def desk_companies(
+        self,
+        owner_id: uuid.UUID | None = None,
+        search: str | None = None,
+        unsynced_only: bool = False,
+        limit: int = 200,
+    ):
+        """Companies for the desk directory, newest registration first.
+
+        Returns ``(rows, total)``. ``total`` counts every match before the
+        limit so the caller can show a truthful count without a second query.
+        """
+        query = self._desk_company_query()
 
         if owner_id:
             query = query.filter(Customer.owner_id == owner_id)

@@ -159,6 +159,30 @@ def get_companies(
 
 
 @router.get(
+    "/companies/{company_id}",
+    response_model=DeskCompanyRow,
+    summary="One Sales Desk company row",
+    description=(
+        "A single company exactly as the directory lists it — industry, "
+        "primary contact, billing profiles with their accounting sync "
+        "state, owning rep and deal counts — assembled by the same path "
+        "as `GET /sales-desk/companies`, so the drawer and the table can "
+        "never disagree about a company. 404 when the company does not "
+        "exist."
+    ),
+    responses={
+        200: {"description": "Company row"},
+        404: {"description": "Company not found"},
+    },
+)
+def get_company(
+    service: SalesDeskServiceDep,
+    company_id: UUID,
+) -> DeskCompanyRow:
+    return service.get_company(company_id)
+
+
+@router.get(
     "/pipeline/overview",
     response_model=PipelineOverviewResponse,
     summary="Pipeline workspace aggregates",
