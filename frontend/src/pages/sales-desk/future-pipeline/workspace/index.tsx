@@ -9,15 +9,17 @@
 
 import { ArrowRight, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, type Column } from "@/components/ui/Table";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
+    DuplicateCustomerError,
     engageProspect,
     formatDeskMoney,
     getFuturePipelineSummary,
@@ -27,6 +29,7 @@ import {
 } from "@/services/salesDeskApi";
 import { AddProspectDialog } from "../components/AddProspectDialog";
 import { DueBadge, UrgencyDot } from "../components/DueBadge";
+import { SuccessNotice } from "../components/SuccessNotice";
 
 const CELL_CLASS = "align-top";
 const TABLE_OVERRIDES =
@@ -35,8 +38,20 @@ const TABLE_OVERRIDES =
 /** First name only, since the column is narrow and the avatar disambiguates. */
 const firstNameOf = (name: string) => name.split(" ")[0];
 
+/** An engage that hit the duplicate-customer 409, awaiting a decision. */
+interface DuplicatePrompt {
+    prospectId: number;
+    companyName: string;
+    existingCustomerId: number;
+}
+
 export default function SalesDeskFuturePipelineWorkspacePage() {
     const navigate = useNavigate();
+
+    // ?rep= scopes the table and its counts to one owner, the same
+    // URL-driven mechanism the pipeline workspace uses for ?deal=.
+    const [searchParams] = useSearchParams();
+    const repFilter = searchParams.get("rep") ?? undefined;
 
     const [prospects, setProspects] = useState<ProspectRow[]>([]);
     const [summary, setSummary] = useState<FuturePipelineSummary | null>(null);
@@ -45,12 +60,18 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
+
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     useEffect(() => {
         let active = true;
 
-        Promise.all([getProspects(debouncedSearch), getFuturePipelineSummary()])
+        Promise.all([
+            getProspects(debouncedSearch, undefined, repFilter),
+            getFuturePipelineSummary(undefined, repFilter),
+        ])
             .then(([rows, next]) => {
                 if (!active) return;
                 setProspects(rows);
@@ -70,7 +91,12 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
         return () => {
             active = false;
         };
-    }, [debouncedSearch, revision]);
+    }, [debouncedSearch, repFilter, revision]);
+
+    // Set when engaging hits an already-registered company; drives the
+    // link-or-cancel dialog below.
+    const [duplicate, setDuplicate] = useState<DuplicatePrompt | null>(null);
+    const [isLinking, setIsLinking] = useState(false);
 
     /** Promote the prospect, then follow it through to the deal it became. */
     const engage = useCallback(
@@ -79,12 +105,39 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 const { dealId } = await engageProspect(prospect.id);
                 navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
             } catch (err) {
+                if (err instanceof DuplicateCustomerError) {
+                    setDuplicate({
+                        prospectId: prospect.id,
+                        companyName: err.companyName,
+                        existingCustomerId: err.existingCustomerId,
+                    });
+                    return;
+                }
                 setError(err instanceof Error ? err.message : "Could not engage that prospect.");
                 setRevision((value) => value + 1);
             }
         },
         [navigate]
     );
+
+    /** Resolve the duplicate by linking the deal to the existing customer. */
+    const linkToExisting = useCallback(async () => {
+        if (!duplicate) return;
+        setIsLinking(true);
+        try {
+            const { dealId } = await engageProspect(
+                duplicate.prospectId,
+                duplicate.existingCustomerId
+            );
+            navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
+        } catch (err) {
+            setDuplicate(null);
+            setError(err instanceof Error ? err.message : "Could not engage that prospect.");
+            setRevision((value) => value + 1);
+        } finally {
+            setIsLinking(false);
+        }
+    }, [duplicate, navigate]);
 
     const columns = useMemo<Column<ProspectRow>[]>(
         () => [
@@ -184,10 +237,12 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 </div>
             )}
 
+            {notice && <SuccessNotice message={notice} onDismiss={dismissNotice} />}
+
             {/* Heading and search share the line; the card starts at the table. */}
             <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
                 <h2 className="text-[13px] font-semibold text-sd-ink">Planned prospects</h2>
-                <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-bold text-priori-purple">
+                <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-bold text-sd-brand">
                     {summary?.prospect_count ?? 0}
                 </span>
                 {(summary?.due_count ?? 0) > 0 && (
@@ -225,8 +280,25 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 onClose={() => setIsCreating(false)}
                 onCreated={() => {
                     setIsCreating(false);
+                    setNotice("Planned deal added — you'll be notified when it's due");
                     setRevision((value) => value + 1);
                 }}
+            />
+
+            {/* The store already knows this company; link rather than duplicate. */}
+            <Dialog
+                isOpen={duplicate !== null}
+                onClose={() => setDuplicate(null)}
+                title="Customer already exists"
+                description={
+                    duplicate
+                        ? `${duplicate.companyName} is already a registered customer. Link this deal to the existing customer record instead of registering a new one?`
+                        : undefined
+                }
+                confirmLabel="Link to existing customer"
+                cancelLabel="Cancel"
+                onConfirm={() => void linkToExisting()}
+                isLoading={isLinking}
             />
         </div>
     );
