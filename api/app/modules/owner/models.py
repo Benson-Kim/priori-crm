@@ -21,10 +21,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -139,6 +141,61 @@ class OwnerProfile(Base):
 
     def __repr__(self) -> str:
         return f"<OwnerProfile {self.full_name!r}>"
+
+
+class OwnerModuleSetting(Base):
+    """Per-owner module entitlement (feature toggle) override.
+
+    One row per (owner profile, module key) — but only when the default is
+    overridden: a MISSING row means the module is ENABLED (default-on), so a
+    fresh install exposes every module without any seeding. Essential
+    modules (see ``ESSENTIAL_MODULES``) never get a disabled row; the admin
+    API rejects such attempts with a 422.
+    """
+
+    __tablename__ = "owner_module_settings"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_profile_id",
+            "module_key",
+            name="uq_owner_module_settings_profile_module",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    owner_profile_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("owner_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    module_key: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        comment="ModuleKey value this row overrides (missing row = enabled)",
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Admin user who last changed this toggle (null = system)",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    def __repr__(self) -> str:
+        return f"<OwnerModuleSetting {self.module_key}={self.enabled}>"
 
 
 class OwnerProfileSnapshot(Base):
