@@ -49,6 +49,7 @@ from app.modules.owner.router import router as owner_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.reports.router import router as reports_router
+from app.modules.sales_desk.router import router as sales_desk_router
 from app.modules.statements.router import router as statements_router
 from app.modules.vendors.router import router as vendors_router
 
@@ -180,6 +181,9 @@ def _register_routers(app: FastAPI) -> None:
         dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
     )
     app.include_router(reports_router, prefix=f"{api_prefix}/reports", tags=["Reports"])
+    app.include_router(
+        sales_desk_router, prefix=f"{api_prefix}/sales-desk", tags=["Sales Desk"]
+    )
     logger.info(
         "Registered routers: %s",
         [route.path for route in app.routes],  # type: ignore

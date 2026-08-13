@@ -157,9 +157,28 @@ class DealService(StateMachineMixin, ServiceBase):
         self, params: PaginationParams, filters: DealFilterParams
     ) -> PaginatedResponse[DealResponse]:
         """List deals with tab/owner/hygiene/search filters + pagination."""
-        query = self._apply_filters(self._db.query(Deal), filters)
+        total = None
+        if params.with_total:
+            total = self._apply_filters(self._db.query(Deal), filters).count()
 
-        total = query.count() if params.with_total else None
+        rows = (
+            self.pipeline_query(filters)
+            .offset(params.offset)
+            .limit(params.fetch_limit)
+            .all()
+        )
+
+        items = [self.build_response(deal) for deal in rows]
+        return PaginatedResponse.create_from_window(items, params, total=total)
+
+    def pipeline_query(self, filters: DealFilterParams):
+        """Filtered + ordered pipeline query.
+
+        Single source of truth for the pipeline list AND the Sales Desk CSV
+        export (issue #45): both read the same rows in the same order (open
+        by stage, then parked, won, lost; value desc within a rank).
+        """
+        query = self._apply_filters(self._db.query(Deal), filters)
 
         stage_rank = case(
             (Deal.stage == DealStage.ACTIVATION.value, 1),
@@ -175,20 +194,12 @@ class DealService(StateMachineMixin, ServiceBase):
             else_=3,
         )
 
-        rows = (
-            query.order_by(
-                status_rank,
-                stage_rank,
-                Deal.value.desc(),
-                Deal.created_at.desc(),
-            )
-            .offset(params.offset)
-            .limit(params.fetch_limit)
-            .all()
+        return query.order_by(
+            status_rank,
+            stage_rank,
+            Deal.value.desc(),
+            Deal.created_at.desc(),
         )
-
-        items = [self.build_response(deal) for deal in rows]
-        return PaginatedResponse.create_from_window(items, params, total=total)
 
     def get_status_counts(self, owner_id: uuid.UUID | None = None) -> DealStatusCounts:
         """Counts per tab (All / Open / Won / Lost) + parked."""
@@ -525,7 +536,9 @@ class DealService(StateMachineMixin, ServiceBase):
 
         weighted_value: Decimal | None = None
         if status in (DealStatus.OPEN, DealStatus.PARKED):
-            weighted_value = (deal.value * stage.probability).quantize(Decimal("0.01"))
+            weighted_value = (deal.value * self._stage_probability(stage)).quantize(
+                Decimal("0.01")
+            )
 
         history = [DealActivityResponse.model_validate(a) for a in activities]
 
@@ -576,6 +589,23 @@ class DealService(StateMachineMixin, ServiceBase):
             updated_at=deal.updated_at,
             version=deal.version,
         )
+
+    def _stage_probability(self, stage: DealStage) -> Decimal:
+        """Org-resolved stage probability (issue #45: settings, not constants).
+
+        Resolved once per service instance (i.e. once per request) so list
+        responses never pay a settings query per row. Defaults match
+        ``DealStage.probability`` when the org has never configured its own.
+        """
+        cache = getattr(self, "_stage_probability_cache", None)
+        if cache is None:
+            # Imported here to keep the deals module importable without the
+            # owner module during partial test collection.
+            from app.modules.owner.service import resolve_deal_stage_probabilities
+
+            cache = resolve_deal_stage_probabilities(self._db)
+            self._stage_probability_cache = cache
+        return cache[stage]
 
     @staticmethod
     def _owner_response(owner: User) -> DealOwnerResponse:

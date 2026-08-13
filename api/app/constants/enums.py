@@ -3,6 +3,8 @@
 from decimal import Decimal
 from enum import StrEnum
 
+from app.constants.settings_defaults import DEFAULT_DEAL_STAGE_PROBABILITIES
+
 
 class UserRole(StrEnum):
     """Authorization roles for application users.
@@ -181,11 +183,14 @@ _DEAL_STAGE_LABELS: dict["DealStage", str] = {
     DealStage.NEGOTIATION: "Negotiation",
 }
 
+# Built-in default probabilities, derived from the org-settings seed values
+# (issue #45: probabilities are configurable via the owner settings; this
+# enum property only ever expresses the built-in default so the two layers
+# cannot drift). Org-resolved values live in
+# ``app.modules.owner.service.resolve_deal_stage_probabilities``.
 _DEAL_STAGE_PROBABILITIES: dict["DealStage", Decimal] = {
-    DealStage.ACTIVATION: Decimal("0.10"),
-    DealStage.QUALIFICATION: Decimal("0.25"),
-    DealStage.PROPOSAL_QUOTE: Decimal("0.50"),
-    DealStage.NEGOTIATION: Decimal("0.75"),
+    DealStage(stage): Decimal(probability)
+    for stage, probability in DEFAULT_DEAL_STAGE_PROBABILITIES.items()
 }
 
 #: Total steps the pipeline UI renders ("Stage N of 5"): the four open
