@@ -31,11 +31,12 @@ router = APIRouter()
 _WRITE_ROLES = (UserRole.MANAGER, UserRole.ADMIN)
 
 
-def _to_response(profile) -> OwnerProfileResponse:
+def _to_response(profile, service) -> OwnerProfileResponse:
     # Surface the org-scoped PO defaults as RESOLVED values (persisted value,
     # or the built-in fallback when never set) so the Settings screen and the
     # PO create form read a single authoritative source
     return OwnerProfileResponse(
+        enabled_modules=service.enabled_modules_map(),
         full_name=profile.full_name,
         location_watermark=profile.location_watermark,
         address=profile.address,
@@ -138,7 +139,7 @@ def update_owner_profile(
     service: OwnerServiceDep,
 ) -> OwnerProfileResponse:
     """Update the live owner profile. Does not affect already-issued documents."""
-    return _to_response(service.update(body))
+    return _to_response(service.update(body), service)
 
 
 @router.put(
@@ -155,7 +156,7 @@ def upload_owner_logo(
     """Validate and store a logo, replacing any existing one."""
     mime_type = file.content_type or "application/octet-stream"
     profile = service.upload_logo(file.file, file.filename or "logo", mime_type)
-    return _to_response(profile)
+    return _to_response(profile, service)
 
 
 @router.delete(
@@ -166,7 +167,7 @@ def upload_owner_logo(
 )
 def remove_owner_logo(service: OwnerServiceDep) -> OwnerProfileResponse:
     """Remove the current logo."""
-    return _to_response(service.remove_logo())
+    return _to_response(service.remove_logo(), service)
 
 
 @router.get(

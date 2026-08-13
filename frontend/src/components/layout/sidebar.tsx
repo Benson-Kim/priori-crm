@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/auth-context";
+import { useEnabledModules } from "@/hooks/useModuleAccess";
 import { cn } from "@/lib/utils";
 import {
     ChevronDown,
@@ -6,11 +7,12 @@ import {
     LogOut,
     PanelLeftClose,
     PanelLeftOpen,
+    Settings,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { navItems, type NavChild } from "./nav-items";
+import { visibleNavItems, type NavChild } from "./nav-items";
 
 /** localStorage key persisting the collapsed/expanded preference. */
 const COLLAPSED_STORAGE_KEY = "sidebar:collapsed";
@@ -109,7 +111,7 @@ export function Sidebar() {
                     </div>
 
                     <nav className="flex flex-col gap-2">
-                        {navItems.map((item) => {
+                        {items.map((item) => {
                             const Icon = item.icon;
 
                             if (!item.children) {
@@ -280,6 +282,13 @@ export function Sidebar() {
                         <p className="pt-4 text-xs text-gray-600">
                             &copy; 2026 Business Central — All Rights Reserved Version: 1.0.188-288
                         </p>
+                    )}
+                </div>
+            </div>
+        </aside>
+    );
+}
+p>
                     )}
                 </div>
             </div>

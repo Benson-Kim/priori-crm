@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoadingState } from "@/components/ui/LoadingState";
 import LoginPage from "@/pages/auth/login";
 import RequireAuth from "./auth/RequireAuth";
+import RequireModule from "./auth/RequireModule";
 import DefaultLayout from "./layout/default-layout";
 
 // Route-based code splitting: every page below is fetched on demand, so the
@@ -65,6 +66,7 @@ const routes = [
                     },
                     {
                         path: "customers",
+                        element: <RequireModule moduleKey="customers" />,
                         children: [
                             {
                                 index: true,
@@ -110,6 +112,7 @@ const routes = [
                     },
                     {
                         path: "quotes",
+                        element: <RequireModule moduleKey="quotes" />,
                         children: [
                             {
                                 index: true,
@@ -155,6 +158,7 @@ const routes = [
                     },
                     {
                         path: "invoices",
+                        element: <RequireModule moduleKey="invoices" />,
                         children: [
                             {
                                 index: true,
@@ -204,6 +208,7 @@ const routes = [
                     },
                     {
                         path: "vendors",
+                        element: <RequireModule moduleKey="vendors" />,
                         children: [
                             {
                                 index: true,
@@ -229,6 +234,7 @@ const routes = [
                     },
                     {
                         path: "expenses",
+                        element: <RequireModule moduleKey="expenses" />,
                         children: [
                             {
                                 index: true,
@@ -390,6 +396,16 @@ const routes = [
                                 },
                             },
                         ],
+                    },
+                    {
+                        path: "settings/modules",
+                        element: lazyPage(() => import("@/pages/settings/modules")),
+                        handle: {
+                            header: {
+                                title: "Module Settings",
+                                description: "Enable or disable application modules for your organisation.",
+                            },
+                        },
                     },
                     {
                         path: "statements",

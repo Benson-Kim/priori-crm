@@ -25,11 +25,13 @@ export type NavChild = {
     path: string;
     label: string;
     icon?: NavIcon;
+    /** Module entitlement key gating this entry (absent = always visible). */
+    moduleKey?: string;
 }
 
 export type NavItem =
-    | { path: string; label: string; icon?: NavIcon; children?: never }
-    | { label: string; icon?: NavIcon; children: NavChild[]; path?: never }
+    | { path: string; label: string; icon?: NavIcon; moduleKey?: string; children?: never }
+    | { label: string; icon?: NavIcon; children: NavChild[]; path?: never; moduleKey?: never }
 
 export const navItems: NavItem[] = [
     {
@@ -52,12 +54,13 @@ export const navItems: NavItem[] = [
         label: "Purchases",
         icon: ShoppingCart,
         children: [
-            { label: "Vendors", path: "/vendors", icon: Store },
-            { label: "Expenses", path: "/expenses", icon: Receipt },
+            { label: "Vendors", path: "/vendors", icon: Store, moduleKey: "vendors" },
+            { label: "Expenses", path: "/expenses", icon: Receipt, moduleKey: "expenses" },
             {
                 label: "Purchase Orders",
                 path: "/purchase-orders",
                 icon: ClipboardList,
+                moduleKey: "purchase_orders",
             },
         ],
     },
@@ -70,8 +73,14 @@ export const navItems: NavItem[] = [
                 label: "Income Statement",
                 path: "/income-statement",
                 icon: FileText,
+                moduleKey: "statements",
             },
-            { label: "Cashflow", path: "/cashflow", icon: DollarSign },
+            {
+                label: "Cashflow",
+                path: "/cashflow",
+                icon: DollarSign,
+                moduleKey: "statements",
+            },
         ],
     },
 
@@ -79,15 +88,17 @@ export const navItems: NavItem[] = [
         label: "Reports",
         icon: BarChart2,
         children: [
-            { label: "Sales Report", path: "/reports/sales", icon: FileText },
-            { label: "Purchases Report", path: "/reports/purchases", icon: Receipt },
-            { label: "Tax Report", path: "/reports/taxes", icon: ReceiptText },
+            { label: "Sales Report", path: "/reports/sales", icon: FileText, moduleKey: "reports" },
+            { label: "Purchases Report", path: "/reports/purchases", icon: Receipt, moduleKey: "reports" },
+            { label: "Tax Report", path: "/reports/taxes", icon: ReceiptText, moduleKey: "reports" },
         ],
     },
-];Report", path: "/reports/taxes", icon: ReceiptText },
-        ],
-    },
-];Entries without a moduleKey are always visible; a null/undefined map
+];
+
+/**
+ * Filter the nav tree by the per-owner module entitlement map.
+ *
+ * Entries without a moduleKey are always visible; a null/undefined map
  * (bootstrap still loading, or older API) shows everything (fail-open,
  * mirroring the backend's missing-row-=-enabled default). Groups whose
  * children are ALL hidden disappear entirely.
