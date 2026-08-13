@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Model registry bootstrap
@@ -26,6 +26,7 @@ import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
 from app.common.database import engine
+from app.common.dependencies import require_module
 from app.common.exceptions import register_exception_handlers
 from app.common.logging import setup_logging
 from app.common.middleware import (
@@ -35,6 +36,7 @@ from app.common.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.common.otel import setup_metrics, shutdown_metrics
+from app.constants.enums import ModuleKey
 from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
@@ -150,39 +152,90 @@ def _register_routers(app: FastAPI) -> None:
     """Register all module routers with the API prefix."""
     api_prefix = settings.API_V1_PREFIX
 
+    def _module_gate(key: ModuleKey) -> list:
+        """Router-wide entitlement gate for one toggleable module.
+
+        Essential modules (auth, owner, health, dashboard) are never gated.
+        """
+        return [Depends(require_module(key))]
+
     app.include_router(health_router, prefix=api_prefix, tags=["Health"])
     app.include_router(auth_router, prefix=f"{api_prefix}/auth", tags=["Auth"])
     app.include_router(
-        customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"]
+        customers_router,
+        prefix=f"{api_prefix}/customers",
+        tags=["Customers"],
+        dependencies=_module_gate(ModuleKey.CUSTOMERS),
     )
     app.include_router(
-        invoices_router, prefix=f"{api_prefix}/invoices", tags=["Invoices"]
+        invoices_router,
+        prefix=f"{api_prefix}/invoices",
+        tags=["Invoices"],
+        dependencies=_module_gate(ModuleKey.INVOICES),
     )
-    app.include_router(deals_router, prefix=f"{api_prefix}/deals", tags=["Deals"])
-    app.include_router(nurture_router, prefix=f"{api_prefix}/nurture", tags=["Nurture"])
     app.include_router(
-        onboarding_router, prefix=f"{api_prefix}/onboardings", tags=["Onboarding"]
+        deals_router,
+        prefix=f"{api_prefix}/deals",
+        tags=["Deals"],
+        dependencies=_module_gate(ModuleKey.DEALS),
     )
-    app.include_router(quotes_router, prefix=f"{api_prefix}/quotes", tags=["Quotes"])
-    app.include_router(vendors_router, prefix=f"{api_prefix}/vendors", tags=["Vendors"])
     app.include_router(
-        expenses_router, prefix=f"{api_prefix}/expenses", tags=["Expenses"]
+        nurture_router,
+        prefix=f"{api_prefix}/nurture",
+        tags=["Nurture"],
+        dependencies=_module_gate(ModuleKey.NURTURE),
+    )
+    app.include_router(
+        onboarding_router,
+        prefix=f"{api_prefix}/onboardings",
+        tags=["Onboarding"],
+        dependencies=_module_gate(ModuleKey.ONBOARDING),
+    )
+    app.include_router(
+        quotes_router,
+        prefix=f"{api_prefix}/quotes",
+        tags=["Quotes"],
+        dependencies=_module_gate(ModuleKey.QUOTES),
+    )
+    app.include_router(
+        vendors_router,
+        prefix=f"{api_prefix}/vendors",
+        tags=["Vendors"],
+        dependencies=_module_gate(ModuleKey.VENDORS),
+    )
+    app.include_router(
+        expenses_router,
+        prefix=f"{api_prefix}/expenses",
+        tags=["Expenses"],
+        dependencies=_module_gate(ModuleKey.EXPENSES),
     )
     app.include_router(
         purchase_orders_router,
         prefix=f"{api_prefix}/purchase-orders",
         tags=["Purchase Orders"],
+        dependencies=_module_gate(ModuleKey.PURCHASE_ORDERS),
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
     app.include_router(
-        statements_router, prefix=f"{api_prefix}/statements", tags=["Statements"]
+        statements_router,
+        prefix=f"{api_prefix}/statements",
+        tags=["Statements"],
+        dependencies=_module_gate(ModuleKey.STATEMENTS),
     )
     app.include_router(
         dashboard_router, prefix=f"{api_prefix}/dashboard", tags=["Dashboard"]
     )
-    app.include_router(reports_router, prefix=f"{api_prefix}/reports", tags=["Reports"])
     app.include_router(
-        sales_desk_router, prefix=f"{api_prefix}/sales-desk", tags=["Sales Desk"]
+        reports_router,
+        prefix=f"{api_prefix}/reports",
+        tags=["Reports"],
+        dependencies=_module_gate(ModuleKey.REPORTS),
+    )
+    app.include_router(
+        sales_desk_router,
+        prefix=f"{api_prefix}/sales-desk",
+        tags=["Sales Desk"],
+        dependencies=_module_gate(ModuleKey.SALES_DESK),
     )
     logger.info(
         "Registered routers: %s",

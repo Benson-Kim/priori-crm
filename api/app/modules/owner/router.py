@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
-from app.constants.enums import UserRole
+from app.constants.enums import ModuleKey, UserRole
 from app.constants.settings_defaults import (
     DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
@@ -20,6 +20,9 @@ from app.constants.settings_defaults import (
 )
 from app.lib.config import settings
 from app.modules.owner.schemas import (
+    ModuleSettingsResponse,
+    ModuleSettingState,
+    ModuleSettingUpdate,
     OwnerProfileResponse,
     OwnerProfileUpdate,
     SalesPricingSettings,
@@ -30,11 +33,12 @@ router = APIRouter()
 _WRITE_ROLES = (UserRole.MANAGER, UserRole.ADMIN)
 
 
-def _to_response(profile) -> OwnerProfileResponse:
+def _to_response(profile, service) -> OwnerProfileResponse:
     # Surface the org-scoped PO defaults as RESOLVED values (persisted value,
     # or the built-in fallback when never set) so the Settings screen and the
     # PO create form read a single authoritative source
     return OwnerProfileResponse(
+        enabled_modules=service.enabled_modules_map(),
         full_name=profile.full_name,
         location_watermark=profile.location_watermark,
         address=profile.address,
@@ -68,7 +72,7 @@ def _to_response(profile) -> OwnerProfileResponse:
 @router.get("", response_model=OwnerProfileResponse, summary="Get the owner profile")
 def get_owner_profile(service: OwnerServiceDep) -> OwnerProfileResponse:
     """Return the live owner profile (seeded from settings on first use)."""
-    return _to_response(service.get_or_create())
+    return _to_response(service.get_or_create(), service)
 
 
 @router.get(
@@ -91,6 +95,46 @@ def get_sales_pricing_settings(service: OwnerServiceDep) -> SalesPricingSettings
     return service.sales_pricing_settings()
 
 
+@router.get(
+    "/modules",
+    response_model=ModuleSettingsResponse,
+    summary="List every module with its effective entitlement state",
+    description=(
+        "Per-owner module entitlements: every ModuleKey with its RESOLVED "
+        "enabled state (missing override row = enabled) and whether it is "
+        "essential (never disableable). Admin only."
+    ),
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+def list_module_settings(service: OwnerServiceDep) -> ModuleSettingsResponse:
+    """Return the effective entitlement state of every module (admin only)."""
+    return ModuleSettingsResponse(modules=service.module_settings())
+
+
+@router.patch(
+    "/modules/{module_key}",
+    response_model=ModuleSettingState,
+    summary="Enable or disable one module",
+    description=(
+        "Upsert the per-owner override for one toggleable module. Disabling "
+        "an essential module (auth, owner, health, dashboard) returns 422. "
+        "Admin only; every change is audited."
+    ),
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    responses={
+        403: {"description": "Caller is not an admin"},
+        422: {"description": "Unknown module key, or essential module"},
+    },
+)
+def update_module_setting(
+    module_key: ModuleKey,
+    body: ModuleSettingUpdate,
+    service: OwnerServiceDep,
+) -> ModuleSettingState:
+    """Enable/disable one module for the organisation (admin only)."""
+    return service.set_module_enabled(module_key, body.enabled)
+
+
 @router.put(
     "",
     response_model=OwnerProfileResponse,
@@ -102,7 +146,7 @@ def update_owner_profile(
     service: OwnerServiceDep,
 ) -> OwnerProfileResponse:
     """Update the live owner profile. Does not affect already-issued documents."""
-    return _to_response(service.update(body))
+    return _to_response(service.update(body), service)
 
 
 @router.put(
@@ -119,7 +163,7 @@ def upload_owner_logo(
     """Validate and store a logo, replacing any existing one."""
     mime_type = file.content_type or "application/octet-stream"
     profile = service.upload_logo(file.file, file.filename or "logo", mime_type)
-    return _to_response(profile)
+    return _to_response(profile, service)
 
 
 @router.delete(
@@ -130,7 +174,7 @@ def upload_owner_logo(
 )
 def remove_owner_logo(service: OwnerServiceDep) -> OwnerProfileResponse:
     """Remove the current logo."""
-    return _to_response(service.remove_logo())
+    return _to_response(service.remove_logo(), service)
 
 
 @router.get(

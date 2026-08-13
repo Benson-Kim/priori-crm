@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/auth-context";
+import { useEnabledModules } from "@/hooks/useModuleAccess";
 import { cn } from "@/lib/utils";
 import {
     ChevronDown,
@@ -6,12 +7,13 @@ import {
     LogOut,
     PanelLeftClose,
     PanelLeftOpen,
+    Settings,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
-import { navItems, type NavChild } from "./nav-items";
+import { visibleNavItems, type NavChild } from "./nav-items";
 
 /** localStorage key persisting the collapsed/expanded preference. */
 const COLLAPSED_STORAGE_KEY = "sidebar:collapsed";
@@ -51,6 +53,17 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const { logout, user } = useAuth();
+
+    // Per-owner module entitlements: hide nav entries for disabled modules
+    // (fail-open while the bootstrap loads). Groups whose children are all
+    // hidden disappear entirely.
+    const { enabledModules } = useEnabledModules();
+    const items = useMemo(
+        () => visibleNavItems(enabledModules),
+        [enabledModules]
+    );
+
+    const isAdmin = user?.role?.toLowerCase() === "admin";
 
     const isActive = (path: string) =>
         pathname === path || pathname.startsWith(path + "/");
@@ -130,7 +143,7 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                     </div>
 
                     <nav className="flex flex-col gap-2">
-                        {navItems.map((item) => {
+                        {items.map((item) => {
                             const Icon = item.icon;
 
                             if (!item.children) {
@@ -254,6 +267,23 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                 </div>
 
                 <div className="flex flex-col gap-1">
+                    {isAdmin && (
+                        <Link
+                            to="/settings/modules"
+                            aria-label="Module Settings"
+                            title={collapsed ? "Module Settings" : undefined}
+                            className={cn(
+                                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                                collapsed && "justify-center px-0",
+                                isActive("/settings/modules")
+                                    ? "bg-white text-priori-purple font-semibold"
+                                    : "text-gray-600 hover:bg-white/50"
+                            )}
+                        >
+                            <Settings size={18} />
+                            {!collapsed && "Module Settings"}
+                        </Link>
+                    )}
                     <Link
                         to="help"
                         aria-label="Help"

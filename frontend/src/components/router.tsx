@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoadingState } from "@/components/ui/LoadingState";
 import LoginPage from "@/pages/auth/login";
 import RequireAuth from "./auth/RequireAuth";
+import RequireModule from "./auth/RequireModule";
 import DefaultLayout from "./layout/default-layout";
 import SalesDeskLayout from "./layout/sales-desk-layout";
 
@@ -66,6 +67,7 @@ const routes = [
                     },
                     {
                         path: "customers",
+                        element: <RequireModule moduleKey="customers" />,
                         children: [
                             {
                                 index: true,
@@ -111,6 +113,7 @@ const routes = [
                     },
                     {
                         path: "quotes",
+                        element: <RequireModule moduleKey="quotes" />,
                         children: [
                             {
                                 index: true,
@@ -156,6 +159,7 @@ const routes = [
                     },
                     {
                         path: "invoices",
+                        element: <RequireModule moduleKey="invoices" />,
                         children: [
                             {
                                 index: true,
@@ -205,6 +209,7 @@ const routes = [
                     },
                     {
                         path: "vendors",
+                        element: <RequireModule moduleKey="vendors" />,
                         children: [
                             {
                                 index: true,
@@ -230,6 +235,7 @@ const routes = [
                     },
                     {
                         path: "expenses",
+                        element: <RequireModule moduleKey="expenses" />,
                         children: [
                             {
                                 index: true,
@@ -275,6 +281,7 @@ const routes = [
                     },
                     {
                         path: "purchase-orders",
+                        element: <RequireModule moduleKey="purchase_orders" />,
                         children: [
                             {
                                 index: true,
@@ -319,27 +326,35 @@ const routes = [
                         ],
                     },
                     {
-                        path: "income-statement",
-                        element: lazyPage(() => import("@/pages/statements/income-statement")),
-                        handle: {
-                            header: {
-                                title: "Income Statements",
-                                description: "Explore your business's net profit; your revenues and expenses in a given time period.",
+                        // Both statement pages share the single 'statements'
+                        // module key via one pathless layout guard.
+                        element: <RequireModule moduleKey="statements" />,
+                        children: [
+                            {
+                                path: "income-statement",
+                                element: lazyPage(() => import("@/pages/statements/income-statement")),
+                                handle: {
+                                    header: {
+                                        title: "Income Statements",
+                                        description: "Explore your business's net profit; your revenues and expenses in a given time period.",
+                                    },
+                                },
                             },
-                        },
-                    },
-                    {
-                        path: "cashflow",
-                        element: lazyPage(() => import("@/pages/statements/cashflow")),
-                        handle: {
-                            header: {
-                                title: "Cashflow",
-                                description: "Explore your business's cash position; money in and money out over a given time period.",
+                            {
+                                path: "cashflow",
+                                element: lazyPage(() => import("@/pages/statements/cashflow")),
+                                handle: {
+                                    header: {
+                                        title: "Cashflow",
+                                        description: "Explore your business's cash position; money in and money out over a given time period.",
+                                    },
+                                },
                             },
-                        },
+                        ],
                     },
                     {
                         path: "reports",
+                        element: <RequireModule moduleKey="reports" />,
                         children: [
                             {
                                 index: true,
@@ -384,6 +399,16 @@ const routes = [
                         ],
                     },
                     {
+                        path: "settings/modules",
+                        element: lazyPage(() => import("@/pages/settings/modules")),
+                        handle: {
+                            header: {
+                                title: "Module Settings",
+                                description: "Enable or disable application modules for your organisation.",
+                            },
+                        },
+                    },
+                    {
                         path: "statements",
                         children: [
                             {
@@ -410,8 +435,11 @@ const routes = [
              */
             {
                 path: "sales-desk",
-                element: <SalesDeskLayout />,
+                element: <RequireModule moduleKey="sales_desk" />,
                 children: [
+                    {
+                        element: <SalesDeskLayout />,
+                        children: [
                     {
                         index: true,
                         element: lazyPage(() => import("@/pages/sales-desk")),
@@ -541,6 +569,8 @@ const routes = [
                                 description: "Post-sale delivery checklists for won deals.",
                             },
                         },
+                    },
+                        ],
                     },
                 ],
             },

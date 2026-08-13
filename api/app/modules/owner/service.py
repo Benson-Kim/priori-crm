@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.uploads import validate_upload
-from app.constants.enums import DealStage
+from app.constants.enums import DealStage, ModuleKey
 from app.constants.settings_defaults import (
     DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
@@ -25,10 +25,12 @@ from app.lib.config import settings
 from app.lib.storage import StorageService, storage_service
 from app.modules.owner.models import (
     SINGLETON_PROFILE_ID,
+    OwnerModuleSetting,
     OwnerProfile,
     OwnerProfileSnapshot,
 )
 from app.modules.owner.schemas import (
+    ModuleSettingState,
     OnboardingTemplate,
     OwnerInfo,
     OwnerProfileUpdate,
@@ -174,6 +176,103 @@ class OwnerService:
         return OnboardingTemplate(
             tasks=list(profile.onboarding_task_template or DEFAULT_ONBOARDING_TASKS),
             version=profile.onboarding_template_version,
+        )
+
+    # Per-owner module entitlements (feature toggles)
+
+    def _module_overrides(self, profile: OwnerProfile) -> dict[str, bool]:
+        """Load the explicit per-module overrides for a profile."""
+        rows = (
+            self._db.query(OwnerModuleSetting)
+            .filter(OwnerModuleSetting.owner_profile_id == profile.id)
+            .all()
+        )
+        return {row.module_key: row.enabled for row in rows}
+
+    def module_settings(self) -> list[ModuleSettingState]:
+        """Effective state of EVERY module key (admin settings screen).
+
+        Missing override = enabled (default-on). Essential modules are
+        always enabled regardless of any (never-created) override row.
+        """
+        profile = self.get_or_create()
+        overrides = self._module_overrides(profile)
+        return [
+            ModuleSettingState(
+                module_key=key.value,
+                enabled=True if key.is_essential else overrides.get(key.value, True),
+                essential=key.is_essential,
+            )
+            for key in ModuleKey
+        ]
+
+    def enabled_modules_map(self) -> dict[str, bool]:
+        """module_key -> effective enabled state, for the bootstrap response."""
+        return {s.module_key: s.enabled for s in self.module_settings()}
+
+    def set_module_enabled(
+        self, module_key: ModuleKey, enabled: bool
+    ) -> ModuleSettingState:
+        """Upsert one module override (admin only; audited).
+
+        Disabling an essential module is a 422 — those are core
+        infrastructure (auth, owner, health, dashboard) and the router
+        gates deliberately do not exist for them.
+        """
+        from app.common.audit import record_audit_event
+        from app.common.exceptions import ValidationException
+
+        if module_key.is_essential and not enabled:
+            raise ValidationException(
+                detail=(
+                    f"The '{module_key.value}' module is essential and "
+                    "cannot be disabled."
+                ),
+                errors=[{"field": "module_key", "reason": "essential_module"}],
+            )
+
+        profile = self.get_or_create()
+        row = (
+            self._db.query(OwnerModuleSetting)
+            .filter(
+                OwnerModuleSetting.owner_profile_id == profile.id,
+                OwnerModuleSetting.module_key == module_key.value,
+            )
+            .first()
+        )
+        before_enabled = row.enabled if row is not None else True
+        actor_id = getattr(self._current_user, "id", None)
+
+        if row is None:
+            row = OwnerModuleSetting(
+                owner_profile_id=profile.id,
+                module_key=module_key.value,
+                enabled=enabled,
+                updated_by=actor_id,
+            )
+            self._db.add(row)
+        else:
+            row.enabled = enabled
+            row.updated_by = actor_id
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=actor_id,
+            entity_type="owner_module_setting",
+            entity_id=row.id,
+            action="module_enabled" if enabled else "module_disabled",
+            before={"module_key": module_key.value, "enabled": before_enabled},
+            after={"module_key": module_key.value, "enabled": enabled},
+        )
+        logger.info(
+            "Module entitlement changed",
+            extra={"module_key": module_key.value, "enabled": enabled},
+        )
+        return ModuleSettingState(
+            module_key=module_key.value,
+            enabled=enabled,
+            essential=module_key.is_essential,
         )
 
     # Snapshots (immutable)
