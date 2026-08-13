@@ -29,6 +29,56 @@ class UserRole(StrEnum):
 PRIVILEGED_ROLES: frozenset["UserRole"] = frozenset({UserRole.ADMIN, UserRole.MANAGER})
 
 
+class ModuleKey(StrEnum):
+    """Per-owner feature-toggleable application modules.
+
+    Each key identifies a functional module whose availability can be
+    switched on/off per owner profile via ``owner_module_settings``.
+    A missing settings row means the module is ENABLED (default-on).
+
+    Members listed in :data:`ESSENTIAL_MODULES` are core infrastructure
+    (auth, owner profile, health, dashboard) and can never be disabled —
+    their routers carry no module gate and the admin API rejects attempts
+    to disable them with a 422.
+    """
+
+    # Toggleable business modules
+    CUSTOMERS = "customers"
+    QUOTES = "quotes"
+    INVOICES = "invoices"
+    DEALS = "deals"
+    NURTURE = "nurture"
+    ONBOARDING = "onboarding"
+    VENDORS = "vendors"
+    EXPENSES = "expenses"
+    PURCHASE_ORDERS = "purchase_orders"
+    STATEMENTS = "statements"
+    REPORTS = "reports"
+
+    # Essential modules — never disableable, no router gate
+    AUTH = "auth"
+    OWNER = "owner"
+    HEALTH = "health"
+    DASHBOARD = "dashboard"
+
+    @property
+    def is_essential(self) -> bool:
+        """Whether this module is core infrastructure that cannot be disabled."""
+        return self in ESSENTIAL_MODULES
+
+
+#: Modules that can never be disabled. Their routers carry no
+#: require_module gate and PATCH /owner/modules rejects them with 422.
+ESSENTIAL_MODULES: frozenset["ModuleKey"] = frozenset(
+    {
+        ModuleKey.AUTH,
+        ModuleKey.OWNER,
+        ModuleKey.HEALTH,
+        ModuleKey.DASHBOARD,
+    }
+)
+
+
 class CustomerStatus(StrEnum):
     """Customer account status."""
 
