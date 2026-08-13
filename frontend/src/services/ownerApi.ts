@@ -7,7 +7,14 @@
  * The response type derives from the generated OpenAPI contract
  * (`@/lib/apiTypes`); the update body stays hand-written.
  */
-import { apiDelete, apiDownload, apiGet, apiPut, apiUploadPut } from "@/lib/api";
+import {
+  apiDelete,
+  apiDownload,
+  apiGet,
+  apiPatch,
+  apiPut,
+  apiUploadPut,
+} from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 
 // OwnerProfileResponse is serialized by alias, so the generated type is the
@@ -49,6 +56,28 @@ export function uploadOwnerLogo(file: File): Promise<OwnerProfile> {
 
 export function removeOwnerLogo(): Promise<OwnerProfile> {
   return apiDelete<OwnerProfile>("owner/logo");
+}
+
+// Per-owner module entitlements (feature toggles)
+
+// Effective state of one module: resolved enabled flag (missing override =
+// enabled) + whether the module is essential (never disableable).
+export type ModuleSettingState = Schema<"ModuleSettingState">;
+export type ModuleSettingsResponse = Schema<"ModuleSettingsResponse">;
+
+/** List every module with its effective entitlement state (admin only). */
+export function getModuleSettings(): Promise<ModuleSettingsResponse> {
+  return apiGet<ModuleSettingsResponse>("owner/modules");
+}
+
+/** Enable/disable one module for the organisation (admin only). */
+export function updateModuleSetting(
+  moduleKey: string,
+  enabled: boolean
+): Promise<ModuleSettingState> {
+  return apiPatch<ModuleSettingState>(`owner/modules/${moduleKey}`, {
+    enabled,
+  });
 }
 
 /**

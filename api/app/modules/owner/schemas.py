@@ -250,11 +250,44 @@ class OwnerProfileResponse(BaseModel):
     # True when a logo is set; the binary is served from a dedicated endpoint
     # so the JSON never carries a path.
     has_logo: bool = Field(False, alias="hasLogo")
+    # Per-owner module entitlements: module_key -> effective enabled state
+    # (missing owner_module_settings row = enabled). The UI bootstrap reads
+    # this map to hide nav entries and gate routes for disabled modules.
+    enabled_modules: dict[str, bool] = Field(
+        default_factory=dict, alias="enabledModules"
+    )
     updated_at: datetime | None = Field(None, alias="updatedAt")
     reporting_timezone: str = Field(alias="reportingTimezone")
     reporting_date: str = Field(alias="reportingDate")
 
     model_config = {"populate_by_name": True, "from_attributes": True}
+
+
+class ModuleSettingState(BaseModel):
+    """Effective entitlement state of one application module.
+
+    ``enabled`` is the RESOLVED state (explicit override, or the default-on
+    when no ``owner_module_settings`` row exists). ``essential`` marks core
+    modules that can never be disabled (the UI renders them locked).
+    """
+
+    module_key: str = Field(alias="moduleKey")
+    enabled: bool
+    essential: bool
+
+    model_config = {"populate_by_name": True}
+
+
+class ModuleSettingsResponse(BaseModel):
+    """Every module key with its effective state (GET /owner/modules)."""
+
+    modules: list[ModuleSettingState]
+
+
+class ModuleSettingUpdate(BaseModel):
+    """PATCH /owner/modules/{module_key} body."""
+
+    enabled: bool
 
 
 class OwnerInfo(BaseModel):
