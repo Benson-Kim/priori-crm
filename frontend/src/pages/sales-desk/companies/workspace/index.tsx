@@ -127,8 +127,9 @@ export default function SalesDeskCompaniesWorkspacePage() {
         [setSearchParams]
     );
 
-    const needsSyncCount = unsyncedCompanies.length;
+    const needsSyncCount = unsyncedTotal;
     const rows = tab === "needs_sync" ? unsyncedCompanies : allCompanies;
+    const rowsTotal = tab === "needs_sync" ? unsyncedTotal : allTotal;
 
     /** Push both profiles straight from the row, then re-read. */
     const syncRow = useCallback(
@@ -247,7 +248,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
                     <FilterTabs
                             variant="brand-outline"
                             tabs={[
-                                { key: "all", label: "All", count: allCompanies.length },
+                                { key: "all", label: "All", count: allTotal },
                                 {
                                     key: "needs_sync",
                                     label: "Needs sync",
