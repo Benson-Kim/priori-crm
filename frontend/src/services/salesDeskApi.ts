@@ -808,17 +808,22 @@ export interface CompanyQuery {
     /** Free-text match over name, industry, contact and tenant. */
     search?: string;
     /** Restrict to companies with an unsynced profile. */
-    needsSyncOnly?: boolean;
+    unsynced?: boolean;
 }
 
-/** The companies directory, newest registration first. */
+/**
+ * The companies directory, newest registration first.
+ *
+ * TODO(#43/#45-wiring): pass ?unsynced=true to the server instead of
+ * filtering the store.
+ */
 export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyRow[]> {
     const term = query.search?.trim().toLowerCase();
 
     return [...getCompanies()]
         .sort((a, b) => a.registeredDaysAgo - b.registeredDaysAgo)
         .map(toCompanyRow)
-        .filter((row) => (query.needsSyncOnly ? row.needs_sync : true))
+        .filter((row) => (query.unsynced ? row.needs_sync : true))
         .filter((row) =>
             term
                 ? `${row.name} ${row.industry} ${row.contact} ${row.tenant ?? ""}`
