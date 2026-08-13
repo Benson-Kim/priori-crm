@@ -57,7 +57,9 @@ def test_filename_hash_matches_revision_id() -> None:
         dated = _DATED_NAME.match(path.name)
         named = dated.group(1) if dated else path.stem
         if named != revision:
-            mismatches.append(f"{path.name}: filename says {named!r}, revision is {revision!r}")
+            mismatches.append(
+                f"{path.name}: filename says {named!r}, revision is {revision!r}"
+            )
     assert not mismatches, (
         "Version filename hash segment must equal the file's revision id "
         "(#55):\n" + "\n".join(mismatches)
