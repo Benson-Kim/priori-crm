@@ -40,6 +40,7 @@ import {
     priceQuote,
     pushQuoteToAccounting,
     saveQuote,
+    taxTreatmentLabel,
     type BillingCurrency,
     type BillingPeriod,
     type PipelineDeal,
@@ -374,7 +375,8 @@ export default function SalesDeskQuoteBuilderPage() {
                                 <span className="font-mono font-bold text-sd-ink">
                                     {priced.profile.code}
                                 </span>{" "}
-                                · {priced.profile.terms} · {priced.profile.tax} ·
+                                · {priced.profile.terms} ·{" "}
+                                {taxTreatmentLabel(priced.profile.tax)} ·
                                 <SyncPill
                                     synced={priced.profile.synced}
                                     className="text-[11px]"

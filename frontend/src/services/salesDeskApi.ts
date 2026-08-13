@@ -53,7 +53,8 @@ export {
     LOST_REASONS,
     PAYMENT_TERMS,
     TAX_TREATMENTS,
-    WON_REASONS
+    WON_REASONS,
+    taxTreatmentLabel
 } from "./salesDeskVocabulary";
 export type { BillingCurrency, DealStage, DealStatus } from "./salesDeskVocabulary";
 

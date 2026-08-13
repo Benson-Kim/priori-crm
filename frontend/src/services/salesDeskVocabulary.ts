@@ -71,6 +71,16 @@ export const PAYMENT_TERMS = [
 export const TAX_TREATMENTS = ["Zero-rated (export)", "VAT 16%", "Exempt"] as const;
 
 /**
+ * Display mapping for tax treatments (#53 item 3): the backend enum keeps
+ * `Zero-rated (export)`; the drawers render it as `VAT 0%` per the design
+ * (`Define_design_guidelines__1_.svg`). Display only — the wire value sent
+ * back to the API is always the enum member itself.
+ */
+export function taxTreatmentLabel(tax: string): string {
+    return tax === "Zero-rated (export)" ? "VAT 0%" : tax;
+}
+
+/**
  * The industry vocabulary, which must stay identical to the server's
  * `Industry` enum (and the IN-list in migration d5e6f7a8b9c0), because the
  * customers API rejects anything outside it.

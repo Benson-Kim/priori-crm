@@ -152,7 +152,9 @@ const COMPANY_COLUMNS: Column<RecentCompany>[] = [
         header: "Registered",
         className: CELL_CLASS,
         render: (company) => (
-            <span className="text-xs text-sd-muted">{formatDate(company.registered_on)}</span>
+            <span className="text-xs text-sd-muted">
+                {formatDate(company.registered_on, "table")}
+            </span>
         ),
     },
 ];

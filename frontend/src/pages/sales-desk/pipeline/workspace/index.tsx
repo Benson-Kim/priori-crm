@@ -269,7 +269,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                         </p>
                         <p className="pt-1 text-[11px] text-sd-muted">
                             {deal.latest_record.stage} ·{" "}
-                            {formatDate(deal.latest_record.logged_on)}
+                            {formatDate(deal.latest_record.logged_on, "table")}
                         </p>
                     </>
                 ),

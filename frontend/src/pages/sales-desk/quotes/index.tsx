@@ -147,7 +147,7 @@ export default function SalesDeskQuotesPage() {
                 header: "Date",
                 className: CELL_CLASS,
                 render: (quote) => (
-                    <span className="text-sd-muted">{formatDate(quote.issued_on)}</span>
+                    <span className="text-sd-muted">{formatDate(quote.issued_on, "table")}</span>
                 ),
             },
             {

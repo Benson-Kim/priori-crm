@@ -19,6 +19,7 @@ import {
     LOST_REASONS,
     WON_REASONS,
     formatDeskMoneyCompact,
+    taxTreatmentLabel,
     type DealDetail,
     type DealRecord,
 } from "@/services/salesDeskApi";
@@ -170,7 +171,7 @@ export function DealDrawer({
                 <p className="flex flex-wrap items-center gap-x-1 text-[11px] text-sd-muted">
                     Billing to{" "}
                     <span className="font-mono font-semibold text-sd-ink">{profile.code}</span> ·{" "}
-                    {profile.terms} · {profile.tax} ·
+                    {profile.terms} · {taxTreatmentLabel(profile.tax)} ·
                     <SyncPill synced={profile.synced} className="text-[11px]" />
                 </p>
             </DrawerSection>
@@ -212,7 +213,7 @@ export function DealDrawer({
                             {shownRecord.stage}
                         </span>
                         <span className="text-[11px] text-sd-muted">
-                            {formatDate(shownRecord.logged_on)}
+                            {formatDate(shownRecord.logged_on, "table")}
                         </span>
                     </div>
                     <p className="pt-1 text-xs leading-relaxed text-sd-ink">{shownRecord.note}</p>

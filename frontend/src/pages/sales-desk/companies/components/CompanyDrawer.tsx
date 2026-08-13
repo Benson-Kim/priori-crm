@@ -23,6 +23,7 @@ import {
     PAYMENT_TERMS,
     TAX_TREATMENTS,
     formatDeskMoneyCompact,
+    taxTreatmentLabel,
     type BillingCurrency,
     type CompanyDetail,
     type CompanyDealSummary,
@@ -252,7 +253,12 @@ export function CompanyDrawer({
                         value={profile.tax}
                         disabled={isSaving}
                         onChange={(tax) => void run(() => onEditProfile(currency, { tax }))}
-                        options={TAX_TREATMENTS.map((tax) => ({ value: tax, label: tax }))}
+                        options={TAX_TREATMENTS.map((tax) => ({
+                            value: tax,
+                            // #53 item 3: "Zero-rated (export)" displays as
+                            // "VAT 0%"; the wire value stays the enum member.
+                            label: taxTreatmentLabel(tax),
+                        }))}
                     />
 
                     <div>
