@@ -135,7 +135,7 @@ export default function SalesDeskCompaniesPage() {
                 className: CELL_CLASS,
                 render: (company) => (
                     <span className="flex items-center gap-1.5">
-                        <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-semibold text-priori-purple">
+                        <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-semibold text-sd-brand">
                             {company.total_deal_count} total
                         </span>
                         {company.open_deal_count > 0 && (

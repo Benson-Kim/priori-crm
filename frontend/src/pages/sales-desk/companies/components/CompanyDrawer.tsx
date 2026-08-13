@@ -200,7 +200,7 @@ export function CompanyDrawer({
                                 className={cn(
                                     "flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
                                     isActive
-                                        ? "bg-priori-purple text-white"
+                                        ? "bg-sd-brand text-white"
                                         : "border border-sd-border text-sd-ink hover:bg-sd-surface"
                                 )}
                             >
@@ -226,7 +226,7 @@ export function CompanyDrawer({
                             {profile.code}
                         </span>
                         {profile.is_default && (
-                            <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-[10px] font-semibold text-priori-purple">
+                            <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-[10px] font-semibold text-sd-brand">
                                 Default
                             </span>
                         )}
