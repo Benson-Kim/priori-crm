@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Model registry bootstrap
@@ -36,6 +36,7 @@ from app.common.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.common.otel import setup_metrics, shutdown_metrics
+from app.constants.enums import ModuleKey
 from app.lib.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
