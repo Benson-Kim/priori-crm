@@ -1016,6 +1016,9 @@ export interface FuturePipelineSummary {
     currency: BillingCurrency;
 }
 
+// TODO(#45-wiring): the server's `due_state` and ISO dates are authoritative
+// once GET /sales-desk/prospects ships; this urgency/days-until computation
+// is a fixture-only stand-in and must not survive the real wiring (#48).
 const urgencyOf = (daysUntil: number): ProspectUrgency =>
     daysUntil < 0 ? "overdue" : daysUntil === 0 ? "today" : "scheduled";
 
@@ -1045,14 +1048,21 @@ function toProspectRow(
     };
 }
 
+/** Prospects owned by `ownerId`, or every prospect when no owner is given. */
+const prospectsScopedTo = (ownerId?: string) =>
+    ownerId
+        ? getProspectRecords().filter((prospect) => prospect.owner === ownerId)
+        : getProspectRecords();
+
 /** Nurtured prospects, soonest engage-by date first. */
 export async function getProspects(
     search?: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
+    ownerId?: string
 ): Promise<ProspectRow[]> {
     const term = search?.trim().toLowerCase();
 
-    return [...getProspectRecords()]
+    return [...prospectsScopedTo(ownerId)]
         .sort((a, b) => a.engageInDays - b.engageInDays)
         .map((prospect) => toProspectRow(prospect, currency))
         .filter((row) =>
@@ -1064,9 +1074,10 @@ export async function getProspects(
 
 /** Headline counts for the future pipeline. */
 export async function getFuturePipelineSummary(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
+    ownerId?: string
 ): Promise<FuturePipelineSummary> {
-    const prospects = getProspectRecords();
+    const prospects = prospectsScopedTo(ownerId);
     return {
         prospect_count: prospects.length,
         due_count: prospects.filter((prospect) => prospect.engageInDays <= 0).length,
@@ -1121,46 +1132,86 @@ export async function addProspect(input: NewProspectInput): Promise<ProspectRow>
 }
 
 /**
+ * Thrown by `engageProspect` when a company with the prospect's name is
+ * already on the book. Mirrors the backend's 409 response so the swap to the
+ * real endpoint is body-only: the caller resolves it by re-invoking with the
+ * existing customer's id, or by cancelling the engage.
+ */
+export class DuplicateCustomerError extends Error {
+    readonly companyName: string;
+    readonly existingCustomerId: number;
+
+    constructor(companyName: string, existingCustomerId: number) {
+        super(`A customer named "${companyName}" already exists.`);
+        this.name = "DuplicateCustomerError";
+        this.companyName = companyName;
+        this.existingCustomerId = existingCustomerId;
+    }
+}
+
+/**
  * Promote a prospect into the live pipeline: register the company and open a
  * deal at Activation carrying the nurture note, then drop the prospect.
  *
  * The company is created with only what the prospect record knows; the rest
  * is filled in on the Companies screen, where the new record shows up needing
  * both profiles pushed. Returns the new deal id so the caller can open it.
+ *
+ * When a company with the prospect's name (case-insensitive, trimmed) is
+ * already registered, throws `DuplicateCustomerError` instead of creating a
+ * second record. Passing that customer's id as `customerId` links the deal
+ * to the existing company instead, and the deal bills in that company's
+ * primary billing currency.
  */
-export async function engageProspect(prospectId: number): Promise<{ dealId: number }> {
+export async function engageProspect(
+    prospectId: number,
+    customerId?: number
+): Promise<{ dealId: number }> {
     const prospect = findProspect(prospectId);
     if (!prospect) throw new Error(`Prospect ${prospectId} not found`);
 
-    const prefix = uniqueCodePrefix(prospect.company);
-    const company = addCompany({
-        id: allocateId(),
-        owner: prospect.owner,
-        name: prospect.company,
-        industry: "Other",
-        contact: prospect.contact,
-        email: "",
-        phone: "",
-        tenant: null,
-        primaryCurrency: "KES",
-        registeredDaysAgo: 0,
-        profiles: {
-            USD: {
-                code: `${prefix}-USD`,
-                terms: "30 days",
-                tax: "Zero-rated (export)",
-                creditLimit: 25_000,
-                synced: false,
+    let company: SeedCompany;
+    if (customerId !== undefined) {
+        const existing = findCompany(customerId);
+        if (!existing) throw new Error(`Company ${customerId} not found`);
+        company = existing;
+    } else {
+        const wanted = prospect.company.trim().toLowerCase();
+        const duplicate = getCompanies().find(
+            (candidate) => candidate.name.trim().toLowerCase() === wanted
+        );
+        if (duplicate) throw new DuplicateCustomerError(duplicate.name, duplicate.id);
+
+        const prefix = uniqueCodePrefix(prospect.company);
+        company = addCompany({
+            id: allocateId(),
+            owner: prospect.owner,
+            name: prospect.company,
+            industry: "Other",
+            contact: prospect.contact,
+            email: "",
+            phone: "",
+            tenant: null,
+            primaryCurrency: "KES",
+            registeredDaysAgo: 0,
+            profiles: {
+                USD: {
+                    code: `${prefix}-USD`,
+                    terms: "30 days",
+                    tax: "Zero-rated (export)",
+                    creditLimit: 25_000,
+                    synced: false,
+                },
+                KES: {
+                    code: `${prefix}-KES`,
+                    terms: "14 days",
+                    tax: "VAT 16%",
+                    creditLimit: 1_300_000,
+                    synced: false,
+                },
             },
-            KES: {
-                code: `${prefix}-KES`,
-                terms: "14 days",
-                tax: "VAT 16%",
-                creditLimit: 1_300_000,
-                synced: false,
-            },
-        },
-    });
+        });
+    }
 
     const deal = addDeal({
         id: allocateId(),
@@ -1169,7 +1220,7 @@ export async function engageProspect(prospectId: number): Promise<{ dealId: numb
         product: "To be scoped",
         seats: 0,
         valueUSD: prospect.estimatedValueUSD,
-        currency: "KES",
+        currency: company.primaryCurrency,
         stage: 0,
         status: "open",
         history: [

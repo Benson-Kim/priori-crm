@@ -8,8 +8,8 @@
  */
 
 import { CalendarDays, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -24,6 +24,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { AddProspectDialog } from "./components/AddProspectDialog";
 import { DueBadge } from "./components/DueBadge";
+import { SuccessNotice } from "./components/SuccessNotice";
 
 /*
  * The whole card links through to the prospect table, matching how a row opens
@@ -72,17 +73,28 @@ function ProspectCard({ prospect }: Readonly<{ prospect: ProspectRow }>) {
 }
 
 export default function SalesDeskFuturePipelinePage() {
+    // ?rep= scopes both the cards and the summary line to one owner, the
+    // same URL-driven mechanism the pipeline workspace uses for ?deal=.
+    const [searchParams] = useSearchParams();
+    const repFilter = searchParams.get("rep") ?? undefined;
+
     const [prospects, setProspects] = useState<ProspectRow[]>([]);
     const [summary, setSummary] = useState<FuturePipelineSummary | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
+
+    const dismissNotice = useCallback(() => setNotice(null), []);
 
     useEffect(() => {
         let active = true;
 
-        Promise.all([getProspects(), getFuturePipelineSummary()])
+        Promise.all([
+            getProspects(undefined, undefined, repFilter),
+            getFuturePipelineSummary(undefined, repFilter),
+        ])
             .then(([rows, next]) => {
                 if (!active) return;
                 setProspects(rows);
@@ -102,7 +114,7 @@ export default function SalesDeskFuturePipelinePage() {
         return () => {
             active = false;
         };
-    }, [revision]);
+    }, [repFilter, revision]);
 
     return (
         <div className="flex flex-col gap-5">
@@ -135,6 +147,8 @@ export default function SalesDeskFuturePipelinePage() {
                 </div>
             )}
 
+            {notice && <SuccessNotice message={notice} onDismiss={dismissNotice} />}
+
             {isLoading ? (
                 <LoadingState message="Loading the nurture list..." className="h-64" />
             ) : prospects.length === 0 ? (
@@ -154,6 +168,7 @@ export default function SalesDeskFuturePipelinePage() {
                 onClose={() => setIsCreating(false)}
                 onCreated={() => {
                     setIsCreating(false);
+                    setNotice("Planned deal added — you'll be notified when it's due");
                     setRevision((value) => value + 1);
                 }}
             />
