@@ -12,14 +12,22 @@ import { Link, NavLink } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/hooks/auth-context";
-import { useSalesDeskBadges } from "@/hooks/useSalesDeskBadges";
+import type { SalesDeskBadges } from "@/hooks/useSalesDeskBadges";
 import { cn } from "@/lib/utils";
 import { salesDeskNavItems } from "./sales-desk-nav-items";
 
 /** Initials for the footer avatar, falling back to the design's placeholder. */
-export function SalesDeskSidebar() {
+export function SalesDeskSidebar({
+    badges = {},
+}: Readonly<{
+    /**
+     * Badge counts keyed by nav path — prop-driven from the layout so the
+     * sidebar and the header bell read the same notifications payload and
+     * can never disagree (#45/#52).
+     */
+    badges?: SalesDeskBadges;
+}>) {
     const { user } = useAuth();
-    const badges = useSalesDeskBadges();
 
     const fullName = user ? `${user.first_name} ${user.last_name}` : "Frank Mueke";
     const role = user?.role ? `${user.role[0].toUpperCase()}${user.role.slice(1)}` : "Senior Admin";

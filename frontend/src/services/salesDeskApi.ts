@@ -964,6 +964,28 @@ export async function getFuturePipelineSummary(
     };
 }
 
+/**
+ * The notification bell total plus the grouped counts feeding the sidebar
+ * badges. One server payload backs both, so the bell can never disagree with
+ * the badges it summarises (#45: total is ALWAYS the sum of the groups).
+ */
+export interface SalesDeskNotifications {
+    total: number;
+    companies_unsynced: number;
+    future_pipeline_due: number;
+    upcoming: number;
+    stale_deals: number;
+}
+
+/** Bell + sidebar badge counts, optionally scoped to one owner. */
+export async function getSalesDeskNotifications(
+    ownerId?: string
+): Promise<SalesDeskNotifications> {
+    return apiGet<Schema<"SalesDeskNotificationsResponse">>("/sales-desk/notifications", {
+        owner: ownerId,
+    });
+}
+
 /** Fields collected when planning a prospect. */
 export interface NewProspectInput {
     company: string;

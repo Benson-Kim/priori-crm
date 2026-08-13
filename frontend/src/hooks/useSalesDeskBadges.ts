@@ -1,44 +1,58 @@
 /**
- * Counts for the Sales Desk nav badges.
+ * Counts for the Sales Desk nav badges and the header bell.
  *
- * Companies and Future pipeline each carry a queue rather than a total:
- * profiles waiting to reach accounting, and prospects whose engage-by date has
- * arrived. A zero renders nothing rather than a "0".
+ * All of them come from ONE server payload (`GET /sales-desk/notifications`,
+ * #45): the bell shows the total and the sidebar shows the groups it sums —
+ * companies with profiles waiting to reach accounting, and future-pipeline
+ * items whose date has arrived. Reading both from the same payload is what
+ * keeps the bell from ever disagreeing with the badges it summarises.
+ * A zero renders nothing rather than a "0".
  *
- * Keyed by nav path so the sidebar stays a declarative list and never has to
- * know what any particular count means.
+ * Badges are keyed by nav path so the sidebar stays a declarative list and
+ * never has to know what any particular count means.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import {
-    getCompanyList,
-    getFuturePipelineSummary,
+    getSalesDeskNotifications,
     subscribeToDeskChanges,
 } from "@/services/salesDeskApi";
 
 export type SalesDeskBadges = Record<string, number>;
 
-export function useSalesDeskBadges(): SalesDeskBadges {
+export interface SalesDeskBadgeState {
+    /** Sidebar badge counts, keyed by nav path. */
+    badges: SalesDeskBadges;
+    /** Header bell count: the server-computed sum of the badge groups. */
+    notificationTotal: number;
+}
+
+const EMPTY: SalesDeskBadgeState = { badges: {}, notificationTotal: 0 };
+
+export function useSalesDeskBadges(): SalesDeskBadgeState {
     const { pathname } = useLocation();
-    const [badges, setBadges] = useState<SalesDeskBadges>({});
+    const [state, setState] = useState<SalesDeskBadgeState>(EMPTY);
 
     const read = useCallback(() => {
         let active = true;
 
-        Promise.all([getCompanyList(), getFuturePipelineSummary()])
-            .then(([companies, future]) => {
+        getSalesDeskNotifications()
+            .then((counts) => {
                 if (!active) return;
-                setBadges({
-                    "/sales-desk/companies": companies.filter((c) => c.needs_sync).length,
-                    "/sales-desk/future-pipeline": future.due_count,
+                setState({
+                    badges: {
+                        "/sales-desk/companies": counts.companies_unsynced,
+                        "/sales-desk/future-pipeline": counts.future_pipeline_due,
+                    },
+                    notificationTotal: counts.total,
                 });
             })
             .catch(() => {
                 // A badge is decoration; failing to read one must never take
                 // the navigation down with it.
-                if (active) setBadges({});
+                if (active) setState(EMPTY);
             });
 
         return () => {
@@ -57,5 +71,5 @@ export function useSalesDeskBadges(): SalesDeskBadges {
 
     useEffect(() => subscribeToDeskChanges(read), [read]);
 
-    return badges;
+    return state;
 }
