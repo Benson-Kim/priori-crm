@@ -42,6 +42,10 @@ export function createSearchParams(
 export const wait = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Pluralise a count against its noun: "1 deal", "4 deals". */
+export const plural = (count: number, noun: string) =>
+  `${count} ${noun}${count === 1 ? "" : "s"}`;
+
 export const getNameInitials = (name: string) => {
   return name
     .split(" ")

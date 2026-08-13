@@ -6,13 +6,14 @@
  * prospect needs to be actionable later.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { InlineSelect } from "@/components/ui/InlineSelect";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { addProspect, getSalesReps } from "@/services/salesDeskApi";
+import { addProspect } from "@/services/salesDeskApi";
+import { useSalesReps } from "@/hooks/useSalesReps";
 
 interface AddProspectDialogProps {
     isOpen: boolean;
@@ -32,7 +33,7 @@ export function AddProspectDialog({
     onClose,
     onCreated,
 }: Readonly<AddProspectDialogProps>) {
-    const reps = getSalesReps();
+    const { reps } = useSalesReps();
 
     const emptyForm = () => ({
         company: "",
@@ -46,6 +47,13 @@ export function AddProspectDialog({
     const [form, setForm] = useState(emptyForm);
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // The roster arrives after first paint, so the default owner is applied
+    // when it lands rather than read during render.
+    useEffect(() => {
+        const first = reps[0]?.id;
+        if (first) setForm((previous) => (previous.ownerId ? previous : { ...previous, ownerId: first }));
+    }, [reps]);
 
     const set = <K extends keyof ReturnType<typeof emptyForm>>(
         key: K,
@@ -67,7 +75,7 @@ export function AddProspectDialog({
                 contact: form.contact,
                 note: form.note,
                 engageOn: form.engageOn,
-                estimatedArrUSD: Number(form.estimatedArr || 0),
+                estimatedArr: Number(form.estimatedArr || 0),
                 ownerId: form.ownerId,
             });
             setForm(emptyForm());

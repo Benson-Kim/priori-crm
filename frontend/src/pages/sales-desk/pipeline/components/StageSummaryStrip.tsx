@@ -45,7 +45,7 @@ export function StageSummaryStrip({ overview }: Readonly<StageSummaryStripProps>
                     )}`}
                     caption={
                         column.deal_count
-                            ? `avg ${column.average_age_days}d in stage list`
+                            ? `avg ${column.average_age_days}d in stage`
                             : "no deals here"
                     }
                 />

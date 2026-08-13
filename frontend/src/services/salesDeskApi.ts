@@ -1,91 +1,104 @@
 /**
  * Sales Desk API service.
  *
- * Backs the Sales Desk dashboard and pipeline. The backend module does not
- * exist yet, so every function resolves against the in-memory store in
- * `salesDeskStore.ts` (seeded from `salesDeskSeed.ts`) instead of `apiGet`.
+ * Backs the Sales Desk screens. Every function here is on the wire: it calls a
+ * server route through `apiGet`/`apiPost`/`apiPatch` and is typed from the
+ * generated contract. The fixtures the screens were built against are gone;
+ * what remains of them is `salesDeskVocabulary.ts`, the display lists (stage
+ * names, industries, closing reasons, currency symbols) transcribed from the
+ * server's enums rather than invented here.
  *
- * The signatures follow the shape the other services use
- * (`dashboardApi.ts`, `reportsApi.ts`): async, currency-parameterised, and
- * returning flat snake_case response objects. When `GET/POST /sales-desk/*`
- * ships, each body swaps to an `apiGet`/`apiPost` call and the response types
- * move to `Schema<"...">` without any caller changes.
+ * The desk's own routes live under `/sales-desk`; the rest of it is a view
+ * over modules that already existed, which is why there is no parallel deal,
+ * customer or quote entity: the pipeline is `/deals`, companies are
+ * `/customers`, the future pipeline is `/nurture`, and quotes are the quotes
+ * module reached through `/deals/{id}/quotes`.
  *
- * Amounts are returned already converted into the requested currency; the
- * fixtures hold USD, which is the desk's base currency.
+ * Server ids are UUID strings, so every id in the view types below is a
+ * `string`.
+ *
+ * Amounts are the server's, in the currency it priced them in. Nothing is
+ * converted, discounted or totalled on this side: `money()` only parses the
+ * decimal strings the API sends.
+ *
+ * The view types below are the screens' contract and stayed stable through the
+ * migration, so wiring a function changed its body and not its callers.
  */
 
+import { avatarColor } from "@/components/ui/avatar-utils";
+import { apiDownload, apiGet, apiPatch, apiPost } from "@/lib/api";
+import type { Schema } from "@/lib/apiTypes";
+import type { PaginatedApiResponse } from "@/lib/types";
 import {
-    ANNUAL_DISCOUNT,
     BILLING_CURRENCIES,
     CURRENCY_SYMBOLS,
     DEAL_STAGES,
-    FX_RATES,
-    ONBOARDING_TASKS,
-    PRODUCTS,
-    QUOTE_CURRENCIES,
-    SEED_BOOKINGS,
-    SEED_REPS,
-    STAGE_PROBABILITY,
-    companyCodePrefix,
     type BillingCurrency,
     type DealStage,
     type DealStatus,
     type QuoteCurrency,
     type QuoteStatus,
-    type SeedBillingProfile,
-    type SeedCompany,
-    type SeedDeal,
-    type SeedOnboarding,
-    type SeedProspect,
-} from "./salesDeskSeed";
+} from "./salesDeskVocabulary";
 
 export {
-    ANNUAL_DISCOUNT,
     BILLING_CURRENCIES,
-    PRODUCTS,
     QUOTE_CURRENCIES,
-    REFERENCE_CURRENCIES,
-} from "./salesDeskSeed";
-export type { QuoteCurrency, QuoteStatus } from "./salesDeskSeed";
-import {
-    addCompany,
-    addDeal,
-    addProspect as addProspectRecord,
-    addQuote,
-    allocateId,
-    appendRecord,
-    findCompany,
-    findDeal,
-    findProspect,
-    getCompanies,
-    subscribeToStore,
-    getDeals,
-    getOnboarding as getOnboardingRecords,
-    getProspects as getProspectRecords,
-    getQuotes as getQuoteRecords,
-    moveToNurture,
-    patchBillingProfile,
-    patchDeal,
-    patchQuote,
-    removeProspect,
-    setOnboardingTask as setOnboardingTaskRecord,
-} from "./salesDeskStore";
+    REFERENCE_CURRENCIES
+} from "./salesDeskVocabulary";
+export type { QuoteCurrency, QuoteStatus } from "./salesDeskVocabulary";
 
-export type { BillingCurrency, DealStage, DealStatus } from "./salesDeskSeed";
 export {
     DEAL_STAGES,
     INDUSTRIES,
     LOST_REASONS,
     PAYMENT_TERMS,
     TAX_TREATMENTS,
-    WON_REASONS,
-} from "./salesDeskSeed";
+    WON_REASONS
+} from "./salesDeskVocabulary";
+export type { BillingCurrency, DealStage, DealStatus } from "./salesDeskVocabulary";
 
 export const DEFAULT_DESK_CURRENCY: BillingCurrency = "USD";
 
 /** A deal is stale once this many days pass with no logged activity. */
 export const STALE_AFTER_DAYS = 30;
+
+/**
+ * Desk lists are working sets a rep scans in one go rather than pages through,
+ * so they are read whole. 100 is the paginated endpoints' own per-page ceiling;
+ * asking for more is a 422, not a bigger page.
+ */
+const LIST_PAGE_SIZE = 100;
+
+/**
+ * The desk's companies endpoint answers in one shot rather than in pages, and
+ * caps a request at 500 rows. The directory is read whole, so it asks for the
+ * ceiling.
+ */
+const COMPANY_LIMIT = 500;
+
+/**
+ * Read every page of a list endpoint.
+ *
+ * The desk shows whole lists, and the server caps a page at LIST_PAGE_SIZE, so
+ * anything past the first page has to be followed rather than requested in one
+ * go. Otherwise a book of more than a hundred deals would quietly show its
+ * first hundred.
+ */
+async function apiGetAll<T>(
+    path: string,
+    params: Record<string, string | number | boolean | undefined | null> = {}
+): Promise<T[]> {
+    const rows: T[] = [];
+    for (let page = 1; ; page++) {
+        const response = await apiGet<PaginatedApiResponse<T>>(path, {
+            ...params,
+            page,
+            per_page: LIST_PAGE_SIZE,
+        });
+        rows.push(...response.items);
+        if (!response.metadata.has_next) return rows;
+    }
+}
 
 // Response contracts. These mirror the shapes the future endpoints return.
 
@@ -117,21 +130,22 @@ export interface BookingsPoint {
     lost: number;
 }
 
-/** One rep's weighted pipeline measured against their quarter quota. */
+/** One rep's closed-won total measured against their quarter quota. */
 export interface RepQuotaLine {
     id: string;
     name: string;
     initials: string;
     color: string;
-    weighted_pipeline: number;
+    /** Closed-won in the period. Attainment is measured on won, not forecast. */
+    won_value: number;
     quarter_target: number;
-    /** Weighted pipeline as a share of quota, 0 to 1. May exceed 1. */
+    /** Won as a share of quota, 0 to 1. May exceed 1 when a rep beats quota. */
     attainment: number;
 }
 
 /** A recently registered company, newest first. */
 export interface RecentCompany {
-    id: number;
+    id: string;
     name: string;
     industry: string;
     contact: string;
@@ -150,10 +164,9 @@ export interface DealRecord {
 
 /** A pipeline row. Amounts are in the requested display currency. */
 export interface PipelineDeal {
-    id: number;
-    company_id: number;
+    id: string;
+    company_id: string;
     company_name: string;
-    contact: string;
     product: string;
     seats: number;
     /** Annual contract value, converted to the display currency. */
@@ -244,133 +257,62 @@ export interface BillingProfile {
     synced: boolean;
 }
 
-// Fixture helpers. All of this moves server-side with the real API.
-
-const convert = (usd: number, currency: BillingCurrency) => usd * FX_RATES[currency];
-
-/** Weighted value of an open deal: value × the probability of its stage. */
-const weightedValue = (deal: SeedDeal) =>
-    deal.valueUSD * (STAGE_PROBABILITY[deal.stage] ?? 0);
-
-const isOpen = (deal: SeedDeal) => deal.status === "open";
-
-const sum = <T,>(items: T[], value: (item: T) => number) =>
-    items.reduce((total, item) => total + value(item), 0);
-
-/** Days since the deal's first record, how long it has been in the pipeline. */
-const ageDays = (deal: SeedDeal) => deal.history[0]?.daysAgo ?? 0;
-
-/** Days since the most recent record, how long it has been sitting quiet. */
-const idleDays = (deal: SeedDeal) => deal.history[deal.history.length - 1]?.daysAgo ?? 0;
-
-/** ISO date `days` before today, in local time. */
-function isoDaysAgo(days: number): string {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-        date.getDate()
-    ).padStart(2, "0")}`;
-}
-
-const initialsOf = (name: string) =>
-    name
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-
-const repById = (id: string) => SEED_REPS.find((rep) => rep.id === id);
-
-/** Won as a share of closed deals, or null when nothing has closed yet. */
-function winRateOf(deals: SeedDeal[]): number | null {
-    const closed = deals.filter((deal) => !isOpen(deal));
-    if (closed.length === 0) return null;
-    return closed.filter((deal) => deal.status === "won").length / closed.length;
-}
-
-/** Human label for a deal's position: its stage, or its closing outcome. */
-function stageLabelOf(deal: SeedDeal): string {
-    if (deal.status === "won") return "Won";
-    if (deal.status === "lost") return "Lost";
-    return DEAL_STAGES[deal.stage] ?? DEAL_STAGES[0];
-}
-
 /**
- * The furthest stage a deal actually recorded.
- *
- * A closed deal's `stage` is a sentinel past the end of the list, so it cannot
- * say how far the deal got: the seeded lost deal is stored at 4 but never
- * reached Negotiation. The history is the honest answer, and it is what the
- * progress bar must draw, otherwise a deal that died at Proposal & Quote
- * appears to have negotiated.
+ * The server numbers stages from one ("Stage 1 of 5" as a rep says it); the
+ * stage path draws segments, so it counts from zero. Converting here keeps the
+ * off-by-one in one place rather than in every component that draws a bar.
  */
-function reachedStageIndex(deal: SeedDeal): number {
-    let reached = 0;
-    deal.history.forEach((record) => {
-        const index = DEAL_STAGES.indexOf(record.stage as (typeof DEAL_STAGES)[number]);
-        if (index > reached) reached = index;
-    });
-    return reached;
+const toStageIndex = (serverIndex: number) => Math.max(0, serverIndex - 1);
+
+function toDealRecord(record: Schema<"DealActivityResponse">): DealRecord {
+    return {
+        stage: record.stage_label,
+        note: record.note,
+        logged_on: record.activity_date,
+    };
 }
 
-/** Index the UI should draw: the live stage while open, the furthest once closed. */
-function stageIndexOf(deal: SeedDeal): number {
-    return isOpen(deal) ? deal.stage : reachedStageIndex(deal);
-}
-
-function toDealRecord(record: { stage: string; note: string; daysAgo: number }): DealRecord {
-    return { stage: record.stage, note: record.note, logged_on: isoDaysAgo(record.daysAgo) };
-}
-
-function toPipelineDeal(
-    deal: SeedDeal,
-    company: SeedCompany,
-    currency: BillingCurrency
-): PipelineDeal {
-    const rep = repById(deal.owner);
-    const history = deal.history.map(toDealRecord);
+/** Server deal to pipeline row. Every derived figure is server-computed. */
+function toPipelineDeal(record: Schema<"DealResponse">): PipelineDeal {
+    const history = (record.stage_history ?? []).map(toDealRecord);
+    const latest = record.latest_record
+        ? toDealRecord(record.latest_record)
+        : (history.at(-1) ?? { stage: record.stage_label, note: "", logged_on: "" });
 
     return {
-        id: deal.id,
-        company_id: company.id,
-        company_name: company.name,
-        contact: company.contact,
-        product: deal.product,
-        seats: deal.seats,
-        value: convert(deal.valueUSD, currency),
-        weighted_value: isOpen(deal) ? convert(weightedValue(deal), currency) : null,
-        billing_currency: deal.currency,
-        stage_index: stageIndexOf(deal),
-        stage_label: stageLabelOf(deal),
-        status: deal.status,
-        close_reason: deal.closeReason ?? null,
-        owner_id: deal.owner,
-        owner_name: rep?.name ?? deal.owner,
-        owner_initials: initialsOf(rep?.name ?? deal.owner),
-        owner_color: rep?.color ?? "#6b7688",
-        age_days: ageDays(deal),
-        idle_days: idleDays(deal),
-        latest_record: history[history.length - 1],
+        id: record.id,
+        company_id: record.customer_id,
+        company_name: record.company_name,
+        product: record.product,
+        seats: record.seats,
+        value: money(record.value),
+        weighted_value: record.weighted_value == null ? null : money(record.weighted_value),
+        billing_currency: record.currency as BillingCurrency,
+        stage_index: toStageIndex(record.stage_index),
+        // `stage_label` is the stage the deal reached, which stays meaningful
+        // after it closes, and the stage path still draws it. The chip beside
+        // the row asks a different question, so a closed deal answers with its
+        // outcome instead.
+        stage_label:
+            record.status === "open"
+                ? record.stage_label
+                : record.status === "won"
+                  ? "Won"
+                  : "Lost",
+        status: record.status as DealStatus,
+        close_reason: record.close_reason,
+        owner_id: record.owner.id,
+        owner_name: record.owner.name,
+        owner_initials: record.owner.initials,
+        owner_color: avatarColor(record.owner.id),
+        age_days: record.age_days,
+        idle_days: record.idle_days,
+        latest_record: latest,
         history,
     };
 }
 
-/** Resolve the company a deal belongs to, or throw, fixtures are complete. */
-function companyOf(deal: SeedDeal): SeedCompany {
-    const company = findCompany(deal.companyId);
-    if (!company) throw new Error(`Company ${deal.companyId} not found`);
-    return company;
-}
 
-/** Predicates behind the named activity filters, applied to open deals. */
-const ACTIVITY_PREDICATES: Record<ActivityFilterKey, (deal: SeedDeal) => boolean> = {
-    all: () => true,
-    active_this_week: (deal) => isOpen(deal) && idleDays(deal) <= 7,
-    quiet_8_30: (deal) => isOpen(deal) && idleDays(deal) > 7 && idleDays(deal) <= STALE_AFTER_DAYS,
-    no_activity_30: (deal) => isOpen(deal) && idleDays(deal) > STALE_AFTER_DAYS,
-    open_45: (deal) => isOpen(deal) && ageDays(deal) >= 45,
-};
 
 const ACTIVITY_LABELS: Record<ActivityFilterKey, string> = {
     all: "All deals",
@@ -380,99 +322,81 @@ const ACTIVITY_LABELS: Record<ActivityFilterKey, string> = {
     open_45: "Open 45d+",
 };
 
-/** Deals owned by `ownerId`, or every deal when no owner is given. */
-const scopedTo = (ownerId?: string) =>
-    ownerId ? getDeals().filter((deal) => deal.owner === ownerId) : getDeals();
 
-// Dashboard endpoints
+/**
+ * Everything the dashboard renders, in one payload.
+ *
+ * The server computes these together under a repeatable-read snapshot, so the
+ * KPI row, the stage split and the bookings trend are guaranteed to agree with
+ * one another. Splitting them across requests would reintroduce the tearing
+ * that snapshot exists to prevent.
+ */
+export interface SalesDeskDashboard {
+    summary: SalesDeskSummary;
+    by_stage: StagePipelineLine[];
+    bookings: BookingsPoint[];
+    rep_quota: RepQuotaLine[];
+    recent_companies: RecentCompany[];
+}
 
-/** KPI cards: weighted forecast, unweighted pipeline, won and lost this period. */
-export async function getSalesDeskSummary(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<SalesDeskSummary> {
-    const deals = getDeals();
-    const open = deals.filter(isOpen);
-    const won = deals.filter((deal) => deal.status === "won");
-    const lost = deals.filter((deal) => deal.status === "lost");
+/** Money crosses the wire as a decimal string; the views want numbers. */
+const money = (value: string | number | null | undefined): number => Number(value ?? 0);
+
+/**
+ * The Sales Desk dashboard, optionally scoped to one owner.
+ *
+ * Amounts arrive already expressed in the org's desk currency, which the
+ * payload names. There is no client-side FX conversion here.
+ */
+export async function getSalesDeskDashboard(ownerId?: string): Promise<SalesDeskDashboard> {
+    const data = await apiGet<Schema<"SalesDeskDashboardResponse">>(
+        "/sales-desk/dashboard",
+        { owner: ownerId }
+    );
+    const kpis = data.kpis;
 
     return {
-        weighted_pipeline: convert(sum(open, weightedValue), currency),
-        total_pipeline: convert(sum(open, (deal) => deal.valueUSD), currency),
-        open_deal_count: open.length,
-        won_amount: convert(sum(won, (deal) => deal.valueUSD), currency),
-        won_deal_count: won.length,
-        lost_amount: convert(sum(lost, (deal) => deal.valueUSD), currency),
-        lost_deal_count: lost.length,
-        currency,
-    };
-}
-
-/** Open pipeline split by stage, in stage order, with each stage's share of the total. */
-export async function getPipelineByStage(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<StagePipelineLine[]> {
-    const open = getDeals().filter(isOpen);
-    const total = sum(open, (deal) => deal.valueUSD);
-
-    return DEAL_STAGES.map((stage, index) => {
-        const atStage = open.filter((deal) => deal.stage === index);
-        const amount = sum(atStage, (deal) => deal.valueUSD);
-        return {
-            stage,
-            amount: convert(amount, currency),
-            deal_count: atStage.length,
-            share: total ? amount / total : 0,
-        };
-    });
-}
-
-/** Closed bookings for the trailing 12 months, oldest first. */
-export async function getBookingsTrend(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<BookingsPoint[]> {
-    return SEED_BOOKINGS.map(({ month, wonUSD, lostUSD }) => ({
-        month,
-        won: convert(wonUSD, currency),
-        lost: convert(lostUSD, currency),
-    }));
-}
-
-/** Each rep's weighted pipeline against their quarter quota. */
-export async function getRepQuotaProgress(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<RepQuotaLine[]> {
-    const open = getDeals().filter(isOpen);
-
-    return SEED_REPS.map((rep) => {
-        const weighted = sum(
-            open.filter((deal) => deal.owner === rep.id),
-            weightedValue
-        );
-        return {
-            id: rep.id,
-            name: rep.name,
-            initials: initialsOf(rep.name),
-            color: rep.color,
-            weighted_pipeline: convert(weighted, currency),
-            quarter_target: convert(rep.quarterTargetUSD, currency),
-            attainment: rep.quarterTargetUSD ? weighted / rep.quarterTargetUSD : 0,
-        };
-    });
-}
-
-/** Most recently registered companies, newest first. */
-export async function getRecentCompanies(limit = 4): Promise<RecentCompany[]> {
-    return [...getCompanies()]
-        .sort((a, b) => a.registeredDaysAgo - b.registeredDaysAgo)
-        .slice(0, limit)
-        .map((company) => ({
-            id: company.id,
+        summary: {
+            weighted_pipeline: money(kpis.pipeline_weighted.value),
+            total_pipeline: money(kpis.total_arr_pipeline.value),
+            open_deal_count: kpis.pipeline_weighted.open_deal_count,
+            won_amount: money(kpis.won_this_period.value),
+            won_deal_count: kpis.won_this_period.deal_count,
+            lost_amount: money(kpis.lost_this_period.value),
+            lost_deal_count: kpis.lost_this_period.deal_count,
+            currency: data.currency as BillingCurrency,
+        },
+        by_stage: data.pipeline_by_stage.map((line) => ({
+            // `stage` is the wire enum ("proposal_quote"); the desk labels
+            // stages the way the server spells them for display.
+            stage: line.stage_label as DealStage,
+            amount: money(line.value),
+            deal_count: line.deal_count,
+            share: line.share,
+        })),
+        bookings: data.bookings_12_months.map((point) => ({
+            month: point.label,
+            won: money(point.won_value),
+            lost: money(point.lost_value),
+        })),
+        rep_quota: data.rep_quota.map((line) => ({
+            id: line.user.id,
+            name: line.user.name,
+            initials: line.user.initials,
+            color: avatarColor(line.user.id),
+            won_value: money(line.won_value),
+            quarter_target: money(line.quota),
+            attainment: line.percent,
+        })),
+        recent_companies: data.recent_companies.map((company) => ({
+            id: String(company.id),
             name: company.name,
-            industry: company.industry,
+            industry: company.industry ?? "",
             contact: company.contact,
-            billing_currency: company.primaryCurrency,
-            registered_on: isoDaysAgo(company.registeredDaysAgo),
-        }));
+            billing_currency: company.currency as BillingCurrency,
+            registered_on: company.created_date,
+        })),
+    };
 }
 
 // Pipeline endpoints
@@ -490,165 +414,105 @@ export interface PipelineQuery {
     status?: DealStatus;
 }
 
-/**
- * Pipeline rows, ordered the way a rep reads them: open deals first by stage,
- * then won, then lost.
- */
-export async function getPipelineDeals(
-    query: PipelineQuery = {},
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<PipelineDeal[]> {
+/** Query string shared by the deal list and its CSV export. */
+function dealListParams(query: PipelineQuery) {
     const { ownerId, activity = "all", includeClosed = true, search, status } = query;
-    const term = search?.trim().toLowerCase();
-
-    // Closed deals have no activity signal, so the activity filters only ever
-    // narrow the open set; a closed deal is either shown or hidden wholesale.
-    const matchesActivity = (deal: SeedDeal) =>
-        isOpen(deal) ? ACTIVITY_PREDICATES[activity](deal) : activity === "all";
-
-    const rows = scopedTo(ownerId)
-        .filter((deal) => (status ? deal.status === status : true))
-        .filter((deal) => (includeClosed ? true : isOpen(deal)))
-        .filter(matchesActivity)
-        .filter((deal) => {
-            if (!term) return true;
-            const company = companyOf(deal);
-            return `${company.name} ${deal.product} ${company.contact}`
-                .toLowerCase()
-                .includes(term);
-        });
-
-    // Open deals sort by stage; closed ones fall to the bottom, won above lost.
-    const rank = (deal: SeedDeal) =>
-        isOpen(deal) ? deal.stage : deal.status === "won" ? 10 : 11;
-
-    return rows
-        .sort((a, b) => rank(a) - rank(b))
-        .map((deal) => toPipelineDeal(deal, companyOf(deal), currency));
+    return {
+        ownerId,
+        // "all" is the absence of a bucket, not a bucket the server knows.
+        hygiene: activity === "all" ? undefined : activity,
+        showClosed: includeClosed,
+        tab: status ?? "all",
+        search: search?.trim() || undefined,
+    };
 }
 
-/** Escape a CSV field: wrap in quotes and double any embedded quote. */
-const csvField = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+/**
+ * Pipeline rows, ordered the way a rep reads them: open deals first by stage,
+ * then won, then lost. The server returns them in that order.
+ */
+export async function getPipelineDeals(query: PipelineQuery = {}): Promise<PipelineDeal[]> {
+    const rows = await apiGetAll<Schema<"DealResponse">>("/deals", dealListParams(query));
+    return rows.map(toPipelineDeal);
+}
 
 /**
  * The pipeline as a CSV file, honoring the same filters as the deal list.
  *
- * TODO(#45-wiring): replace with GET /sales-desk/exports/pipeline — the
- * server builds the file (issue #47 mandates the server export from #45), so
- * this body becomes a fetch that resolves with the response blob and the
- * client-side generation below is deleted. Callers only ever see a Blob, so
- * the swap is body-only.
- *
- * Columns follow #47's export spec as far as the mock data allows. Parked
- * deals leave the pipeline entirely in the mock store, so the
- * "Stage / Parked until" column only ever carries a stage here; the server
- * fills in the parked-until date.
+ * The server builds the file (#47 mandates the server export from #45), so the
+ * filters are passed through and the response blob is returned as-is.
  */
-export async function exportPipelineCsv(
-    query: PipelineQuery = {},
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<Blob> {
-    const deals = await getPipelineDeals(query, currency);
-
-    const header = [
-        "Company",
-        "Contact",
-        "Owner",
-        "Product",
-        "Seats",
-        "Currency",
-        "Annual value",
-        "Status",
-        "Stage / Parked until",
-        "Days in pipeline",
-        "Days idle",
-        "Close reason",
-        "Latest note",
-    ];
-    const rows = deals.map((deal) => [
-        deal.company_name,
-        deal.contact,
-        deal.owner_name,
-        deal.product,
-        deal.seats,
-        deal.billing_currency,
-        Math.round(deal.value),
-        deal.status,
-        deal.stage_label,
-        deal.age_days,
-        deal.idle_days,
-        deal.close_reason ?? "",
-        deal.latest_record.note,
-    ]);
-    const csv = [header, ...rows].map((row) => row.map(csvField).join(",")).join("\n");
-    return new Blob([csv], { type: "text/csv;charset=utf-8" });
+export async function exportPipelineCsv(query: PipelineQuery = {}): Promise<Blob> {
+    return apiDownload("/sales-desk/exports/pipeline", dealListParams(query));
 }
 
 /** Rep cards, stage strip, filter counts and the open-pipeline total. */
-export async function getPipelineOverview(
-    ownerId?: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<PipelineOverview> {
-    const all = getDeals();
-    const scoped = scopedTo(ownerId);
-    const scopedOpen = scoped.filter(isOpen);
+export async function getPipelineOverview(ownerId?: string): Promise<PipelineOverview> {
+    const data = await apiGet<Schema<"PipelineOverviewResponse">>(
+        "/sales-desk/pipeline/overview",
+        { ownerId }
+    );
 
-    const reps: RepPipelineCard[] = SEED_REPS.map((rep) => {
-        const mine = all.filter((deal) => deal.owner === rep.id);
-        const open = mine.filter(isOpen);
-        return {
-            id: rep.id,
-            name: rep.name,
-            initials: initialsOf(rep.name),
-            color: rep.color,
-            open_deal_count: open.length,
-            open_value: convert(sum(open, (deal) => deal.valueUSD), currency),
-            win_rate: winRateOf(mine),
-            cold_deal_count: open.filter((deal) => idleDays(deal) > STALE_AFTER_DAYS).length,
-        };
-    });
-
-    const teamOpen = all.filter(isOpen);
-    const closedScoped = scoped.filter((deal) => !isOpen(deal));
+    /** Hygiene counts arrive keyed by the server's names, not the filter keys. */
+    const counts: Record<ActivityFilterKey, number> = {
+        all: data.hygiene.all,
+        active_this_week: data.hygiene.active_week,
+        quiet_8_30: data.hygiene.quiet_8_30,
+        no_activity_30: data.hygiene.no_activity_30,
+        open_45: data.hygiene.open_45,
+    };
 
     return {
-        reps,
+        reps: data.reps.map((rep) => ({
+            id: rep.user.id,
+            name: rep.user.name,
+            initials: rep.user.initials,
+            color: avatarColor(rep.user.id),
+            open_deal_count: rep.open_count,
+            open_value: money(rep.open_value),
+            win_rate: rep.win_rate,
+            cold_deal_count: rep.cold_count,
+        })),
         team: {
             name: "Whole team",
-            open_deal_count: teamOpen.length,
-            open_value: convert(sum(teamOpen, (deal) => deal.valueUSD), currency),
-            win_rate: winRateOf(all),
-            cold_deal_count: teamOpen.filter((deal) => idleDays(deal) > STALE_AFTER_DAYS).length,
+            open_deal_count: data.team.open_count,
+            open_value: money(data.team.open_value),
+            win_rate: data.team.win_rate,
+            cold_deal_count: data.team.cold_count,
         },
-        stages: DEAL_STAGES.map((stage, index) => {
-            const atStage = scopedOpen.filter((deal) => deal.stage === index);
-            return {
-                stage,
-                deal_count: atStage.length,
-                value: convert(sum(atStage, (deal) => deal.valueUSD), currency),
-                average_age_days: atStage.length
-                    ? Math.round(sum(atStage, ageDays) / atStage.length)
-                    : 0,
-            };
-        }),
+        stages: data.stages.map((column) => ({
+            stage: column.stage_label as DealStage,
+            deal_count: column.count,
+            value: money(column.value),
+            average_age_days: column.avg_days_in_stage,
+        })),
         closed: {
-            deal_count: closedScoped.length,
-            won_count: closedScoped.filter((deal) => deal.status === "won").length,
-            lost_count: closedScoped.filter((deal) => deal.status === "lost").length,
-            win_rate: winRateOf(scoped),
+            deal_count: data.closed.count,
+            won_count: data.closed.won_count,
+            lost_count: data.closed.lost_count,
+            win_rate: data.closed.win_rate,
         },
         filters: (Object.keys(ACTIVITY_LABELS) as ActivityFilterKey[]).map((key) => ({
             key,
             label: ACTIVITY_LABELS[key],
-            // "All deals" counts everything in scope; the rest are open-only.
-            count:
-                key === "all"
-                    ? scoped.length
-                    : scopedOpen.filter(ACTIVITY_PREDICATES[key]).length,
+            count: counts[key],
         })),
-        open_pipeline_value: convert(sum(scopedOpen, (deal) => deal.valueUSD), currency),
-        currency,
+        open_pipeline_value: money(data.open_pipeline_total),
+        currency: data.currency as BillingCurrency,
     };
+}
+
+/**
+ * The reps a deal or company can be assigned to.
+ *
+ * There is no user directory endpoint, but the pipeline overview already
+ * returns every rep with a book, which is the same set the owner filters and
+ * the "assign to" selects need. Reusing it keeps one server-side definition of
+ * who a rep is instead of inventing a second.
+ */
+export async function getSalesReps(): Promise<RepPipelineCard[]> {
+    const overview = await getPipelineOverview();
+    return overview.reps;
 }
 
 /** One deal plus the billing profile it will invoice against. */
@@ -661,97 +525,78 @@ export interface DealDetail {
     next_stage: DealStage | null;
 }
 
-export async function getDealDetail(
-    dealId: number,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<DealDetail> {
-    const deal = findDeal(dealId);
-    if (!deal) throw new Error(`Deal ${dealId} not found`);
-    const company = companyOf(deal);
-    const profile: SeedBillingProfile = company.profiles[deal.currency];
+export async function getDealDetail(dealId: string): Promise<DealDetail> {
+    const record = await apiGet<Schema<"DealResponse">>(`/deals/${dealId}`);
+    const profile = record.billing_profile;
 
     return {
-        deal: toPipelineDeal(deal, company, currency),
-        billing_profile: { ...profile },
-        billed_value: convert(deal.valueUSD, deal.currency),
+        deal: toPipelineDeal(record),
+        billing_profile: {
+            code: profile?.code ?? "",
+            terms: profile?.payment_terms ?? "",
+            tax: profile?.tax_treatment ?? "",
+            synced: profile?.synced ?? false,
+        },
+        billed_value: money(record.value),
         next_stage:
-            isOpen(deal) && deal.stage < DEAL_STAGES.length - 1
-                ? DEAL_STAGES[deal.stage + 1]
+            record.status === "open" && record.stage_index < record.stage_total - 1
+                ? DEAL_STAGES[record.stage_index + 1]
                 : null,
     };
 }
 
 // Pipeline writes
 //
-// Each of these mutates the in-memory store and resolves with the updated
-// deal, so callers can refresh from the returned value. Against the real API
-// they become POSTs to /sales-desk/deals/{id}/... with the same arguments.
+// Each resolves with the server's updated deal, so callers refresh from the
+// returned value rather than refetching the list.
 
 /** Record what happened without moving the deal. */
-export async function logDealActivity(
-    dealId: number,
-    note: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<PipelineDeal> {
-    const deal = findDeal(dealId);
-    if (!deal) throw new Error(`Deal ${dealId} not found`);
-    appendRecord(dealId, { stage: stageLabelOf(deal), note });
-    return toPipelineDeal(deal, companyOf(deal), currency);
+export async function logDealActivity(dealId: string, note: string): Promise<PipelineDeal> {
+    return toPipelineDeal(
+        await apiPost<Schema<"DealResponse">>(`/deals/${dealId}/activities`, { note })
+    );
 }
 
 /** Move the deal to the next stage, recording why. */
-export async function advanceDeal(
-    dealId: number,
-    note: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
-): Promise<PipelineDeal> {
-    const deal = findDeal(dealId);
-    if (!deal) throw new Error(`Deal ${dealId} not found`);
-    if (!isOpen(deal)) throw new Error("A closed deal cannot be advanced.");
-    if (deal.stage >= DEAL_STAGES.length - 1) {
-        throw new Error("This deal is already at the final stage. Close it instead.");
-    }
-
-    const nextStage = deal.stage + 1;
-    patchDeal(dealId, { stage: nextStage });
-    appendRecord(dealId, { stage: DEAL_STAGES[nextStage], note });
-    return toPipelineDeal(deal, companyOf(deal), currency);
+export async function advanceDeal(dealId: string, note: string): Promise<PipelineDeal> {
+    return toPipelineDeal(
+        await apiPost<Schema<"DealResponse">>(`/deals/${dealId}/advance`, { note })
+    );
 }
 
 /** Close the deal as won or lost, with a reason and a closing note. */
 export async function closeDeal(
-    dealId: number,
+    dealId: string,
     outcome: Extract<DealStatus, "won" | "lost">,
     reason: string,
-    note: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY
+    note: string
 ): Promise<PipelineDeal> {
-    const deal = findDeal(dealId);
-    if (!deal) throw new Error(`Deal ${dealId} not found`);
-    if (!isOpen(deal)) throw new Error("This deal is already closed.");
-
-    patchDeal(dealId, {
-        status: outcome,
-        stage: DEAL_STAGES.length,
-        closeReason: reason,
-    });
-    appendRecord(dealId, {
-        stage: outcome === "won" ? "Closed · Won" : "Closed · Lost",
-        note,
-    });
-    return toPipelineDeal(deal, companyOf(deal), currency);
+    return toPipelineDeal(
+        await apiPost<Schema<"DealResponse">>(`/deals/${dealId}/close`, {
+            result: outcome,
+            reason,
+            note,
+        })
+    );
 }
 
 /**
- * Park the deal out of the active pipeline as a nurtured prospect. The deal
- * leaves the pipeline entirely, which is why this resolves with nothing.
+ * Park the deal out of the active pipeline until a date, so it resurfaces in
+ * the future pipeline when due.
  */
 export async function moveDealToFuturePipeline(
-    dealId: number,
+    dealId: string,
     note: string,
     engageInDays = 90
 ): Promise<void> {
-    moveToNurture(dealId, note, engageInDays);
+    const until = new Date();
+    until.setDate(until.getDate() + engageInDays);
+    await apiPost<Schema<"DealResponse">>(`/deals/${dealId}/park`, {
+        note,
+        parkedUntil: until.toISOString().slice(0, 10),
+    });
+    // The deal reappears as a prospect, which the future-pipeline badge counts.
+    announceDeskChange();
 }
 
 // Company endpoints
@@ -771,7 +616,7 @@ export interface CompanyBillingProfile {
 
 /** A row in the companies directory. */
 export interface CompanyRow {
-    id: number;
+    id: string;
     name: string;
     industry: string;
     contact: string;
@@ -794,7 +639,7 @@ export interface CompanyRow {
 
 /** A company's deal, trimmed to what the drawer's deal cards show. */
 export interface CompanyDealSummary {
-    id: number;
+    id: string;
     product: string;
     billing_currency: BillingCurrency;
     value: number;
@@ -810,57 +655,6 @@ export interface CompanyDetail {
     deals: CompanyDealSummary[];
 }
 
-function toBillingProfile(
-    company: SeedCompany,
-    currency: BillingCurrency
-): CompanyBillingProfile {
-    const profile = company.profiles[currency];
-    return {
-        currency,
-        code: profile.code,
-        terms: profile.terms,
-        tax: profile.tax,
-        // Already denominated in this profile's currency, so no conversion.
-        credit_limit: profile.creditLimit,
-        synced: profile.synced,
-        is_default: company.primaryCurrency === currency,
-    };
-}
-
-function toCompanyRow(company: SeedCompany): CompanyRow {
-    const rep = repById(company.owner);
-    const deals = getDeals().filter((deal) => deal.companyId === company.id);
-    const profiles = BILLING_CURRENCIES.map((currency) =>
-        toBillingProfile(company, currency)
-    );
-
-    return {
-        id: company.id,
-        name: company.name,
-        industry: company.industry,
-        contact: company.contact,
-        email: company.email,
-        phone: company.phone,
-        tenant: company.tenant,
-        primary_currency: company.primaryCurrency,
-        registered_on: isoDaysAgo(company.registeredDaysAgo),
-        owner_id: company.owner,
-        owner_name: rep?.name ?? company.owner,
-        owner_initials: initialsOf(rep?.name ?? company.owner),
-        owner_color: rep?.color ?? "#6b7688",
-        profiles,
-        needs_sync: profiles.some((profile) => !profile.synced),
-        open_deal_count: deals.filter(isOpen).length,
-        closed_deal_count: deals.filter((deal) => !isOpen(deal)).length,
-        total_deal_count: deals.length,
-    };
-}
-
-/** A rep, for owner pickers. Synchronous, the roster is a fixed reference list. */
-export function getSalesReps(): Array<{ id: string; name: string; color: string }> {
-    return SEED_REPS.map(({ id, name, color }) => ({ id, name, color }));
-}
-
 export interface CompanyQuery {
     /** Free-text match over name, industry, contact and tenant. */
     search?: string;
@@ -868,50 +662,89 @@ export interface CompanyQuery {
     unsynced?: boolean;
 }
 
-/**
- * The companies directory, newest registration first.
- *
- * TODO(#43/#45-wiring): pass ?unsynced=true to the server instead of
- * filtering the store.
- */
-export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyRow[]> {
-    const term = query.search?.trim().toLowerCase();
-
-    return [...getCompanies()]
-        .sort((a, b) => a.registeredDaysAgo - b.registeredDaysAgo)
-        .map(toCompanyRow)
-        .filter((row) => (query.unsynced ? row.needs_sync : true))
-        .filter((row) =>
-            term
-                ? `${row.name} ${row.industry} ${row.contact} ${row.tenant ?? ""}`
-                      .toLowerCase()
-                      .includes(term)
-                : true
-        );
+/** Server company row to the directory row the table renders. */
+function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
+    return {
+        id: record.id,
+        name: record.name,
+        industry: record.industry ?? "",
+        contact: record.contact,
+        email: record.email,
+        phone: record.phone,
+        tenant: record.tenant,
+        primary_currency: record.primary_currency as BillingCurrency,
+        registered_on: record.registered_on,
+        owner_id: record.owner?.id ?? "",
+        owner_name: record.owner?.name ?? "Unassigned",
+        owner_initials: record.owner?.initials ?? "—",
+        owner_color: avatarColor(record.owner?.id ?? ""),
+        profiles: record.profiles.map((profile) => ({
+            currency: profile.currency as BillingCurrency,
+            code: profile.code,
+            terms: profile.payment_terms,
+            tax: profile.tax_treatment,
+            credit_limit: money(profile.credit_limit),
+            synced: profile.synced,
+            is_default: profile.is_default,
+        })),
+        needs_sync: record.needs_sync,
+        open_deal_count: record.open_deal_count,
+        closed_deal_count: record.closed_deal_count,
+        total_deal_count: record.total_deal_count,
+    };
 }
 
-/** One company plus its deals, for the drawer. */
-export async function getCompanyDetail(companyId: number): Promise<CompanyDetail> {
-    const company = findCompany(companyId);
-    if (!company) throw new Error(`Company ${companyId} not found`);
+/** The companies directory, newest registration first. */
+export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyRow[]> {
+    const data = await apiGet<Schema<"DeskCompaniesResponse">>("/sales-desk/companies", {
+        search: query.search?.trim() || undefined,
+        unsynced: query.unsynced || undefined,
+        limit: COMPANY_LIMIT,
+    });
+    return data.items.map(toCompanyRowFromServer);
+}
+
+/**
+ * One company plus its deals, for the drawer.
+ *
+ * The row comes back through the same desk endpoint the directory uses, so
+ * the drawer and the table can never disagree about a company. The deals are
+ * read from the pipeline: `/deals` has no customer filter, but its search
+ * matches the company name, so the name narrows the page and the id filters
+ * out any other company the name also matched.
+ */
+export async function getCompanyDetail(companyId: string): Promise<CompanyDetail> {
+    const directory = await apiGet<Schema<"DeskCompaniesResponse">>(
+        "/sales-desk/companies",
+        { limit: COMPANY_LIMIT }
+    );
+    const record = directory.items.find((item) => item.id === companyId);
+    if (!record) throw new Error(`Company ${companyId} not found`);
+
+    const company = toCompanyRowFromServer(record);
+    const dealRows = await apiGetAll<Schema<"DealResponse">>("/deals", {
+        search: company.name,
+        showClosed: true,
+        tab: "all",
+    });
 
     return {
-        company: toCompanyRow(company),
-        deals: getDeals()
-            .filter((deal) => deal.companyId === companyId)
+        company,
+        deals: dealRows
+            .filter((deal) => deal.customer_id === companyId)
             .map((deal) => ({
                 id: deal.id,
                 product: deal.product,
-                billing_currency: deal.currency,
+                billing_currency: deal.currency as BillingCurrency,
                 // In the deal's own billing currency, which is what the card
                 // labels it with. Converting to the caller's currency here
                 // would print a USD figure beside a KES chip.
-                value: convert(deal.valueUSD, deal.currency),
-                stage_index: stageIndexOf(deal),
-                stage_label: stageLabelOf(deal),
-                status: deal.status,
-                close_reason: deal.closeReason ?? null,
-                age_days: ageDays(deal),
+                value: money(deal.value),
+                stage_index: toStageIndex(deal.stage_index),
+                stage_label: deal.stage_label,
+                status: deal.status as DealStatus,
+                close_reason: deal.close_reason ?? null,
+                age_days: deal.age_days,
             })),
     };
 }
@@ -929,7 +762,7 @@ export interface BillingProfilePatch {
  * holding the previous terms until the profile is pushed again.
  */
 export async function updateBillingProfile(
-    companyId: number,
+    companyId: string,
     currency: BillingCurrency,
     patch: BillingProfilePatch
 ): Promise<CompanyRow> {
@@ -939,39 +772,69 @@ export async function updateBillingProfile(
         }
     }
 
-    const company = patchBillingProfile(companyId, currency, {
-        ...(patch.terms !== undefined ? { terms: patch.terms } : {}),
-        ...(patch.tax !== undefined ? { tax: patch.tax } : {}),
-        ...(patch.credit_limit !== undefined
-            ? { creditLimit: patch.credit_limit }
-            : {}),
-    });
-    return toCompanyRow(company);
+    await apiPatch<Schema<"BillingProfileResponse">>(
+        `/customers/${companyId}/profiles/${currency}`,
+        {
+            ...(patch.terms !== undefined ? { paymentTerms: patch.terms } : {}),
+            ...(patch.tax !== undefined ? { taxTreatment: patch.tax } : {}),
+            ...(patch.credit_limit !== undefined
+                ? { creditLimit: String(patch.credit_limit) }
+                : {}),
+        }
+    );
+
+    // The response is the one profile; the drawer redraws the whole company
+    // (both profiles, the sync banner, the deal counts), so the row is re-read
+    // rather than patched in place.
+    return reloadCompany(companyId);
 }
 
 /** Push one currency profile to accounting. */
 export async function syncBillingProfile(
-    companyId: number,
+    companyId: string,
     currency: BillingCurrency
 ): Promise<CompanyRow> {
-    return toCompanyRow(patchBillingProfile(companyId, currency, { synced: true }));
+    await apiPost<Schema<"BillingProfileResponse">>(
+        `/customers/${companyId}/profiles/${currency}/sync`,
+        {}
+    );
+    return reloadCompany(companyId);
 }
 
 /** Push both currency profiles to accounting. */
-export async function syncBothProfiles(companyId: number): Promise<CompanyRow> {
-    let company = findCompany(companyId);
-    if (!company) throw new Error(`Company ${companyId} not found`);
-    BILLING_CURRENCIES.forEach((currency) => {
-        company = patchBillingProfile(companyId, currency, { synced: true });
-    });
-    return toCompanyRow(company);
+export async function syncBothProfiles(companyId: string): Promise<CompanyRow> {
+    await apiPost(`/customers/${companyId}/profiles/sync-all`, {});
+    return reloadCompany(companyId);
+}
+
+/**
+ * Re-read one company through the desk directory, after a write.
+ *
+ * Every company write changes the needs-sync queue behind the nav badge, so
+ * the re-read is also where the change is announced.
+ */
+async function reloadCompany(companyId: string): Promise<CompanyRow> {
+    const directory = await apiGet<Schema<"DeskCompaniesResponse">>(
+        "/sales-desk/companies",
+        { limit: COMPANY_LIMIT }
+    );
+    const record = directory.items.find((item) => item.id === companyId);
+    if (!record) throw new Error(`Company ${companyId} not found`);
+    announceDeskChange();
+    return toCompanyRowFromServer(record);
 }
 
 /** Fields collected when registering a company. */
 export interface NewCompanyInput {
     name: string;
     industry: string;
-    contact: string;
+    /**
+     * The primary contact, as a first and last name. The customers module
+     * holds the two separately and requires both, so the desk asks for both
+     * rather than guessing at a split.
+     */
+    firstName: string;
+    lastName: string;
     email: string;
     phone: string;
     tenant?: string;
@@ -980,72 +843,39 @@ export interface NewCompanyInput {
 }
 
 /**
- * A profile code is an accounting identity, so it has to be unique even when
- * two company names reduce to the same initials (Acme Logistics and Alpha
- * Logistics both give AL). Suffixes the prefix until nothing else claims it,
- * which is what the customers API does server-side.
- */
-function uniqueCodePrefix(name: string): string {
-    const base = companyCodePrefix(name);
-    const taken = new Set(
-        getCompanies().flatMap((company) =>
-            BILLING_CURRENCIES.map((currency) => company.profiles[currency].code)
-        )
-    );
-    const isFree = (candidate: string) =>
-        BILLING_CURRENCIES.every((currency) => !taken.has(`${candidate}-${currency}`));
-
-    if (isFree(base)) return base;
-    for (let suffix = 2; ; suffix++) {
-        const candidate = `${base}${suffix}`;
-        if (isFree(candidate)) return candidate;
-    }
-}
-
-/**
- * Register a company. Both profiles are created unsynced: nothing exists in
- * accounting until someone pushes it, and the Companies screen surfaces that
- * through its "Needs sync" filter.
+ * Register a company.
+ *
+ * The customers module owns the whole registration: it allocates the profile
+ * codes (unique even when two company names reduce to the same initials) and
+ * opens one billing profile per currency, all unsynced: nothing exists in
+ * accounting until someone pushes it, which is what the Companies screen's
+ * "Needs sync" filter surfaces.
  */
 export async function createCompany(input: NewCompanyInput): Promise<CompanyRow> {
     const name = input.name.trim();
     if (!name) throw new Error("Company name is required.");
-    if (!input.contact.trim()) throw new Error("A primary contact is required.");
+    if (!input.firstName.trim() || !input.lastName.trim()) {
+        throw new Error("A primary contact's first and last name are required.");
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) {
         throw new Error("Enter a valid email address.");
     }
 
-    const prefix = uniqueCodePrefix(name);
-    const company = addCompany({
-        id: allocateId(),
-        owner: input.ownerId,
-        name,
-        industry: input.industry,
-        contact: input.contact.trim(),
+    const created = await apiPost<Schema<"CustomerResponse">>("/customers", {
+        customerType: "business",
+        companyName: name,
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
         email: input.email.trim(),
         phone: input.phone.trim(),
-        tenant: input.tenant?.trim() || null,
+        currency: input.primaryCurrency,
         primaryCurrency: input.primaryCurrency,
-        registeredDaysAgo: 0,
-        profiles: {
-            USD: {
-                code: `${prefix}-USD`,
-                terms: "30 days",
-                tax: "Zero-rated (export)",
-                creditLimit: 25_000,
-                synced: false,
-            },
-            KES: {
-                code: `${prefix}-KES`,
-                terms: "14 days",
-                tax: "VAT 16%",
-                creditLimit: 1_300_000,
-                synced: false,
-            },
-        },
+        ...(input.industry.trim() ? { industry: input.industry.trim() } : {}),
+        ...(input.tenant?.trim() ? { tenantDomain: input.tenant.trim() } : {}),
+        ...(input.ownerId ? { ownerId: input.ownerId } : {}),
     });
 
-    return toCompanyRow(company);
+    return reloadCompany(created.id);
 }
 
 // Future pipeline endpoints
@@ -1054,7 +884,7 @@ export async function createCompany(input: NewCompanyInput): Promise<CompanyRow>
 export type ProspectUrgency = "overdue" | "today" | "scheduled";
 
 export interface ProspectRow {
-    id: number;
+    id: string;
     company: string;
     contact: string;
     note: string;
@@ -1063,6 +893,8 @@ export interface ProspectRow {
     /** Days until that date. Negative once it has passed. */
     days_until: number;
     urgency: ProspectUrgency;
+    /** Chip text exactly as the server computed it: "Overdue", "Today", "45d". */
+    due_label: string;
     estimated_arr: number;
     owner_id: string;
     owner_name: string;
@@ -1078,76 +910,57 @@ export interface FuturePipelineSummary {
     currency: BillingCurrency;
 }
 
-// TODO(#45-wiring): the server's `due_state` and ISO dates are authoritative
-// once GET /sales-desk/prospects ships; this urgency/days-until computation
-// is a fixture-only stand-in and must not survive the real wiring (#48).
-const urgencyOf = (daysUntil: number): ProspectUrgency =>
-    daysUntil < 0 ? "overdue" : daysUntil === 0 ? "today" : "scheduled";
+/** Server due-state to the urgency the chips and dots key on. */
+const urgencyOf = (state: string): ProspectUrgency =>
+    state === "overdue" ? "overdue" : state === "today" ? "today" : "scheduled";
 
-/** ISO date `days` from today, in local time. */
-function isoDaysFromNow(days: number): string {
-    return isoDaysAgo(-days);
-}
-
-function toProspectRow(
-    prospect: SeedProspect,
-    currency: BillingCurrency
-): ProspectRow {
-    const rep = repById(prospect.owner);
+function toProspectRow(record: Schema<"NurtureProspectResponse">): ProspectRow {
+    const owner = record.owner;
     return {
-        id: prospect.id,
-        company: prospect.company,
-        contact: prospect.contact,
-        note: prospect.note,
-        engage_on: isoDaysFromNow(prospect.engageInDays),
-        days_until: prospect.engageInDays,
-        urgency: urgencyOf(prospect.engageInDays),
-        estimated_arr: convert(prospect.estimatedValueUSD, currency),
-        owner_id: prospect.owner,
-        owner_name: rep?.name ?? prospect.owner,
-        owner_initials: initialsOf(rep?.name ?? prospect.owner),
-        owner_color: rep?.color ?? "#6b7688",
+        id: record.id,
+        company: record.company,
+        contact: record.contact ?? "",
+        note: record.note ?? "",
+        engage_on: record.engage_on,
+        // The server counts against the org-local accounting boundary; a
+        // client-side date subtraction would disagree either side of midnight.
+        days_until: record.due_state.in_days ?? 0,
+        urgency: urgencyOf(record.due_state.state),
+        due_label: record.due_state.label,
+        estimated_arr: money(record.est_arr),
+        owner_id: owner?.id ?? "",
+        owner_name: owner?.name ?? "Unassigned",
+        owner_initials: owner?.initials ?? "—",
+        owner_color: avatarColor(owner?.id ?? ""),
     };
 }
-
-/** Prospects owned by `ownerId`, or every prospect when no owner is given. */
-const prospectsScopedTo = (ownerId?: string) =>
-    ownerId
-        ? getProspectRecords().filter((prospect) => prospect.owner === ownerId)
-        : getProspectRecords();
 
 /** Nurtured prospects, soonest engage-by date first. */
 export async function getProspects(
     search?: string,
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
     ownerId?: string
 ): Promise<ProspectRow[]> {
-    const term = search?.trim().toLowerCase();
-
-    return [...prospectsScopedTo(ownerId)]
-        .sort((a, b) => a.engageInDays - b.engageInDays)
-        .map((prospect) => toProspectRow(prospect, currency))
-        .filter((row) =>
-            term
-                ? `${row.company} ${row.contact} ${row.note}`.toLowerCase().includes(term)
-                : true
-        );
+    const rows = await apiGetAll<Schema<"NurtureProspectResponse">>("/nurture", {
+        search: search?.trim() || undefined,
+        ownerId,
+    });
+    return rows.map(toProspectRow);
 }
 
 /** Headline counts for the future pipeline. */
 export async function getFuturePipelineSummary(
-    currency: BillingCurrency = DEFAULT_DESK_CURRENCY,
-    ownerId?: string
+    ownerId?: string,
+    search?: string
 ): Promise<FuturePipelineSummary> {
-    const prospects = prospectsScopedTo(ownerId);
+    const summary = await apiGet<Schema<"NurtureSummary">>("/nurture/summary", {
+        ownerId,
+        search: search?.trim() || undefined,
+    });
     return {
-        prospect_count: prospects.length,
-        due_count: prospects.filter((prospect) => prospect.engageInDays <= 0).length,
-        total_estimated_arr: convert(
-            sum(prospects, (prospect) => prospect.estimatedValueUSD),
-            currency
-        ),
-        currency,
+        prospect_count: summary.count,
+        due_count: summary.due_now,
+        total_estimated_arr: money(summary.total_est_arr),
+        currency: DEFAULT_DESK_CURRENCY,
     };
 }
 
@@ -1156,54 +969,49 @@ export interface NewProspectInput {
     company: string;
     contact: string;
     note: string;
-    /** ISO date (yyyy-mm-dd). */
+    /** ISO date (yyyy-mm-dd). Omitted lets the server default to +90 days. */
     engageOn: string;
-    /** In USD, the desk's base currency. */
-    estimatedArrUSD: number;
+    estimatedArr: number;
     ownerId: string;
 }
 
 export async function addProspect(input: NewProspectInput): Promise<ProspectRow> {
-    const company = input.company.trim();
-    if (!company) throw new Error("Company name is required.");
-    if (!input.engageOn) throw new Error("Pick an engage-by date.");
-    if (!Number.isFinite(input.estimatedArrUSD) || input.estimatedArrUSD < 0) {
-        throw new Error("Estimated ARR must be a positive number.");
-    }
-
-    // The store thinks in offsets from today, so the picked date is converted
-    // once here rather than every time a row is read.
-    const target = new Date(`${input.engageOn}T00:00:00`);
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const engageInDays = Math.round(
-        (target.getTime() - startOfToday.getTime()) / 86_400_000
-    );
-
-    const prospect = addProspectRecord({
-        id: allocateId(),
-        owner: input.ownerId,
-        company,
-        contact: input.contact.trim(),
-        note: input.note.trim(),
-        engageInDays,
-        estimatedValueUSD: input.estimatedArrUSD,
+    const created = await apiPost<Schema<"NurtureProspectResponse">>("/nurture", {
+        company: input.company.trim(),
+        contact: input.contact.trim() || null,
+        note: input.note.trim() || null,
+        engageOn: input.engageOn || null,
+        estArr: input.estimatedArr,
+        ownerId: input.ownerId || null,
     });
-
-    return toProspectRow(prospect, DEFAULT_DESK_CURRENCY);
+    // A prospect planned for today lands straight in the due queue.
+    announceDeskChange();
+    return toProspectRow(created);
 }
 
 /**
- * Thrown by `engageProspect` when a company with the prospect's name is
- * already on the book. Mirrors the backend's 409 response so the swap to the
- * real endpoint is body-only: the caller resolves it by re-invoking with the
+ * The customer details engaging a prospect must supply.
+ *
+ * A prospect records only a company, a contact name and a note, but a
+ * customer needs an email and phone, so the engage dialog collects them.
+ */
+export interface EngageCustomerInput {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+}
+
+/**
+ * Thrown when a customer with the prospect's email is already on the book.
+ * Mirrors the backend's 409: the caller resolves it by re-invoking with the
  * existing customer's id, or by cancelling the engage.
  */
 export class DuplicateCustomerError extends Error {
     readonly companyName: string;
-    readonly existingCustomerId: number;
+    readonly existingCustomerId: string;
 
-    constructor(companyName: string, existingCustomerId: number) {
+    constructor(companyName: string, existingCustomerId: string) {
         super(`A customer named "${companyName}" already exists.`);
         this.name = "DuplicateCustomerError";
         this.companyName = companyName;
@@ -1212,103 +1020,69 @@ export class DuplicateCustomerError extends Error {
 }
 
 /**
- * Promote a prospect into the live pipeline: register the company and open a
- * deal at Activation carrying the nurture note, then drop the prospect.
+ * Promote a prospect into the live pipeline.
  *
- * The company is created with only what the prospect record knows; the rest
- * is filled in on the Companies screen, where the new record shows up needing
- * both profiles pushed. Returns the new deal id so the caller can open it.
- *
- * When a company with the prospect's name (case-insensitive, trimmed) is
- * already registered, throws `DuplicateCustomerError` instead of creating a
- * second record. Passing that customer's id as `customerId` links the deal
- * to the existing company instead, and the deal bills in that company's
- * primary billing currency.
+ * The server creates the customer and an open deal at Activation and drops
+ * the prospect, all in one transaction. Product, seats and currency are left
+ * to the server's defaults (first catalogued product, one seat, the
+ * customer's primary currency); the rep adjusts them in the deal drawer.
  */
 export async function engageProspect(
-    prospectId: number,
-    customerId?: number
-): Promise<{ dealId: number }> {
-    const prospect = findProspect(prospectId);
-    if (!prospect) throw new Error(`Prospect ${prospectId} not found`);
+    prospectId: string,
+    input: { customerId: string } | { customer: EngageCustomerInput; company: string }
+): Promise<{ dealId: string }> {
+    const body =
+        "customerId" in input
+            ? { customerId: input.customerId }
+            : {
+                  customer: {
+                      customerType: "business",
+                      companyName: input.company,
+                      firstName: input.customer.firstName,
+                      lastName: input.customer.lastName,
+                      email: input.customer.email,
+                      phone: input.customer.phone,
+                  },
+              };
 
-    let company: SeedCompany;
-    if (customerId !== undefined) {
-        const existing = findCompany(customerId);
-        if (!existing) throw new Error(`Company ${customerId} not found`);
-        company = existing;
-    } else {
-        const wanted = prospect.company.trim().toLowerCase();
-        const duplicate = getCompanies().find(
-            (candidate) => candidate.name.trim().toLowerCase() === wanted
+    try {
+        const deal = await apiPost<Schema<"DealResponse">>(
+            `/nurture/${prospectId}/engage`,
+            body
         );
-        if (duplicate) throw new DuplicateCustomerError(duplicate.name, duplicate.id);
-
-        const prefix = uniqueCodePrefix(prospect.company);
-        company = addCompany({
-            id: allocateId(),
-            owner: prospect.owner,
-            name: prospect.company,
-            industry: "Other",
-            contact: prospect.contact,
-            email: "",
-            phone: "",
-            tenant: null,
-            primaryCurrency: "KES",
-            registeredDaysAgo: 0,
-            profiles: {
-                USD: {
-                    code: `${prefix}-USD`,
-                    terms: "30 days",
-                    tax: "Zero-rated (export)",
-                    creditLimit: 25_000,
-                    synced: false,
-                },
-                KES: {
-                    code: `${prefix}-KES`,
-                    terms: "14 days",
-                    tax: "VAT 16%",
-                    creditLimit: 1_300_000,
-                    synced: false,
-                },
-            },
-        });
+        // The prospect leaves the due queue behind the nav badge.
+        announceDeskChange();
+        return { dealId: deal.id };
+    } catch (error) {
+        // A 409 carries the existing customer, which the caller offers to link.
+        const conflict = error as { status?: number; data?: Record<string, unknown> };
+        if (conflict.status === 409) {
+            const existing = String(conflict.data?.customer_id ?? "");
+            throw new DuplicateCustomerError(
+                "company" in input ? input.company : "",
+                existing
+            );
+        }
+        throw error;
     }
-
-    const deal = addDeal({
-        id: allocateId(),
-        companyId: company.id,
-        owner: prospect.owner,
-        product: "To be scoped",
-        seats: 0,
-        valueUSD: prospect.estimatedValueUSD,
-        currency: company.primaryCurrency,
-        stage: 0,
-        status: "open",
-        history: [
-            {
-                stage: DEAL_STAGES[0],
-                note: `Moved from future pipeline. ${prospect.note}`,
-                daysAgo: 0,
-            },
-        ],
-    });
-
-    removeProspect(prospectId);
-    return { dealId: deal.id };
 }
 
 // Onboarding endpoints
 
 export interface OnboardingTask {
-    index: number;
+    /**
+     * The server's 1-based step number, which is both what the card counts off
+     * and the path segment the toggle endpoint takes. Named for what it is so
+     * neither use has to guess at the base.
+     */
+    position: number;
     label: string;
     completed: boolean;
 }
 
 export interface OnboardingRow {
-    id: number;
-    company_id: number;
+    id: string;
+    company_id: string;
     company_name: string;
     plan: string;
     tasks: OnboardingTask[];
@@ -1318,49 +1092,80 @@ export interface OnboardingRow {
     progress: number;
 }
 
-function toOnboardingRow(record: SeedOnboarding): OnboardingRow {
-    const tasks = ONBOARDING_TASKS.map((label, index) => ({
-        index,
-        label,
-        completed: record.completed[index] ?? false,
+/**
+ * Server checklist to view row.
+ *
+ * Steps carry their own `position`, which is what the toggle endpoint keys on,
+ * so it is preserved rather than re-derived from array order.
+ */
+function toOnboardingRow(record: Schema<"OnboardingResponse">): OnboardingRow {
+    const tasks: OnboardingTask[] = record.steps.map((step) => ({
+        position: step.position,
+        label: step.label,
+        completed: step.done,
     }));
-    const completed = tasks.filter((task) => task.completed).length;
 
     return {
         id: record.id,
-        company_id: record.companyId,
-        company_name: findCompany(record.companyId)?.name ?? "Unknown company",
-        plan: record.plan,
+        company_id: record.customer_id,
+        company_name: record.company_name,
+        plan: record.plan_label,
         tasks,
-        completed_count: completed,
-        total_count: tasks.length,
-        progress: tasks.length ? completed / tasks.length : 0,
+        completed_count: record.tasks_completed,
+        total_count: record.tasks_total,
+        progress: record.tasks_total ? record.tasks_completed / record.tasks_total : 0,
     };
 }
 
 /** Delivery checklists, least complete first, the ones needing work lead. */
-export async function getOnboardingList(): Promise<OnboardingRow[]> {
-    return getOnboardingRecords()
+export async function getOnboardingList(search?: string): Promise<OnboardingRow[]> {
+    const rows = await apiGetAll<Schema<"OnboardingResponse">>("/onboardings", {
+        search: search?.trim() || undefined,
+    });
+    return rows
         .map(toOnboardingRow)
-        .sort((a, b) => a.progress - b.progress);
+        .sort((first, second) => first.progress - second.progress);
 }
 
 /** Tick or untick one delivery step. */
 export async function setOnboardingTask(
-    onboardingId: number,
-    taskIndex: number,
-    completed: boolean
+    onboardingId: string,
+    taskPosition: number
 ): Promise<OnboardingRow> {
-    return toOnboardingRow(setOnboardingTaskRecord(onboardingId, taskIndex, completed));
+    return toOnboardingRow(
+        await apiPost<Schema<"OnboardingResponse">>(
+            `/onboardings/${onboardingId}/tasks/${taskPosition}/toggle`,
+            {}
+        )
+    );
 }
 
 /**
- * Called whenever desk data changes, so views that outlive the screen doing
+ * Called whenever a desk write lands, so views that outlive the screen doing
  * the writing (the sidebar's queue counts) can re-read. Returns an
- * unsubscribe. Becomes cache invalidation once the API is fetch-backed.
+ * unsubscribe.
+ *
+ * Deliberately a bare notification rather than a cache: the desk has no client
+ * store to invalidate, and each listener re-reads exactly what it needs.
  */
 export function subscribeToDeskChanges(listener: () => void): () => void {
-    return subscribeToStore(listener);
+    deskListeners.add(listener);
+    return () => {
+        deskListeners.delete(listener);
+    };
+}
+
+const deskListeners = new Set<() => void>();
+
+/** Announce a write. Listener failures must not break the write that caused them. */
+function announceDeskChange(): void {
+    deskListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch {
+            // A stale subscriber is not the writer's problem.
+        }
+    });
 }
 
 // Quotes & pricing endpoints
@@ -1374,19 +1179,48 @@ export interface PriceListRow {
     ten_seat_arr: number;
 }
 
-/** The Microsoft price list, per seat per month, with derived columns. */
-export function getPriceList(): PriceListRow[] {
-    return PRODUCTS.map((product) => ({
-        name: product.name,
-        monthly_per_seat: product.usdPerSeatMonth,
-        annual_per_seat: product.usdPerSeatMonth * 12,
-        ten_seat_arr: product.usdPerSeatMonth * 12 * 10,
-    }));
+/** The org's sales pricing: what it sells, and on what annual terms. */
+export interface SalesPricing {
+    catalog: PriceListRow[];
+    /**
+     * Percentage points off the per-seat monthly price for annual billing.
+     * The builder names it on its billing control and the server applies it,
+     * so reading it here keeps the label honest if an org changes it.
+     */
+    annual_discount_percent: number;
+}
+
+/**
+ * The org's price list and annual terms.
+ *
+ * The annual and ten-seat figures are computed server-side so the table and
+ * the quote builder can never disagree about what list price means.
+ */
+export async function getSalesPricing(): Promise<SalesPricing> {
+    const settings = await apiGet<Schema<"SalesPricingSettings">>(
+        "/owner/settings/sales-pricing"
+    );
+    return {
+        annual_discount_percent: money(settings.annual_billing_discount_pct),
+        catalog: settings.catalog.map((entry) => ({
+            name: entry.name,
+            monthly_per_seat: money(entry.usd_per_seat_month),
+            annual_per_seat: money(entry.usd_per_seat_year),
+            ten_seat_arr: money(entry.usd_ten_seat_arr),
+        })),
+    };
+}
+
+/** Just the price table, for the screen that only renders it. */
+export async function getPriceList(): Promise<PriceListRow[]> {
+    return (await getSalesPricing()).catalog;
 }
 
 export interface QuoteRow {
     id: string;
-    company_id: number;
+    /** User-facing reference ("Q-2031"), which is what every screen labels. */
+    quote_number: string;
+    company_id: string;
     company_name: string;
     profile_code: string;
     currency: BillingCurrency;
@@ -1396,36 +1230,28 @@ export interface QuoteRow {
     /** ISO date (yyyy-mm-dd). */
     issued_on: string;
     /** Deal the quote was raised from (deal drawer, #47), or null. */
-    deal_id: number | null;
+    deal_id: string | null;
 }
 
-/**
- * Deal linkage for quotes saved this session. The seed record predates the
- * deals↔quotes integration, so the link is held beside the store until the
- * real API persists it on the quote itself.
- *
- * TODO(#44-wiring): drop this map — `deal_id` is a column on the quote
- * record server-side and comes back on every quote response.
- */
-const quoteDealLinks = new Map<string, number>();
-
-function toQuoteRow(quote: ReturnType<typeof getQuoteRecords>[number]): QuoteRow {
+function toQuoteRow(quote: Schema<"QuoteSummary">): QuoteRow {
     return {
         id: quote.id,
-        company_id: quote.companyId,
-        company_name: findCompany(quote.companyId)?.name ?? "Unknown company",
-        profile_code: quote.profileCode,
-        currency: quote.currency,
-        total_usd: quote.totalUSD,
-        status: quote.status,
-        issued_on: isoDaysAgo(quote.daysAgo),
-        deal_id: quoteDealLinks.get(quote.id) ?? null,
+        quote_number: quote.quote_number,
+        company_id: quote.customer_id,
+        company_name: quote.customer_name,
+        profile_code: quote.billing_profile_code ?? "",
+        currency: quote.currency as BillingCurrency,
+        total_usd: money(quote.total_usd_equivalent ?? quote.total_due),
+        status: quote.display_status as QuoteStatus,
+        issued_on: quote.transaction_date,
+        deal_id: quote.deal_id ?? null,
     };
 }
 
 /** Saved quotes, newest first. */
 export async function getQuoteList(): Promise<QuoteRow[]> {
-    return getQuoteRecords().map(toQuoteRow);
+    const rows = await apiGetAll<Schema<"QuoteSummary">>("/quotes");
+    return rows.map(toQuoteRow);
 }
 
 /** How a quote line is billed. Annual trades a 15% discount for a year's commitment. */
@@ -1440,7 +1266,7 @@ export interface QuoteLineInput {
     discountPercent: number;
 }
 
-/** One priced line. Amounts are in the quote's display currency. */
+/** One priced line, in the currency the quote is written in. */
 export interface PricedQuoteLine {
     /** Undiscounted list price per seat per month. */
     list_per_seat_month: number;
@@ -1450,93 +1276,94 @@ export interface PricedQuoteLine {
     is_discounted: boolean;
     /** Per month for monthly lines, per year for annual ones. */
     line_total: number;
+    /** "per month" or "per year", as the server labels the period. */
+    period_label: string;
 }
 
 export interface PricedQuote {
     lines: PricedQuoteLine[];
     subtotal: number;
-    tax_rate: number;
+    /** The profile's tax treatment, e.g. "VAT 16%" or "Zero-rated (export)". */
+    tax_label: string;
     tax_amount: number;
     total: number;
-    /** The same total in every other quote currency, for the "≈" line. */
-    equivalents: Array<{ currency: QuoteCurrency; amount: number }>;
-    currency: QuoteCurrency;
-    /** Null for reference currencies, which have no profile to post against. */
-    profile: BillingProfile | null;
-    /** True when the quote can actually be saved. */
-    can_save: boolean;
-    /** Why saving is blocked, for the button's title. Null when it is not. */
-    blocked_reason: string | null;
+    /** The billing currency the server actually priced in. */
+    currency: BillingCurrency;
+    /** The profile the quote posts against. Always present when priced. */
+    profile: BillingProfile;
+    /**
+     * The total in every reference currency the server converts to. Drives
+     * both the "≈" line and what a reference-currency selection displays.
+     */
+    conversions: Partial<Record<QuoteCurrency, number>>;
 }
 
+/** A quote-builder line as the server's prefill contract expects it. */
+const toLineInput = (line: QuoteLineInput) => ({
+    product: line.product,
+    seats: Math.max(0, Math.trunc(line.seats)),
+    billingPeriod: line.billing,
+    extraDiscountPct: String(clampPercent(line.discountPercent)),
+});
+
 /**
- * Price a set of lines.
+ * Price a set of lines against a deal.
  *
- * Deliberately synchronous and pure: the builder recomputes on every
- * keystroke, and a promise per character would be wasteful and would let
- * results land out of order. It is still the single definition of the
- * arithmetic, so it moves server-side unchanged when the API lands.
+ * Every figure here is the server's: catalogue list price, the annual
+ * billing discount, the extra discount, the VAT line and the reference
+ * conversions all come back from `/deals/{id}/quotes/preview`, which shares
+ * `calculate_totals` with the create path, so a preview can never disagree
+ * with what saving would persist.
  *
  * Tax follows the *profile*, not the currency: a KES profile carries VAT at
- * 16%, a USD profile is a zero-rated export. Reference currencies have no
- * profile, so no tax and no save.
+ * 16%, a USD profile is a zero-rated export. `currency` may be left null to
+ * take the deal's own billing currency. EUR and GBP are reference currencies
+ * with no profile behind them, so they are never sent: the builder reads them
+ * off `conversions` instead.
  */
-export function priceQuote(
+export async function priceQuote(
+    dealId: string,
     lines: QuoteLineInput[],
-    currency: QuoteCurrency,
-    company: CompanyRow | null
-): PricedQuote {
-    const profile =
-        company && isBillingCurrency(currency)
-            ? (company.profiles.find((entry) => entry.currency === currency) ?? null)
-            : null;
+    currency: BillingCurrency | null
+): Promise<PricedQuote> {
+    const preview = await apiPost<Schema<"DealQuotePreviewResponse">>(
+        `/deals/${dealId}/quotes/preview`,
+        {
+            lines: lines.map(toLineInput),
+            ...(currency === null ? {} : { currency }),
+        }
+    );
 
-    const hasSellableSeats =
-        lines.length > 0 &&
-        lines.every((line) => Number.isFinite(line.seats) && line.seats >= MIN_SEATS);
-
-    // Totals are accumulated in USD alongside the display shape, so the
-    // subtotal never re-derives itself from already-converted figures.
-    let subtotalUSD = 0;
-
-    const priced = lines.map((line): PricedQuoteLine => {
-        const product = PRODUCTS.find((candidate) => candidate.name === line.product);
-        const listUSD = product?.usdPerSeatMonth ?? 0;
-
-        const annualFactor = line.billing === "annual" ? 1 - ANNUAL_DISCOUNT : 1;
-        const discountFactor = 1 - clampPercent(line.discountPercent) / 100;
-        const perSeatMonthUSD = listUSD * annualFactor * discountFactor;
-
-        // An annual line bills twelve months up front; a monthly line bills one.
-        const months = line.billing === "annual" ? 12 : 1;
-        const lineTotalUSD = perSeatMonthUSD * Math.max(0, line.seats) * months;
-        subtotalUSD += lineTotalUSD;
-
-        return {
-            list_per_seat_month: toCurrency(listUSD, currency),
-            per_seat_month: toCurrency(perSeatMonthUSD, currency),
-            is_discounted: annualFactor * discountFactor < 1,
-            line_total: toCurrency(lineTotalUSD, currency),
-        };
-    });
-
-    const taxRate = profile?.tax === "VAT 16%" ? 0.16 : 0;
-    const totalUSD = subtotalUSD * (1 + taxRate);
-
+    const total = money(preview.total_due);
     return {
-        lines: priced,
-        subtotal: toCurrency(subtotalUSD, currency),
-        tax_rate: taxRate,
-        tax_amount: toCurrency(subtotalUSD * taxRate, currency),
-        total: toCurrency(totalUSD, currency),
-        equivalents: QUOTE_CURRENCIES.filter((code) => code !== currency).map((code) => ({
-            currency: code,
-            amount: toCurrency(totalUSD, code),
-        })),
-        currency,
-        profile,
-        can_save: profile !== null && hasSellableSeats,
-        blocked_reason: blockedReason(profile !== null, hasSellableSeats),
+        lines: preview.lines.map((line) => {
+            const list = money(line.list_price_per_user_month);
+            const discounted = money(line.discounted_price_per_user_month);
+            return {
+                list_per_seat_month: list,
+                per_seat_month: discounted,
+                is_discounted: discounted < list,
+                line_total: money(line.line_total),
+                period_label: line.period_label,
+            };
+        }),
+        subtotal: money(preview.subtotal),
+        tax_label: preview.tax_label,
+        tax_amount: money(preview.tax_total),
+        total,
+        currency: preview.currency as BillingCurrency,
+        profile: {
+            code: preview.billing_profile.code,
+            terms: preview.billing_profile.payment_terms,
+            tax: preview.billing_profile.tax_treatment,
+            synced: preview.billing_profile.synced,
+        },
+        conversions: {
+            USD: money(preview.conversions.usd),
+            EUR: money(preview.conversions.eur),
+            GBP: money(preview.conversions.gbp),
+            [preview.currency as BillingCurrency]: total,
+        },
     };
 }
 
@@ -1544,86 +1371,103 @@ export function priceQuote(
  * A line with no seats contributes nothing, so a quote made only of such
  * lines totals zero. Saving that produces a document nobody can act on.
  */
-const MIN_SEATS = 1;
-
-function blockedReason(hasProfile: boolean, hasSeats: boolean): string | null {
-    if (!hasProfile) return "Switch to USD or KES to save this quote";
-    if (!hasSeats) return `Every line needs at least ${MIN_SEATS} seat`;
-    return null;
-}
+export const MIN_SEATS = 1;
 
 const clampPercent = (value: number) =>
-    Number.isFinite(value) ? Math.min(Math.max(value, 0), 100) : 0;
+    Number.isFinite(value) ? Math.min(Math.max(value, 0), 99) : 0;
 
-const toCurrency = (usd: number, currency: QuoteCurrency) => usd * FX_RATES[currency];
-
-const isBillingCurrency = (currency: QuoteCurrency): currency is BillingCurrency =>
+export const isBillingCurrency = (currency: QuoteCurrency): currency is BillingCurrency =>
     BILLING_CURRENCIES.includes(currency as BillingCurrency);
 
 export interface SaveQuoteInput {
-    companyId: number;
-    currency: QuoteCurrency;
+    /**
+     * The deal the quote is raised from. Quotes belong to deals server-side:
+     * the customer, the reference sequence and the billing profile are all
+     * derived from it, so there is no company-only save.
+     */
+    dealId: string;
+    /** Null takes the deal's own billing currency. */
+    currency: BillingCurrency | null;
     lines: QuoteLineInput[];
-    /** Deal the builder was opened from (deal drawer, #47). Optional. */
-    dealId?: number;
 }
 
 /**
- * Save a quote against the company's profile for the chosen currency.
- * Saves as Draft, pushing it to the quotations module is a separate step,
- * which is what the Synced status on the list records.
+ * A newly created quote, as much of it as the create response carries.
+ *
+ * Narrower than `QuoteRow` on purpose: the quotes module's create response
+ * has no company name, profile code or USD equivalent on it, and inventing
+ * them client-side is exactly the drift the preview/create split avoids. The
+ * builder already holds the profile from its preview, and the list refreshes
+ * from `getQuoteList` straight after.
  */
-export async function saveQuote(input: SaveQuoteInput): Promise<QuoteRow> {
-    const company = findCompany(input.companyId);
-    if (!company) throw new Error("Pick a company first.");
+export interface SavedQuote {
+    id: string;
+    quote_number: string;
+    currency: BillingCurrency;
+    /** In the quote's own currency. */
+    total_due: number;
+    status: QuoteStatus;
+}
+
+/**
+ * Save a quote against the deal's profile for the chosen currency.
+ *
+ * Saves as Draft; pushing it through to accounting is a separate step, which
+ * is what the Synced status on the list records.
+ */
+export async function saveQuote(input: SaveQuoteInput): Promise<SavedQuote> {
     if (input.lines.length === 0) throw new Error("Add at least one line.");
-    if (!isBillingCurrency(input.currency)) {
-        throw new Error(
-            `${input.currency} is a reference currency. Switch to USD or KES to save a quote.`
-        );
+    if (input.lines.some((line) => !(line.seats >= MIN_SEATS))) {
+        throw new Error(`Every line needs at least ${MIN_SEATS} seat.`);
     }
 
-    const priced = priceQuote(input.lines, input.currency, toCompanyRow(company));
-    const profile = company.profiles[input.currency];
+    const quote = await apiPost<Schema<"QuoteResponse">>(
+        `/deals/${input.dealId}/quotes`,
+        {
+            lines: input.lines.map(toLineInput),
+            ...(input.currency === null ? {} : { currency: input.currency }),
+        }
+    );
 
-    // Ids continue the Q-2031 series rather than restarting per session.
-    const nextNumber = 2031 + getQuoteRecords().length;
-
-    const quote = addQuote({
-        id: `Q-${nextNumber}`,
-        companyId: company.id,
-        profileCode: profile.code,
-        currency: input.currency,
-        totalUSD: priced.total / FX_RATES[input.currency],
-        status: "Draft",
-        daysAgo: 0,
-    });
-
-    // TODO(#44-wiring): send deal_id in the create payload instead; the
-    // quotes module persists the link and echoes it back on the response.
-    if (input.dealId !== undefined) quoteDealLinks.set(quote.id, input.dealId);
-
-    return toQuoteRow(quote);
+    return {
+        id: quote.id,
+        quote_number: quote.quote_number,
+        currency: quote.currency as BillingCurrency,
+        total_due: money(quote.total_due),
+        status: quote.display_status as QuoteStatus,
+    };
 }
 
 /** Push a saved quote to the quotations module. */
 export async function syncQuote(quoteId: string): Promise<void> {
-    patchQuote(quoteId, { status: "Synced" });
+    // "Posts to {profile}" on the desk is the quotes module's conversion to an
+    // invoice: QuoteDisplayStatus maps Synced <- invoiced, i.e. pushed through
+    // to accounting. There is no separate sync route, and adding one would
+    // give the same state two owners.
+    await apiPost<Schema<"QuoteConvertToInvoiceResponse">>(
+        `/quotes/${quoteId}/convert-to-invoice`,
+        {}
+    );
 }
 
 /**
  * Thrown when a quote cannot be issued because the billing profile it posts
  * against has never been pushed to accounting. Carries the company id so the
  * UI can deep-link straight into the company drawer's sync flow (#46).
+ *
+ * The guard is raised on the desk rather than by the quotes module: the
+ * module's mark-sent transition only cares about the quote's own status, and
+ * the sync state lives on the customer's billing profile, which the desk
+ * already has from the companies list.
  */
 export class UnsyncedProfileError extends Error {
-    readonly companyId: number;
+    readonly companyId: string;
     readonly profileCode: string;
 
-    constructor(companyId: number, profileCode: string) {
+    constructor(companyId: string, profileCode: string) {
         super(
             `Profile ${profileCode} has not been synced to accounting yet. ` +
-                "Push the profile first, then issue the quote."
+            "Push the profile first, then issue the quote."
         );
         this.name = "UnsyncedProfileError";
         this.companyId = companyId;
@@ -1632,30 +1476,18 @@ export class UnsyncedProfileError extends Error {
 }
 
 /**
- * Issue a Draft quote to accounting — the issue/finalize transition.
- *
- * A quote can only post against a profile accounting knows about, so an
- * unsynced profile fails with `UnsyncedProfileError` rather than a plain
- * message: the caller routes the user into the sync flow instead of showing
- * a dead end.
- *
- * TODO(#44-wiring): swap the body to the existing quotes module transition
- * endpoint (issue/finalize), following `quoteApi.ts`.
+ * Issue a Draft quote. The mark-sent transition is what moves a quote from
+ * Draft to Pending on the desk.
  */
-export async function pushQuoteToAccounting(quoteId: string): Promise<QuoteRow> {
-    const quote = getQuoteRecords().find((candidate) => candidate.id === quoteId);
-    if (!quote) throw new Error(`Quote ${quoteId} not found`);
-    if (quote.status !== "Draft") {
-        throw new Error("Only Draft quotes can be pushed to accounting.");
-    }
-
-    const company = findCompany(quote.companyId);
-    if (!company) throw new Error(`Company ${quote.companyId} not found`);
-
-    const profile = company.profiles[quote.currency];
-    if (!profile.synced) throw new UnsyncedProfileError(company.id, profile.code);
-
-    return toQuoteRow(patchQuote(quoteId, { status: "Synced" }));
+export async function pushQuoteToAccounting(quoteId: string): Promise<SavedQuote> {
+    const sent = await apiPost<Schema<"QuoteResponse">>(`/quotes/${quoteId}/mark-sent`, {});
+    return {
+        id: sent.id,
+        quote_number: sent.quote_number,
+        currency: sent.currency as BillingCurrency,
+        total_due: money(sent.total_due),
+        status: sent.display_status as QuoteStatus,
+    };
 }
 
 // Formatting

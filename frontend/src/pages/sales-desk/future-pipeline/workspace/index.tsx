@@ -24,10 +24,12 @@ import {
     formatDeskMoney,
     getFuturePipelineSummary,
     getProspects,
+    type EngageCustomerInput,
     type FuturePipelineSummary,
     type ProspectRow,
 } from "@/services/salesDeskApi";
 import { AddProspectDialog } from "../components/AddProspectDialog";
+import { EngageProspectDialog } from "../components/EngageProspectDialog";
 import { DueBadge, UrgencyDot } from "../components/DueBadge";
 import { SuccessNotice } from "../components/SuccessNotice";
 
@@ -40,9 +42,9 @@ const firstNameOf = (name: string) => name.split(" ")[0];
 
 /** An engage that hit the duplicate-customer 409, awaiting a decision. */
 interface DuplicatePrompt {
-    prospectId: number;
+    prospectId: string;
     companyName: string;
-    existingCustomerId: number;
+    existingCustomerId: string;
 }
 
 export default function SalesDeskFuturePipelineWorkspacePage() {
@@ -69,8 +71,8 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
         let active = true;
 
         Promise.all([
-            getProspects(debouncedSearch, undefined, repFilter),
-            getFuturePipelineSummary(undefined, repFilter),
+            getProspects(debouncedSearch, repFilter),
+            getFuturePipelineSummary(repFilter, debouncedSearch),
         ])
             .then(([rows, next]) => {
                 if (!active) return;
@@ -98,26 +100,39 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
     const [duplicate, setDuplicate] = useState<DuplicatePrompt | null>(null);
     const [isLinking, setIsLinking] = useState(false);
 
+    // The prospect awaiting customer details, if the engage dialog is open.
+    const [engaging, setEngaging] = useState<ProspectRow | null>(null);
+    const [isEngaging, setIsEngaging] = useState(false);
+
     /** Promote the prospect, then follow it through to the deal it became. */
-    const engage = useCallback(
-        async (prospect: ProspectRow) => {
+    const confirmEngage = useCallback(
+        async (customer: EngageCustomerInput) => {
+            if (!engaging) return;
+            setIsEngaging(true);
             try {
-                const { dealId } = await engageProspect(prospect.id);
+                const { dealId } = await engageProspect(engaging.id, {
+                    customer,
+                    company: engaging.company,
+                });
+                setEngaging(null);
                 navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
             } catch (err) {
                 if (err instanceof DuplicateCustomerError) {
                     setDuplicate({
-                        prospectId: prospect.id,
-                        companyName: err.companyName,
+                        prospectId: engaging.id,
+                        companyName: err.companyName || engaging.company,
                         existingCustomerId: err.existingCustomerId,
                     });
+                    setEngaging(null);
                     return;
                 }
                 setError(err instanceof Error ? err.message : "Could not engage that prospect.");
                 setRevision((value) => value + 1);
+            } finally {
+                setIsEngaging(false);
             }
         },
-        [navigate]
+        [engaging, navigate]
     );
 
     /** Resolve the duplicate by linking the deal to the existing customer. */
@@ -125,10 +140,9 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
         if (!duplicate) return;
         setIsLinking(true);
         try {
-            const { dealId } = await engageProspect(
-                duplicate.prospectId,
-                duplicate.existingCustomerId
-            );
+            const { dealId } = await engageProspect(duplicate.prospectId, {
+                customerId: duplicate.existingCustomerId,
+            });
             navigate(`/sales-desk/pipeline/workspace?deal=${dealId}`);
         } catch (err) {
             setDuplicate(null);
@@ -209,7 +223,7 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 render: (prospect) => (
                     <Button
                         variant="primary"
-                        onClick={() => void engage(prospect)}
+                        onClick={() => setEngaging(prospect)}
                         aria-label={`Start engaging ${prospect.company}`}
                     >
                         Start engaging <ArrowRight size={16} />
@@ -217,7 +231,7 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 ),
             },
         ],
-        [engage]
+        []
     );
 
     return (
@@ -300,6 +314,13 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
                 onConfirm={() => void linkToExisting()}
                 isLoading={isLinking}
             />
+            <EngageProspectDialog
+                prospect={engaging}
+                isSaving={isEngaging}
+                onClose={() => setEngaging(null)}
+                onConfirm={(customer) => void confirmEngage(customer)}
+            />
+
         </div>
     );
 }

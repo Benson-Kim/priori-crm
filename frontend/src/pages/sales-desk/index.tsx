@@ -13,15 +13,10 @@ import { useEffect, useState } from "react";
 
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table, type Column } from "@/components/ui/Table";
-import { formatDate } from "@/lib/utils";
+import { formatDate, plural } from "@/lib/utils";
 import {
-    DEFAULT_DESK_CURRENCY,
     formatDeskMoney,
-    getBookingsTrend,
-    getPipelineByStage,
-    getRecentCompanies,
-    getRepQuotaProgress,
-    getSalesDeskSummary,
+    getSalesDeskDashboard,
     type BookingsPoint,
     type RecentCompany,
     type RepQuotaLine,
@@ -35,10 +30,6 @@ import { DeskPanel } from "./components/DeskPanel";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 
 const RECENT_COMPANY_LIMIT = 4;
-
-/** Pluralise a count against its noun: "1 deal", "4 deals". */
-const plural = (count: number, noun: string) =>
-    `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 interface DashboardData {
     summary: SalesDeskSummary;
@@ -97,7 +88,7 @@ function RepQuotaPanel({ reps }: Readonly<{ reps: RepQuotaLine[] }>) {
                                     {rep.name}
                                 </span>
                                 <span className="shrink-0 text-xs text-sd-muted">
-                                    {formatDeskMoney(rep.weighted_pipeline)} /{" "}
+                                    {formatDeskMoney(rep.won_value)} /{" "}
                                     {formatDeskMoney(rep.quarter_target)}
                                 </span>
                             </div>
@@ -191,15 +182,16 @@ export default function SalesDeskDashboardPage() {
     useEffect(() => {
         let active = true;
 
-        Promise.all([
-            getSalesDeskSummary(DEFAULT_DESK_CURRENCY),
-            getPipelineByStage(DEFAULT_DESK_CURRENCY),
-            getBookingsTrend(DEFAULT_DESK_CURRENCY),
-            getRepQuotaProgress(DEFAULT_DESK_CURRENCY),
-            getRecentCompanies(RECENT_COMPANY_LIMIT),
-        ])
-            .then(([summary, stages, bookings, reps, companies]) => {
-                if (active) setData({ summary, stages, bookings, reps, companies });
+        getSalesDeskDashboard()
+            .then((dashboard) => {
+                if (active)
+                    setData({
+                        summary: dashboard.summary,
+                        stages: dashboard.by_stage,
+                        bookings: dashboard.bookings,
+                        reps: dashboard.rep_quota,
+                        companies: dashboard.recent_companies.slice(0, RECENT_COMPANY_LIMIT),
+                    });
             })
             .catch((err) => {
                 if (active)

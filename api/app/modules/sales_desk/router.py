@@ -36,6 +36,7 @@ from app.lib.config import settings
 from app.modules.deals.schemas import DealFilterParams
 from app.modules.sales_desk.audit import audit_sales_desk_export
 from app.modules.sales_desk.schemas import (
+    DeskCompaniesResponse,
     PipelineOverviewResponse,
     SalesDeskDashboardResponse,
     SalesDeskNotificationsResponse,
@@ -125,6 +126,36 @@ def get_notifications(
     owner: OwnerParam = None,
 ) -> SalesDeskNotificationsResponse:
     return service.get_notifications(owner)
+
+
+@router.get(
+    "/companies",
+    response_model=DeskCompaniesResponse,
+    summary="Sales Desk companies directory",
+    description=(
+        "The Companies table (Companies.svg) in one round trip: each company "
+        "with its industry, primary contact, both billing profiles and their "
+        "accounting sync state, the owning rep and its deal counts. The "
+        "customers list endpoint returns a leaner summary built for the "
+        "accounting screens, which is why the desk has its own row shape. "
+        "`unsynced=true` narrows to companies with at least one profile not "
+        "yet pushed to accounting, the same semantics as the Needs sync tab "
+        "and the sidebar badge."
+    ),
+    responses={200: {"description": "Companies directory"}},
+)
+def get_companies(
+    service: SalesDeskServiceDep,
+    owner: OwnerParam = None,
+    search: Annotated[
+        str | None, Query(description="Match company, contact, industry or tenant")
+    ] = None,
+    unsynced: Annotated[
+        bool, Query(description="Only companies with an unsynced billing profile")
+    ] = False,
+    limit: Annotated[int, Query(ge=1, le=500, description="Maximum rows")] = 200,
+) -> DeskCompaniesResponse:
+    return service.get_companies(owner, search, unsynced, limit)
 
 
 @router.get(

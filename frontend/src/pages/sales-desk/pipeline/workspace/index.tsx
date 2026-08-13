@@ -21,7 +21,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, type Column } from "@/components/ui/Table";
 import { useDebounce } from "@/hooks/useDebounce";
-import { cn, formatDate, saveBlob } from "@/lib/utils";
+import { cn, formatDate, plural, saveBlob } from "@/lib/utils";
 import {
     advanceDeal,
     closeDeal,
@@ -72,7 +72,7 @@ const isActivityKey = (value: string | null): value is ActivityFilterKey =>
 
 export default function SalesDeskPipelineWorkspacePage() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const selectedDealId = Number(searchParams.get("deal")) || null;
+    const selectedDealId = searchParams.get("deal") || null;
 
     /*
      * Filter state is read straight from the URL (issue #47 scope 6), with
@@ -169,7 +169,7 @@ export default function SalesDeskPipelineWorkspacePage() {
     }, [selectedDealId, revision]);
 
     const selectDeal = useCallback(
-        (dealId: number | null) => {
+        (dealId: string | null) => {
             setSearchParams(
                 (params) => {
                     if (dealId === null) params.delete("deal");
@@ -217,7 +217,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                                 {deal.company_name}
                             </span>
                             <span className="block text-[11px] text-sd-muted">
-                                {deal.product} · {deal.seats} seats · {deal.billing_currency}
+                                {deal.product} · {plural(deal.seats, "seat")} · {deal.billing_currency}
                             </span>
                         </span>
                     </span>
@@ -241,7 +241,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                 className: `${CELL_CLASS} w-[110px]`,
                 render: (deal) => (
                     <span className="text-[13px] font-bold text-sd-ink">
-                        {formatDeskMoneyCompact(deal.value)}
+                        {formatDeskMoneyCompact(deal.value, deal.billing_currency)}
                     </span>
                 ),
             },
@@ -378,7 +378,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                             variant="sales-desk"
                             className={TABLE_OVERRIDES}
                             selectedKey={
-                                selectedDealId === null ? undefined : String(selectedDealId)
+                                selectedDealId ?? undefined
                             }
                             emptyMessage="No deals match these filters."
                         />
