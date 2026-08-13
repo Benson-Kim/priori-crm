@@ -129,6 +129,49 @@ class TestDisabledModuleReturns403:
         assert enabled_modules["invoices"] is True
 
 
+class TestSalesDeskModule:
+    """The Sales Desk (!46) is toggleable like any other business module."""
+
+    def test_sales_desk_listed_in_admin_modules(self, client, db):
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        resp = client.get("/api/v1/owner/modules", headers=_auth(admin))
+        assert resp.status_code == 200
+        modules = {m["moduleKey"]: m for m in resp.json()["modules"]}
+        assert "sales_desk" in modules
+        assert modules["sales_desk"]["enabled"] is True
+        assert modules["sales_desk"]["essential"] is False
+
+    def test_disabling_sales_desk_rejects_router_with_403(self, client, db):
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        member = _seed_user(db, "member@mail.com", UserRole.MEMBER)
+        headers = _auth(admin)
+
+        assert (
+            client.get("/api/v1/sales-desk/dashboard", headers=headers).status_code
+            == 200
+        )
+
+        resp = client.patch(
+            "/api/v1/owner/modules/sales_desk",
+            json={"enabled": False},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "moduleKey": "sales_desk",
+            "enabled": False,
+            "essential": False,
+        }
+
+        blocked = client.get("/api/v1/sales-desk/dashboard", headers=_auth(member))
+        assert blocked.status_code == 403
+        assert "disabled" in blocked.json()["error"].lower()
+
+        # Deals/nurture/onboarding keep their own independent keys: disabling
+        # the Sales Desk shell does not disable the underlying deals module.
+        assert client.get("/api/v1/deals", headers=headers).status_code == 200
+
+
 class TestEssentialModules:
     def test_disabling_essential_module_is_422(self, client, db):
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
