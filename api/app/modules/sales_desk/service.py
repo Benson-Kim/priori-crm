@@ -42,12 +42,12 @@ from app.modules.owner.service import (
 from app.modules.sales_desk.queries import SalesDeskRepository
 from app.modules.sales_desk.schemas import (
     BookingsMonth,
-    DeskCompaniesResponse,
-    DeskCompanyProfile,
-    DeskCompanyRow,
     ClosedPeriodKpi,
     ClosedStripColumn,
     DashboardKpis,
+    DeskCompaniesResponse,
+    DeskCompanyProfile,
+    DeskCompanyRow,
     HygieneCounts,
     PipelineOverviewResponse,
     PipelineWeightedKpi,
@@ -682,8 +682,7 @@ class SalesDeskService:
                 DeskCompanyRow(
                     id=str(row.id),
                     name=(
-                        row.company_name
-                        or f"{row.first_name} {row.last_name}".strip()
+                        row.company_name or f"{row.first_name} {row.last_name}".strip()
                     ),
                     industry=row.industry,
                     contact=f"{row.first_name} {row.last_name}".strip(),
