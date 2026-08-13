@@ -7,7 +7,19 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from app.common.database import Base, get_db
+from app.lib.config import settings
 from app.main import app
+
+# The whole suite drives the shared `app` through one unauthenticated
+# TestClient, so every request lands in a single rate-limit bucket
+# ("testclient"). With the production limiter active (60 req/min) the suite
+# trips 429s once it makes >60 requests inside a sliding minute — a
+# timing-dependent flake, not a product signal. Rate-limit behaviour has its
+# own dedicated coverage (test_rate_limit.py builds an isolated app and
+# re-enables the limiter via monkeypatch; test_rate_limiter.py mocks
+# settings), so it stays fully tested. The middleware reads this setting on
+# every dispatch, so flipping it here is sufficient.
+settings.RATE_LIMIT_ENABLED = False
 
 # Prefer the real PostgreSQL database (provided by the CI service via
 # DATABASE_URL) so Postgres-only constructs - gen_random_uuid(),
