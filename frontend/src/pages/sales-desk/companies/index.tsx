@@ -28,6 +28,8 @@ export default function SalesDeskCompaniesPage() {
     const navigate = useNavigate();
 
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
+    // The server's match count, before the row limit — the honest "N companies".
+    const [total, setTotal] = useState(0);
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebounce(search, 250);
     const [isCreating, setIsCreating] = useState(false);
@@ -41,9 +43,10 @@ export default function SalesDeskCompaniesPage() {
         let active = true;
 
         getCompanyList({ search: debouncedSearch })
-            .then((rows) => {
+            .then((list) => {
                 if (active) {
-                    setCompanies(rows);
+                    setCompanies(list.items);
+                    setTotal(list.total);
                     setError(null);
                 }
             })
@@ -182,16 +185,24 @@ export default function SalesDeskCompaniesPage() {
             {isLoading ? (
                 <LoadingState message="Loading companies..." className="h-64" />
             ) : (
-                <Table
-                    columns={columns}
-                    data={companies}
-                    rowKey={(company) => String(company.id)}
-                    onRowClick={openInWorkspace}
-                    variant="sales-desk"
-                    className="shadow-sd-card [&_table]:min-w-[1100px]"
-                    chevron={() => "Open the companies workspace"}
-                    emptyMessage="No companies match that search."
-                />
+                <>
+                    {/* The server total, which stays honest past the row limit. */}
+                    <p className="text-xs text-sd-muted">
+                        {total} {total === 1 ? "company" : "companies"}
+                        {total > companies.length &&
+                            ` · showing the ${companies.length} most recently registered`}
+                    </p>
+                    <Table
+                        columns={columns}
+                        data={companies}
+                        rowKey={(company) => String(company.id)}
+                        onRowClick={openInWorkspace}
+                        variant="sales-desk"
+                        className="shadow-sd-card [&_table]:min-w-[1100px]"
+                        chevron={() => "Open the companies workspace"}
+                        emptyMessage="No companies match that search."
+                    />
+                </>
             )}
 
             <NewCompanyDialog

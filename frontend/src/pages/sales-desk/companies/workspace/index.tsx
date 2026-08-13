@@ -50,6 +50,9 @@ export default function SalesDeskCompaniesWorkspacePage() {
 
     const [allCompanies, setAllCompanies] = useState<CompanyRow[]>([]);
     const [unsyncedCompanies, setUnsyncedCompanies] = useState<CompanyRow[]>([]);
+    // Server match counts, before the row limit — the honest tab counts.
+    const [allTotal, setAllTotal] = useState(0);
+    const [unsyncedTotal, setUnsyncedTotal] = useState(0);
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -71,8 +74,10 @@ export default function SalesDeskCompaniesWorkspacePage() {
         ])
             .then(([all, unsynced]) => {
                 if (seq !== seqRef.current) return;
-                setAllCompanies(all);
-                setUnsyncedCompanies(unsynced);
+                setAllCompanies(all.items);
+                setUnsyncedCompanies(unsynced.items);
+                setAllTotal(all.total);
+                setUnsyncedTotal(unsynced.total);
                 setError(null);
             })
             .catch((err) => {
@@ -296,6 +301,14 @@ export default function SalesDeskCompaniesWorkspacePage() {
                         />
                     )}
                 </div>
+
+                {/* When the server matched more than the row limit returned. */}
+                {rowsTotal > rows.length && (
+                    <p className="text-xs text-sd-muted">
+                        Showing the {rows.length} most recently registered of{" "}
+                        {rowsTotal} companies — narrow the search to find the rest.
+                    </p>
+                )}
             </div>
 
             {/*

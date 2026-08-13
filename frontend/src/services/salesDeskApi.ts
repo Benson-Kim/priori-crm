@@ -265,6 +265,47 @@ export interface BillingProfile {
  */
 const toStageIndex = (serverIndex: number) => Math.max(0, serverIndex - 1);
 
+/**
+ * The next open stage a deal can advance to, or null when it is closed or
+ * already at the last selling stage.
+ *
+ * `serverStageIndex` is the server's 1-BASED index, and `DEAL_STAGES` is
+ * 0-based, so the base difference IS the +1: `DEAL_STAGES[serverStageIndex]`
+ * is the stage after the current one. Negotiation (4) walks off the end of
+ * the four-stage list, which is exactly the null the drawer wants.
+ */
+function nextDealStage(status: DealStatus, serverStageIndex: number): DealStage | null {
+    if (status !== "open") return null;
+    const next: DealStage | undefined = DEAL_STAGES[serverStageIndex];
+    return next ?? null;
+}
+
+/**
+ * Pins next-stage per stage against the server's 1-based indices, checked at
+ * module load in dev: Activation → Qualification → Proposal & Quote →
+ * Negotiation → null, and closed deals never advance. Regressing the base
+ * conversion (the off-by-one this replaces skipped a stage) fails loudly
+ * here instead of mislabelling the drawer's "Advance to X" button.
+ */
+if (import.meta.env.DEV) {
+    const NEXT_STAGE_TABLE: ReadonlyArray<[DealStatus, number, DealStage | null]> = [
+        ["open", 1, "Qualification"], // Activation
+        ["open", 2, "Proposal & Quote"], // Qualification
+        ["open", 3, "Negotiation"], // Proposal & Quote
+        ["open", 4, null], // Negotiation is the last selling stage
+        ["won", 2, null], // closed deals never advance
+        ["lost", 3, null],
+    ];
+    for (const [status, index, expected] of NEXT_STAGE_TABLE) {
+        const actual = nextDealStage(status, index);
+        if (actual !== expected) {
+            throw new Error(
+                `nextDealStage(${status}, ${index}) returned ${actual}; expected ${expected}`
+            );
+        }
+    }
+}
+
 function toDealRecord(record: Schema<"DealActivityResponse">): DealRecord {
     return {
         stage: record.stage_label,
@@ -539,10 +580,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetail> {
             synced: profile?.synced ?? false,
         },
         billed_value: money(record.value),
-        next_stage:
-            record.status === "open" && record.stage_index < record.stage_total - 1
-                ? DEAL_STAGES[record.stage_index + 1]
-                : null,
+        next_stage: nextDealStage(record.status as DealStatus, record.stage_index),
     };
 }
 
@@ -695,58 +733,61 @@ function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
     };
 }
 
+/** The companies directory page plus the true match count on the server. */
+export interface CompanyList {
+    items: CompanyRow[];
+    /**
+     * How many companies matched on the server, before the row limit. When it
+     * exceeds `items.length` the directory is showing a truncated window.
+     */
+    total: number;
+}
+
 /** The companies directory, newest registration first. */
-export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyRow[]> {
+export async function getCompanyList(query: CompanyQuery = {}): Promise<CompanyList> {
     const data = await apiGet<Schema<"DeskCompaniesResponse">>("/sales-desk/companies", {
         search: query.search?.trim() || undefined,
         unsynced: query.unsynced || undefined,
         limit: COMPANY_LIMIT,
     });
-    return data.items.map(toCompanyRowFromServer);
+    return { items: data.items.map(toCompanyRowFromServer), total: data.total };
 }
 
 /**
  * One company plus its deals, for the drawer.
  *
- * The row comes back through the same desk endpoint the directory uses, so
- * the drawer and the table can never disagree about a company. The deals are
- * read from the pipeline: `/deals` has no customer filter, but its search
- * matches the company name, so the name narrows the page and the id filters
- * out any other company the name also matched.
+ * The row comes back from the directory's single-company endpoint, assembled
+ * server-side by the same path as the table, so the drawer and the table can
+ * never disagree about a company. The deals are the pipeline's, narrowed to
+ * the company by the list's own customer filter.
  */
 export async function getCompanyDetail(companyId: string): Promise<CompanyDetail> {
-    const directory = await apiGet<Schema<"DeskCompaniesResponse">>(
-        "/sales-desk/companies",
-        { limit: COMPANY_LIMIT }
+    const record = await apiGet<Schema<"DeskCompanyRow">>(
+        `/sales-desk/companies/${companyId}`
     );
-    const record = directory.items.find((item) => item.id === companyId);
-    if (!record) throw new Error(`Company ${companyId} not found`);
 
-    const company = toCompanyRowFromServer(record);
     const dealRows = await apiGetAll<Schema<"DealResponse">>("/deals", {
-        search: company.name,
+        customerId: companyId,
         showClosed: true,
         tab: "all",
     });
 
     return {
-        company,
-        deals: dealRows
-            .filter((deal) => deal.customer_id === companyId)
-            .map((deal) => ({
-                id: deal.id,
-                product: deal.product,
-                billing_currency: deal.currency as BillingCurrency,
-                // In the deal's own billing currency, which is what the card
-                // labels it with. Converting to the caller's currency here
-                // would print a USD figure beside a KES chip.
-                value: money(deal.value),
-                stage_index: toStageIndex(deal.stage_index),
-                stage_label: deal.stage_label,
-                status: deal.status as DealStatus,
-                close_reason: deal.close_reason ?? null,
-                age_days: deal.age_days,
-            })),
+        company: toCompanyRowFromServer(record),
+        deals: dealRows.map((deal) => ({
+            id: deal.id,
+            product: deal.product,
+            billing_currency: deal.currency as BillingCurrency,
+            // In the deal's own billing currency, which is what the card
+            // labels it with. Converting to the caller's currency here
+            // would print a USD figure beside a KES chip.
+            value: money(deal.value),
+            stage_index: toStageIndex(deal.stage_index),
+            stage_label: deal.stage_label,
+            status: deal.status as DealStatus,
+            close_reason: deal.close_reason ?? null,
+            age_days: deal.age_days,
+        })),
     };
 }
 
@@ -809,18 +850,15 @@ export async function syncBothProfiles(companyId: string): Promise<CompanyRow> {
 }
 
 /**
- * Re-read one company through the desk directory, after a write.
+ * Re-read one company after a write, through the single-company endpoint.
  *
  * Every company write changes the needs-sync queue behind the nav badge, so
  * the re-read is also where the change is announced.
  */
 async function reloadCompany(companyId: string): Promise<CompanyRow> {
-    const directory = await apiGet<Schema<"DeskCompaniesResponse">>(
-        "/sales-desk/companies",
-        { limit: COMPANY_LIMIT }
+    const record = await apiGet<Schema<"DeskCompanyRow">>(
+        `/sales-desk/companies/${companyId}`
     );
-    const record = directory.items.find((item) => item.id === companyId);
-    if (!record) throw new Error(`Company ${companyId} not found`);
     announceDeskChange();
     return toCompanyRowFromServer(record);
 }
