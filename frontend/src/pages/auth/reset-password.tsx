@@ -93,7 +93,7 @@ export default function ResetPasswordPage() {
         <div className="space-y-8">
           <div className="flex justify-center">
             <img
-              src="/Logo Priori.svg"
+              src="/logo.svg"
               alt="Business Central"
               className="h-20 object-contain"
             />
