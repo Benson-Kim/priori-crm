@@ -294,3 +294,19 @@ legend {
   unicode-bidi: isolate;
   padding-inline: 2px;
 }
+
+/*
+ * Scrollable regions inside the chrome (sidebar nav, filter-tab strips) still
+ * need to scroll on short viewports, but a permanent scrollbar track reads as
+ * a rendering fault rather than an affordance. Hide the chrome, keep the
+ * scrolling — wheel, trackpad, touch and keyboard all still work.
+ */
+ .no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

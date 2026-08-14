@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
+    DbSession,
     QuoteServiceDep,
     require_privileged,
     verify_internal_secret,
@@ -522,7 +523,8 @@ async def download_quote_pdf(quote_id: UUID, service: QuoteServiceDep):
     ),
     dependencies=[Depends(verify_internal_secret)],
 )
-def trigger_quote_expired_transition(service: QuoteServiceDep) -> dict:
+def trigger_quote_expired_transition(db: DbSession) -> dict:
+    service = QuoteService(db)
     updated = service.bulk_transition_expired()
     return {
         "transitioned": updated,

@@ -9,6 +9,7 @@
 // import { Outlet } from "react-router-dom";
 
 import { useAuth } from "@/hooks/auth-context";
+import { OwnerProfileProvider } from "@/hooks/OwnerProfileProvider";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 export default function RequireAuth() {
@@ -20,5 +21,9 @@ export default function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  return <Outlet />;
+  return (
+    <OwnerProfileProvider>
+      <Outlet />
+    </OwnerProfileProvider>
+  );
 }

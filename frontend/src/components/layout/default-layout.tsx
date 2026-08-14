@@ -3,7 +3,6 @@ import { Outlet, useMatches, type UIMatch } from "react-router-dom";
 
 import type { RouteHandle } from "@/lib/types";
 import { useAuth } from "@/hooks/auth-context";
-import { OwnerProfileProvider } from "@/hooks/OwnerProfileProvider";
 import { Header } from "./header";
 import { HeaderContext, type HeaderOverride } from "./header-context";
 import { Sidebar } from "./sidebar";
@@ -36,25 +35,23 @@ const DefaultLayout = () => {
     const notificationCount = 0;
 
     return (
-        <OwnerProfileProvider>
-            <HeaderContext.Provider value={{ override, setOverride }}>
-                <div className="flex h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">
-                    <Sidebar badgeCounts={navBadgeCounts} />
-                    <div className="flex flex-col flex-1 min-w-0 border border-gray-300 bg-gray-50 p-2 pb-4 rounded-2xl">
-                        {showHeader && (
-                            <Header
-                                title={activeTitle}
-                                description={activeDescription ?? ""}
-                                notificationCount={notificationCount}
-                            />
-                        )}
-                        <main className="flex-1 p-4 overflow-auto">
-                            <Outlet />
-                        </main>
-                    </div>
+        <HeaderContext.Provider value={{ override, setOverride }}>
+            <div className="flex h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">
+                <Sidebar badgeCounts={navBadgeCounts} />
+                <div className="flex flex-col flex-1 min-w-0 border border-gray-300 bg-gray-50 p-2 pb-4 rounded-2xl">
+                    {showHeader && (
+                        <Header
+                            title={activeTitle}
+                            description={activeDescription ?? ""}
+                            notificationCount={notificationCount}
+                        />
+                    )}
+                    <main className="flex-1 p-4 overflow-auto">
+                        <Outlet />
+                    </main>
                 </div>
-            </HeaderContext.Provider>
-        </OwnerProfileProvider>
+            </div>
+        </HeaderContext.Provider>
     );
 };
 
