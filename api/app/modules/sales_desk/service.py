@@ -626,9 +626,7 @@ class SalesDeskService:
         """
         return DealService(self.db, current_user=self.current_user)
 
-    def _close_reason_lines(
-        self, owner_id: uuid.UUID | None
-    ) -> list[CloseReasonLine]:
+    def _close_reason_lines(self, owner_id: uuid.UUID | None) -> list[CloseReasonLine]:
         """One bar per lost reason (all six, zero-count bars included, #57).
 
         Shares are fractions of the lost deals in scope, so the bars answer
