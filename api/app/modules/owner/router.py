@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import ModuleKey, UserRole
 from app.constants.settings_defaults import (
     DEFAULT_DEAL_STAGE_PROBABILITIES,
@@ -28,7 +29,7 @@ from app.modules.owner.schemas import (
     SalesPricingSettings,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 _WRITE_ROLES = (UserRole.MANAGER, UserRole.ADMIN)
 
