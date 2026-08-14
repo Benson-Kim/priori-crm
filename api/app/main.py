@@ -216,6 +216,12 @@ def _register_routers(app: FastAPI) -> None:
         dependencies=_module_gate(ModuleKey.PURCHASE_ORDERS),
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
+    # Platform-operator surface (ADR-0011): owner-id-scoped module
+    # entitlement grants. Never module-gated — platform administration must
+    # keep working even when every toggleable module is disabled.
+    app.include_router(
+        platform_router, prefix=f"{api_prefix}/platform", tags=["Platform"]
+    )
     app.include_router(
         statements_router,
         prefix=f"{api_prefix}/statements",
