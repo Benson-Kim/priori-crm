@@ -22,7 +22,9 @@ interface FilterTabsProps {
 }
 
 const CONTAINER_STYLES: Record<FilterTabsVariant, string> = {
-  default: "flex items-center gap-6",
+  // A tight gap so a full set of tabs stays on one line next to the search
+  // box and the page's primary action, rather than pushing them off the row.
+  default: "flex items-center gap-1",
   "brand-filled": "flex items-center gap-1.5",
   "brand-outline": "flex items-center gap-1.5",
 };
@@ -32,7 +34,7 @@ const TAB_STYLES: Record<
   { base: string; active: string; inactive: string; count: (active: boolean) => string }
 > = {
   default: {
-    base: "p-3 rounded-md text-base font-normal transition-all duration-200 cursor-pointer",
+    base: "shrink-0 whitespace-nowrap p-3 rounded-md text-base font-normal transition-all duration-200 cursor-pointer",
     active: "bg-pink-25 text-priori-purple border border-gray-200 ",
     inactive:
       "text-content-secondary hover:text-content-priori-purple hover:bg-surface-app   ",
