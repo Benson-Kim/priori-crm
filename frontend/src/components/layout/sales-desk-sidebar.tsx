@@ -38,7 +38,7 @@ export function SalesDeskSidebar({
             <div className="flex h-19 items-center px-4 pt-5 pb-4">
                 <Link to="/sales-desk" className="flex items-center gap-2.5 px-2 py-1">
                     <img
-                        src="/Logo Priori.svg"
+                        src="/logo.svg"
                         alt="Business Central"
                         className="h-8 w-auto shrink-0"
                     />

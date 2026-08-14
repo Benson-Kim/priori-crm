@@ -112,7 +112,7 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                         {!collapsed && (
                             <div className="flex min-w-0 items-center gap-2.5 px-1">
                                 <img
-                                    src="/Logo Priori.svg"
+                                    src="/logo.svg"
                                     alt="Business Central logo"
                                     className="h-8 w-8 shrink-0"
                                 />

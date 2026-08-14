@@ -60,7 +60,7 @@ OwnerParam = Annotated[
 
 
 def _temporary_csv_path() -> str:
-    fd, path = tempfile.mkstemp(prefix="priori-sales-desk-", suffix=".csv")
+    fd, path = tempfile.mkstemp(prefix="sales-desk-export-", suffix=".csv")
     os.close(fd)
     return path
 

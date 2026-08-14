@@ -60,7 +60,7 @@ _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.
 
 
 def _temporary_xlsx_path() -> str:
-    fd, path = tempfile.mkstemp(prefix="priori-report-", suffix=".xlsx")
+    fd, path = tempfile.mkstemp(prefix="report-export-", suffix=".xlsx")
     os.close(fd)
     return path
 
