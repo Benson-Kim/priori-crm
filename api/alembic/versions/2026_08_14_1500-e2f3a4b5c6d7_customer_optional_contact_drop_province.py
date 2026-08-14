@@ -7,7 +7,7 @@ postal_code and website are not touched: both were already nullable (the
 former since 25134e7109ca), so the "four optional fields" contract needs no
 DDL for them.
 
-Revision ID: d1e2f3a4b5c6
+Revision ID: e2f3a4b5c6d7
 Revises: c0d1e2f3a4b5
 Create Date: 2026-08-14 15:00:00.000000
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d1e2f3a4b5c6"
+revision: str = "e2f3a4b5c6d7"
 down_revision: Union[str, None] = "c0d1e2f3a4b5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
