@@ -23,7 +23,7 @@ export default function RequireAuth() {
 
   return (
     <OwnerProfileProvider>
-      <Outlet />;
+      <Outlet />
     </OwnerProfileProvider>
-  )
+  );
 }
