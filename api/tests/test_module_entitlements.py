@@ -1,15 +1,23 @@
-"""Per-owner module entitlements (feature toggles).
+"""Per-owner module entitlements — operator-granted (ADR-0011, issue #58).
 
 Pins the entitlement contract:
 
 - default-on: with no ``owner_module_settings`` row every module is enabled
-  (service map and admin listing agree);
+  (service map and listings agree);
 - a disabled module's router rejects every request with 403;
 - essential modules (auth, owner, health, dashboard) can never be disabled
   (422) and carry no router gate;
-- GET/PATCH /owner/modules are ADMIN-only;
+- entitlements are GRANTS: only a PLATFORM_OPERATOR may write, via
+  ``PATCH /platform/owners/{owner_id}/modules/{module_key}``; the tenant
+  self-service ``PATCH /owner/modules/{module_key}`` no longer exists;
+- ``GET /owner/modules`` stays the tenant admin's READ-ONLY view;
+- the platform surface is owner-id-scoped and 404s on unknown owners
+  (never get-or-create);
+- the operator role is isolated from tenant data (403 on tenant gates);
 - every change is audited and the bootstrap ``enabledModules`` map follows.
 """
+
+import uuid
 
 from app.common.audit import AuditEvent
 from app.common.security import create_access_token, hash_password
@@ -38,6 +46,19 @@ def _auth(user: User) -> dict:
     return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
 
 
+def _seed_owner(db) -> uuid.UUID:
+    """Create the owner profile row and return its id (the platform surface
+    never creates owners implicitly)."""
+    profile = OwnerService(db).get_or_create()
+    db.commit()
+    return profile.id
+
+
+def _modules_url(owner_id: uuid.UUID, module_key: str | None = None) -> str:
+    base = f"/api/v1/platform/owners/{owner_id}/modules"
+    return f"{base}/{module_key}" if module_key else base
+
+
 class TestDefaultEnabled:
     def test_no_rows_means_every_module_enabled(self, db):
         svc = OwnerService(db)
@@ -57,6 +78,15 @@ class TestDefaultEnabled:
             assert modules[key.value]["enabled"] is True
             assert modules[key.value]["essential"] is (key in ESSENTIAL_MODULES)
 
+    def test_operator_listing_matches_admin_view(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        owner_id = _seed_owner(db)
+        resp = client.get(_modules_url(owner_id), headers=_auth(operator))
+        assert resp.status_code == 200
+        modules = {m["moduleKey"]: m for m in resp.json()["modules"]}
+        assert set(modules) == {k.value for k in ModuleKey}
+        assert all(m["enabled"] for m in modules.values())
+
     def test_gated_router_accessible_by_default(self, client, db):
         member = _seed_user(db, "member@mail.com", UserRole.MEMBER)
         resp = client.get("/api/v1/customers", headers=_auth(member))
@@ -65,13 +95,15 @@ class TestDefaultEnabled:
 
 class TestDisabledModuleReturns403:
     def test_disabled_module_router_rejects_with_403(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         member = _seed_user(db, "member@mail.com", UserRole.MEMBER)
+        owner_id = _seed_owner(db)
 
         resp = client.patch(
-            "/api/v1/owner/modules/customers",
+            _modules_url(owner_id, "customers"),
             json={"enabled": False},
-            headers=_auth(admin),
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
         assert resp.json() == {
@@ -84,45 +116,48 @@ class TestDisabledModuleReturns403:
         assert blocked.status_code == 403
         assert "disabled" in blocked.json()["error"].lower()
 
-        # Even the admin is blocked on the module's own routes — the gate is
-        # org state, not a per-user permission.
+        # Even the tenant admin is blocked on the module's own routes — the
+        # gate is org state (an operator grant), not a per-user permission.
         assert client.get("/api/v1/customers", headers=_auth(admin)).status_code == 403
 
     def test_reenabling_restores_access(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
-        headers = _auth(admin)
+        owner_id = _seed_owner(db)
         for enabled, expected in ((False, 403), (True, 200)):
             resp = client.patch(
-                "/api/v1/owner/modules/reports",
+                _modules_url(owner_id, "reports"),
                 json={"enabled": enabled},
-                headers=headers,
+                headers=_auth(operator),
             )
             assert resp.status_code == 200
             assert (
-                client.get("/api/v1/reports/sales", headers=headers).status_code
+                client.get("/api/v1/reports/sales", headers=_auth(admin)).status_code
                 == expected
             )
 
     def test_other_modules_unaffected_by_one_disable(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
-        headers = _auth(admin)
+        owner_id = _seed_owner(db)
         resp = client.patch(
-            "/api/v1/owner/modules/vendors",
+            _modules_url(owner_id, "vendors"),
             json={"enabled": False},
-            headers=headers,
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
-        assert client.get("/api/v1/customers", headers=headers).status_code == 200
+        assert client.get("/api/v1/customers", headers=_auth(admin)).status_code == 200
 
     def test_bootstrap_enabled_modules_map_follows(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
-        headers = _auth(admin)
+        owner_id = _seed_owner(db)
         client.patch(
-            "/api/v1/owner/modules/quotes",
+            _modules_url(owner_id, "quotes"),
             json={"enabled": False},
-            headers=headers,
+            headers=_auth(operator),
         )
-        profile = client.get("/api/v1/owner", headers=headers)
+        profile = client.get("/api/v1/owner", headers=_auth(admin))
         assert profile.status_code == 200
         enabled_modules = profile.json()["enabledModules"]
         assert enabled_modules["quotes"] is False
@@ -142,14 +177,16 @@ class TestSalesDeskModule:
         assert modules["sales_desk"]["essential"] is False
 
     def test_disabling_sales_desk_rejects_router_with_403(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         member = _seed_user(db, "member@mail.com", UserRole.MEMBER)
+        owner_id = _seed_owner(db)
         headers = _auth(admin)
 
         resp = client.patch(
-            "/api/v1/owner/modules/sales_desk",
+            _modules_url(owner_id, "sales_desk"),
             json={"enabled": False},
-            headers=headers,
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
         assert resp.json() == {
@@ -170,9 +207,9 @@ class TestSalesDeskModule:
         # sales-desk service opens a read-only REPEATABLE READ snapshot on
         # the request session (like reports), so no write may follow it.
         resp = client.patch(
-            "/api/v1/owner/modules/sales_desk",
+            _modules_url(owner_id, "sales_desk"),
             json={"enabled": True},
-            headers=headers,
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
         assert (
@@ -183,28 +220,66 @@ class TestSalesDeskModule:
 
 class TestEssentialModules:
     def test_disabling_essential_module_is_422(self, client, db):
-        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        owner_id = _seed_owner(db)
         for key in sorted(k.value for k in ESSENTIAL_MODULES):
             resp = client.patch(
-                f"/api/v1/owner/modules/{key}",
+                _modules_url(owner_id, key),
                 json={"enabled": False},
-                headers=_auth(admin),
+                headers=_auth(operator),
             )
             assert resp.status_code == 422, key
             assert "essential" in resp.json()["error"].lower()
 
     def test_unknown_module_key_is_422(self, client, db):
-        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        owner_id = _seed_owner(db)
         resp = client.patch(
-            "/api/v1/owner/modules/not_a_module",
+            _modules_url(owner_id, "not_a_module"),
             json={"enabled": False},
-            headers=_auth(admin),
+            headers=_auth(operator),
         )
         assert resp.status_code == 422
 
 
-class TestAdminOnlyAccess:
-    def test_non_admins_cannot_read_module_settings(self, client, db):
+class TestPlatformOwnerScoping:
+    """The operator surface is owner-id-scoped and never auto-creates."""
+
+    def test_unknown_owner_id_is_404_on_read_and_write(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        unknown = uuid.uuid4()
+        assert (
+            client.get(_modules_url(unknown), headers=_auth(operator)).status_code
+            == 404
+        )
+        resp = client.patch(
+            _modules_url(unknown, "customers"),
+            json={"enabled": False},
+            headers=_auth(operator),
+        )
+        assert resp.status_code == 404
+
+    def test_owners_listing_is_operator_only(self, client, db):
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        owner_id = _seed_owner(db)
+
+        resp = client.get("/api/v1/platform/owners", headers=_auth(operator))
+        assert resp.status_code == 200
+        owners = resp.json()["owners"]
+        assert [o["id"] for o in owners] == [str(owner_id)]
+        assert owners[0]["fullName"]
+
+        assert (
+            client.get("/api/v1/platform/owners", headers=_auth(admin)).status_code
+            == 403
+        )
+
+
+class TestAuthorization:
+    """Entitlements are grants: only the platform operator writes."""
+
+    def test_non_admins_cannot_read_owner_module_settings(self, client, db):
         for email, role in (
             ("member@mail.com", UserRole.MEMBER),
             ("manager@mail.com", UserRole.MANAGER),
@@ -213,30 +288,65 @@ class TestAdminOnlyAccess:
             resp = client.get("/api/v1/owner/modules", headers=_auth(user))
             assert resp.status_code == 403, role
 
-    def test_non_admins_cannot_toggle_modules(self, client, db):
+    def test_tenant_self_service_patch_route_is_gone(self, client, db):
+        """The QA-09 hole: the tenant admin could re-enable anything."""
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        resp = client.patch(
+            "/api/v1/owner/modules/customers",
+            json={"enabled": True},
+            headers=_auth(admin),
+        )
+        assert resp.status_code == 404
+
+    def test_tenant_roles_cannot_write_platform_entitlements(self, client, db):
+        owner_id = _seed_owner(db)
         for email, role in (
             ("member@mail.com", UserRole.MEMBER),
             ("manager@mail.com", UserRole.MANAGER),
+            ("admin@mail.com", UserRole.ADMIN),
         ):
             user = _seed_user(db, email, role)
             resp = client.patch(
-                "/api/v1/owner/modules/customers",
+                _modules_url(owner_id, "customers"),
                 json={"enabled": False},
                 headers=_auth(user),
             )
             assert resp.status_code == 403, role
 
-    def test_unauthenticated_cannot_read_module_settings(self, client):
+    def test_operator_is_isolated_from_tenant_gates(self, client, db):
+        """PLATFORM_OPERATOR is not a tenant role: tenant-scoped role gates
+        (require_role(ADMIN), privileged reports) reject it (ADR-0011)."""
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        assert not UserRole.PLATFORM_OPERATOR.is_privileged
+        assert (
+            client.get("/api/v1/owner/modules", headers=_auth(operator)).status_code
+            == 403
+        )
+        assert (
+            client.get("/api/v1/reports/sales", headers=_auth(operator)).status_code
+            == 403
+        )
+
+    def test_unauthenticated_cannot_read_or_write(self, client, db):
+        owner_id = _seed_owner(db)
         assert client.get("/api/v1/owner/modules").status_code == 401
+        assert client.get(_modules_url(owner_id)).status_code == 401
+        assert (
+            client.patch(
+                _modules_url(owner_id, "customers"), json={"enabled": False}
+            ).status_code
+            == 401
+        )
 
 
 class TestAudit:
     def test_toggle_writes_audit_event(self, client, db):
-        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
+        owner_id = _seed_owner(db)
         client.patch(
-            "/api/v1/owner/modules/expenses",
+            _modules_url(owner_id, "expenses"),
             json={"enabled": False},
-            headers=_auth(admin),
+            headers=_auth(operator),
         )
         events = (
             db.query(AuditEvent)
@@ -246,6 +356,6 @@ class TestAudit:
         assert len(events) == 1
         event = events[0]
         assert event.action == "module_disabled"
-        assert str(event.actor_id) == str(admin.id)
+        assert str(event.actor_id) == str(operator.id)
         assert event.before == {"module_key": "expenses", "enabled": True}
         assert event.after == {"module_key": "expenses", "enabled": False}
