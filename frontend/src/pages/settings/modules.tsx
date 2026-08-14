@@ -1,26 +1,22 @@
 /**
- * Module Settings — admin-only per-owner module entitlements (feature toggles).
+ * Settings › Modules — READ-ONLY per-owner module entitlements (ADR-0011).
  *
- * Lists every module key with its effective enabled state. Toggleable
- * modules can be switched on/off (PATCH /owner/modules/{key}); essential
- * modules (auth, owner, health, dashboard) render locked and cannot be
- * disabled — the backend rejects such attempts with a 422. After a toggle
- * the owner-profile bootstrap is refreshed so the sidebar and route guards
- * pick up the change immediately.
+ * Entitlements are granted by the platform operator, not self-service:
+ * the tenant-facing toggle endpoint was removed (issue #58 / QA finding
+ * 09), so this screen only shows every module key with its effective
+ * enabled state. Essential modules (auth, owner, health, dashboard) render
+ * locked — they can never be disabled.
  */
 
 import { Lock } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
+import { Badge } from "@/components/ui/Badge";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { Toggle } from "@/components/ui/Toggle";
 import { useAuth } from "@/hooks/auth-context";
-import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { ApiError } from "@/lib/api";
 import {
   getModuleSettings,
-  updateModuleSetting,
   type ModuleSettingState,
 } from "@/services/ownerApi";
 
@@ -56,12 +52,10 @@ function moduleLabel(key: string): string {
 
 export default function ModuleSettingsPage() {
   const { user } = useAuth();
-  const { refresh } = useOwnerProfile();
 
   const [modules, setModules] = useState<ModuleSettingState[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const isAdmin = user?.role?.toLowerCase() === "admin";
 
@@ -86,34 +80,8 @@ export default function ModuleSettingsPage() {
     }
   }, [isAdmin, load]);
 
-  const handleToggle = useCallback(
-    async (moduleKey: string, enabled: boolean) => {
-      setSavingKey(moduleKey);
-      setError(null);
-      try {
-        const updated = await updateModuleSetting(moduleKey, enabled);
-        setModules((prev) =>
-          prev
-            ? prev.map((m) => (m.moduleKey === moduleKey ? updated : m))
-            : prev
-        );
-        // Refresh the bootstrap so nav visibility and route guards follow.
-        await refresh();
-      } catch (err) {
-        setError(
-          err instanceof ApiError
-            ? err.message
-            : "Failed to update the module setting"
-        );
-      } finally {
-        setSavingKey(null);
-      }
-    },
-    [refresh]
-  );
-
   // Admin-only page: everyone else is bounced to the dashboard, matching
-  // the backend's require_role(ADMIN) gate on GET/PATCH /owner/modules.
+  // the backend's require_role(ADMIN) gate on GET /owner/modules.
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -137,8 +105,10 @@ export default function ModuleSettingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Modules</h2>
           <p className="text-sm text-gray-500">
-            Disabled modules disappear from navigation and their pages and
-            APIs are blocked for every user in the organisation.
+            Module access is granted by your platform operator and cannot be
+            changed here. Disabled modules disappear from navigation and
+            their pages and APIs are blocked for every user in the
+            organisation. Contact your platform operator to change a grant.
           </p>
         </div>
         <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
@@ -150,14 +120,9 @@ export default function ModuleSettingsPage() {
               <span className="text-sm font-medium text-gray-800">
                 {moduleLabel(module.moduleKey)}
               </span>
-              <Toggle
-                checked={module.enabled}
-                disabled={savingKey === module.moduleKey}
-                onChange={(checked) =>
-                  void handleToggle(module.moduleKey, checked)
-                }
-                aria-label={`Toggle ${moduleLabel(module.moduleKey)}`}
-              />
+              <Badge variant={module.enabled ? "active" : "canceled"}>
+                {module.enabled ? "Enabled" : "Disabled"}
+              </Badge>
             </li>
           ))}
         </ul>
