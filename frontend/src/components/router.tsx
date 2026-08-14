@@ -450,8 +450,18 @@ const routes = [
                             },
                         },
                     },
+                    /*
+                     * The desk's sub-destinations are backed by their own
+                     * gated routers (deals, nurture, quotes, onboarding), so
+                     * each group carries the matching route guard — the same
+                     * mechanism the Business Central routes use — landing a
+                     * disabled module's URLs on the desk dashboard instead of
+                     * the backend's 403 (finding 07). Dashboard and Companies
+                     * ride on the sales_desk gate around the whole subtree.
+                     */
                     {
                         path: "pipeline",
+                        element: <RequireModule moduleKey="deals" redirectTo="/sales-desk" />,
                         children: [
                             {
                                 index: true,
@@ -506,6 +516,7 @@ const routes = [
                     },
                     {
                         path: "future-pipeline",
+                        element: <RequireModule moduleKey="nurture" redirectTo="/sales-desk" />,
                         children: [
                             {
                                 index: true,
@@ -535,6 +546,7 @@ const routes = [
                     },
                     {
                         path: "quotes",
+                        element: <RequireModule moduleKey="quotes" redirectTo="/sales-desk" />,
                         children: [
                             {
                                 index: true,
@@ -562,13 +574,22 @@ const routes = [
                     },
                     {
                         path: "onboarding",
-                        element: lazyPage(() => import("@/pages/sales-desk/onboarding")),
-                        handle: {
-                            header: {
-                                title: "Onboarding",
-                                description: "Post-sale delivery checklists for won deals.",
+                        element: (
+                            <RequireModule moduleKey="onboarding" redirectTo="/sales-desk" />
+                        ),
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/sales-desk/onboarding")),
+                                handle: {
+                                    header: {
+                                        title: "Onboarding",
+                                        description:
+                                            "Post-sale delivery checklists for won deals.",
+                                    },
+                                },
                             },
-                        },
+                        ],
                     },
                         ],
                     },

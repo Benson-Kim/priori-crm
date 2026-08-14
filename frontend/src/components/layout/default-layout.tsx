@@ -34,6 +34,9 @@ const DefaultLayout = () => {
     const navBadgeCounts = undefined;
     const notificationCount = 0;
 
+    // The OwnerProfileProvider is mounted by RequireAuth, above the split
+    // between this shell and the Sales Desk shell, so both read the same
+    // owner bootstrap (module entitlements included) from one fetch.
     return (
         <HeaderContext.Provider value={{ override, setOverride }}>
             <div className="flex h-screen bg-gray-100 w-full overflow-hidden pt-2 pr-2">

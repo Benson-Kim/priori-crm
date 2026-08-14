@@ -406,9 +406,16 @@ export default function SalesDeskPipelineWorkspacePage() {
                         afterWrite(closeDeal(detail.deal.id, outcome, reason, note))
                     }
                     onMoveToFuture={async (note) => {
-                        await moveDealToFuturePipeline(detail.deal.id, note);
+                        /*
+                         * Parking goes through the same afterWrite re-read
+                         * closing uses (finding 08: the stage strip and rep
+                         * cards kept pre-park figures). The refresh is issued
+                         * before the drawer-closing navigation rather than
+                         * behind it, so the scoreboard re-fetch can never be
+                         * lost to the URL transition that unmounts the drawer.
+                         */
+                        await afterWrite(moveDealToFuturePipeline(detail.deal.id, note));
                         selectDeal(null);
-                        refresh();
                     }}
                 />
             )}
