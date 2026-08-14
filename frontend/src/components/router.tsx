@@ -571,6 +571,7 @@ const routes = [
                                 },
                             },
                         ],
+                    },
                     {
                         path: "onboarding",
                         element: (
@@ -589,7 +590,6 @@ const routes = [
                                 },
                             },
                         ],
-                    },  },
                     },
                         ],
                     },
