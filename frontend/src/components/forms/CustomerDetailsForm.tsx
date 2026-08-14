@@ -70,13 +70,14 @@ export function CustomerDetailsForm({
         });
     };
 
-    function Field({ id, label, children, }: Readonly<{
-        id: string; label: string; children: React.ReactNode;
+    function Field({ id, label, required = false, children, }: Readonly<{
+        id: string; label: string; required?: boolean; children: React.ReactNode;
     }>) {
         return (
             <div className="flex flex-col gap-2">
                 <label htmlFor={id} className="text-sm font-semibold leading-6 text-gray-900">
                     {label}
+                    {required && <span className="text-red-500"> *</span>}
                 </label>
                 {children}
             </div>
@@ -191,7 +192,7 @@ export function CustomerDetailsForm({
                             )}
                         />
                     </Field>
-                    <Field id="phone" label="Phone">
+                    <Field id="phone" label="Phone" required={customerType === "individual"}>
                         <Controller
                             name="phone"
                             control={control}

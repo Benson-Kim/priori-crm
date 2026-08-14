@@ -16,6 +16,7 @@ from app.common.exceptions import (
     ConflictException,
     DatabaseException,
     NotFoundException,
+    ValidationException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reference import ReferenceGenerator
@@ -28,7 +29,7 @@ from app.common.statement import (
     StatementGenerator,
 )
 from app.common.statistics import status_counts
-from app.constants.enums import BillingCurrency, CustomerStatus
+from app.constants.enums import BillingCurrency, CustomerStatus, CustomerType
 from app.modules.customers.models import Customer, CustomerBillingProfile
 from app.modules.customers.profile_backfill import (
     PROFILE_CODE_SCOPE_KEY,
@@ -539,6 +540,26 @@ class CustomerService(ServiceBase):
 
             if not update_data:
                 return customer
+
+            # Individual customers must keep a phone number. CustomerUpdate
+            # cannot enforce this alone: either half of the pair may be absent
+            # from the payload, so the rule is evaluated against the state the
+            # customer would end up in. This catches both clearing the phone of
+            # an individual and switching a phone-less company to individual.
+            resulting_type = update_data.get("customer_type", customer.customer_type)
+            resulting_phone = update_data.get("phone", customer.phone)
+            if resulting_type == CustomerType.INDIVIDUAL and not resulting_phone:
+                raise ValidationException(
+                    detail="Phone number is required for individual customers.",
+                    errors=[
+                        {
+                            "field": "phone",
+                            "message": (
+                                "Phone number is required for individual customers."
+                            ),
+                        }
+                    ],
+                )
 
             # Normalize email to lowercase before conflict check + persist
             if "email" in update_data and update_data["email"] is not None:

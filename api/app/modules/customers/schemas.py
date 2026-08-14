@@ -122,6 +122,18 @@ class CustomerCreate(BaseModel):
             raise ValueError("company_name is required for business customers")
         return self
 
+    @model_validator(mode="after")
+    def validate_individual_phone(self) -> "CustomerCreate":
+        """Individual customers must have a phone number.
+
+        Phone is optional for companies, which are typically reached through
+        a billing contact, but an individual is only reachable directly - so
+        the field is conditionally required rather than globally optional.
+        """
+        if self.customer_type == CustomerType.INDIVIDUAL and not self.phone:
+            raise ValueError("Phone number is required for individual customers.")
+        return self
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {

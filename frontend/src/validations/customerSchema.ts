@@ -42,6 +42,21 @@ export const customerSchema = z
       message: "Company name is required for business customers",
       path: ["companyName"],
     }
+  )
+  // Phone is conditionally required: an individual is only reachable
+  // directly, while a company is normally reached through a billing contact.
+  // Mirrors the API's CustomerCreate.validate_individual_phone.
+  .refine(
+    (data) => {
+      if (data.customerType === "individual" && !data.phone) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Phone number is required for individual customers.",
+      path: ["phone"],
+    }
   );
 
 export type CustomerFormData = z.infer<typeof customerSchema>;

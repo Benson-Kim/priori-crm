@@ -262,10 +262,13 @@ export default function CustomerDetailsPage() {
   const { customer: details, financial_summary } = customer;
 
   // Create display name from customer data
+  // Email is the last resort and is optional, so the chain ends in a literal
+  // rather than falling through to null.
   const displayName =
     details.company_name ||
     `${details.first_name} ${details.last_name}`.trim() ||
-    details.email;
+    details.email ||
+    "Unnamed customer";
 
   // Get customer initials from display_name
   const initials = getNameInitials(displayName);

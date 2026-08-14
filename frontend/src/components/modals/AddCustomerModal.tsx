@@ -68,6 +68,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
     });
 
     const emailValue = useWatch({ name: "email", control });
+    const customerTypeValue = useWatch({ name: "customerType", control });
+    const phoneRequired = customerTypeValue === "individual";
 
 
     const onSubmit = async (data: QuickCustomerForm) => {
@@ -228,9 +230,14 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
                             Phone
+                            {phoneRequired && <span className="text-red-500"> *</span>}
                         </label>
                         <Input
-                            {...register("phone")}
+                            {...register("phone", {
+                                validate: (value) =>
+                                    !phoneRequired || !!value ||
+                                    "Phone number is required for individual customers.",
+                            })}
                             prefix="+254"
                             type="tel"
                             placeholder="700 000 000"

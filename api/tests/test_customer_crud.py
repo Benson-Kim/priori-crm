@@ -1,8 +1,13 @@
 """Customer CRUD round-trip backfill (service layer)."""
 
 import pytest
+from pydantic import ValidationError
 
-from app.common.exceptions import ConflictException, NotFoundException
+from app.common.exceptions import (
+    ConflictException,
+    NotFoundException,
+    ValidationException,
+)
 from app.common.pagination import PaginationParams
 from app.constants.enums import CustomerStatus, CustomerType
 from app.modules.customers.schemas import CustomerCreate, CustomerUpdate
@@ -169,3 +174,92 @@ def test_formatted_address_omits_absent_parts(db):
     assert "Nairobi" in formatted
     assert formatted.endswith("KE")
     assert ", ," not in formatted
+
+
+# Phone is conditionally required
+#
+# Individual customers must have a phone number; companies may omit it. The
+# create rule lives in CustomerCreate, but the update rule needs the service:
+# CustomerUpdate cannot see the stored type, and either half of the
+# (type, phone) pair may be absent from a payload.
+
+
+def _individual_payload(**overrides) -> CustomerCreate:
+    base = dict(
+        customer_type=CustomerType.INDIVIDUAL,
+        first_name="Ada",
+        last_name="Lovelace",
+        email=None,
+        phone="0712345678",
+        address="123 Industrial Area",
+        country="KE",
+        city="Nairobi",
+    )
+    base.update(overrides)
+    return CustomerCreate(**base)
+
+
+def test_create_individual_without_phone_rejected(db):
+    with pytest.raises(ValidationError) as exc:
+        _individual_payload(phone=None)
+
+    assert "Phone number is required for individual customers." in str(exc.value)
+
+
+def test_create_individual_with_empty_phone_rejected(db):
+    """ "" is coerced to None first, so it must fail the same way."""
+    with pytest.raises(ValidationError):
+        _individual_payload(phone="")
+
+
+def test_create_company_without_phone_allowed(db):
+    svc = CustomerService(db)
+    created = svc.create(_create_payload(phone=None))
+
+    assert created.phone is None
+    assert created.customer_type == CustomerType.BUSINESS
+
+
+def test_update_cannot_clear_individual_phone(db):
+    svc = CustomerService(db)
+    c = svc.create(_individual_payload())
+
+    with pytest.raises(ValidationException):
+        svc.update(c.id, CustomerUpdate(phone=None), expected_version=c.version)
+
+    assert svc.get_by_id(c.id).phone is not None
+
+
+def test_update_can_clear_company_phone(db):
+    svc = CustomerService(db)
+    c = svc.create(_create_payload(email="clearphone@acme.com"))
+
+    updated = svc.update(c.id, CustomerUpdate(phone=None), expected_version=c.version)
+
+    assert updated.phone is None
+
+
+def test_switching_company_without_phone_to_individual_rejected(db):
+    """The rule is evaluated against the state the customer would end up in."""
+    svc = CustomerService(db)
+    c = svc.create(_create_payload(email="notype@acme.com", phone=None))
+
+    with pytest.raises(ValidationException):
+        svc.update(
+            c.id,
+            CustomerUpdate(customer_type=CustomerType.INDIVIDUAL),
+            expected_version=c.version,
+        )
+
+
+def test_switching_company_to_individual_with_phone_allowed(db):
+    svc = CustomerService(db)
+    c = svc.create(_create_payload(email="withphone@acme.com", phone="0712345678"))
+
+    updated = svc.update(
+        c.id,
+        CustomerUpdate(customer_type=CustomerType.INDIVIDUAL),
+        expected_version=c.version,
+    )
+
+    assert updated.customer_type == CustomerType.INDIVIDUAL
