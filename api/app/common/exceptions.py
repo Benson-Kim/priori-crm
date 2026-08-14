@@ -233,6 +233,221 @@ class UnsyncedBillingProfileException(AppException):
         )
 
 
+# Request-validation humanisation
+#
+# FastAPI/Pydantic validation errors are developer-facing: the location is a
+# raw tuple like ("body", "password") and the message is framework prose
+# ("String should have at least 8 characters"). Rendering those verbatim leaked
+# "body.password: string should have at least 8 characters" to a user on the
+# login screen. The helpers below turn each Pydantic error into a sentence a
+# non-technical user can act on, keyed off the machine-readable `type` and
+# `ctx` rather than by rewriting `msg` text.
+
+# Location segments FastAPI prepends to identify the request part the value
+# came from. They are noise in a user-facing message.
+_LOCATION_PREFIXES = frozenset({"body", "query", "path", "header", "cookie"})
+
+# Field names whose humanised form is not just a capitalised snake_case split.
+_FIELD_LABEL_OVERRIDES = {
+    "email": "Email address",
+    "otp": "One-time code",
+    "code": "One-time code",
+    "vat_rate": "VAT rate",
+    "vatRate": "VAT rate",
+    "iban": "IBAN",
+    "url": "URL",
+    "id": "ID",
+}
+
+
+def _field_path(loc: tuple[Any, ...]) -> str:
+    """Reduce a Pydantic error location to a client-usable field path.
+
+    Drops the leading request-part segment and renders list indices in
+    bracket form so a nested error reads `lines[0].quantity`.
+    """
+    parts = list(loc)
+    if parts and parts[0] in _LOCATION_PREFIXES:
+        parts = parts[1:]
+
+    if not parts:
+        return "request"
+
+    rendered = ""
+    for part in parts:
+        if isinstance(part, int):
+            rendered += f"[{part}]"
+        elif rendered:
+            rendered += f".{part}"
+        else:
+            rendered = str(part)
+
+    return rendered or "request"
+
+
+def _field_label(field: str) -> str:
+    """Humanise a field path into a sentence-leading label."""
+    # Label the specific value that failed, not the whole path: for
+    # `lines[0].quantity` the actionable noun is "Quantity". Take the last
+    # dotted segment first, then strip any trailing list index off it.
+    leaf = field.split(".")[-1].split("[")[0] or field
+
+    override = _FIELD_LABEL_OVERRIDES.get(leaf)
+    if override:
+        return override
+
+    # snake_case and camelCase both occur (query aliases are camelCase).
+    spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", leaf).replace("_", " ").strip()
+    if not spaced:
+        return "This field"
+
+    words = spaced.split()
+    return " ".join([words[0].capitalize(), *(w.lower() for w in words[1:])])
+
+
+def _plural(count: Any, noun: str) -> str:
+    """Render `1 character` / `8 characters` without a stray plural."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _as_sentence(text: str) -> str:
+    """Normalise validator-authored text into a user-facing sentence.
+
+    Custom validators sometimes name fields in code form (`vat_rate is
+    required when vat_enabled is true`). Spell those out so the reader never
+    sees an identifier, then ensure the result is capitalised and terminated.
+    """
+    # Only touch multi-word snake_case tokens; a bare word like "quantity"
+    # is already ordinary English and must not be altered.
+    spelled = re.sub(
+        r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b", lambda m: m.group(0).replace("_", " "), text
+    )
+
+    spelled = spelled.strip()
+    if not spelled:
+        return spelled
+
+    if spelled[0].islower():
+        spelled = spelled[0].upper() + spelled[1:]
+
+    if spelled[-1] not in ".!?":
+        spelled += "."
+
+    return spelled
+
+
+def _friendly_message(error: dict[str, Any]) -> str:
+    """Build a user-readable sentence for one Pydantic validation error.
+
+    Dispatches on the stable `type` discriminator and the `ctx` constraint
+    values. Any type without an explicit case falls through to a generic
+    sentence, so an unmapped framework message can never reach the client.
+    """
+    error_type = str(error.get("type", ""))
+    ctx = error.get("ctx") or {}
+    label = _field_label(_field_path(tuple(error.get("loc", ()))))
+
+    if error_type == "missing":
+        return f"{label} is required."
+
+    if error_type == "string_too_short":
+        return (
+            f"{label} must be at least {_plural(ctx.get('min_length'), 'character')}."
+        )
+
+    if error_type == "string_too_long":
+        return f"{label} must be at most {_plural(ctx.get('max_length'), 'character')}."
+
+    # `too_short`/`too_long` apply to collections (lists, sets), not strings.
+    if error_type == "too_short":
+        return f"{label} must have at least {_plural(ctx.get('min_length'), 'item')}."
+
+    if error_type == "too_long":
+        return f"{label} must have at most {_plural(ctx.get('max_length'), 'item')}."
+
+    if error_type == "string_pattern_mismatch":
+        return f"{label} is not in the expected format."
+
+    if error_type in {"greater_than", "greater_than_equal"}:
+        bound = ctx.get("gt", ctx.get("ge"))
+        qualifier = "greater than" if error_type == "greater_than" else "at least"
+        return f"{label} must be {qualifier} {bound}."
+
+    if error_type in {"less_than", "less_than_equal"}:
+        bound = ctx.get("lt", ctx.get("le"))
+        qualifier = "less than" if error_type == "less_than" else "at most"
+        return f"{label} must be {qualifier} {bound}."
+
+    if error_type in {"int_parsing", "int_type", "int_from_float"}:
+        return f"{label} must be a whole number."
+
+    if error_type in {"float_parsing", "float_type", "decimal_parsing"}:
+        return f"{label} must be a number."
+
+    if error_type in {"bool_parsing", "bool_type"}:
+        return f"{label} must be true or false."
+
+    if error_type in {"date_parsing", "date_type", "date_from_datetime_parsing"}:
+        return f"{label} must be a valid date."
+
+    if error_type in {
+        "datetime_parsing",
+        "datetime_type",
+        "datetime_from_date_parsing",
+    }:
+        return f"{label} must be a valid date and time."
+
+    if error_type == "uuid_parsing":
+        return f"{label} must be a valid identifier."
+
+    if error_type in {"enum", "literal_error"}:
+        expected = ctx.get("expected")
+        if expected:
+            return f"{label} must be one of: {expected}."
+        return f"{label} is not one of the allowed values."
+
+    if error_type in {"json_invalid", "json_type"}:
+        return "The request body is not valid JSON."
+
+    if error_type == "string_type":
+        return f"{label} must be text."
+
+    if error_type == "value_error":
+        # Covers EmailStr and every custom `field_validator`, which already
+        # raise sentences written for humans. Pydantic prefixes the raw text
+        # with "Value error, "; strip it and reuse the author's wording.
+        raw = str(error.get("msg", "")).removeprefix("Value error, ").strip()
+
+        # EmailStr's own text is developer prose ("value is not a valid email
+        # address: An email address must have an @-sign."); replace it rather
+        # than prefixing a label onto it.
+        if "not a valid email address" in raw.lower():
+            return f"{label} must be a valid email address."
+
+        if raw:
+            return _as_sentence(raw)
+
+    return f"{label} is not valid."
+
+
+def humanize_validation_errors(
+    raw_errors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach `field` and `message` to each raw Pydantic error.
+
+    `loc`/`msg` are preserved so existing API consumers and debugging tooling
+    keep working; clients should render `message` and key form state off
+    `field`.
+    """
+    humanized: list[dict[str, Any]] = []
+    for error in raw_errors:
+        entry = dict(error)
+        entry["field"] = _field_path(tuple(error.get("loc", ())))
+        entry["message"] = _friendly_message(error)
+        humanized.append(entry)
+    return humanized
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers for consistent error responses."""
 
@@ -291,6 +506,16 @@ def register_exception_handlers(app: FastAPI) -> None:
         # inside the handler itself.
         errors = jsonable_encoder(exc.errors())
 
+        # Add a user-readable `message` and a clean `field` to every error, and
+        # promote the first message to the top-level `error`. Clients that show
+        # `error` verbatim then display "Password must be at least 8
+        # characters." instead of the framework's raw prose.
+        errors = humanize_validation_errors(errors)
+        summary = next(
+            (e["message"] for e in errors if e.get("message")),
+            "Please check the information you entered and try again.",
+        )
+
         logger.warning(
             "Request validation error",
             extra={
@@ -305,7 +530,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "error": "Validation failed",
+                "error": summary,
                 "error_code": "VALIDATION_ERROR",
                 "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "request_id": request_id,
