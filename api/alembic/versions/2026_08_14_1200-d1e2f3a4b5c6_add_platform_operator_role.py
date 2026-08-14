@@ -1,7 +1,7 @@
 """Allow the platform_operator user role
 
 Revision ID: d1e2f3a4b5c6
-Revises: c0d1e2f3a4b5
+Revises: e2f3a4b5c6d7
 Create Date: 2026-08-14 12:00:00.000000
 
 Issue #58 / ADR-0011: module entitlements become operator-granted, so a
@@ -21,7 +21,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d1e2f3a4b5c6"
-down_revision: Union[str, None] = "c0d1e2f3a4b5"
+down_revision: Union[str, None] = "e2f3a4b5c6d7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
