@@ -54,7 +54,7 @@ router = APIRouter(
     route_class=CommitOnSuccessRoute,
     dependencies=[
         Depends(authorize_and_audit_report_access, scope="function"),
-    ]
+    ],
 )
 
 _exporter = ExcelExporter()
