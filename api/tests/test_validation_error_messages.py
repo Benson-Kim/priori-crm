@@ -234,6 +234,23 @@ class TestValidationResponseShape:
         assert body["error"] == "Email address must be a valid email address."
         assert_no_leak(body["error"])
 
+    def test_weak_password_keeps_the_policy_wording(self, client):
+        """A long-but-weak password fails the policy validator, not min_length.
+
+        `validate_password_strength` already raises sentences written for
+        users; Pydantic surfaces them as `value_error` with a "Value error, "
+        prefix, which the handler strips rather than replaces.
+        """
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "frank@mail.com", "password": "passwordonly"},
+        )
+
+        assert response.status_code == 422
+        body = response.json()
+        assert body["error"] == "Password must contain at least one number."
+        assert_no_leak(body["error"])
+
     def test_missing_field_is_readable(self, client):
         response = client.post("/api/v1/auth/login", json={})
 
