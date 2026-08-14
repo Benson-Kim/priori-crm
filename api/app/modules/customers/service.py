@@ -94,7 +94,6 @@ class CustomerService(ServiceBase):
                 address=data.address,
                 address2=data.address2,
                 country=data.country,
-                province=data.province,
                 city=data.city,
                 postal_code=data.postal_code,
             )

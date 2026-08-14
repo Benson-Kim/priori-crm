@@ -156,17 +156,21 @@ class Customer(Base):
         comment="Contact person last name",
     )
 
-    email: Mapped[str] = mapped_column(
+    # Optional: a customer may be recorded from a phone call or a walk-in with
+    # no email on file. The unique constraint still holds for supplied
+    # addresses - Postgres treats NULLs as distinct, so any number of rows may
+    # omit one.
+    email: Mapped[str | None] = mapped_column(
         String(255),
         unique=True,
-        nullable=False,
+        nullable=True,
         index=True,
         comment="Primary email address",
     )
 
-    phone: Mapped[str] = mapped_column(
+    phone: Mapped[str | None] = mapped_column(
         String(20),
-        nullable=False,
+        nullable=True,
         comment="Primary phone number",
     )
 
@@ -238,13 +242,7 @@ class Customer(Base):
         comment="City",
     )
 
-    province: Mapped[str] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="State/Province/Region",
-    )
-
-    postal_code: Mapped[str] = mapped_column(
+    postal_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Postal/ZIP code",
@@ -357,7 +355,6 @@ class Customer(Base):
             self.address,
             self.address2,
             self.city,
-            self.province,
             self.postal_code,
             self.country,
         ]
