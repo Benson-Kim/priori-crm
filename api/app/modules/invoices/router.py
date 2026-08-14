@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.common.dependencies import (
+    DbSession,
     InvoiceServiceDep,
     require_privileged,
     verify_internal_secret,
@@ -626,7 +627,8 @@ async def download_invoice_pdf(
     ),
     dependencies=[Depends(verify_internal_secret)],
 )
-def trigger_invoice_overdue_transition(service: InvoiceServiceDep) -> dict:
+def trigger_invoice_overdue_transition(db: DbSession) -> dict:
+    service = InvoiceService(db)
     updated = service.bulk_transition_overdue()
     return {
         "transitioned": updated,
