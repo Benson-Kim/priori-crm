@@ -3305,6 +3305,11 @@
           "tax_treatment": {
             "title": "Tax Treatment",
             "type": "string"
+          },
+          "version": {
+            "description": "Optimistic-locking version; pass as expectedVersion when editing the profile",
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
@@ -3314,7 +3319,8 @@
           "tax_treatment",
           "credit_limit",
           "synced",
-          "is_default"
+          "is_default",
+          "version"
         ],
         "title": "DeskCompanyProfile",
         "type": "object"
@@ -5933,6 +5939,84 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "ModuleKey": {
+        "description": "Per-owner feature-toggleable application modules.\n\nEach key identifies a functional module whose availability can be\nswitched on/off per owner profile via ``owner_module_settings``.\nA missing settings row means the module is ENABLED (default-on).\n\nMembers listed in :data:`ESSENTIAL_MODULES` are core infrastructure\n(auth, owner profile, health, dashboard) and can never be disabled \u2014\ntheir routers carry no module gate and the admin API rejects attempts\nto disable them with a 422.",
+        "enum": [
+          "customers",
+          "quotes",
+          "invoices",
+          "deals",
+          "nurture",
+          "onboarding",
+          "vendors",
+          "expenses",
+          "purchase_orders",
+          "statements",
+          "reports",
+          "sales_desk",
+          "auth",
+          "owner",
+          "health",
+          "dashboard"
+        ],
+        "title": "ModuleKey",
+        "type": "string"
+      },
+      "ModuleSettingState": {
+        "description": "Effective entitlement state of one application module.\n\n``enabled`` is the RESOLVED state (explicit override, or the default-on\nwhen no ``owner_module_settings`` row exists). ``essential`` marks core\nmodules that can never be disabled (the UI renders them locked).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "essential": {
+            "title": "Essential",
+            "type": "boolean"
+          },
+          "moduleKey": {
+            "title": "Modulekey",
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleKey",
+          "enabled",
+          "essential"
+        ],
+        "title": "ModuleSettingState",
+        "type": "object"
+      },
+      "ModuleSettingUpdate": {
+        "description": "PATCH /owner/modules/{module_key} body.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ModuleSettingUpdate",
+        "type": "object"
+      },
+      "ModuleSettingsResponse": {
+        "description": "Every module key with its effective state (GET /owner/modules).",
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleSettingState"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modules"
+        ],
+        "title": "ModuleSettingsResponse",
+        "type": "object"
+      },
       "NurtureDueState": {
         "description": "Server-computed due badge, rendered directly by the UI.\n\n``state`` is ``overdue`` / ``today`` / ``in_days`` (with ``in_days``\ncarrying N), computed against the org-local accounting date boundary.\n``label`` is the chip text verbatim: \"Overdue\", \"Today\", \"45d\".",
         "properties": {
@@ -6556,6 +6640,13 @@
               }
             ],
             "title": "Email"
+          },
+          "enabledModules": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Enabledmodules",
+            "type": "object"
           },
           "fullName": {
             "title": "Fullname",
@@ -14911,6 +15002,25 @@
             }
           },
           {
+            "description": "Filter by customer (company)",
+            "in": "query",
+            "name": "customerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by customer (company)",
+              "title": "Customerid"
+            }
+          },
+          {
             "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
             "in": "query",
             "name": "hygiene",
@@ -19093,6 +19203,86 @@
           }
         ],
         "summary": "Upload / replace the owner logo",
+        "tags": [
+          "Owner"
+        ]
+      }
+    },
+    "/api/v1/owner/modules": {
+      "get": {
+        "description": "Per-owner module entitlements: every ModuleKey with its RESOLVED enabled state (missing override row = enabled) and whether it is essential (never disableable). Admin only.",
+        "operationId": "list_module_settings_api_v1_owner_modules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List every module with its effective entitlement state",
+        "tags": [
+          "Owner"
+        ]
+      }
+    },
+    "/api/v1/owner/modules/{module_key}": {
+      "patch": {
+        "description": "Upsert the per-owner override for one toggleable module. Disabling an essential module (auth, owner, health, dashboard) returns 422. Admin only; every change is audited.",
+        "operationId": "update_module_setting_api_v1_owner_modules__module_key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module_key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModuleKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleSettingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not an admin"
+          },
+          "422": {
+            "description": "Unknown module key, or essential module"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enable or disable one module",
         "tags": [
           "Owner"
         ]
@@ -23513,6 +23703,58 @@
           }
         ],
         "summary": "Sales Desk companies directory",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/companies/{company_id}": {
+      "get": {
+        "description": "A single company exactly as the directory lists it \u2014 industry, primary contact, billing profiles with their accounting sync state, owning rep and deal counts \u2014 assembled by the same path as `GET /sales-desk/companies`, so the drawer and the table can never disagree about a company. 404 when the company does not exist.",
+        "operationId": "get_company_api_v1_sales_desk_companies__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskCompanyRow"
+                }
+              }
+            },
+            "description": "Company row"
+          },
+          "404": {
+            "description": "Company not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One Sales Desk company row",
         "tags": [
           "Sales Desk"
         ]
