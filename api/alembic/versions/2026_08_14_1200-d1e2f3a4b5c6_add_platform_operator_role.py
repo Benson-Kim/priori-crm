@@ -5,7 +5,8 @@ Revises: c0d1e2f3a4b5
 Create Date: 2026-08-14 12:00:00.000000
 
 Issue #58 / ADR-0011: module entitlements become operator-granted, so a
-platform-level role above ADMIN must be storable. Widens the
+platform-level role outside the tenant role set (a disjoint authority
+axis, not a rung above ADMIN) must be storable. Widens the
 ``ck_users_valid_role`` CHECK constraint to accept ``platform_operator``
 alongside the existing tenant roles. The column itself (String(20)) already
 fits the 17-character value; no data backfill is needed.
