@@ -31,20 +31,26 @@ from app.modules.deals.schemas import DealOwnerResponse
 class PipelineWeightedKpi(BaseModel):
     """PIPELINE (WEIGHTED): sum of open value x stage probability + open count."""
 
-    value: Decimal = Field(description="Weighted open pipeline, reporting-currency equivalent")
+    value: Decimal = Field(
+        description="Weighted open pipeline, reporting-currency equivalent"
+    )
     open_deal_count: int = Field(description="Open deals (parked excluded)")
 
 
 class TotalArrPipelineKpi(BaseModel):
     """TOTAL ARR PIPELINE: unweighted sum of open deal values."""
 
-    value: Decimal = Field(description="Unweighted open pipeline, reporting-currency equivalent")
+    value: Decimal = Field(
+        description="Unweighted open pipeline, reporting-currency equivalent"
+    )
 
 
 class ClosedPeriodKpi(BaseModel):
     """WON/LOST THIS PERIOD: closed value + count for the current quarter."""
 
-    value: Decimal = Field(description="Closed value this period, reporting-currency equivalent")
+    value: Decimal = Field(
+        description="Closed value this period, reporting-currency equivalent"
+    )
     deal_count: int = Field(description="Deals closed this period")
 
 
@@ -61,8 +67,12 @@ class BookingsMonth(BaseModel):
     """One month of the Bookings — 12 months chart (rolling window)."""
 
     label: str = Field(description="Month label as rendered (e.g. 'Sep')")
-    won_value: Decimal = Field(description="Won value closed this month, reporting currency")
-    lost_value: Decimal = Field(description="Lost value closed this month, reporting currency")
+    won_value: Decimal = Field(
+        description="Won value closed this month, reporting currency"
+    )
+    lost_value: Decimal = Field(
+        description="Lost value closed this month, reporting currency"
+    )
 
 
 class StagePipelineLine(BaseModel):
@@ -70,7 +80,9 @@ class StagePipelineLine(BaseModel):
 
     stage: DealStage
     stage_label: str = Field(description="Display label (design vocabulary)")
-    value: Decimal = Field(description="Open value at this stage, reporting-currency equivalent")
+    value: Decimal = Field(
+        description="Open value at this stage, reporting-currency equivalent"
+    )
     deal_count: int
     share: float = Field(
         description="Share of the total open pipeline, 0..1 (drives bar width)"
@@ -201,7 +213,9 @@ class StageStripColumn(BaseModel):
     stage: DealStage
     stage_label: str
     count: int
-    value: Decimal = Field(description="Open value at this stage, reporting-currency equivalent")
+    value: Decimal = Field(
+        description="Open value at this stage, reporting-currency equivalent"
+    )
     avg_days_in_stage: int = Field(
         description="Mean days-in-pipeline of the open deals at this stage"
     )

@@ -35,9 +35,10 @@ import app.modules.sales_desk.audit as sales_desk_audit
 import app.modules.sales_desk.router as sales_desk_router
 from app.common.audit import AuditEvent
 from app.common.dependencies import get_current_user, get_sales_desk_service
-from app.common.fx import usd_equivalent
+from app.common.fx import convert_from_usd, usd_equivalent
 from app.common.reporting_time import reporting_date, reporting_timezone
 from app.constants.enums import (
+    Currency,
     CustomerType,
     DealLostReason,
     DealStage,
@@ -541,6 +542,179 @@ def test_pipeline_overview_owner_scoping(db):
     assert overview.open_pipeline_total == Decimal("1000.00")
     assert overview.hygiene.all == 1
     assert sum(column.count for column in overview.stages) == 1
+
+
+# Close-reason aggregation (#57, QA finding 05)
+
+
+def test_close_reasons_empty_state(db):
+    service = _svc(db)
+
+    lines = service.get_dashboard().close_reasons
+    assert [line.reason for line in lines] == list(DealLostReason)
+    assert all(line.count == 0 and line.share == 0.0 for line in lines)
+
+    assert service.get_pipeline_overview().closed.lost_reasons == lines
+
+
+def test_close_reasons_aggregate_lost_deals(db):
+    owner = _make_owner(db)
+    customer = _make_customer(db)
+
+    for note in ("No budget left.", "Budget cut again."):
+        deal = _make_deal(db, owner, customer, value=Decimal("1000.00"))
+        _deal_svc(db, owner).close(
+            deal.id, "lost", DealLostReason.NO_BUDGET.value, note
+        )
+    timing = _make_deal(db, owner, customer, value=Decimal("1000.00"))
+    _deal_svc(db, owner).close(
+        timing.id, "lost", DealLostReason.BAD_TIMING.value, "Renewing next year."
+    )
+    # Won deals carry a won reason and never count toward the lost bars.
+    won = _make_deal(db, owner, customer, value=Decimal("1000.00"))
+    _deal_svc(db, owner).close(
+        won.id, "won", DealWonReason.PRODUCT_FIT.value, "Signed."
+    )
+
+    service = _svc(db)
+    lines = service.get_dashboard().close_reasons
+    assert [line.reason for line in lines] == list(DealLostReason)
+    by_reason = {line.reason: line for line in lines}
+    assert by_reason[DealLostReason.NO_BUDGET].count == 2
+    assert by_reason[DealLostReason.NO_BUDGET].share == pytest.approx(2 / 3, abs=1e-4)
+    assert by_reason[DealLostReason.BAD_TIMING].count == 1
+    assert by_reason[DealLostReason.BAD_TIMING].share == pytest.approx(1 / 3, abs=1e-4)
+    assert sum(line.count for line in lines) == 3
+
+    # The pipeline overview's closed column carries the same breakdown.
+    assert service.get_pipeline_overview().closed.lost_reasons == lines
+
+
+def test_close_reasons_honour_owner_filter(db):
+    owner = _make_owner(db)
+    other = _make_owner(db, first="Joy", last="Nduta")
+    customer = _make_customer(db)
+
+    mine = _make_deal(db, owner, customer, value=Decimal("1000.00"))
+    _deal_svc(db, owner).close(
+        mine.id, "lost", DealLostReason.NO_DECISION.value, "Went silent."
+    )
+    theirs = _make_deal(db, other, customer, value=Decimal("1000.00"))
+    _deal_svc(db, other).close(
+        theirs.id, "lost", DealLostReason.PRICE_TOO_HIGH.value, "Too dear."
+    )
+
+    service = _svc(db)
+    scoped_dashboard = service.get_dashboard(owner.id)
+    lines = {line.reason: line for line in scoped_dashboard.close_reasons}
+    assert lines[DealLostReason.NO_DECISION].count == 1
+    assert lines[DealLostReason.NO_DECISION].share == 1.0
+    assert lines[DealLostReason.PRICE_TOO_HIGH].count == 0
+
+    scoped = service.get_pipeline_overview(owner.id).closed
+    assert scoped.lost_count == 1
+    scoped_counts = {line.reason: line.count for line in scoped.lost_reasons}
+    assert scoped_counts[DealLostReason.NO_DECISION] == 1
+    assert scoped_counts[DealLostReason.PRICE_TOO_HIGH] == 0
+
+
+# Currency lens (#57, QA finding 06)
+
+
+def test_dashboard_currency_lens_converts_reported_values(db):
+    owner = _make_owner(db)
+    customer = _make_customer(db)
+    won = _make_deal(db, owner, customer, value=Decimal("400.00"))
+    _deal_svc(db, owner).close(
+        won.id, "won", DealWonReason.PRODUCT_FIT.value, "Signed."
+    )
+    _make_deal(db, owner, customer, value=Decimal("1000.00"))
+
+    def in_kes(usd_value: str) -> Decimal:
+        return convert_from_usd(Decimal(usd_value), "KES")
+
+    service = _svc(db)
+    usd = service.get_dashboard()
+    kes = service.get_dashboard(currency=Currency.KES)
+
+    assert usd.currency == "USD"
+    assert kes.currency == "KES"
+    assert kes.kpis.total_arr_pipeline.value == in_kes("1000.00")
+    assert kes.kpis.pipeline_weighted.value == in_kes("100.00")
+    assert kes.kpis.won_this_period.value == in_kes("400.00")
+    assert kes.bookings_12_months[-1].won_value == in_kes("400.00")
+
+    by_stage = {line.stage: line for line in kes.pipeline_by_stage}
+    assert by_stage[DealStage.ACTIVATION].value == in_kes("1000.00")
+
+    # Counts and ratio fields are lens-invariant: only the money moves.
+    assert kes.kpis.pipeline_weighted.open_deal_count == 1
+    assert by_stage[DealStage.ACTIVATION].share == 1.0
+    usd_quota = {line.user.id: line for line in usd.rep_quota}
+    kes_quota = {line.user.id: line for line in kes.rep_quota}
+    assert kes_quota[owner.id].percent == usd_quota[owner.id].percent
+    assert kes_quota[owner.id].quota == convert_from_usd(
+        usd_quota[owner.id].quota, "KES"
+    )
+
+
+def test_pipeline_overview_currency_lens(db):
+    owner = _make_owner(db)
+    customer = _make_customer(db)
+    _make_deal(db, owner, customer, value=Decimal("2700.00"))
+
+    service = _svc(db)
+    usd = service.get_pipeline_overview()
+    kes = service.get_pipeline_overview(currency=Currency.KES)
+
+    assert kes.currency == "KES"
+    expected = convert_from_usd(Decimal("2700.00"), "KES")
+    assert kes.open_pipeline_total == expected
+    assert kes.team.open_value == expected
+    cards = {card.user.id: card for card in kes.reps}
+    assert cards[owner.id].open_value == expected
+    strip = {column.stage: column for column in kes.stages}
+    assert strip[DealStage.ACTIVATION].value == expected
+
+    assert kes.team.open_count == usd.team.open_count
+    assert kes.hygiene == usd.hygiene
+    assert kes.closed == usd.closed
+
+
+def test_currency_lens_endpoints(client, db):
+    owner = _make_owner(db)
+    customer = _make_customer(db)
+    _make_deal(db, owner, customer, value=Decimal("1000.00"))
+    lost = _make_deal(db, owner, customer, value=Decimal("500.00"))
+    _deal_svc(db, owner).close(
+        lost.id, "lost", DealLostReason.NO_BUDGET.value, "No budget."
+    )
+
+    _install_actor(owner)
+    try:
+        dashboard = client.get(f"{API}/dashboard", params={"currency": "KES"})
+        overview = client.get(f"{API}/pipeline/overview", params={"currency": "KES"})
+        invalid = client.get(f"{API}/dashboard", params={"currency": "JPY"})
+    finally:
+        _clear_actor()
+
+    assert dashboard.status_code == 200
+    body = dashboard.json()
+    assert body["currency"] == "KES"
+    total_arr = Decimal(str(body["kpis"]["total_arr_pipeline"]["value"]))
+    assert total_arr == convert_from_usd(Decimal("1000.00"), "KES")
+    reasons = {line["reason"]: line["count"] for line in body["close_reasons"]}
+    assert reasons[DealLostReason.NO_BUDGET.value] == 1
+
+    assert overview.status_code == 200
+    over = overview.json()
+    assert over["currency"] == "KES"
+    lost_lines = {
+        line["reason"]: line["count"] for line in over["closed"]["lost_reasons"]
+    }
+    assert lost_lines[DealLostReason.NO_BUDGET.value] == 1
+
+    assert invalid.status_code == 422
 
 
 # Read-snapshot dependency
