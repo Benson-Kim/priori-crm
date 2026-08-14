@@ -34,15 +34,16 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
                 companyName: customer.company_name || "",
                 firstName: customer.first_name,
                 lastName: customer.last_name,
-                email: customer.email,
-                phone: customer.phone.replace(/^\+?254/, "").trim(),
+                email: customer.email || "",
+                // Optional: strip the country prefix only when a number is
+                // on file. Calling .replace() on an absent phone throws.
+                phone: (customer.phone || "").replace(/^\+?254/, "").trim(),
                 website: customer.website || "",
                 vatNumber: customer.vat_number || "",
                 currency: customer.currency,
                 address: customer.address || "",
                 address2: customer.address2 || "",
                 country: customer.country || "KE",
-                province: customer.province || "",
                 city: customer.city || "",
                 postalCode: customer.postal_code || "",
             });

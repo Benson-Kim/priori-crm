@@ -25,6 +25,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * One entry of a 422 response's `details.errors`.
+ *
+ * `field` and `message` are the user-facing pair the API emits; `loc` and
+ * `msg` are the underlying Pydantic values, kept for debugging and never
+ * shown to a user.
+ */
+export interface ValidationErrorDetail {
+  field?: string;
+  message?: string;
+  loc?: (string | number)[];
+  msg?: string;
+}
+
+const GENERIC_VALIDATION_MESSAGE =
+  "Please check the information you entered and try again.";
+
 function buildUrl(
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
@@ -178,23 +195,34 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
 
-    // Handle validation errors with detailed information
+    // Validation errors: the API humanizes each entry into a `message`
+    // written for end users. Render those, never the raw Pydantic `loc`/`msg`
+    // (which produced "body.password: string should have at least 8
+    // characters" on the login screen).
     if (body.details?.errors && Array.isArray(body.details.errors)) {
-      const errorMessages = body.details.errors
-        .map((err: { loc?: (string | number)[]; msg?: string }) => {
-          const field = err.loc?.join(".") || "unknown";
-          return `${field}: ${err.msg}`;
-        })
-        .join("; ");
+      const friendly = (body.details.errors as ValidationErrorDetail[])
+        .map((err) => err.message)
+        .filter((msg): msg is string => typeof msg === "string" && msg.length > 0);
+
+      if (friendly.length > 0) {
+        throw new ApiError(friendly.join(" "), response.status);
+      }
+      // An older API build without humanized messages: fall back to the
+      // envelope summary rather than reconstructing text from `loc`/`msg`.
       throw new ApiError(
-        errorMessages || body.error || "Validation failed",
+        typeof body.error === "string" && body.error
+          ? body.error
+          : GENERIC_VALIDATION_MESSAGE,
         response.status
       );
     }
 
+    // `detail` is a string for hand-raised HTTPExceptions but an array for any
+    // 422 that bypasses the API's handler; only render it when it is a string,
+    // otherwise it stringifies to "[object Object]".
     const message =
-      body.detail ||
-      body.error ||
+      (typeof body.detail === "string" && body.detail) ||
+      (typeof body.error === "string" && body.error) ||
       response.statusText ||
       "An unexpected error occurred";
     throw new ApiError(message, response.status);
@@ -306,7 +334,10 @@ export async function apiDownloadWithFilename(
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new ApiError(
-      body.detail || body.error || response.statusText || "Download failed",
+      (typeof body.detail === "string" && body.detail) ||
+        (typeof body.error === "string" && body.error) ||
+        response.statusText ||
+        "Download failed",
       response.status
     );
   }
