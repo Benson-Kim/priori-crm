@@ -4,6 +4,12 @@
  * Redirects unauthenticated visitors to /login, preserving the location
  * they attempted to open (react-router `state.from`) so the login flow
  * can send them back after a successful sign-in.
+ *
+ * Also mounts the OwnerProfileProvider for every authenticated route: the
+ * per-owner module entitlements (`profile.enabledModules`) gate navigation
+ * and routes in BOTH shells — the Business Central layout and the Sales
+ * Desk layout — so the provider must sit above the point where the two
+ * route trees split, not inside one of them.
  */
 
 // import { Outlet } from "react-router-dom";

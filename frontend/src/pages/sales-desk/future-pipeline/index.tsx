@@ -1,24 +1,30 @@
 /**
- * Future pipeline, nurture cards.
+ * Future pipeline, waiting deals as cards.
  *
- * Prospects that are real but not yet workable: the reason we are waiting and
- * the date the waiting ends. Cards rather than rows because the note is the
- * point, and a table cell would truncate it. Ordered soonest first, so
- * anything overdue or due today sits at the top.
+ * Both kinds of waiting live here — parked deals (already in the book, with a
+ * recorded stage to resume at) and nurture prospects (real but not yet
+ * workable). Each card carries the reason we are waiting and the date the
+ * waiting ends; cards rather than rows because the note is the point, and a
+ * table cell would truncate it. Ordered soonest first, so anything overdue or
+ * due today sits at the top. These are the same two groups the sidebar badge
+ * counts, so the page always agrees with its own badge.
  */
 
-import { CalendarDays, Plus } from "lucide-react";
+import { ArrowRight, CalendarDays, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { formatDate } from "@/lib/utils";
+import { formatDate, plural } from "@/lib/utils";
 import {
     formatDeskMoney,
     getFuturePipelineSummary,
+    getParkedDeals,
     getProspects,
+    resumeDeal,
     type FuturePipelineSummary,
+    type ParkedDealRow,
     type ProspectRow,
 } from "@/services/salesDeskApi";
 import { Avatar } from "@/components/ui/Avatar";
@@ -72,19 +78,92 @@ function ProspectCard({ prospect }: Readonly<{ prospect: ProspectRow }>) {
     );
 }
 
+/*
+ * A parked deal is not worked in a prospect table — its one action is the
+ * resume control, so unlike ProspectCard the card is not a link. Resuming
+ * returns the deal to the stage it was parked at and follows it into the
+ * pipeline workspace, the same hand-off the engage flow makes.
+ */
+function ParkedDealCard({
+    deal,
+    isResuming,
+    onResume,
+}: Readonly<{ deal: ParkedDealRow; isResuming: boolean; onResume: () => void }>) {
+    return (
+        <div className="flex flex-col rounded-2xl border border-sd-border bg-sd-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 className="text-[15px] font-bold text-sd-ink">{deal.company}</h2>
+                    <p className="pt-0.5 text-xs text-sd-muted">
+                        {deal.product} · {plural(deal.seats, "seat")}
+                    </p>
+                </div>
+                <DueBadge
+                    prospect={{
+                        urgency: deal.urgency,
+                        days_until: deal.days_until,
+                        engage_on: deal.parked_until,
+                    }}
+                />
+            </div>
+
+            <p className="py-4 text-[13px] leading-relaxed text-sd-ink">{deal.note}</p>
+
+            <div className="mt-auto flex items-end justify-between gap-3 border-t border-sd-border pt-3">
+                <span className="flex items-center gap-2">
+                    <Avatar
+                        name={deal.owner_name}
+                        initials={deal.owner_initials}
+                        color={deal.owner_color}
+                    />
+                    <span className="text-[13px] text-sd-ink">{deal.owner_name}</span>
+                </span>
+                <span className="text-right">
+                    <span className="block text-[11px] text-sd-muted">Value / yr</span>
+                    <span className="block text-[15px] font-bold text-sd-ink">
+                        {formatDeskMoney(deal.value, deal.billing_currency)}
+                    </span>
+                </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                <p className="flex items-center gap-1.5 text-xs text-sd-muted">
+                    <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
+                    Re-engage on {formatDate(deal.parked_until)} · resumes at{" "}
+                    {deal.resume_stage_label}
+                </p>
+                <Button
+                    variant="primary"
+                    loading={isResuming}
+                    onClick={onResume}
+                    aria-label={`Resume the ${deal.company} deal at ${deal.resume_stage_label}`}
+                >
+                    Resume deal <ArrowRight size={16} />
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 export default function SalesDeskFuturePipelinePage() {
+    const navigate = useNavigate();
+
     // ?rep= scopes both the cards and the summary line to one owner, the
     // same URL-driven mechanism the pipeline workspace uses for ?deal=.
     const [searchParams] = useSearchParams();
     const repFilter = searchParams.get("rep") ?? undefined;
 
     const [prospects, setProspects] = useState<ProspectRow[]>([]);
+    const [parkedDeals, setParkedDeals] = useState<ParkedDealRow[]>([]);
     const [summary, setSummary] = useState<FuturePipelineSummary | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [revision, setRevision] = useState(0);
+
+    // The deal a resume call is in flight for, so only its button spins.
+    const [resumingId, setResumingId] = useState<string | null>(null);
 
     const dismissNotice = useCallback(() => setNotice(null), []);
 
@@ -93,11 +172,13 @@ export default function SalesDeskFuturePipelinePage() {
 
         Promise.all([
             getProspects(undefined, repFilter),
+            getParkedDeals(repFilter),
             getFuturePipelineSummary(repFilter),
         ])
-            .then(([rows, next]) => {
+            .then(([rows, parked, next]) => {
                 if (!active) return;
                 setProspects(rows);
+                setParkedDeals(parked);
                 setSummary(next);
                 setError(null);
             })
@@ -115,6 +196,34 @@ export default function SalesDeskFuturePipelinePage() {
             active = false;
         };
     }, [repFilter, revision]);
+
+    /**
+     * Resume the parked deal at its recorded stage, then follow it into the
+     * pipeline workspace — the same hand-off engaging a prospect makes.
+     */
+    const resumeParkedDeal = useCallback(
+        async (deal: ParkedDealRow) => {
+            setResumingId(deal.id);
+            setError(null);
+            try {
+                await resumeDeal(deal.id);
+                navigate(`/sales-desk/pipeline/workspace?deal=${deal.id}`);
+            } catch (err) {
+                setError(
+                    err instanceof Error ? err.message : "Could not resume that deal."
+                );
+                setResumingId(null);
+                // Re-read both lists: a refused resume usually means the deal
+                // is no longer parked, so the card itself is stale.
+                setRevision((value) => value + 1);
+            }
+        },
+        [navigate]
+    );
+
+    const dueParkedCount = parkedDeals.filter(
+        (deal) => deal.urgency !== "scheduled"
+    ).length;
 
     return (
         <div className="flex flex-col gap-5">
@@ -150,17 +259,62 @@ export default function SalesDeskFuturePipelinePage() {
             {notice && <SuccessNotice message={notice} onDismiss={dismissNotice} />}
 
             {isLoading ? (
-                <LoadingState message="Loading the nurture list..." className="h-64" />
-            ) : prospects.length === 0 ? (
-                <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-[13px] text-sd-muted">
-                    No prospects planned.
-                </p>
+                <LoadingState message="Loading the future pipeline..." className="h-64" />
             ) : (
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                    {prospects.map((prospect) => (
-                        <ProspectCard key={prospect.id} prospect={prospect} />
-                    ))}
-                </div>
+                <>
+                    {/*
+                     * Parked deals lead: they are already-won attention with a
+                     * resume date, and the sidebar badge counts the due ones,
+                     * so hiding them here made the page disagree with its own
+                     * badge (finding 03).
+                     */}
+                    {parkedDeals.length > 0 && (
+                        <section className="flex flex-col gap-3" aria-label="Parked deals">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-[13px] font-semibold text-sd-ink">
+                                    Parked deals
+                                </h2>
+                                <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-bold text-sd-brand">
+                                    {parkedDeals.length}
+                                </span>
+                                {dueParkedCount > 0 && (
+                                    <span className="rounded-full bg-sd-danger-bg px-2.5 py-0.5 text-xs font-semibold text-sd-danger">
+                                        {dueParkedCount} due now
+                                    </span>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                                {parkedDeals.map((deal) => (
+                                    <ParkedDealCard
+                                        key={deal.id}
+                                        deal={deal}
+                                        isResuming={resumingId === deal.id}
+                                        onResume={() => void resumeParkedDeal(deal)}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className="flex flex-col gap-3" aria-label="Nurture prospects">
+                        {parkedDeals.length > 0 && (
+                            <h2 className="text-[13px] font-semibold text-sd-ink">
+                                Nurture prospects
+                            </h2>
+                        )}
+                        {prospects.length === 0 ? (
+                            <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-[13px] text-sd-muted">
+                                No prospects planned.
+                            </p>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                                {prospects.map((prospect) => (
+                                    <ProspectCard key={prospect.id} prospect={prospect} />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </>
             )}
 
             <AddProspectDialog

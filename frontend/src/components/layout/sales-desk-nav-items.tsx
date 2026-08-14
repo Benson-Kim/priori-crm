@@ -30,6 +30,13 @@ export interface SalesDeskNavItem {
      * this, since every other route starts with "/sales-desk".
      */
     end?: boolean;
+    /**
+     * Module entitlement key gating this entry (absent = always visible).
+     * Dashboard and Companies ride on the `sales_desk` key that gates the
+     * whole subtree; the entries backed by their own routers carry their
+     * own keys, matching the backend's per-router gates.
+     */
+    moduleKey?: string;
 }
 
 /** Root of the module, and the entry point from the Business Central sidebar. */
@@ -37,21 +44,45 @@ export const SALES_DESK_ROOT = "/sales-desk";
 
 export const salesDeskNavItems: SalesDeskNavItem[] = [
     { label: "Dashboard", path: SALES_DESK_ROOT, icon: DashboardIcon, end: true },
-    { label: "Pipeline", path: `${SALES_DESK_ROOT}/pipeline`, icon: PipelineIcon },
+    {
+        label: "Pipeline",
+        path: `${SALES_DESK_ROOT}/pipeline`,
+        icon: PipelineIcon,
+        moduleKey: "deals",
+    },
     { label: "Companies", path: `${SALES_DESK_ROOT}/companies`, icon: CompaniesIcon },
     {
         label: "Future pipeline",
         path: `${SALES_DESK_ROOT}/future-pipeline`,
         icon: FuturePipelineIcon,
+        moduleKey: "nurture",
     },
     {
         label: "Quotes & pricing",
         path: `${SALES_DESK_ROOT}/quotes`,
         icon: QuotesIcon,
+        moduleKey: "quotes",
     },
     {
         label: "Onboarding",
         path: `${SALES_DESK_ROOT}/onboarding`,
         icon: OnboardingIcon,
+        moduleKey: "onboarding",
     },
 ];
+
+/**
+ * Filter the desk nav by the per-owner module entitlement map, the same
+ * fail-open rule `visibleNavItems` applies to the Business Central sidebar
+ * (finding 07): entries without a moduleKey are always visible, and a
+ * null/undefined map (bootstrap still loading, or older API) shows
+ * everything, mirroring the backend's missing-row-=-enabled default.
+ */
+export function visibleSalesDeskNavItems(
+    enabledModules: Record<string, boolean> | null | undefined
+): SalesDeskNavItem[] {
+    return salesDeskNavItems.filter(
+        ({ moduleKey }) =>
+            !moduleKey || !enabledModules || enabledModules[moduleKey] !== false
+    );
+}

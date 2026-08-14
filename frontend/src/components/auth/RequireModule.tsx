@@ -14,11 +14,22 @@ import { Navigate, Outlet } from "react-router-dom";
 
 import { useModuleEnabled } from "@/hooks/useModuleAccess";
 
-export default function RequireModule({ moduleKey }: { moduleKey: string }) {
+export default function RequireModule({
+  moduleKey,
+  redirectTo = "/dashboard",
+}: {
+  moduleKey: string;
+  /**
+   * Where a disabled module's routes land. The Sales Desk sub-routes
+   * redirect to the desk's own dashboard rather than ejecting the user
+   * from the module shell.
+   */
+  redirectTo?: string;
+}) {
   const enabled = useModuleEnabled(moduleKey);
 
   if (!enabled) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <Outlet />;
