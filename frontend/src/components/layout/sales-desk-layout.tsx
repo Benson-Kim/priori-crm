@@ -94,7 +94,7 @@ export default function SalesDeskLayout() {
      * everywhere else in the app.
      */
     return (
-        <div className="sales-desk flex h-screen w-full overflow-hidden bg-sd-surface">
+        <div className="sales-desk flex h-screen w-full overflow-hidden bg-gray-100">
             <SalesDeskSidebar badges={badges} />
             <div className="flex min-w-0 flex-1 flex-col">
                 <SalesDeskHeader
