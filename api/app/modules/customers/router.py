@@ -19,6 +19,7 @@ from app.common.exceptions import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.common.statement import default_statement_period
 from app.constants.enums import BillingCurrency, UserRole
 from app.modules.customers.schemas import (
@@ -37,7 +38,7 @@ from app.modules.customers.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 @router.post(

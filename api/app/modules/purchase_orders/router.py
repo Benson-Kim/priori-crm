@@ -31,6 +31,7 @@ from app.common.dependencies import PurchaseOrderServiceDep, require_privileged
 from app.common.exceptions import BadRequestException
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
 from app.modules.purchase_orders.schemas import (
@@ -53,7 +54,7 @@ from app.modules.purchase_orders.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 # CREATE

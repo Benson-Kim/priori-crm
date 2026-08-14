@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.common.dependencies import DashboardServiceDep
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import Currency
 from app.modules.dashboard.schemas import (
     MAX_TOP_SALES_LIMIT,
@@ -34,7 +35,7 @@ from app.modules.statements.schemas import RangePreset, ResolvedPeriod
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 GranularityParam = Annotated[
     Granularity | None,

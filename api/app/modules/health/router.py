@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session
 from app.common.database import check_database_connection, get_db, get_pool_status
 from app.common.dependencies import verify_internal_secret
 from app.common.financial import TAX_RATES
+from app.common.routing import CommitOnSuccessRoute
 from app.lib.config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 class HealthResponse(BaseModel):
