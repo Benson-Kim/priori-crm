@@ -261,5 +261,8 @@ ui:lint-build:
     - npm run gen:api
   script:
     - npm run lint
-    - npx tsc --noEmit
+    # The root tsconfig.json is a {"files": [], "references": []} solution
+    # stub that type-checks nothing; target the app project explicitly so
+    # generated-schema drift fails this check, not only the build.
+    - npx tsc --noEmit -p tsconfig.app.json
     - npm run build

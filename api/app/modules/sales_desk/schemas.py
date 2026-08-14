@@ -240,6 +240,12 @@ class DeskCompanyProfile(BaseModel):
     credit_limit: Decimal = Field(description="Ceiling in this profile's currency")
     synced: bool = Field(description="Pushed to accounting")
     is_default: bool = Field(description="The company's primary transacting currency")
+    version: int = Field(
+        description=(
+            "Optimistic-locking version; pass as expectedVersion when "
+            "editing the profile"
+        )
+    )
 
 
 class DeskCompanyRow(BaseModel):

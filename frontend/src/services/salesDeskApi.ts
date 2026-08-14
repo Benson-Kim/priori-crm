@@ -651,6 +651,8 @@ export interface CompanyBillingProfile {
     synced: boolean;
     /** True when this is the company's default transacting currency. */
     is_default: boolean;
+    /** Optimistic-locking version, echoed back as `expectedVersion` on edits. */
+    version: number;
 }
 
 /** A row in the companies directory. */
@@ -725,6 +727,7 @@ function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
             credit_limit: money(profile.credit_limit),
             synced: profile.synced,
             is_default: profile.is_default,
+            version: profile.version,
         })),
         needs_sync: record.needs_sync,
         open_deal_count: record.open_deal_count,
@@ -802,11 +805,15 @@ export interface BillingProfilePatch {
 /**
  * Edit a profile's terms. Any change clears the sync flag: accounting is
  * holding the previous terms until the profile is pushed again.
+ *
+ * The endpoint uses optimistic locking: `expectedVersion` must be the
+ * profile's `version` from the last read, and a stale value returns 409.
  */
 export async function updateBillingProfile(
     companyId: string,
     currency: BillingCurrency,
-    patch: BillingProfilePatch
+    patch: BillingProfilePatch,
+    expectedVersion: number
 ): Promise<CompanyRow> {
     if (patch.credit_limit !== undefined) {
         if (!Number.isFinite(patch.credit_limit) || patch.credit_limit < 0) {
@@ -815,7 +822,7 @@ export async function updateBillingProfile(
     }
 
     await apiPatch<Schema<"BillingProfileResponse">>(
-        `/customers/${companyId}/profiles/${currency}`,
+        `/customers/${companyId}/profiles/${currency}?expectedVersion=${expectedVersion}`,
         {
             ...(patch.terms !== undefined ? { paymentTerms: patch.terms } : {}),
             ...(patch.tax !== undefined ? { taxTreatment: patch.tax } : {}),

@@ -724,6 +724,7 @@ class SalesDeskService:
                             credit_limit=profile.credit_limit,
                             synced=profile.synced,
                             is_default=profile.currency == default_currency,
+                            version=profile.version,
                         )
                         for profile in profiles
                     ],
