@@ -6,8 +6,9 @@
  * owed. Selecting a row opens the drawer, the only place a deal changes.
  *
  * The whole view state lives in the query string — selected deal, owner,
- * activity chip, closed toggle and search — so a filtered view is shareable,
- * survives reload, and the back button steps out of the drawer.
+ * activity chip, closed toggle, search and the reporting currency (#57) — so
+ * a filtered view is shareable, survives reload, and the back button steps
+ * out of the drawer.
  */
 
 import { Download } from "lucide-react";
@@ -19,12 +20,15 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn, formatDate, plural, saveBlob } from "@/lib/utils";
 import {
     advanceDeal,
+    BILLING_CURRENCIES,
     closeDeal,
+    DEFAULT_DESK_CURRENCY,
     exportPipelineCsv,
     formatDeskMoneyCompact,
     getDealDetail,
@@ -33,6 +37,7 @@ import {
     logDealActivity,
     moveDealToFuturePipeline,
     type ActivityFilterKey,
+    type BillingCurrency,
     type DealDetail,
     type PipelineDeal,
     type PipelineOverview,
@@ -70,6 +75,15 @@ const ACTIVITY_KEYS: readonly ActivityFilterKey[] = [
 const isActivityKey = (value: string | null): value is ActivityFilterKey =>
     ACTIVITY_KEYS.includes(value as ActivityFilterKey);
 
+/** The desk's currency lens offers the billable currencies (KES/USD, #57). */
+const DESK_CURRENCY_OPTIONS = BILLING_CURRENCIES.map((currency) => ({
+    value: currency,
+    label: currency,
+}));
+
+const isBillingCurrency = (value: string | null): value is BillingCurrency =>
+    BILLING_CURRENCIES.includes(value as BillingCurrency);
+
 export default function SalesDeskPipelineWorkspacePage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedDealId = searchParams.get("deal") || null;
@@ -84,6 +98,10 @@ export default function SalesDeskPipelineWorkspacePage() {
     const activityParam = searchParams.get("activity");
     const activity: ActivityFilterKey = isActivityKey(activityParam) ? activityParam : "all";
     const showClosed = searchParams.get("closed") !== "0";
+    const currencyParam = searchParams.get("currency");
+    const currency: BillingCurrency = isBillingCurrency(currencyParam)
+        ? currencyParam
+        : DEFAULT_DESK_CURRENCY;
     const search = searchParams.get("q") ?? "";
     const debouncedSearch = useDebounce(search, 250);
 
@@ -123,7 +141,7 @@ export default function SalesDeskPipelineWorkspacePage() {
         setIsLoading(true);
 
         Promise.all([
-            getPipelineOverview(ownerId ?? undefined),
+            getPipelineOverview(ownerId ?? undefined, currency),
             getPipelineDeals({
                 ownerId: ownerId ?? undefined,
                 activity,
@@ -144,7 +162,7 @@ export default function SalesDeskPipelineWorkspacePage() {
             .finally(() => {
                 if (seq === seqRef.current) setIsLoading(false);
             });
-    }, [ownerId, activity, showClosed, debouncedSearch, revision]);
+    }, [ownerId, activity, showClosed, currency, debouncedSearch, revision]);
 
     // Load the selected deal separately: the drawer must survive the table
     // re-filtering underneath it.
@@ -291,6 +309,22 @@ export default function SalesDeskPipelineWorkspacePage() {
                         Open pipeline{" "}
                         <span className="text-sd-brand">{openPipelineLabel}</span>
                     </span>
+                    <div className="w-24">
+                        <Select
+                            aria-label="Reporting currency"
+                            options={DESK_CURRENCY_OPTIONS}
+                            value={currency}
+                            wrapperClassName="bg-sd-card py-2"
+                            onChange={(event) =>
+                                setViewParam(
+                                    "currency",
+                                    event.target.value === DEFAULT_DESK_CURRENCY
+                                        ? null
+                                        : event.target.value
+                                )
+                            }
+                        />
+                    </div>
                     <Button
                         variant="outline-secondary"
                         className="h-control"
