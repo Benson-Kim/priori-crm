@@ -126,7 +126,6 @@ class TestCustomerEmailCaseInsensitive:
                 phone="+254712345678",
                 address="123 Main Street",
                 country="KE",
-                province="Nairobi",
                 city="Nairobi",
                 postalCode="00100",
             )

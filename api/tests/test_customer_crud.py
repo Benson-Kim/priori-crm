@@ -19,7 +19,6 @@ def _create_payload(**overrides) -> CustomerCreate:
         phone="0712345678",
         address="123 Industrial Area",
         country="KE",
-        province="Nairobi",
         city="Nairobi",
         postal_code="00100",
     )
@@ -84,3 +83,89 @@ def test_update_changes_persisted_fields(db):
 def test_update_cannot_set_status_directly(db):
     """Sstatus is not a CustomerUpdate field (bypass guard)."""
     assert "status" not in CustomerUpdate.model_fields
+
+
+# Optional contact fields
+#
+# postal code, website, email and phone are all optional. email additionally
+# keeps its unique constraint, so the absent case has to coexist with dedup.
+
+
+def test_create_without_any_optional_contact_fields(db):
+    """A customer can be recorded with no email, phone, postal code or site."""
+    svc = CustomerService(db)
+    created = svc.create(
+        _create_payload(
+            email=None,
+            phone=None,
+            postal_code=None,
+            website=None,
+        )
+    )
+
+    assert created.id is not None
+    assert created.email is None
+    assert created.phone is None
+    assert created.postal_code is None
+    assert created.website is None
+    assert svc.get_by_id(created.id).email is None
+
+
+def test_empty_strings_are_stored_as_absent(db):
+    """A form submitting "" for an optional field records no value."""
+    svc = CustomerService(db)
+    created = svc.create(
+        _create_payload(email="", phone="", postal_code="", website="")
+    )
+
+    assert created.email is None
+    assert created.phone is None
+    assert created.postal_code is None
+    assert created.website is None
+
+
+def test_multiple_customers_may_omit_email(db):
+    """The unique constraint must not collapse rows that have no email.
+
+    Postgres treats NULLs as distinct, and the service skips the dedup
+    check when no address is supplied.
+    """
+    svc = CustomerService(db)
+    first = svc.create(_create_payload(email=None))
+    second = svc.create(_create_payload(email=None))
+
+    assert first.id != second.id
+
+
+def test_duplicate_email_still_rejected_when_supplied(db):
+    """Relaxing the field must not weaken dedup for supplied addresses."""
+    svc = CustomerService(db)
+    svc.create(_create_payload(email="still-unique@acme.com"))
+
+    with pytest.raises(ConflictException):
+        svc.create(_create_payload(email="STILL-UNIQUE@acme.com"))
+
+
+def test_update_can_clear_email(db):
+    """Clearing an address is allowed and does not report a false conflict."""
+    svc = CustomerService(db)
+    other = svc.create(_create_payload(email=None))
+    c = svc.create(_create_payload(email="clearme@acme.com"))
+
+    updated = svc.update(c.id, CustomerUpdate(email=None), expected_version=c.version)
+
+    assert updated.email is None
+    assert svc.get_by_id(other.id).email is None
+
+
+def test_formatted_address_omits_absent_parts(db):
+    """The display address skips fields the customer does not have."""
+    svc = CustomerService(db)
+    created = svc.create(_create_payload(email=None, postal_code=None))
+
+    formatted = svc.get_by_id(created.id).formatted_address
+
+    assert "123 Industrial Area" in formatted
+    assert "Nairobi" in formatted
+    assert formatted.endswith("KE")
+    assert ", ," not in formatted

@@ -68,14 +68,19 @@ class CustomerService(ServiceBase):
         """Create a new customer."""
         try:
             # Case-insensitive identity: store and compare emails lowercased
-            # so 'Alpha@x.com' and 'alpha@x.com' are one customer.
-            email = data.email.strip().lower()
-            existing = self._db.query(Customer).filter(Customer.email == email).first()
-            if existing:
-                raise ConflictException(
-                    detail=f"Customer with email '{email}' already exists",
-                    field="email",
+            # so 'Alpha@x.com' and 'alpha@x.com' are one customer. Email is
+            # optional, and the uniqueness check only applies to a supplied
+            # address - customers recorded without one do not collide.
+            email = data.email.strip().lower() if data.email else None
+            if email is not None:
+                existing = (
+                    self._db.query(Customer).filter(Customer.email == email).first()
                 )
+                if existing:
+                    raise ConflictException(
+                        detail=f"Customer with email '{email}' already exists",
+                        field="email",
+                    )
 
             customer = Customer(
                 customer_type=data.customer_type,
@@ -539,8 +544,15 @@ class CustomerService(ServiceBase):
             if "email" in update_data and update_data["email"] is not None:
                 update_data["email"] = update_data["email"].strip().lower()
 
-            # Check for email conflict if email is being updated
-            if "email" in update_data and update_data["email"] != customer.email:
+            # Check for email conflict if email is being updated. Clearing the
+            # address skips the check: `Customer.email == None` compiles to
+            # IS NULL, which would match any other customer recorded without
+            # an email and report a conflict that does not exist.
+            if (
+                "email" in update_data
+                and update_data["email"] is not None
+                and update_data["email"] != customer.email
+            ):
                 existing = (
                     self._db.query(Customer)
                     .filter(
