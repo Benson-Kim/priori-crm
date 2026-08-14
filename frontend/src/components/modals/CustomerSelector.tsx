@@ -63,7 +63,8 @@ function CustomerDropdown({
                     >
                         <CircleUserRound size={24} stroke="#475467" />
                         <span className={`block text-[14px] text-gray-800 `}>
-                            {c.display_name} ({c.phone})
+                            {c.display_name}
+                            {c.phone ? ` (${c.phone})` : ""}
                         </span>
                     </button>
                 ))
@@ -78,8 +79,10 @@ export interface CustomerSelectorProps {
     initialCustomerName?: string;
     initialCustomerDetails?: {
         address?: string;
-        phone: string;
-        email: string;
+        // Optional on the customer record, so absent for anyone recorded
+        // without contact details.
+        phone?: string;
+        email?: string;
     } | null;
     onChange: (customerId: string, currency?: string) => void;
     restrictedMode?: boolean;
@@ -129,15 +132,15 @@ export function CustomerSelector({
             const customerData = await getCustomer(c.id);
             setCustomerDetails({
                 address: customerData.customer.address || undefined,
-                phone: customerData.customer.phone,
-                email: customerData.customer.email,
+                phone: customerData.customer.phone ?? undefined,
+                email: customerData.customer.email ?? undefined,
             });
             onChange(c.id, customerData.customer.currency ?? undefined);
         } catch (err) {
             console.error("[CustomerSelector] Failed to fetch customer details:", err);
             setCustomerDetails({
-                phone: c.phone,
-                email: c.email,
+                phone: c.phone ?? undefined,
+                email: c.email ?? undefined,
             });
         }
     };
@@ -151,8 +154,8 @@ export function CustomerSelector({
             const customerData = await getCustomer(newCustomerId);
             setCustomerDetails({
                 address: customerData.customer.address || undefined,
-                phone: customerData.customer.phone,
-                email: customerData.customer.email,
+                phone: customerData.customer.phone ?? undefined,
+                email: customerData.customer.email ?? undefined,
             });
             onChange(newCustomerId, customerData.customer.currency ?? undefined);
         } catch (err) {
@@ -188,8 +191,12 @@ export function CustomerSelector({
                             {customerDetails.address && (
                                 <p className="text-sm text-gray-600">{customerDetails.address}</p>
                             )}
-                            <p className="text-sm text-gray-600">{customerDetails.phone}</p>
-                            <p className="text-sm text-gray-600">{customerDetails.email}</p>
+                            {customerDetails.phone && (
+                                <p className="text-sm text-gray-600">{customerDetails.phone}</p>
+                            )}
+                            {customerDetails.email && (
+                                <p className="text-sm text-gray-600">{customerDetails.email}</p>
+                            )}
                         </>
                     )}
                 </div>

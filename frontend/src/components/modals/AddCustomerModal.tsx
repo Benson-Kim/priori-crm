@@ -17,13 +17,12 @@ interface QuickCustomerForm {
     companyName?: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phone: string;
+    email?: string;
+    phone?: string;
     address: string;
     country: string;
     city: string;
-    province: string;
-    postalCode: string;
+    postalCode?: string;
     website?: string;
     vatNumber?: string;
 }
@@ -62,7 +61,6 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
             address: "",
             country: COUNTRY_OPTIONS[0].value,
             city: "",
-            province: "",
             postalCode: "",
             website: "",
             vatNumber: "",
@@ -70,6 +68,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
     });
 
     const emailValue = useWatch({ name: "email", control });
+    const customerTypeValue = useWatch({ name: "customerType", control });
+    const phoneRequired = customerTypeValue === "individual";
 
 
     const onSubmit = async (data: QuickCustomerForm) => {
@@ -83,13 +83,12 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                 status: data.status,
                 firstName: data.firstName,
                 lastName: data.lastName,
-                email: data.email,
-                phone: data.phone,
+                email: data.email || undefined,
+                phone: data.phone || undefined,
                 address: data.address,
                 country: data.country,
                 city: data.city,
-                province: data.province,
-                postalCode: data.postalCode,
+                postalCode: data.postalCode || undefined,
                 currency: "KES" satisfies Currency,
                 website: data.website || undefined,
                 vatNumber: data.vatNumber || undefined,
@@ -208,12 +207,11 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     {/* Email */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Email <span className="text-red-500">*</span>
+                            Email
                         </label>
                         <>
                             <Input
                                 {...register("email", {
-                                    required: "Email is required",
                                     pattern: {
                                         value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                                         message: "Invalid email address"
@@ -231,10 +229,15 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     {/* Phone */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Phone <span className="text-red-500">*</span>
+                            Phone
+                            {phoneRequired && <span className="text-red-500"> *</span>}
                         </label>
                         <Input
-                            {...register("phone", { required: "Phone is required" })}
+                            {...register("phone", {
+                                validate: (value) =>
+                                    !phoneRequired || !!value ||
+                                    "Phone number is required for individual customers.",
+                            })}
                             prefix="+254"
                             type="tel"
                             placeholder="700 000 000"
@@ -257,8 +260,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         />
                     </div>
 
-                    {/* City, Province, Postal Code */}
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* City & Postal Code */}
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
                                 City <span className="text-red-500">*</span>
@@ -274,24 +277,10 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Province <span className="text-red-500">*</span>
-                            </label>
-                            <Input
-                                {...register("province", {
-                                    required: "Province is required",
-                                    minLength: { value: 2, message: "Province must be at least 2 characters" }
-                                })}
-                                placeholder="Province"
-                                error={errors.province?.message}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Postal Code <span className="text-red-500">*</span>
+                                Postal Code
                             </label>
                             <Input
                                 {...register("postalCode", {
-                                    required: "Postal code is required",
                                     minLength: { value: 3, message: "Postal code must be at least 3 characters" }
                                 })}
                                 placeholder="00100"
