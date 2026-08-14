@@ -23,12 +23,6 @@ const countryOptions = [
     { value: "TZ", label: "Tanzania" },
 ];
 
-const provinceOptions = [
-    { value: "nairobi", label: "Nairobi" },
-    { value: "coastal", label: "Coastal" },
-    { value: "rift-valley", label: "Rift Valley" },
-];
-
 export function CustomerDetailsForm({
     initialData,
     onCancel,
@@ -56,7 +50,6 @@ export function CustomerDetailsForm({
             address: "",
             address2: "",
             country: "",
-            province: "",
             city: "",
             postalCode: "",
         },
@@ -73,7 +66,7 @@ export function CustomerDetailsForm({
     const onSubmit = (data: CustomerFormData) => {
         onSave?.({
             ...data,
-            phone: normalizeKenyanPhoneNumber(data.phone),
+            phone: normalizeKenyanPhoneNumber(data.phone ?? ""),
         });
     };
 
@@ -331,7 +324,7 @@ export function CustomerDetailsForm({
                     />
                 </div>
 
-                {/* Country & Province */}
+                {/* Country */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                     <Controller
                         name="country"
@@ -343,19 +336,6 @@ export function CustomerDetailsForm({
                                 options={countryOptions}
                                 placeholder="Select country"
                                 error={errors.country?.message}
-                            />
-                        )}
-                    />
-                    <Controller
-                        name="province"
-                        control={control}
-                        render={({ field }) => (
-                            <Select
-                                id="province"
-                                {...field}
-                                options={provinceOptions}
-                                placeholder="Select province/state/county"
-                                error={errors.province?.message}
                             />
                         )}
                     />
