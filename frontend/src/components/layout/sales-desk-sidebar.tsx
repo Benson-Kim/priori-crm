@@ -10,11 +10,14 @@
 import { ArrowLeft } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 
+import { useMemo } from "react";
+
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/hooks/auth-context";
+import { useEnabledModules } from "@/hooks/useModuleAccess";
 import type { SalesDeskBadges } from "@/hooks/useSalesDeskBadges";
 import { cn } from "@/lib/utils";
-import { salesDeskNavItems } from "./sales-desk-nav-items";
+import { visibleSalesDeskNavItems } from "./sales-desk-nav-items";
 
 /** Initials for the footer avatar, falling back to the design's placeholder. */
 export function SalesDeskSidebar({
@@ -28,6 +31,17 @@ export function SalesDeskSidebar({
     badges?: SalesDeskBadges;
 }>) {
     const { user } = useAuth();
+
+    /*
+     * The desk nav honours the same per-owner module entitlements as the
+     * Business Central sidebar (finding 07): a disabled module's entry is
+     * hidden here rather than left to land the user on the backend's 403.
+     */
+    const { enabledModules } = useEnabledModules();
+    const navItems = useMemo(
+        () => visibleSalesDeskNavItems(enabledModules),
+        [enabledModules]
+    );
 
     const fullName = user ? `${user.first_name} ${user.last_name}` : "Frank Mueke";
     const role = user?.role ? `${user.role[0].toUpperCase()}${user.role.slice(1)}` : "Senior Admin";
@@ -48,7 +62,7 @@ export function SalesDeskSidebar({
 
             {/* Module navigation */}
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2">
-                {salesDeskNavItems.map(({ path, label, icon: Icon, end }) => {
+                {navItems.map(({ path, label, icon: Icon, end }) => {
                     const count = badges[path] ?? 0;
                     return (
                         <NavLink
