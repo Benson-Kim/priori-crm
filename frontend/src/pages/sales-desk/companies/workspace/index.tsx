@@ -324,7 +324,20 @@ export default function SalesDeskCompaniesWorkspacePage() {
                     detail={detail}
                     onClose={() => selectCompany(null)}
                     onEditProfile={async (currency: BillingCurrency, patch) => {
-                        await updateBillingProfile(detail.company.id, currency, patch);
+                        const profile = detail.company.profiles.find(
+                            (candidate) => candidate.currency === currency
+                        );
+                        if (!profile) {
+                            throw new Error(`No ${currency} billing profile to edit.`);
+                        }
+                        // The profile's version from the last read; the server
+                        // 409s if someone else edited it in the meantime.
+                        await updateBillingProfile(
+                            detail.company.id,
+                            currency,
+                            patch,
+                            profile.version
+                        );
                         refresh();
                     }}
                     onSyncProfile={async (currency: BillingCurrency) => {

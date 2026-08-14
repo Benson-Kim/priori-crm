@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.common.dependencies import DbSession, verify_internal_secret
+from app.common.routing import CommitOnSuccessRoute
 from app.modules.auth.schemas import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -16,7 +17,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.service import AuthService
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 @router.post("/login", response_model=MessageResponse)

@@ -5,6 +5,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
+from fastapi import Request
 from sqlalchemy import MetaData, create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
@@ -123,12 +124,27 @@ def assert_version(
         )
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db(request: Request) -> Generator[Session, None, None]:
     """
     Dependency that provides a database session.
     Session is automatically closed after use, even if an exception occurs.
+
+    Atomicity contract (QA finding 04 — read-after-write race): the
+    request's writes are made durable by ``CommitOnSuccessRoute``
+    (``app/common/routing.py``), which commits BEFORE the response is sent.
+    FastAPI runs this dependency's post-``yield`` teardown only after the
+    response has started travelling out through the middleware stack, so
+    the ``db.commit()`` below must never be the commit a client-visible
+    write relies on. It stays as a safety net for work performed after the
+    route-level commit (e.g. the export-audit dependencies' post-``yield``
+    rows) and for any route mounted without the route class. Rollback on
+    exception is owned here, as before.
+
+    The session is published on ``request.state.db`` so the route class can
+    find it.
     """
     db = SessionLocal()
+    request.state.db = db
     try:
         yield db
         db.commit()

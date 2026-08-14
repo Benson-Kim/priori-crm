@@ -17,6 +17,7 @@ from app.common.dependencies import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import DiscountType
 from app.modules.quotes.schemas import (
     QuoteApproveRequest,
@@ -38,7 +39,7 @@ from app.modules.quotes.service import QuoteService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 @router.post(

@@ -31,6 +31,7 @@ from starlette.background import BackgroundTask
 from app.common.dependencies import SalesDeskServiceDep
 from app.common.export_limiter import run_export
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import DealHygieneBucket, DealTab
 from app.lib.config import settings
 from app.modules.deals.schemas import DealFilterParams
@@ -49,7 +50,7 @@ from app.modules.sales_desk.service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 _CSV_MEDIA_TYPE = "text/csv"
 
