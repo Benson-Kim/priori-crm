@@ -124,7 +124,7 @@ def assert_version(
         )
 
 
-def get_db(request: Request | None = None) -> Generator[Session, None, None]:
+def get_db(request: Request) -> Generator[Session, None, None]:
     """
     Dependency that provides a database session.
     Session is automatically closed after use, even if an exception occurs.
@@ -141,12 +141,10 @@ def get_db(request: Request | None = None) -> Generator[Session, None, None]:
     exception is owned here, as before.
 
     The session is published on ``request.state.db`` so the route class can
-    find it. ``request`` is optional so the generator keeps working when
-    called outside FastAPI dependency injection.
+    find it.
     """
     db = SessionLocal()
-    if request is not None:
-        request.state.db = db
+    request.state.db = db
     try:
         yield db
         db.commit()
