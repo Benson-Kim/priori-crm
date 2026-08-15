@@ -7,6 +7,7 @@ import RequireAuth from "./auth/RequireAuth";
 import RequireModule from "./auth/RequireModule";
 import DefaultLayout from "./layout/default-layout";
 import SalesDeskLayout from "./layout/sales-desk-layout";
+import SettingsLayout from "./layout/settings-layout";
 
 // Route-based code splitting: every page below is fetched on demand, so the
 // initial bundle only ships the shell (router, auth guard, layout) and the
@@ -399,14 +400,48 @@ const routes = [
                         ],
                     },
                     {
-                        path: "settings/modules",
-                        element: lazyPage(() => import("@/pages/settings/modules")),
-                        handle: {
-                            header: {
-                                title: "Module Settings",
-                                description: "Enable or disable application modules for your organisation.",
+                        // Owner Settings section (issue #58 / ADR-0011):
+                        // business details + branding, document defaults, and
+                        // the READ-ONLY module entitlements granted by the
+                        // platform operator.
+                        path: "settings",
+                        element: <SettingsLayout />,
+                        children: [
+                            {
+                                index: true,
+                                element: <Navigate to="/settings/organisation" replace />,
                             },
-                        },
+                            {
+                                path: "organisation",
+                                element: lazyPage(() => import("@/pages/settings/organisation")),
+                                handle: {
+                                    header: {
+                                        title: "Settings",
+                                        description: "Business details, branding and logo for your organisation.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "documents",
+                                element: lazyPage(() => import("@/pages/settings/documents")),
+                                handle: {
+                                    header: {
+                                        title: "Settings",
+                                        description: "Organisation-wide document defaults.",
+                                    },
+                                },
+                            },
+                            {
+                                path: "modules",
+                                element: lazyPage(() => import("@/pages/settings/modules")),
+                                handle: {
+                                    header: {
+                                        title: "Settings",
+                                        description: "Modules granted to your organisation by the platform operator.",
+                                    },
+                                },
+                            },
+                        ],
                     },
                     {
                         path: "statements",

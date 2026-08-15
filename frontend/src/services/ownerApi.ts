@@ -11,7 +11,6 @@ import {
   apiDelete,
   apiDownload,
   apiGet,
-  apiPatch,
   apiPut,
   apiUploadPut,
 } from "@/lib/api";
@@ -58,26 +57,20 @@ export function removeOwnerLogo(): Promise<OwnerProfile> {
   return apiDelete<OwnerProfile>("owner/logo");
 }
 
-// Per-owner module entitlements (feature toggles)
+// Per-owner module entitlements (operator-granted, ADR-0011)
 
 // Effective state of one module: resolved enabled flag (missing override =
 // enabled) + whether the module is essential (never disableable).
 export type ModuleSettingState = Schema<"ModuleSettingState">;
 export type ModuleSettingsResponse = Schema<"ModuleSettingsResponse">;
 
-/** List every module with its effective entitlement state (admin only). */
+/**
+ * List every module with its effective entitlement state (admin only,
+ * READ-ONLY). Entitlements are granted by the platform operator via the
+ * /platform API; the tenant-facing write endpoint no longer exists.
+ */
 export function getModuleSettings(): Promise<ModuleSettingsResponse> {
   return apiGet<ModuleSettingsResponse>("owner/modules");
-}
-
-/** Enable/disable one module for the organisation (admin only). */
-export function updateModuleSetting(
-  moduleKey: string,
-  enabled: boolean
-): Promise<ModuleSettingState> {
-  return apiPatch<ModuleSettingState>(`owner/modules/${moduleKey}`, {
-    enabled,
-  });
 }
 
 /**

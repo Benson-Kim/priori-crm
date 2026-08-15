@@ -225,8 +225,12 @@ export function CustomerSelector({
                     {customerDetails.address && (
                         <p className="text-sm text-gray-600">{customerDetails.address}</p>
                     )}
-                    <p className="text-sm text-gray-600">{customerDetails.phone}</p>
-                    <p className="text-sm text-gray-600">{customerDetails.email}</p>
+                    {customerDetails.phone && (
+                        <p className="text-sm text-gray-600">{customerDetails.phone}</p>
+                    )}
+                    {customerDetails.email && (
+                        <p className="text-sm text-gray-600">{customerDetails.email}</p>
+                    )}
                 </div>
             ) : (
                 <div className="relative">
