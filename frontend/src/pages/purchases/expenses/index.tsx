@@ -240,14 +240,20 @@ export default function ExpensesPage() {
 
     return (
         <div className="flex flex-col h-full space-y-4 font-sans">
-            {/* Top Header */}
-            <div className="flex justify-end mt-4">
+            {/* Top Header: both page-level actions, so the filter bar below
+                keeps the tabs and search on a single line. */}
+            <div className="flex flex-wrap justify-end items-center gap-3 mt-4">
                 <Button
                     variant="outline-secondary"
                     onClick={handleExport}
                     disabled={isExporting}
                 >
                     <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
+                </Button>
+                <Button
+                    variant="primary"
+                    onClick={() => navigate('/expenses/new')}>
+                    <Plus size={16} /> Add Expense
                 </Button>
             </div>
 
@@ -275,11 +281,7 @@ export default function ExpensesPage() {
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
-                        <Button
-                            variant="primary"
-                            onClick={() => navigate('/expenses/new')}>
-                            <Plus size={16} /> Add Expense
-                        </Button>
+
                     </div>
                 </div>
 
