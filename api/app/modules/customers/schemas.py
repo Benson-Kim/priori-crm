@@ -328,8 +328,11 @@ class CustomerSummary(BaseModel):
     customer_type: str
     status: str
     display_name: str
-    email: str
-    phone: str
+    # Nullable since the contact fields became optional (e2f3a4b5c6d7): these
+    # are read straight off the ORM row, so a plain `str` makes the whole
+    # list endpoint 500 the moment one customer has no email or phone.
+    email: str | None = None
+    phone: str | None = None
     balance: Decimal
     currency: str
     created_at: datetime

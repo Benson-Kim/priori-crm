@@ -261,8 +261,10 @@ class DeskCompanyRow(BaseModel):
     name: str
     industry: str | None
     contact: str = Field(description="Contact person full name")
-    email: str
-    phone: str
+    # Nullable for the same reason as CustomerSummary.email/phone: optional
+    # on the customer record since e2f3a4b5c6d7, and rendered from the row.
+    email: str | None = None
+    phone: str | None = None
     tenant: str | None = Field(description="Microsoft tenant domain, when set")
     primary_currency: str
     registered_on: date = Field(description="Org-local date the company was added")
