@@ -36,13 +36,14 @@ const FIELDS: {
   label: string;
   type?: string;
   placeholder?: string;
-  prefix?: string;
 }[] = [
   { key: "fullName", label: "Business name", placeholder: "Enter full name" },
   { key: "locationWatermark", label: "Location", placeholder: "Watermark" },
   { key: "address", label: "Address", placeholder: "PO BOX 000, 10000" },
   { key: "email", label: "Email", type: "email", placeholder: "email@example.com" },
-  { key: "phone", label: "Phone", placeholder: "700 000 000", prefix: "+254" },
+  // No "+254" prefix decoration here: the API stores E.164 (+254700000000),
+  // and this form deliberately seeds/saves that value verbatim (issue #63).
+  { key: "phone", label: "Phone", placeholder: "+254 700 000 000" },
   { key: "taxPin", label: "Tax ID/PIN Number", placeholder: "AOE0387233N" },
   { key: "website", label: "Website", placeholder: "https://example.com" },
 ];
@@ -87,11 +88,15 @@ export default function OrganisationSettingsPage() {
         locationWatermark: profile.locationWatermark ?? "",
         address: profile.address ?? "",
         email: profile.email ?? "",
-        // The field renders a "+254" prefix decoration, but the API stores
-        // E.164 (normalize_phone), so seeding verbatim reads "+254
-        // +254700000000". Strip the country code the same way
-        // use-customer-form.ts does; normalize_phone puts it back on save.
-        phone: (profile.phone ?? "").replace(/^\+?254/, "").trim(),
+        // Seed verbatim — the documented settingsSchema contract: the zod
+        // phone rule is length-only, so a stored E.164 "+254700000000" must
+        // render as-is and save untouched (normalize_phone accepts it). The
+        // duplicated "+254 +254700000000" read (issue #63) came from the
+        // visual prefix decoration, removed above — not from the value.
+        // Deliberately NOT the use-customer-form.ts strip-on-seed approach:
+        // stripping here mangles non-KE numbers and can turn a stored value
+        // the API accepted into one it rejects on an untouched field.
+        phone: profile.phone ?? "",
         taxPin: profile.taxPin ?? "",
         website: profile.website ?? "",
       });
@@ -231,7 +236,7 @@ export default function OrganisationSettingsPage() {
             </p>
           </div>
           <div className="flex flex-col gap-5 rounded-xl border border-gray-200 bg-white p-6">
-            {FIELDS.map(({ key, label, type, placeholder, prefix }) => (
+            {FIELDS.map(({ key, label, type, placeholder }) => (
               <label key={key} className="flex flex-col gap-1.5">
                 <span className="text-sm font-semibold text-gray-800">
                   {label}
@@ -241,13 +246,6 @@ export default function OrganisationSettingsPage() {
                   type={type ?? "text"}
                   placeholder={placeholder}
                   error={errors[key]?.message}
-                  prefix={
-                    prefix ? (
-                      <span className="text-gray-500 text-base font-medium">
-                        {prefix}
-                      </span>
-                    ) : undefined
-                  }
                   wrapperClassName="bg-white"
                 />
               </label>
