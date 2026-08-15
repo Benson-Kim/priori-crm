@@ -124,7 +124,7 @@ class TestUpsert:
     def test_rejects_policy_violating_password_and_bad_email(self, db):
         # LoginRequest enforces the same policy, so a weaker password would
         # seed an account that can never sign in.
-        with pytest.raises(ValueError, match="[Pp]assword"):
+        with pytest.raises(ValueError, match=r"[Pp]assword"):
             upsert_platform_operator(db, EMAIL, "short1")
         with pytest.raises(ValueError, match="email"):
             upsert_platform_operator(db, "not-an-email", PASSWORD)
