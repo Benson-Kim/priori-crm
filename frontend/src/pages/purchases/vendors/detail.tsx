@@ -40,11 +40,19 @@ import { useNavigate, useParams } from "react-router-dom";
  * every row paid/pending, and exports to Excel / PDF.
  *
  * The backend card endpoints take explicit period_start/period_end (the same
- * contract as the vendor statement), so a preset is resolved to concrete dates
- * here before the request. The reusable PeriodRangePicker still drives the UX.
+ * contract as the vendor statement), so the chosen period is resolved to
+ * concrete dates before the request. ReportPeriodPicker drives the UX and
+ * resolveReportPeriod does the resolving.
  */
-import { PeriodRangePicker } from "@/components/ui/PeriodRangePicker";
-import { isPeriodReady, resolvePeriod, type PeriodFilter } from "@/services/statementsApi";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import {
+  currentYear,
+  isReportPeriodReady,
+  reportPeriodFromPreset,
+  resolveReportPeriod,
+  type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 
 // Source filter values shown in the type Select.
 type VendorTxnType = "purchase_order" | "expense" | "payments";
@@ -104,7 +112,10 @@ export default function VendorDetailPage() {
   const [statement, setStatement] = useState<VendorStatement | null>(null);
   const [isLoadingStatement, setIsLoadingStatement] = useState(false);
   const [statementError, setStatementError] = useState<string | null>(null);
-  const [statementPeriod, setStatementPeriod] = useState<PeriodFilter>({ range: "last_12_months" });
+  const reportingDay = useReportingDate();
+  const [statementPeriod, setStatementPeriod] = useState<ReportPeriodFilter>(
+    () => reportPeriodFromPreset("last_12_months", reportingDay)
+  );
   const [isExporting, setIsExporting] = useState(false);
 
 
@@ -191,16 +202,16 @@ export default function VendorDetailPage() {
   }, [id, currentPage, perPage, activeTab, typeTab]);
 
   const getResolvedPeriod = useCallback(() => {
-    if (!isPeriodReady(statementPeriod)) {
+    if (!isReportPeriodReady(statementPeriod, reportingDay)) {
       return null;
     }
 
-    const { start, end } = resolvePeriod(statementPeriod)
-    if (!start || !end) {
+    const { dateFrom, dateTo } = resolveReportPeriod(statementPeriod, reportingDay)
+    if (!dateFrom || !dateTo) {
       return null
     }
-    return { periodStart: start, periodEnd: end };
-  }, [statementPeriod]
+    return { periodStart: dateFrom, periodEnd: dateTo };
+  }, [statementPeriod, reportingDay]
   );
 
 
@@ -280,14 +291,14 @@ export default function VendorDetailPage() {
 
   useEffect(() => {
     if (mainTab === "statements") {
-      if (!isPeriodReady(statementPeriod)) {
+      if (!isReportPeriodReady(statementPeriod, reportingDay)) {
         setStatement(null)
         return
       }
 
       void (async () => { await fetchStatement(); })();
     }
-  }, [mainTab, fetchStatement, statementPeriod]);
+  }, [mainTab, fetchStatement, statementPeriod, reportingDay]);
 
   useEffect(() => {
     void (async () => { await fetchTransactions(); })();
@@ -572,13 +583,7 @@ export default function VendorDetailPage() {
         </div>
         <div className="flex justify-end items-center gap-3">
           {mainTab === "statements" && (
-            <PeriodRangePicker
-              period={statementPeriod}
-              onPeriodChange={setStatementPeriod}
-              placeholder="Statement period"
-              wrapperClassName="flex-row items-center"
-              selectWrapperClassName="min-w-[120px] px-4 py-3"
-            />
+            <ReportPeriodPicker value={statementPeriod} onChange={setStatementPeriod} />
           )}
           <Dropdown
             items={actions}
@@ -986,23 +991,27 @@ export function VendorSummaryCard({
   title,
   currency,
 }: Readonly<VendorSummaryCardProps>) {
-  // Default preset gives an immediate, useful window without a 12-month load.
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_year" });
+  // Year-to-date gives an immediate, useful window without a 12-month load.
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() => ({
+    mode: "year",
+    year: currentYear(reportingDay),
+  }));
   const [page, setPage] = useState(1);
   const [data, setData] = useState<VendorCardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const periodParams = useCallback(() => {
-    const { start, end } = resolvePeriod(period);
+    const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
     const params: { period_start?: string; period_end?: string } = {};
-    if (start) params.period_start = start;
-    if (end) params.period_end = end;
+    if (dateFrom) params.period_start = dateFrom;
+    if (dateTo) params.period_end = dateTo;
     return params;
-  }, [period]);
+  }, [period, reportingDay]);
 
   const fetchCard = useCallback(async () => {
-    if (!isPeriodReady(period)) return;
+    if (!isReportPeriodReady(period, reportingDay)) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -1017,7 +1026,7 @@ export function VendorSummaryCard({
     } finally {
       setIsLoading(false);
     }
-  }, [vendorId, card, page, period, periodParams]);
+  }, [vendorId, card, page, period, periodParams, reportingDay]);
 
   useEffect(() => {
     void fetchCard();
@@ -1040,11 +1049,7 @@ export function VendorSummaryCard({
         <p className="text-left font-bold text-lg text-content-primary">{title}</p>
 
         {/* Date filter */}
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          selectWrapperClassName="max-w-[160px] py-3 px-4"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} />
       </div>
 
       {/* Transaction list */}

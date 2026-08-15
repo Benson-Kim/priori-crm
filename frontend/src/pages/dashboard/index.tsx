@@ -600,7 +600,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
  * DashboardPage
  *
  * Composes four independent section widgets. Each widget owns its own
- * PeriodFilter state and stale-response guard, so changing the date range
+ * ReportPeriodFilter state and stale-response guard, so changing the range
  * in one section never re-fetches or clears another. Currency is a
  * page-level display preference shared across all sections via props.
  */

@@ -203,6 +203,68 @@ export function defaultReportPeriod(reportingDate: string = getTodayString()): R
      };
 }
 
+// URL round-trip
+//
+// The income statement drills into cashflow carrying the current period.
+// Serialising the filter itself (rather than only its resolved dates) means
+// the target page still shows "Aug 2026" or "Last 12 months" instead of a
+// raw date pair.
+
+export function reportPeriodToSearchParams(
+     filter: ReportPeriodFilter
+): Record<string, string> {
+     const params: Record<string, string> = {
+          mode: filter.mode,
+          year: String(filter.year),
+     };
+     if (filter.month != null) params.month = String(filter.month);
+     if (filter.quarter != null) params.quarter = String(filter.quarter);
+     if (filter.preset) params.preset = filter.preset;
+     if (filter.customFrom) params.dateFrom = filter.customFrom;
+     if (filter.customTo) params.dateTo = filter.customTo;
+     return params;
+}
+
+const MODES: ReportPeriodMode[] = ["recent", "month", "quarter", "year", "custom"];
+
+/** Parse a filter off the URL, falling back to the default when unusable. */
+export function reportPeriodFromSearchParams(
+     params: URLSearchParams,
+     reportingDate: string = getTodayString()
+): ReportPeriodFilter {
+     const mode = params.get("mode") as ReportPeriodMode | null;
+     if (mode == null || !MODES.includes(mode)) {
+          return defaultReportPeriod(reportingDate);
+     }
+
+     const year = Number(params.get("year"));
+     const filter: ReportPeriodFilter = {
+          mode,
+          year: Number.isFinite(year) && year > 0
+               ? year
+               : calendarFromIso(reportingDate).year,
+     };
+
+     if (mode === "month") filter.month = Number(params.get("month")) || undefined;
+     if (mode === "quarter") filter.quarter = Number(params.get("quarter")) || undefined;
+     if (mode === "recent") {
+          const preset = params.get("preset") as ReportPeriodPreset | null;
+          filter.preset = REPORT_PERIOD_PRESETS.some((p) => p.value === preset)
+               ? (preset as ReportPeriodPreset)
+               : REPORT_PERIOD_PRESETS[0].value;
+     }
+     if (mode === "custom") {
+          filter.customFrom = params.get("dateFrom") ?? undefined;
+          filter.customTo = params.get("dateTo") ?? undefined;
+     }
+
+     // A mode missing its own field (a hand-edited or stale URL) would leave
+     // the page permanently un-ready, so fall back rather than hang.
+     return isReportPeriodReady(filter, reportingDate)
+          ? filter
+          : defaultReportPeriod(reportingDate);
+}
+
 // Label helper
 
 function formatIsoShort(iso: string): string {
