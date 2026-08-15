@@ -15,21 +15,22 @@ import { Button } from "@/components/ui/Button";
 export default function NotFoundPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-6 px-6 py-12 text-center">
+      {/*
+        The artwork already reads "Page not found / ERROR 404", so it is the
+        heading — repeating that in an <h1> underneath just says it twice.
+        The accessible name carries the same words for anyone who cannot see
+        it, and the copy below only adds what the picture cannot say.
+      */}
       <NotFoundArt
         role="img"
-        aria-label="Page not found"
-        className="w-full max-w-sm h-auto"
+        aria-label="Page not found, error 404"
+        className="w-full max-w-xs h-auto"
       />
 
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-gray-900">
-          We couldn&apos;t find that page
-        </h1>
-        <p className="max-w-md text-sm text-gray-500">
-          The link may be out of date, or the page may have been moved or
-          renamed. Nothing has been lost — pick a destination below.
-        </p>
-      </div>
+      <p className="max-w-md text-sm text-gray-500">
+        The link may be out of date, or the page may have been moved or
+        renamed. Nothing has been lost - pick a destination below.
+      </p>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Button asChild variant="primary">

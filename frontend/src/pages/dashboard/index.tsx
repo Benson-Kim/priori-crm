@@ -564,7 +564,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
             placeholder="Select range"
             selectWrapperClassName="min-w-[180px]"
           />
-          <Button variant="outline" size="lg">View all</Button>
+          <Button variant="outline">View all</Button>
         </div>
       </div>
 
