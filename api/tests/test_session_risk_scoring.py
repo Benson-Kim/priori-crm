@@ -348,8 +348,7 @@ class TestTokenEdgeCases:
         _seed_user(db, "resetter@mail.com")
         access, _ = _login_session(client, "resetter@mail.com")
         assert (
-            client.get("/api/v1/customers", headers=_bearer(access)).status_code
-            == 200
+            client.get("/api/v1/customers", headers=_bearer(access)).status_code == 200
         )
 
         with patch(

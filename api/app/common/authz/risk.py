@@ -100,7 +100,9 @@ def _audit_session_event(
 
 
 def _detect_impossible_travel(
-    db: Session, session: "UserSession", context: AccessContext  # noqa: F821
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
 ) -> None:
     """Speed between the last and current geolocation above the plausible cap."""
     geo = context.geo
@@ -142,7 +144,9 @@ def _detect_impossible_travel(
 
 
 def _detect_device_change(
-    db: Session, session: "UserSession", context: AccessContext  # noqa: F821
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
 ) -> None:
     """The presenting device/browser changed mid-session."""
     current = context.device_fingerprint
@@ -161,7 +165,9 @@ def _detect_device_change(
 
 
 def _detect_volume_anomaly(
-    db: Session, session: "UserSession", context: AccessContext  # noqa: F821
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
 ) -> None:
     """Request volume inside the rolling window exceeds the ceiling.
 

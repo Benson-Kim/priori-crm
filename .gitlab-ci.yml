@@ -109,7 +109,6 @@ api:lint:
     - pip install -r requirements.txt
   script:
     - ruff check .
-    - ruff format --diff .
     - ruff format --check .
 
 api:test:
