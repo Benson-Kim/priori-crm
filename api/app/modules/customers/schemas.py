@@ -44,8 +44,8 @@ class CustomerCreate(BaseModel):
     last_name: str = Field(
         ..., min_length=1, max_length=100, description="Last name", alias="lastName"
     )
-    email: EmailStr = Field(..., description="Email address")
-    phone: str = Field(..., description="Phone number in international format")
+    email: EmailStr | None = Field(None, description="Email address")
+    phone: str | None = Field(None, description="Phone number in international format")
     website: str | None = Field(None, max_length=500, description="Website URL")
     vat_number: str | None = Field(
         None, max_length=50, description="VAT/Tax number", alias="vatNumber"
@@ -71,9 +71,6 @@ class CustomerCreate(BaseModel):
     country: str | None = Field(
         None, min_length=2, max_length=2, description="ISO country code"
     )
-    province: str | None = Field(
-        None, min_length=2, max_length=100, description="State/Province"
-    )
     city: str | None = Field(None, min_length=2, max_length=100, description="City")
     postal_code: str | None = Field(
         None, min_length=3, max_length=20, description="Postal code", alias="postalCode"
@@ -81,12 +78,13 @@ class CustomerCreate(BaseModel):
 
     @field_validator(
         "company_name",
+        "email",
+        "phone",
         "website",
         "vat_number",
         "tenant_domain",
         "address",
         "address2",
-        "province",
         "city",
         "postal_code",
         mode="before",
@@ -98,8 +96,10 @@ class CustomerCreate(BaseModel):
 
     @field_validator("phone")
     @classmethod
-    def validate_phone(cls, v: str, info) -> str:
+    def validate_phone(cls, v: str | None, info) -> str | None:
         """Validate and normalize phone number to E.164 format."""
+        if v is None:
+            return None
         country = info.data.get("country")
         return normalize_phone(v, country)
 
@@ -109,7 +109,7 @@ class CustomerCreate(BaseModel):
         """Validate and normalize ISO 3166-1 alpha-2 country code."""
         return validate_country_code(v)
 
-    @field_validator("province", "city")
+    @field_validator("city")
     @classmethod
     def capitalize_location(cls, v: str | None) -> str | None:
         """Capitalize location names for consistency."""
@@ -120,6 +120,18 @@ class CustomerCreate(BaseModel):
         """Ensure business customers have a company name."""
         if self.customer_type == CustomerType.BUSINESS and not self.company_name:
             raise ValueError("company_name is required for business customers")
+        return self
+
+    @model_validator(mode="after")
+    def validate_individual_phone(self) -> "CustomerCreate":
+        """Individual customers must have a phone number.
+
+        Phone is optional for companies, which are typically reached through
+        a billing contact, but an individual is only reachable directly - so
+        the field is conditionally required rather than globally optional.
+        """
+        if self.customer_type == CustomerType.INDIVIDUAL and not self.phone:
+            raise ValueError("Phone number is required for individual customers.")
         return self
 
     model_config = {
@@ -135,7 +147,6 @@ class CustomerCreate(BaseModel):
                     "currency": "KES",
                     "address": "123 Main Street",
                     "city": "Nairobi",
-                    "province": "Nairobi County",
                     "country": "KE",
                     "postalCode": "00100",
                 },
@@ -151,7 +162,6 @@ class CustomerCreate(BaseModel):
                     "currency": "KES",
                     "address": "456 Business Ave",
                     "country": "KE",
-                    "province": "Nairobi",
                     "city": "Nairobi",
                     "postal_code": "00100",
                 },
@@ -181,7 +191,6 @@ class CustomerUpdate(BaseModel):
     address: str | None = None
     address2: str | None = None
     country: str | None = Field(None, min_length=2, max_length=2)
-    province: str | None = None
     city: str | None = None
     postal_code: str | None = Field(None, alias="postalCode")
     # `status` is intentionally NOT editable here: lifecycle changes must
@@ -190,12 +199,13 @@ class CustomerUpdate(BaseModel):
 
     @field_validator(
         "company_name",
+        "email",
+        "phone",
         "website",
         "vat_number",
         "tenant_domain",
         "address",
         "address2",
-        "province",
         "city",
         "postal_code",
         mode="before",
@@ -220,7 +230,7 @@ class CustomerUpdate(BaseModel):
         """Validate ISO country code if provided."""
         return validate_country_code(v)
 
-    @field_validator("province", "city")
+    @field_validator("city")
     @classmethod
     def capitalize_location(cls, v: str | None) -> str | None:
         """Capitalize location names."""
@@ -288,8 +298,8 @@ class CustomerResponse(BaseModel):
     company_name: str | None = None
     first_name: str
     last_name: str
-    email: str
-    phone: str
+    email: str | None = None
+    phone: str | None = None
     website: str | None = None
     vat_number: str | None = None
     currency: str
@@ -302,7 +312,6 @@ class CustomerResponse(BaseModel):
     address: str | None = None
     address2: str | None = None
     country: str | None = None
-    province: str | None = None
     city: str | None = None
     postal_code: str | None = None
     version: int = 1

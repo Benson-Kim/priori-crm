@@ -16,6 +16,7 @@ from app.common.exceptions import (
     ConflictException,
     DatabaseException,
     NotFoundException,
+    ValidationException,
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reference import ReferenceGenerator
@@ -28,7 +29,7 @@ from app.common.statement import (
     StatementGenerator,
 )
 from app.common.statistics import status_counts
-from app.constants.enums import BillingCurrency, CustomerStatus
+from app.constants.enums import BillingCurrency, CustomerStatus, CustomerType
 from app.modules.customers.models import Customer, CustomerBillingProfile
 from app.modules.customers.profile_backfill import (
     PROFILE_CODE_SCOPE_KEY,
@@ -68,14 +69,19 @@ class CustomerService(ServiceBase):
         """Create a new customer."""
         try:
             # Case-insensitive identity: store and compare emails lowercased
-            # so 'Alpha@x.com' and 'alpha@x.com' are one customer.
-            email = data.email.strip().lower()
-            existing = self._db.query(Customer).filter(Customer.email == email).first()
-            if existing:
-                raise ConflictException(
-                    detail=f"Customer with email '{email}' already exists",
-                    field="email",
+            # so 'Alpha@x.com' and 'alpha@x.com' are one customer. Email is
+            # optional, and the uniqueness check only applies to a supplied
+            # address - customers recorded without one do not collide.
+            email = data.email.strip().lower() if data.email else None
+            if email is not None:
+                existing = (
+                    self._db.query(Customer).filter(Customer.email == email).first()
                 )
+                if existing:
+                    raise ConflictException(
+                        detail=f"Customer with email '{email}' already exists",
+                        field="email",
+                    )
 
             customer = Customer(
                 customer_type=data.customer_type,
@@ -94,7 +100,6 @@ class CustomerService(ServiceBase):
                 address=data.address,
                 address2=data.address2,
                 country=data.country,
-                province=data.province,
                 city=data.city,
                 postal_code=data.postal_code,
             )
@@ -536,12 +541,39 @@ class CustomerService(ServiceBase):
             if not update_data:
                 return customer
 
+            # Individual customers must keep a phone number. CustomerUpdate
+            # cannot enforce this alone: either half of the pair may be absent
+            # from the payload, so the rule is evaluated against the state the
+            # customer would end up in. This catches both clearing the phone of
+            # an individual and switching a phone-less company to individual.
+            resulting_type = update_data.get("customer_type", customer.customer_type)
+            resulting_phone = update_data.get("phone", customer.phone)
+            if resulting_type == CustomerType.INDIVIDUAL and not resulting_phone:
+                raise ValidationException(
+                    detail="Phone number is required for individual customers.",
+                    errors=[
+                        {
+                            "field": "phone",
+                            "message": (
+                                "Phone number is required for individual customers."
+                            ),
+                        }
+                    ],
+                )
+
             # Normalize email to lowercase before conflict check + persist
             if "email" in update_data and update_data["email"] is not None:
                 update_data["email"] = update_data["email"].strip().lower()
 
-            # Check for email conflict if email is being updated
-            if "email" in update_data and update_data["email"] != customer.email:
+            # Check for email conflict if email is being updated. Clearing the
+            # address skips the check: `Customer.email == None` compiles to
+            # IS NULL, which would match any other customer recorded without
+            # an email and report a conflict that does not exist.
+            if (
+                "email" in update_data
+                and update_data["email"] is not None
+                and update_data["email"] != customer.email
+            ):
                 existing = (
                     self._db.query(Customer)
                     .filter(
