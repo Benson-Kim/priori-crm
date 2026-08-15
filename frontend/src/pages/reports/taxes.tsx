@@ -178,9 +178,18 @@ export default function TaxReportPage() {
     <div className="flex flex-col space-y-6">
       {/* Header controls card */}
       <div className="bg-transparent rounded-2xl border border-transparent py-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
-        <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
+        <div className="min-w-0">
+          <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
+          {/* The filing caveat comes from the backend and must stay on the
+              page: this report is an estimate, not the KRA return. Muted so
+              the header stays compact. */}
+          <p className="mt-1 text-sm text-gray-500">
+            {data?.filing_warning ??
+              "Confirm against eTIMS, customs, credit/debit notes, and the KRA auto-populated return before filing."}
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-6">
-          <ReportPeriodPicker value={period} onChange={setPeriod} className="px-2 py-1.5" />
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="px-2 py-1.5" />
           <Button size="sm" variant="outline" onClick={handleExport} disabled={isExporting || !data}>
             {isExporting ? "Exporting..." : "Export Excel"}
           </Button>

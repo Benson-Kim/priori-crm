@@ -103,8 +103,13 @@ export default function ModuleSettingsPage() {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Enabled</h2>
-
+          <h2 className="text-lg font-semibold text-gray-900">Modules</h2>
+          {/* One line, but the governance context has to stay: without it the
+              read-only badges look like a bug rather than a policy. */}
+          <p className="text-sm text-gray-500">
+            Access is granted by your platform operator and cannot be changed
+            here.
+          </p>
         </div>
         <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
           {toggleable.map((module) => (
