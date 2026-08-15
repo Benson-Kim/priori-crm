@@ -113,6 +113,14 @@ export default function OrganisationSettingsPage() {
   };
 
   const onSubmit = async (data: OrganisationFormData) => {
+    // When the profile bootstrap failed, the form is still holding EMPTY_FORM
+    // rather than the stored profile. Saving it would PUT a blank value for
+    // every business-detail field and wipe them, so the save is refused —
+    // the old useState form got this from its `if (!form) return` guard.
+    if (!profile) {
+      setError("Organisation settings could not be loaded. Reload the page before saving.");
+      return;
+    }
     setError(null);
     try {
       // Listed field by field rather than spread: this tab must send only the

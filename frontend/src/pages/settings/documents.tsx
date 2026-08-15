@@ -81,8 +81,13 @@ export default function DocumentSettingsPage() {
 
   const onSubmit = async (data: DocumentDefaultsFormData) => {
     // fullName is read from the loaded profile, not the form, so the profile
-    // has to be here before this tab can save at all.
-    if (!profile) return;
+    // has to be here before this tab can save at all. It is also the guard
+    // that stops a failed bootstrap from saving an empty form over the
+    // stored defaults.
+    if (!profile) {
+      setError("Document settings could not be loaded. Reload the page before saving.");
+      return;
+    }
     setError(null);
     try {
       // fullName is required by the update schema; everything else in the
