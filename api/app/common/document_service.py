@@ -218,10 +218,11 @@ class DocumentSendMixin:
     or failing SES call can never hold a row lock or serialize concurrent
     operations on the document.
 
-    Atomicity-contract note: the mid-request commit here is a
-    deliberate, documented exception to the get_db()-owns-the-commit rule;
-    a later failure in the same request cannot roll the SENT transition
-    back.
+    Atomicity-contract note: the mid-request commit here is a deliberate,
+    documented exception to the request-scoped-commit rule (the commit is
+    normally owned by CommitOnSuccessRoute in app/common/routing.py, with
+    get_db()'s teardown commit as a safety net only); a later failure in
+    the same request cannot roll the SENT transition back.
 
     Concrete services declare ``_send_model``, ``_send_draft_status`` and
     ``_send_sent_status``, and may override ``_validate_sendable``.
