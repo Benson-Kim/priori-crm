@@ -94,6 +94,29 @@ class ForbiddenException(AppException):
         )
 
 
+class StepUpRequiredException(AppException):
+    """Context-aware access control demands step-up verification (401).
+
+    Raised by the zero-trust gate (issue #67) when the ABAC policy engine
+    or the session risk score returns a CHALLENGE decision. The stable
+    ``error_code`` ``STEP_UP_REQUIRED`` plus ``details.challenge = "otp"``
+    tell the client to re-run the existing login → OTP flow; the fresh
+    token pair it yields satisfies the challenge.
+    """
+
+    def __init__(
+        self,
+        detail: str = "Additional verification is required for this action.",
+        challenge: str = "otp",
+    ) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+            error_code="STEP_UP_REQUIRED",
+            extra={"challenge": challenge},
+        )
+
+
 class BadRequestException(AppException):
     """Invalid request data (400)."""
 

@@ -21,6 +21,16 @@ from app.main import app
 # every dispatch, so flipping it here is sufficient.
 settings.RATE_LIMIT_ENABLED = False
 
+# The ABAC off-hours rule (#67) challenges sensitive access by wall-clock
+# time in REPORTING_TIMEZONE, which would make the business-endpoint tests
+# time-of-day dependent (a nightly CI run would see step-up challenges).
+# start == end disables the window; the ABAC tests re-enable it explicitly
+# via monkeypatch and drive the clock themselves. Every other ABAC layer
+# (gate, sensitivity classification, decision auditing, DB guard) stays
+# fully active for the whole suite.
+settings.ABAC_OFF_HOURS_START = 0
+settings.ABAC_OFF_HOURS_END = 0
+
 # Prefer the real PostgreSQL database (provided by the CI service via
 # DATABASE_URL) so Postgres-only constructs - gen_random_uuid(),
 # partial/GIN indexes, with_for_update(), pg_advisory_xact_lock,

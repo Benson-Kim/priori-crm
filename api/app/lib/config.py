@@ -55,6 +55,28 @@ class Settings(BaseSettings):
         "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
     )
 
+    # Context-aware access control (ABAC + zero trust, issue #67).
+    # The policy engine evaluates per-request context (time of day,
+    # geolocation, device fingerprint, IP reputation, resource sensitivity)
+    # on top of the existing RBAC gates; it can only restrict, never widen.
+    ABAC_ENABLED: bool = True
+    # Trust edge-supplied context headers (X-Geo-Country/-Lat/-Lon,
+    # X-Device-Fingerprint). Enable ONLY behind a proxy/CDN that sets and
+    # strips these headers; otherwise they are attacker-controlled.
+    ABAC_TRUST_CONTEXT_HEADERS: bool = False
+    # Comma-separated bad-reputation sources: exact IPs, CIDR ranges, or
+    # literal client identifiers. Matching requests are denied outright.
+    ABAC_IP_DENYLIST: str = ""
+    # Comma-separated ISO country codes to refuse (requires a geo signal).
+    ABAC_GEO_BLOCKLIST: str = ""
+    # Off-hours window in the organisation's REPORTING_TIMEZONE: sensitive
+    # access inside it triggers an OTP step-up challenge. start == end
+    # disables the window (the test suite pins 0/0 for determinism).
+    ABAC_OFF_HOURS_START: int = Field(default=22, ge=0, le=23)
+    ABAC_OFF_HOURS_END: int = Field(default=6, ge=0, le=23)
+    # Audit ALLOW decisions too (deny/challenge/terminate always audited).
+    ABAC_AUDIT_ALLOW_DECISIONS: bool = True
+
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
