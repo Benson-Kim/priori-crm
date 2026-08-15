@@ -69,7 +69,13 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
       <button
         disabled={disabled}
         onClick={toggleDropdown}
-        className="inline-flex items-center gap-2 text-sm font-medium bg-gray-50 text-priori-purple transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        /*
+         * No background of its own. The trigger sits inside a table cell or a
+         * host-styled wrapper (`className` lands on the wrapper, not here), so
+         * a fill here painted a grey pill behind "Actions" on every row and
+         * fought whatever the host had already set.
+         */
+        className="inline-flex items-center gap-2 bg-transparent text-sm font-medium text-priori-purple transition-colors cursor-pointer hover:text-priori-purple/70 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {trigger || (
           <>
