@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from app.common.dependencies import OwnerServiceDep, require_role
 from app.common.reporting_time import reporting_date
 from app.common.routing import CommitOnSuccessRoute
-from app.constants.enums import ModuleKey, UserRole
+from app.constants.enums import UserRole
 from app.constants.settings_defaults import (
     DEFAULT_DEAL_STAGE_PROBABILITIES,
     DEFAULT_ONBOARDING_TASKS,
@@ -22,8 +22,6 @@ from app.constants.settings_defaults import (
 from app.lib.config import settings
 from app.modules.owner.schemas import (
     ModuleSettingsResponse,
-    ModuleSettingState,
-    ModuleSettingUpdate,
     OwnerProfileResponse,
     OwnerProfileUpdate,
     SalesPricingSettings,
@@ -99,41 +97,19 @@ def get_sales_pricing_settings(service: OwnerServiceDep) -> SalesPricingSettings
 @router.get(
     "/modules",
     response_model=ModuleSettingsResponse,
-    summary="List every module with its effective entitlement state",
+    summary="List every module with its effective entitlement state (read-only)",
     description=(
         "Per-owner module entitlements: every ModuleKey with its RESOLVED "
         "enabled state (missing override row = enabled) and whether it is "
-        "essential (never disableable). Admin only."
+        "essential (never disableable). Admin only, READ-ONLY: entitlements "
+        "are granted by the platform operator via the /platform API "
+        "(ADR-0011); there is no tenant-facing write."
     ),
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def list_module_settings(service: OwnerServiceDep) -> ModuleSettingsResponse:
     """Return the effective entitlement state of every module (admin only)."""
     return ModuleSettingsResponse(modules=service.module_settings())
-
-
-@router.patch(
-    "/modules/{module_key}",
-    response_model=ModuleSettingState,
-    summary="Enable or disable one module",
-    description=(
-        "Upsert the per-owner override for one toggleable module. Disabling "
-        "an essential module (auth, owner, health, dashboard) returns 422. "
-        "Admin only; every change is audited."
-    ),
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
-    responses={
-        403: {"description": "Caller is not an admin"},
-        422: {"description": "Unknown module key, or essential module"},
-    },
-)
-def update_module_setting(
-    module_key: ModuleKey,
-    body: ModuleSettingUpdate,
-    service: OwnerServiceDep,
-) -> ModuleSettingState:
-    """Enable/disable one module for the organisation (admin only)."""
-    return service.set_module_enabled(module_key, body.enabled)
 
 
 @router.put(

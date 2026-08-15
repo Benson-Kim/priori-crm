@@ -1,0 +1,98 @@
+"""Platform-operator API (ADR-0011).
+
+Owner-id-scoped module entitlement administration, restricted to the
+PLATFORM_OPERATOR role. Entitlements are commercial grants made by the
+platform, not tenant preferences: the tenant-facing write
+(``PATCH /owner/modules/{module_key}``) was removed in favour of this
+surface, and the owner Settings screen renders entitlements read-only.
+
+Deliberately owner-id-scoped even though today's deployment holds a single
+``owner_profiles`` row: when real multi-tenancy arrives, only owner
+resolution changes — this API contract does not.
+
+No ``require_module`` gate: platform administration is infrastructure and
+must keep working even when every toggleable module is disabled.
+"""
+
+import uuid
+
+from fastapi import APIRouter, Depends
+
+from app.common.dependencies import OwnerServiceDep, require_role
+from app.common.routing import CommitOnSuccessRoute
+from app.constants.enums import ModuleKey, UserRole
+from app.modules.owner.schemas import (
+    ModuleSettingsResponse,
+    ModuleSettingState,
+    ModuleSettingUpdate,
+    PlatformOwnersResponse,
+)
+
+router = APIRouter(
+    route_class=CommitOnSuccessRoute,
+    dependencies=[Depends(require_role(UserRole.PLATFORM_OPERATOR))],
+)
+
+
+@router.get(
+    "/owners",
+    response_model=PlatformOwnersResponse,
+    summary="List every owner profile (platform operator only)",
+    description=(
+        "Identity-only listing (id + display name) of the owner profiles "
+        "whose module entitlements the platform operator administers. The "
+        "operator role carries no access to tenant business data."
+    ),
+    responses={403: {"description": "Caller is not a platform operator"}},
+)
+def list_owners(service: OwnerServiceDep) -> PlatformOwnersResponse:
+    """Return every owner profile for the operator console."""
+    return PlatformOwnersResponse(owners=service.owner_profiles())
+
+
+@router.get(
+    "/owners/{owner_id}/modules",
+    response_model=ModuleSettingsResponse,
+    summary="List one owner's module entitlements (platform operator only)",
+    description=(
+        "Every ModuleKey with its RESOLVED enabled state for the given "
+        "owner (missing override row = enabled) and whether it is "
+        "essential (never disableable)."
+    ),
+    responses={
+        403: {"description": "Caller is not a platform operator"},
+        404: {"description": "Unknown owner id"},
+    },
+)
+def list_owner_module_settings(
+    owner_id: uuid.UUID,
+    service: OwnerServiceDep,
+) -> ModuleSettingsResponse:
+    """Return the effective entitlement state of every module for one owner."""
+    return ModuleSettingsResponse(modules=service.module_settings_for_owner(owner_id))
+
+
+@router.patch(
+    "/owners/{owner_id}/modules/{module_key}",
+    response_model=ModuleSettingState,
+    summary="Grant or revoke one module for one owner (platform operator only)",
+    description=(
+        "Upsert the per-owner override for one toggleable module. Disabling "
+        "an essential module (auth, owner, health, dashboard) returns 422. "
+        "Unknown owner ids return 404 — an owner profile is never created "
+        "implicitly. Every change is audited."
+    ),
+    responses={
+        403: {"description": "Caller is not a platform operator"},
+        404: {"description": "Unknown owner id"},
+        422: {"description": "Unknown module key, or essential module"},
+    },
+)
+def update_owner_module_setting(
+    owner_id: uuid.UUID,
+    module_key: ModuleKey,
+    body: ModuleSettingUpdate,
+    service: OwnerServiceDep,
+) -> ModuleSettingState:
+    """Enable/disable one module for one owner (platform operator only)."""
+    return service.set_module_enabled_for_owner(owner_id, module_key, body.enabled)

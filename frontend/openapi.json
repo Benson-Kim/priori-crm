@@ -5973,7 +5973,7 @@
         "type": "object"
       },
       "ModuleSettingUpdate": {
-        "description": "PATCH /owner/modules/{module_key} body.",
+        "description": "PATCH /platform/owners/{owner_id}/modules/{module_key} body.",
         "properties": {
           "enabled": {
             "title": "Enabled",
@@ -7526,6 +7526,43 @@
           "open_deal_count"
         ],
         "title": "PipelineWeightedKpi",
+        "type": "object"
+      },
+      "PlatformOwnerSummary": {
+        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity-only (id + display name): the operator manages\nentitlements, not tenant business data (ADR-0011).",
+        "properties": {
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fullName"
+        ],
+        "title": "PlatformOwnerSummary",
+        "type": "object"
+      },
+      "PlatformOwnersResponse": {
+        "description": "Every owner profile (GET /platform/owners).",
+        "properties": {
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformOwnerSummary"
+            },
+            "title": "Owners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "owners"
+        ],
+        "title": "PlatformOwnersResponse",
         "type": "object"
       },
       "ProfitMarginMetric": {
@@ -19196,7 +19233,7 @@
     },
     "/api/v1/owner/modules": {
       "get": {
-        "description": "Per-owner module entitlements: every ModuleKey with its RESOLVED enabled state (missing override row = enabled) and whether it is essential (never disableable). Admin only.",
+        "description": "Per-owner module entitlements: every ModuleKey with its RESOLVED enabled state (missing override row = enabled) and whether it is essential (never disableable). Admin only, READ-ONLY: entitlements are granted by the platform operator via the /platform API (ADR-0011); there is no tenant-facing write.",
         "operationId": "list_module_settings_api_v1_owner_modules_get",
         "responses": {
           "200": {
@@ -19215,60 +19252,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List every module with its effective entitlement state",
-        "tags": [
-          "Owner"
-        ]
-      }
-    },
-    "/api/v1/owner/modules/{module_key}": {
-      "patch": {
-        "description": "Upsert the per-owner override for one toggleable module. Disabling an essential module (auth, owner, health, dashboard) returns 422. Admin only; every change is audited.",
-        "operationId": "update_module_setting_api_v1_owner_modules__module_key__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "module_key",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ModuleKey"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ModuleSettingUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModuleSettingState"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "403": {
-            "description": "Caller is not an admin"
-          },
-          "422": {
-            "description": "Unknown module key, or essential module"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Enable or disable one module",
+        "summary": "List every module with its effective entitlement state (read-only)",
         "tags": [
           "Owner"
         ]
@@ -19322,6 +19306,157 @@
         "summary": "Simple ping",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/api/v1/platform/owners": {
+      "get": {
+        "description": "Identity-only listing (id + display name) of the owner profiles whose module entitlements the platform operator administers. The operator role carries no access to tenant business data.",
+        "operationId": "list_owners_api_v1_platform_owners_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformOwnersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List every owner profile (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/platform/owners/{owner_id}/modules": {
+      "get": {
+        "description": "Every ModuleKey with its RESOLVED enabled state for the given owner (missing override row = enabled) and whether it is essential (never disableable).",
+        "operationId": "list_owner_module_settings_api_v1_platform_owners__owner_id__modules_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "404": {
+            "description": "Unknown owner id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List one owner's module entitlements (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/platform/owners/{owner_id}/modules/{module_key}": {
+      "patch": {
+        "description": "Upsert the per-owner override for one toggleable module. Disabling an essential module (auth, owner, health, dashboard) returns 422. Unknown owner ids return 404 \u2014 an owner profile is never created implicitly. Every change is audited.",
+        "operationId": "update_owner_module_setting_api_v1_platform_owners__owner_id__modules__module_key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "module_key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModuleKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleSettingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "404": {
+            "description": "Unknown owner id"
+          },
+          "422": {
+            "description": "Unknown module key, or essential module"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant or revoke one module for one owner (platform operator only)",
+        "tags": [
+          "Platform"
         ]
       }
     },

@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/auth-context";
+import { useAuth, useCanEditOwner } from "@/hooks/auth-context";
 import { useEnabledModules } from "@/hooks/useModuleAccess";
 import { cn } from "@/lib/utils";
 import {
@@ -70,7 +70,9 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
         [enabledModules]
     );
 
-    const isAdmin = user?.role?.toLowerCase() === "admin";
+    // Settings visibility mirrors the backend owner-profile write roles
+    // (MANAGER/ADMIN); the Modules tab inside is additionally admin-only.
+    const canEditOwner = useCanEditOwner();
 
     const isActive = (path: string) =>
         pathname === path || pathname.startsWith(path + "/");
@@ -273,21 +275,21 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                     </nav>
 
                 <div className="flex shrink-0 flex-col gap-1 pt-2">
-                    {isAdmin && (
+                    {canEditOwner && (
                         <Link
-                            to="/settings/modules"
-                            aria-label="Module Settings"
-                            title={collapsed ? "Module Settings" : undefined}
+                            to="/settings"
+                            aria-label="Settings"
+                            title={collapsed ? "Settings" : undefined}
                             className={cn(
                                 ITEM_BASE,
                                 collapsed && "justify-center px-0",
-                                isActive("/settings/modules")
+                                isActive("/settings")
                                     ? ITEM_ACTIVE
                                     : ITEM_IDLE
                             )}
                         >
                             <Settings className={ICON} />
-                            {!collapsed && "Module Settings"}
+                            {!collapsed && "Settings"}
                         </Link>
                     )}
                     <Link
