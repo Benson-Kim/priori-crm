@@ -15,11 +15,9 @@ import { Navigate, NavLink, Outlet } from "react-router-dom";
 
 import { useAuth, useCanEditOwner } from "@/hooks/auth-context";
 import { cn } from "@/lib/utils";
+import { ITEM_ACTIVE, ITEM_BASE, ITEM_IDLE } from "./sidebar-styles";
 
-const TAB_BASE =
-  "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
-const TAB_ACTIVE = "bg-white text-gray-900 shadow-sm";
-const TAB_IDLE = "text-gray-500 hover:text-gray-900";
+
 
 export default function SettingsLayout() {
   const { user } = useAuth();
@@ -42,14 +40,14 @@ export default function SettingsLayout() {
     <div className="flex flex-col gap-6">
       <nav
         aria-label="Settings sections"
-        className="flex w-fit items-center gap-1 rounded-xl bg-gray-100 p-1"
+        className="bg-gray-100 flex w-fit items-center gap-1 rounded-lg border border-gray-200 overflow-hidden shrink-0 transition-all duration-200"
       >
         {tabs.map((tab) => (
           <NavLink
             key={tab.path}
             to={tab.path}
             className={({ isActive }) =>
-              cn(TAB_BASE, isActive ? TAB_ACTIVE : TAB_IDLE)
+              cn(ITEM_BASE, isActive ? ITEM_ACTIVE : ITEM_IDLE)
             }
           >
             {tab.label}

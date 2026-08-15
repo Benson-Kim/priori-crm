@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from "@/lib/constants";
+import { CURRENCY_OPTIONS } from "@/lib/constants";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import {
     checkEmailDuplicate,
@@ -48,7 +49,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
             email: "",
             phone_primary: "",
             address: "",
-            country: COUNTRY_OPTIONS[0].value,
+            country: DEFAULT_COUNTRY,
             currency: CURRENCY_OPTIONS[0].value,
         },
     });
@@ -66,7 +67,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                 phone_primary: data.phone_primary || "",
                 phone_secondary: data.phone_secondary || "",
                 address: data.address || "",
-                country: data.country || COUNTRY_OPTIONS[0].value,
+                country: data.country || DEFAULT_COUNTRY,
                 website: data.website || "",
                 vat_number: data.vat_number || "",
                 tax_id_pin: data.tax_id_pin || "",
@@ -260,7 +261,7 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                                             <Select
                                                 id="country"
                                                 {...field}
-                                                options={COUNTRY_OPTIONS}
+                                                options={COUNTRIES}
                                                 placeholder="Country"
                                             />
                                             {renderFieldError(errors.country)}

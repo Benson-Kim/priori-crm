@@ -8,7 +8,8 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { ACCEPTED_IMAGE_TYPES, COUNTRY_OPTIONS } from "@/lib/constants";
+import { ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import { type OwnerProfile, type OwnerProfileUpdate } from "@/services/ownerApi";
 import { CheckCircle, SquarePen, Trash, UploadCloud, X } from "lucide-react";
@@ -172,10 +173,12 @@ export function OwnerProfileModal({
             <span className="text-sm font-medium text-gray-600">
               Jurisdiction
             </span>
+            {/* Falls back to Kenya so an unset jurisdiction reads as the home
+                market rather than as a blank control. */}
             <Select
-              value={form.jurisdiction ?? ""}
+              value={form.jurisdiction || DEFAULT_COUNTRY}
               onChange={(e) => update("jurisdiction", e.target.value)}
-              options={COUNTRY_OPTIONS}
+              options={COUNTRIES}
             />
           </label>
 

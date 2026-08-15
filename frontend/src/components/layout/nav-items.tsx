@@ -37,7 +37,19 @@ export type NavChild = {
 }
 
 export type NavItem =
-    | { path: string; label: string; icon?: NavIcon; moduleKey?: string; children?: never }
+    | {
+        path: string;
+        label: string;
+        icon?: NavIcon;
+        moduleKey?: string;
+        children?: never;
+        /**
+         * Marks a leaf that navigates out of this shell rather than expanding
+         * in place. The sidebar gives it a right chevron, so it reads as "goes
+         * somewhere" next to the groups whose down chevron means "opens here".
+         */
+        leavesShell?: boolean;
+    }
     | { label: string; icon?: NavIcon; children: NavChild[]; path?: never; moduleKey?: never }
 
 export const navItems: NavItem[] = [
@@ -55,18 +67,6 @@ export const navItems: NavItem[] = [
             { label: "Quotes", path: "/quotes", icon: FileText, moduleKey: "quotes" },
             { label: "Invoices", path: "/invoices", icon: Invoice, moduleKey: "invoices" },
         ],
-    },
-
-    /*
-     * The Sales Desk is a module, not a section: following this link leaves
-     * the Business Central shell for the desk's own layout and sidebar
-     * (components/layout/sales-desk-layout.tsx), so it has no children here.
-     */
-    {
-        label: "Sales Desk",
-        icon: Target,
-        path: "/sales-desk",
-        moduleKey: "sales_desk",
     },
 
     {
@@ -111,6 +111,19 @@ export const navItems: NavItem[] = [
             { label: "Purchases Report", path: "/reports/purchases", icon: Receipt, moduleKey: "reports" },
             { label: "Tax Report", path: "/reports/taxes", icon: ReceiptText, moduleKey: "reports" },
         ],
+    },
+
+    /*
+     * The Sales Desk is a module, not a section: following this link leaves
+     * the Business Central shell for the desk's own layout and sidebar
+     * (components/layout/sales-desk-layout.tsx), so it has no children here.
+     */
+    {
+        label: "Sales Desk",
+        icon: Target,
+        path: "/sales-desk",
+        moduleKey: "sales_desk",
+        leavesShell: true,
     },
 ];
 
