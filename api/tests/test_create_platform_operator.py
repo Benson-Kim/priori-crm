@@ -202,7 +202,7 @@ class TestCliSurface:
         env["PYTHONPATH"] = str(API_DIR)
         env[ENV_EMAIL] = EMAIL
         env[ENV_PASSWORD] = PASSWORD
-        result = subprocess.run(  # noqa: S603 — fixed argv, test-controlled
+        result = subprocess.run(
             [sys.executable, "-m", "app.scripts.create_platform_operator"],
             cwd=tmp_path,
             env=env,
