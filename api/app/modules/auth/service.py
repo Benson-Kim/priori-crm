@@ -1,15 +1,18 @@
 import hashlib
 import logging
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.common.audit import record_audit_event
 from app.common.exceptions import (
     BadRequestException,
     RateLimitException,
+    StepUpRequiredException,
     UnauthorizedException,
 )
 from app.common.rate_limit_store import RateLimitStore, build_rate_limit_store

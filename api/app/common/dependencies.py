@@ -3,7 +3,7 @@
 import secrets
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
