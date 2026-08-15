@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { currencyOptions, customerTypeOptions } from "@/lib/enums";
 import { formatKenyanPhoneInput, getKenyanPhoneGhostText, normalizeKenyanPhoneNumber } from "@/lib/utils";
 import { customerSchema, type CustomerFormData } from "@/validations/customerSchema";
@@ -16,12 +17,6 @@ interface CustomerDetailsFormProps {
     onSave?: (data: CustomerFormData) => void;
     isLoading?: boolean;
 }
-
-const countryOptions = [
-    { value: "KE", label: "Kenya" },
-    { value: "UG", label: "Uganda" },
-    { value: "TZ", label: "Tanzania" },
-];
 
 export function CustomerDetailsForm({
     initialData,
@@ -49,7 +44,9 @@ export function CustomerDetailsForm({
             currency: "",
             address: "",
             address2: "",
-            country: "",
+            // Kenya is the home market, so the country starts answered rather
+            // than sending everyone through a 249-entry list.
+            country: DEFAULT_COUNTRY,
             city: "",
             postalCode: "",
         },
@@ -103,7 +100,7 @@ export function CustomerDetailsForm({
                 {/* Customer Type & Company Name */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
 
-                    <Field id="customerType" label="Customer Type">
+                    <Field id="customerType" label="Customer Type" required>
                         <Controller
                             name="customerType"
                             control={control}
@@ -141,7 +138,7 @@ export function CustomerDetailsForm({
                 {/* First Name & Last Name */}
                 <div className="grid grid-cols-2 gap-6">
 
-                    <Field id="firstName" label="First Name">
+                    <Field id="firstName" label="First Name" required>
                         <Controller
                             name="firstName"
                             control={control}
@@ -156,7 +153,7 @@ export function CustomerDetailsForm({
                             )}
                         />
                     </Field>
-                    <Field id="lastName" label="Last Name">
+                    <Field id="lastName" label="Last Name" required>
                         <Controller
                             name="lastName"
                             control={control}
@@ -236,7 +233,7 @@ export function CustomerDetailsForm({
 
                 {/* Currency & VAT Number */}
                 <div className="grid grid-cols-2 gap-6">
-                    <Field id="currency" label="Currency">
+                    <Field id="currency" label="Currency" required>
                         <Controller
                             name="currency"
                             control={control}
@@ -334,7 +331,7 @@ export function CustomerDetailsForm({
                             <Select
                                 id="country"
                                 {...field}
-                                options={countryOptions}
+                                options={COUNTRIES}
                                 placeholder="Select country"
                                 error={errors.country?.message}
                             />

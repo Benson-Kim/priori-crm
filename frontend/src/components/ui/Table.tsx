@@ -24,6 +24,12 @@ interface TableProps<T> {
   rowClassName?: (item: T, index: number) => string;
   footer?: ReactNode;
   className?: string;
+  /**
+   * Classes for the inner <table>. The 600px floor below suits a full-width
+   * table but forces a scrollbar inside a half-width card, so a narrow host
+   * can pass `min-w-0` to opt out of it.
+   */
+  tableClassName?: string;
   emptyMessage?: string;
   /**
    * Enable column-header sort controls. When true, clicking a sortable
@@ -100,6 +106,7 @@ export function Table<T>({
   rowKey,
   onRowClick,
   className,
+  tableClassName,
   footer,
   rowClassName,
   emptyMessage = "No data available.",
@@ -131,7 +138,7 @@ export function Table<T>({
         className
       )}
     >
-      <table className="w-full min-w-150">
+      <table className={cn("w-full min-w-150", tableClassName)}>
         <thead>
           <tr
             className={cn(
@@ -147,10 +154,11 @@ export function Table<T>({
                   key={col.key}
                   onClick={isSortable ? () => handleHeaderClick(col) : undefined}
                   className={cn(
+                    "whitespace-nowrap",
                     isSalesDesk
-                      ? "bg-sd-surface px-cell-x py-cell-y text-left text-[13px] font-bold text-sd-ink"
+                      ? "bg-sd-surface px-cell-x py-cell-y text-left text-sm font-bold text-sd-ink"
                       : cn(
-                        "p-3 text-left text-base font-bold text-content-primary",
+                        "p-3 text-left text-sm font-bold text-content-primary",
                         "bg-gray-50 border-b border-gray-100 first:rounded-tl-lg last:rounded-tr-lg"
                       ),
                     isSortable && "cursor-pointer select-none hover:bg-gray-100",
@@ -222,9 +230,16 @@ export function Table<T>({
                     <td
                       key={col.key}
                       className={cn(
+                        // One line per cell. A wrapped cell makes every row in
+                        // the table a different height, which reads as broken
+                        // rather than dense; the wrapper already scrolls
+                        // horizontally when the columns need more room. Columns
+                        // holding long free text clamp their own width and put
+                        // the full value in a title.
+                        "whitespace-nowrap",
                         isSalesDesk
                           ? "px-cell-x py-cell-y text-[13px] leading-5 text-sd-ink"
-                          : "px-4 py-3 text-base text-content-primary leading-6",
+                          : "px-4 py-3 text-sm text-content-primary leading-6",
                         col.className
                       )}
                     >

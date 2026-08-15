@@ -17,13 +17,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/Select";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { COUNTRIES } from "@/lib/countries";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import {
   documentDefaultsSchema,
   MAX_DEFAULT_TERMS_LENGTH,
@@ -31,7 +31,9 @@ import {
 } from "@/validations/settingsSchema";
 
 const EMPTY_FORM: DocumentDefaultsFormData = {
-  jurisdiction: "",
+  // Kenya is the home market; an org that never set a jurisdiction reads as
+  // KE here, matching resolveOrgJurisdiction's fallback.
+  jurisdiction: DEFAULT_COUNTRY,
   defaultTermsAndConditions: "",
   defaultSendMessage: "",
 };
@@ -129,11 +131,28 @@ export default function DocumentSettingsPage() {
             <span className="text-sm font-semibold text-gray-800">
               Jurisdiction
             </span>
-            <Select
-              {...register("jurisdiction")}
-              options={COUNTRIES}
-              placeholder="Select country"
-              error={errors.jurisdiction?.message}
+            {/*
+              * Controller rather than register: Select now draws its own
+              * options panel, so picking a value no longer emits a bubbling
+              * DOM change event. That also means the form-level onChange above
+              * cannot see it, hence the explicit setSaved(false) here.
+              */}
+            <Controller
+              name="jurisdiction"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  id="jurisdiction"
+                  onChange={(event) => {
+                    field.onChange(event);
+                    setSaved(false);
+                  }}
+                  options={COUNTRIES}
+                  placeholder="Select country"
+                  error={errors.jurisdiction?.message}
+                />
+              )}
             />
             <span className="text-xs text-gray-400">
               Drives the compliance-reference label printed on documents.

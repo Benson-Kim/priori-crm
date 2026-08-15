@@ -51,7 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               ref={ref}
               aria-invalid={!!error}
               className={cn(
-                "relative z-10 ui-input w-full bg-transparent border-none outline-none ring-0 px-0 py-4 text-base font-normal leading-6 text-gray-900 placeholder:text-gray-400",
+                "relative z-10 ui-input w-full bg-transparent border-none outline-none ring-0 px-0 py-3 text-base font-normal leading-6 text-gray-900 placeholder:text-gray-400",
                 className
               )}
               {...props}

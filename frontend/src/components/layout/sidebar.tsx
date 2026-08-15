@@ -3,6 +3,7 @@ import { useEnabledModules } from "@/hooks/useModuleAccess";
 import { cn } from "@/lib/utils";
 import {
     ChevronDown,
+    ChevronRight,
     HelpCircle,
     LogOut,
     PanelLeftClose,
@@ -167,11 +168,26 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                                         className={cn(
                                             ITEM_BASE,
                                             collapsed && "justify-center px-0",
+                                            !collapsed && item.leavesShell && "justify-between",
                                             isActive(item.path) ? ITEM_ACTIVE : ITEM_IDLE
                                         )}
                                     >
-                                        {Icon && <Icon className={ICON} />}
-                                        {!collapsed && item.label}
+                                        <div
+                                            className={cn(
+                                                "flex items-center",
+                                                !collapsed && "gap-3"
+                                            )}
+                                        >
+                                            {Icon && <Icon className={ICON} />}
+                                            {!collapsed && item.label}
+                                        </div>
+
+                                        {/* Right chevron reads as "leaves this
+                                            shell", against the groups' down
+                                            chevron meaning "opens here". */}
+                                        {!collapsed && item.leavesShell && (
+                                            <ChevronRight size={16} />
+                                        )}
                                     </Link>
                                 );
                             }
