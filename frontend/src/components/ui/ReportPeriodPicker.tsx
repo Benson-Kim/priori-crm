@@ -165,7 +165,7 @@ export function ReportPeriodPicker({
         aria-expanded={isOpen}
         onClick={toggle}
         className={cn(
-          "flex items-center gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
+          "flex items-center gap-2 p-3 rounded-lg border border-gray-300 bg-gray-50",
           "text-base font-normal leading-6 text-gray-900 transition-all cursor-pointer whitespace-nowrap",
           "hover:border-priori-purple/50",
           isOpen && "border-priori-purple ring-1 ring-priori-purple/20",

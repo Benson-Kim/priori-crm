@@ -616,7 +616,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
           Last Transactions
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
           <Button variant="outline">View all</Button>
         </div>
       </div>

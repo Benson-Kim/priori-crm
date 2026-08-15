@@ -103,13 +103,8 @@ export default function ModuleSettingsPage() {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Modules</h2>
-          <p className="text-sm text-gray-500">
-            Module access is granted by your platform operator and cannot be
-            changed here. Disabled modules disappear from navigation and
-            their pages and APIs are blocked for every user in the
-            organisation. Contact your platform operator to change a grant.
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900">Enabled</h2>
+
         </div>
         <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
           {toggleable.map((module) => (
@@ -133,10 +128,7 @@ export default function ModuleSettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">
             Essential modules
           </h2>
-          <p className="text-sm text-gray-500">
-            Core infrastructure that is always enabled and cannot be turned
-            off.
-          </p>
+
         </div>
         <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
           {essential.map((module) => (

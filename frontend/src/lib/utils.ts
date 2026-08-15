@@ -46,11 +46,20 @@ export const wait = (ms: number) =>
 export const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;
 
+/**
+ * Avatar initials for a display name, capped at two characters — "St. John
+ * Paul II Sabbatical Centre" renders "SC", not "SJPISC". First + last word
+ * mirrors the backend's `Vendor.display_initials`, which is the one place the
+ * two conventions sit side by side (the vendor detail card prefers the
+ * server's value and falls back to this). `avatarInitials` in
+ * components/ui/avatar-utils.ts is the table-avatar equivalent and takes the
+ * first two words instead; leave that one alone.
+ */
 export const getNameInitials = (name: string) => {
-  return name
-    .split(" ")
-    .map((n) => n.charAt(0))
-    .join("");
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
 export function getDayNames(days: number[]): string[] {
