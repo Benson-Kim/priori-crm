@@ -1,12 +1,18 @@
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table } from "@/components/ui/Table";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import {
+     defaultReportPeriod,
+     isReportPeriodReady,
+     reportPeriodToSearchParams,
+     resolveReportPeriod,
+     type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import { money } from "@/lib/utils";
 import {
      getIncomeStatement,
-     isPeriodReady,
      type IncomeStatement,
      type IncomeStatementLine,
-     type PeriodFilter,
 } from "@/services/statementsApi";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,13 +20,16 @@ import { OverviewComponent } from "../components/OverviewComponent";
 
 export default function IncomeStatementsPage() {
      const navigate = useNavigate();
-     const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+     const reportingDay = useReportingDate();
+     const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+          defaultReportPeriod(reportingDay)
+     );
      const [statement, setStatement] = useState<IncomeStatement | null>(null);
      const [isLoading, setIsLoading] = useState(true);
      const [error, setError] = useState<string | null>(null);
 
-     const { range, dateFrom, dateTo } = period;
-     const periodReady = isPeriodReady(period);
+     const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+     const periodReady = isReportPeriodReady(period, reportingDay);
 
      // Stale-response guard: only the latest request may write state.
      const seqRef = useRef(0);
@@ -35,7 +44,7 @@ export default function IncomeStatementsPage() {
           const seq = ++seqRef.current;
           setIsLoading(true);
           setError(null);
-          getIncomeStatement({ range, dateFrom, dateTo })
+          getIncomeStatement({ range: "custom", dateFrom, dateTo })
                .then((data) => {
                     if (seq === seqRef.current) setStatement(data);
                })
@@ -49,7 +58,7 @@ export default function IncomeStatementsPage() {
                .finally(() => {
                     if (seq === seqRef.current) setIsLoading(false);
                });
-     }, [periodReady, range, dateFrom, dateTo]);
+     }, [periodReady, dateFrom, dateTo]);
 
      // Drill down into the cashflow ledger filtered to this account
      // category, carrying the current period (including custom dates).
@@ -58,15 +67,11 @@ export default function IncomeStatementsPage() {
                const params = new URLSearchParams({
                     category,
                     accountCategory: item.account_category,
-                    range,
+                    ...reportPeriodToSearchParams(period),
                });
-               if (range === "custom" && dateFrom && dateTo) {
-                    params.set("dateFrom", dateFrom);
-                    params.set("dateTo", dateTo);
-               }
                navigate(`/cashflow?${params.toString()}`);
           },
-          [navigate, range, dateFrom, dateTo],
+          [navigate, period],
      );
 
      const buildColumns = (amountClass: string) => [

@@ -1,10 +1,18 @@
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { InlineSelect } from "@/components/ui/InlineSelect";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { PeriodRangePicker } from "@/components/ui/PeriodRangePicker";
-import { Select } from "@/components/ui/Select";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Table } from "@/components/ui/Table";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
+import {
+  defaultReportPeriod,
+  isReportPeriodReady,
+  resolveReportPeriod,
+  type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import { formatDate, formatDelta, getNameInitials, money } from "@/lib/utils";
 import {
   getCashflowSeries,
@@ -18,8 +26,7 @@ import {
   type TopSaleLine,
   type TopSales,
 } from "@/services/dashboardApi";
-import { isPeriodReady, type PeriodFilter } from "@/services/statementsApi";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -86,8 +93,30 @@ function formatSignedMoney(
   return n < 0 ? `- ${prefix} ${abs}` : `${prefix} ${abs}`;
 }
 
+/**
+ * Series colours, shared by the bars and the tooltip.
+ *
+ * These used to be written twice — #717bbc/#9d4d8f on the <Bar>s and the
+ * near-but-not-equal #7b77c8/#a54a96 in the tooltip — so the swatch never
+ * quite matched the bar it described.
+ */
+const CASHFLOW_COLORS = {
+  income: "#717bbc",
+  expense: "#9d4d8f",
+} as const;
+
+/** Tooltip heading for a bucket, e.g. "Jan 3 - 2026". */
+function tooltipDateLabel(bucketStart: string): string {
+  const d = new Date(`${bucketStart}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return bucketStart;
+  const month = d.toLocaleDateString("en-KE", { month: "short" });
+  return `${month} ${d.getUTCDate()} - ${d.getUTCFullYear()}`;
+}
+
 interface CashflowChartDatum {
   name: string;
+  /** Heading the tooltip shows; carries the year the x-axis label omits. */
+  fullLabel: string;
   income: number;
   expense: number;
 }
@@ -98,38 +127,60 @@ interface CustomTooltipProps {
 }
 
 const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
-  if (active && payload && payload.length) {
-    const { name } = payload[0].payload;
-    return (
-      <div className="bg-white rounded-2xl p-4 shadow-[0px_4px_15px_rgba(0,0,0,0.08)] border border-gray-100 flex flex-col items-center justify-center min-w-30 relative z-50">
-        <p className="text-gray-500 text-[13px] font-medium mb-1">{name}</p>
-        <p className="text-[16px] font-bold" style={{ color: "#7b77c8" }}>
+  if (!active || !payload?.length) return null;
+
+  const { fullLabel } = payload[0].payload;
+
+  return (
+    /*
+     * Lifted above the cursor and centred on it so the pointer below the
+     * card aims at the bar being described; recharts would otherwise park
+     * the box down and to the right, leaving the pointer aimed at nothing.
+     */
+    <div className="relative z-50 -translate-x-1/2 -translate-y-[calc(100%+14px)]">
+      <div className="flex min-w-36 flex-col items-center justify-center rounded-3xl bg-[#f8f9fb] px-6 py-4 shadow-[0_8px_24px_rgba(16,24,40,0.12)]">
+        <p className="text-[17px] font-medium text-gray-600">{fullLabel}</p>
+        <p
+          className="mt-2 text-[20px] font-bold leading-7"
+          style={{ color: CASHFLOW_COLORS.income }}
+        >
           {money(payload[0].value)}
         </p>
-        <p className="text-[16px] font-bold" style={{ color: "#a54a96" }}>
+        <p
+          className="text-[20px] font-bold leading-7"
+          style={{ color: CASHFLOW_COLORS.expense }}
+        >
           {money(payload[1]?.value ?? 0)}
         </p>
       </div>
-    );
-  }
-  return null;
+
+      {/* Downward pointer, same fill as the card. */}
+      <span
+        aria-hidden
+        className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-[10px] border-t-[12px] border-x-transparent border-t-[#f8f9fb]"
+      />
+    </div>
+  );
 };
 
 // Section-level widget: Summary cards
 
 interface SummaryWidgetProps {
   currency: string;
-  onCurrencyChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onCurrencyChange: (value: string) => void;
 }
 
 function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   // Stale-response guard: only the latest request may write state.
   const seqRef = useRef(0);
@@ -144,7 +195,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getDashboardSummary({ range, dateFrom, dateTo }, currency)
+    getDashboardSummary({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
         if (seq === seqRef.current) setSummary(data);
       })
@@ -155,7 +206,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   return (
     <section>
@@ -163,17 +214,14 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
         <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xl font-bold text-gray-800">Overview</h2>
           <div className="flex items-center gap-3">
-            <Select
+            <InlineSelect
               options={CURRENCY_OPTIONS}
               value={currency}
               onChange={onCurrencyChange}
+              aria-label="Display currency"
+              triggerClassName="bg-white"
             />
-            <PeriodRangePicker
-              period={period}
-              onPeriodChange={setPeriod}
-              placeholder="Select range"
-              selectWrapperClassName="min-w-[220px]"
-            />
+            <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
           </div>
         </div>
       </div>
@@ -221,13 +269,16 @@ interface CashflowWidgetProps {
 }
 
 function CashflowWidget({ currency }: CashflowWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [series, setSeries] = useState<CashflowSeries | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -241,7 +292,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getCashflowSeries({ range, dateFrom, dateTo }, currency)
+    getCashflowSeries({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
         if (seq === seqRef.current) setSeries(data);
       })
@@ -252,12 +303,13 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   const chartData = useMemo<CashflowChartDatum[]>(
     () =>
       (series?.buckets ?? []).map((bucket) => ({
         name: bucketLabel(bucket.bucket_start),
+        fullLabel: tooltipDateLabel(bucket.bucket_start),
         income: Number(bucket.income),
         expense: Number(bucket.expense),
       })),
@@ -265,7 +317,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
   );
 
   return (
-    <section className="relative flex flex-col p-6 justify-between rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
+    <Card padding="lg" className="relative flex flex-col justify-between rounded-xl">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
         <div>
           <h4 className="text-lg leading-6 text-gray-500">Cash Flow</h4>
@@ -273,12 +325,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
             {money(series?.net_total)}
           </p>
         </div>
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          placeholder="Select range"
-          selectWrapperClassName="min-w-[180px]"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -296,27 +343,37 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
             margin={{ top: 10, right: 0, left: -20, bottom: 0 }}
             barGap={2}
           >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eaecf0" />
             <XAxis
               dataKey="name"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "#9ca3af", fontSize: 12 }}
+              tick={{ fill: "#667085", fontSize: 12 }}
               dy={10}
             />
             <YAxis
               tickFormatter={(value) => (value === 0 ? "0" : `${value / 1000}k`)}
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "#9ca3af", fontSize: 12 }}
+              tick={{ fill: "#667085", fontSize: 12 }}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
-            <Bar dataKey="income" fill="#7b77c8" radius={[20, 20, 20, 20]} barSize={16} />
-            <Bar dataKey="expense" fill="#a54a96" radius={[20, 20, 20, 20]} barSize={16} />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ fill: "transparent" }}
+              offset={0}
+              /*
+               * The card is lifted above the cursor, so on the upper rows of
+               * the plot it needs to render outside the chart's viewBox —
+               * without this the heading is clipped off at the top.
+               */
+              allowEscapeViewBox={{ x: true, y: true }}
+            />
+            <Bar dataKey="income" fill={CASHFLOW_COLORS.income} radius={[20, 20, 20, 20]} barSize={16} />
+            <Bar dataKey="expense" fill={CASHFLOW_COLORS.expense} radius={[20, 20, 20, 20]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -372,13 +429,16 @@ interface TopSalesWidgetProps {
 }
 
 function TopSalesWidget({ currency }: TopSalesWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [topSales, setTopSales] = useState<TopSales | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -392,7 +452,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getTopSales({ range, dateFrom, dateTo }, currency, TOP_SALES_LIMIT)
+    getTopSales({ range: "custom" as const, dateFrom, dateTo }, currency, TOP_SALES_LIMIT)
       .then((data) => {
         if (seq === seqRef.current) setTopSales(data);
       })
@@ -403,18 +463,13 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   return (
-    <section className="relative flex flex-col gap-4 p-6 rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
+    <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          placeholder="Select range"
-          selectWrapperClassName="min-w-[180px]"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -434,7 +489,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
           emptyMessage="No sales available for the selected period."
         />
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -445,13 +500,16 @@ interface TransactionsWidgetProps {
 }
 
 function TransactionsWidget({ currency }: TransactionsWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [transactions, setTransactions] = useState<DashboardTransactions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -466,7 +524,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     setIsLoading(true);
     setError(null);
     getRecentTransactions(
-      { range, dateFrom, dateTo },
+      { range: "custom" as const, dateFrom, dateTo },
       currency,
       RECENT_TRANSACTIONS_LIMIT,
     )
@@ -480,7 +538,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   const columns = [
     {
@@ -558,13 +616,8 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
           Last Transactions
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <PeriodRangePicker
-            period={period}
-            onPeriodChange={setPeriod}
-            placeholder="Select range"
-            selectWrapperClassName="min-w-[180px]"
-          />
-          <Button variant="outline" size="lg">View all</Button>
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+          <Button variant="outline">View all</Button>
         </div>
       </div>
 
@@ -595,7 +648,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
  * DashboardPage
  *
  * Composes four independent section widgets. Each widget owns its own
- * PeriodFilter state and stale-response guard, so changing the date range
+ * ReportPeriodFilter state and stale-response guard, so changing the range
  * in one section never re-fetches or clears another. Currency is a
  * page-level display preference shared across all sections via props.
  */
@@ -607,7 +660,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <SummaryWidget
         currency={currency}
-        onCurrencyChange={(event) => setCurrency(event.target.value)}
+        onCurrencyChange={setCurrency}
       />
 
       {/* Cashflow chart + Top Sales — side by side, each with own period */}
