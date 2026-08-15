@@ -87,11 +87,14 @@ function PipelineByStagePanel({
 }
 
 // Section: why the lost deals were lost (QA finding 05: the six enumerated
-// reasons are recorded on every lost close but never aggregated anywhere)
+// reasons are recorded on every lost close but never aggregated anywhere).
+// The breakdown is all-time, unlike the quarterly KPI tiles beside it, so the
+// panel carries an explicit "All time" subtitle to prevent misreading.
 
 function CloseReasonsPanel({ reasons }: Readonly<{ reasons: CloseReasonSlice[] }>) {
     return (
         <DeskPanel title="Lost deals by reason">
+            <p className="-mt-3 pb-3 text-xs text-sd-muted">All time</p>
             <div className="flex flex-col gap-3">
                 {reasons.map((line) => (
                     <div key={line.reason}>
