@@ -275,8 +275,15 @@ export default function PurchaseOrdersPage() {
         {
             key: "vendorName",
             header: "Vendor Name",
+            // Clamped like the other list pages: with nowrap cells, one long
+            // vendor name would otherwise widen the table for every row.
             render: (item: PurchaseOrderSummary) => (
-                <span className="text-content-primary">{item.vendor_name}</span>
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
+                    {item.vendor_name}
+                </span>
             ),
         },
         {

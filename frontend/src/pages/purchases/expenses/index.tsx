@@ -210,7 +210,16 @@ export default function ExpensesPage() {
         {
             key: "vendorName",
             header: "Vendor Name",
-            render: (item: ExpenseSummary) => <span className="text-content-primary">{item.vendor_name}</span>,
+            // Clamped like the other list pages: with nowrap cells, one long
+            // vendor name would otherwise widen the table for every row.
+            render: (item: ExpenseSummary) => (
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
+                    {item.vendor_name}
+                </span>
+            ),
         },
         {
             key: "amount",
