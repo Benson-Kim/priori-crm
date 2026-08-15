@@ -7,7 +7,7 @@ import { createCustomer } from "@/services/customerApi";
 import { checkEmailDuplicate } from "@/services/vendorApi";
 import { CheckCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { Card } from "../ui/Card";
 import { Select } from "../ui/Select";
 

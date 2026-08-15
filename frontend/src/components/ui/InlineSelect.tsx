@@ -377,16 +377,3 @@ export function InlineSelect({
     </div>
   );
 }
-i-purple font-semibold"
-                      : "text-gray-700 hover:bg-priori-purple hover:text-white"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
-    </div>
-  );
-}
