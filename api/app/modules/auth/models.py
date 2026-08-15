@@ -3,7 +3,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -14,7 +16,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
-from app.constants.enums import UserRole
+from app.constants.enums import SessionStatus, UserRole
 
 
 class User(Base):
@@ -118,6 +120,92 @@ class OTPCode(Base):
 
     def __repr__(self) -> str:
         return f"<OTPCode user_id={self.user_id} used={self.is_used}>"
+
+
+class UserSession(Base):
+    """One authenticated session with its continuous risk state (issue #67).
+
+    Minted by ``verify_otp`` (its id travels as the ``sid`` claim in both
+    the access and refresh tokens) and re-scored on EVERY request by the
+    zero-trust gate: behavioural signals (impossible travel, data-access
+    volume, device change, privilege-escalation attempts) raise
+    ``risk_score``; crossing thresholds flips ``status`` to
+    ``challenge_required`` (step-up via the existing login → OTP flow) or
+    ``terminated`` (dead forever). A non-active session is never cleared
+    in place — re-authentication mints a NEW session row.
+    """
+
+    __tablename__ = "user_sessions"
+
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN {SessionStatus.db_check_values()}",
+            name="valid_status",
+        ),
+        # Hot path: the gate loads by PK; ops queries list a user's live
+        # sessions ("terminate everything for this account").
+        Index("ix_user_sessions_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=SessionStatus.ACTIVE,
+        server_default=SessionStatus.ACTIVE.value,
+    )
+    risk_score: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    device_fingerprint: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        comment="Last presented device fingerprint (client: or derived: form)",
+    )
+    last_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    last_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Start of the current data-access volume window",
+    )
+    window_request_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    escalation_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+        comment="Privilege-escalation attempts (RBAC 403s) on this session",
+    )
+    termination_reason: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    user: Mapped["User"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<UserSession {self.id} user={self.user_id} "
+            f"status={self.status} risk={self.risk_score}>"
+        )
 
 
 class PasswordResetToken(Base):

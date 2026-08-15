@@ -21,9 +21,10 @@ from app.common.security import (
     verify_password,
 )
 from app.common.token_denylist import TokenDenylist, build_token_denylist
+from app.constants.enums import SessionStatus
 from app.lib.config import settings
 from app.lib.email import email_service
-from app.modules.auth.models import OTPCode, PasswordResetToken, User
+from app.modules.auth.models import OTPCode, PasswordResetToken, User, UserSession
 
 logger = logging.getLogger(__name__)
 
@@ -200,8 +201,18 @@ class AuthService:
 
         self._invalidate_pending_otps(user.id, exclude_id=otp.id)
 
-        access_token = create_access_token(subject=str(user.id))
-        refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
+        # Continuous session risk (#67): every completed OTP verification
+        # mints a FRESH session whose id travels as the `sid` claim in both
+        # tokens. This is also how a step-up challenge is satisfied: the
+        # challenged session stays challenged forever; re-authenticating
+        # yields a new, cleanly-scored session.
+        session = self._create_session(user)
+        claims = {"sid": str(session.id)}
+
+        access_token = create_access_token(subject=str(user.id), extra=claims)
+        refresh_token, _jti, _exp = create_refresh_token(
+            subject=str(user.id), extra=claims
+        )
 
         return access_token, refresh_token, user
 
@@ -325,6 +336,25 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedException("Invalid or inactive user.")
 
+        # Continuous session risk (#67): a refresh never launders session
+        # state. A terminated session's tokens are dead, and a challenged
+        # session cannot be rotated back to life — the caller must re-run
+        # the full login → OTP flow, which mints a fresh session.
+        sid = payload.get("sid")
+        session = self._get_session(sid)
+        if sid is not None and session is None:
+            raise UnauthorizedException("Refresh token has been revoked.")
+        if session is not None:
+            if session.status == SessionStatus.TERMINATED.value:
+                raise UnauthorizedException("Refresh token has been revoked.")
+            if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
+                raise StepUpRequiredException(
+                    detail=(
+                        "Additional verification is required. Please sign in "
+                        "again to receive a verification code."
+                    )
+                )
+
         # Rotate: atomically spend the presented token BEFORE minting the
         # new pair. revoke_if_new is a single revoke-and-report operation,
         # so exactly one concurrent presenter of a given jti can win this
@@ -359,6 +389,23 @@ class AuthService:
             return
 
         self._revoke_refresh_payload(payload)
+
+        # Continuous session risk (#67): logout kills the whole session, so
+        # any still-live ACCESS token carrying this `sid` dies with it —
+        # zero trust, not just refresh-token revocation.
+        session = self._get_session(payload.get("sid"))
+        if session is not None and session.status != SessionStatus.TERMINATED.value:
+            session.status = SessionStatus.TERMINATED.value
+            session.termination_reason = "logout"
+            record_audit_event(
+                self._db,
+                actor_id=session.user_id,
+                entity_type="session",
+                entity_id=session.id,
+                action="session_terminated",
+                after={"why": "logout"},
+            )
+            self._db.flush()
 
     # Maintenance
 
@@ -421,6 +468,54 @@ class AuthService:
 
         ttl = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
         _refresh_token_denylist().set_fence(f"user:{user_id}", time.time(), ttl)
+
+    def _create_session(self, user: User) -> UserSession:
+        """Mint a fresh, cleanly-scored session row (#67).
+
+        Flush-only: the row commits with the verify-otp request via
+        ``CommitOnSuccessRoute``, atomically with the OTP consumption.
+        Context fields (ip, geo, device) start empty and are populated by
+        the zero-trust gate on the session's first scored request.
+        """
+        session = UserSession(user_id=user.id, status=SessionStatus.ACTIVE.value)
+        self._db.add(session)
+        self._db.flush()
+        logger.info("Session %s created for user %s", session.id, user.email)
+        return session
+
+    def _get_session(self, sid: str | None) -> UserSession | None:
+        """Resolve a `sid` claim to its session row (None for legacy tokens)."""
+        if not sid:
+            return None
+        try:
+            session_id = uuid.UUID(str(sid))
+        except ValueError:
+            return None
+        return self._db.get(UserSession, session_id)
+
+    def _terminate_user_sessions(self, user_id, reason: str) -> None:
+        """Terminate every non-terminated session for a user, audited (#67)."""
+        sessions = (
+            self._db.query(UserSession)
+            .filter(
+                UserSession.user_id == user_id,
+                UserSession.status != SessionStatus.TERMINATED.value,
+            )
+            .all()
+        )
+        for session in sessions:
+            session.status = SessionStatus.TERMINATED.value
+            session.termination_reason = reason
+            record_audit_event(
+                self._db,
+                actor_id=session.user_id,
+                entity_type="session",
+                entity_id=session.id,
+                action="session_terminated",
+                after={"why": reason},
+            )
+        if sessions:
+            self._db.flush()
 
     @staticmethod
     def _hash_otp(code: str) -> str:

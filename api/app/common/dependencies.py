@@ -47,8 +47,14 @@ def require_role(*allowed_roles: UserRole):
     """
     allowed = set(allowed_roles)
 
-    def _check(current_user: CurrentUser):
+    def _check(request: Request, db: DbSession, current_user: CurrentUser):
         if UserRole(current_user.role) not in allowed:
+            # Continuous session risk (#67): an RBAC rejection is a
+            # privilege-escalation attempt; score it against the session
+            # before raising, durably (the 403 rolls the request back).
+            from app.common.authz.risk import note_privilege_escalation
+
+            note_privilege_escalation(request, db)
             raise ForbiddenException(
                 detail="You do not have permission to perform this action.",
                 required_permission="/".join(sorted(r.value for r in allowed)),
@@ -67,8 +73,12 @@ def require_privileged():
         dependencies=[Depends(require_privileged())]
     """
 
-    def _check(current_user: CurrentUser):
+    def _check(request: Request, db: DbSession, current_user: CurrentUser):
         if not UserRole(current_user.role).is_privileged:
+            # Continuous session risk (#67): see require_role.
+            from app.common.authz.risk import note_privilege_escalation
+
+            note_privilege_escalation(request, db)
             raise ForbiddenException(
                 detail="You do not have permission to perform this action.",
                 required_permission="/".join(sorted(r.value for r in PRIVILEGED_ROLES)),

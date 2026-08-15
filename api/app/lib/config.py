@@ -77,6 +77,24 @@ class Settings(BaseSettings):
     # Audit ALLOW decisions too (deny/challenge/terminate always audited).
     ABAC_AUDIT_ALLOW_DECISIONS: bool = True
 
+    # Continuous session risk scoring (issue #67). Behavioural anomalies
+    # add their score to the session; crossing the challenge threshold
+    # forces a step-up (login → OTP mints a fresh session), crossing the
+    # terminate threshold kills the session outright. Scores never decay
+    # within a session.
+    RISK_CHALLENGE_THRESHOLD: int = Field(default=60, ge=1, le=10000)
+    RISK_TERMINATE_THRESHOLD: int = Field(default=90, ge=1, le=10000)
+    # Impossible travel: implied speed between consecutive geolocated
+    # requests above this many km/h is an anomaly (900 ≈ airliner cruise).
+    RISK_IMPOSSIBLE_TRAVEL_KMH: int = Field(default=900, ge=100, le=10000)
+    RISK_SCORE_IMPOSSIBLE_TRAVEL: int = Field(default=70, ge=0, le=10000)
+    RISK_SCORE_DEVICE_CHANGE: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_VOLUME_ANOMALY: int = Field(default=30, ge=0, le=10000)
+    RISK_SCORE_PRIVILEGE_ESCALATION: int = Field(default=25, ge=0, le=10000)
+    # Data-access volume ceiling: requests per rolling window per session.
+    RISK_VOLUME_WINDOW_SECONDS: int = Field(default=60, ge=5, le=3600)
+    RISK_VOLUME_MAX_REQUESTS: int = Field(default=300, ge=1, le=100000)
+
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)

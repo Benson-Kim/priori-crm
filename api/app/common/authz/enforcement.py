@@ -127,14 +127,17 @@ def _reject(context: AccessContext, verdict: PolicyVerdict) -> None:
 def evaluate_session_risk(
     request: Request, db: Session, context: AccessContext
 ) -> PolicyVerdict | None:
-    """Continuous session risk hook (issue #67 capability 3).
+    """Continuous session risk (issue #67 capability 3).
 
-    Placeholder in the policy-engine tranche: session risk scoring plugs in
-    here (per-session behavioural score, impossible travel, volume and
-    privilege-escalation anomalies) and may return a CHALLENGE / TERMINATE
-    verdict that overrides a static ALLOW.
+    Re-scores the request's session (impossible travel, data-access
+    volume, device change, accumulated privilege-escalation attempts) and
+    may return a CHALLENGE / TERMINATE verdict that overrides a static
+    ALLOW. Runs after the gate published its provisional ALLOW verdict, so
+    the risk state reads/writes pass the DB guard.
     """
-    return None
+    from app.common.authz.risk import assess_session_risk
+
+    return assess_session_risk(db, context)
 
 
 def zero_trust_gate(request: Request, db: Session = Depends(get_db)) -> None:
@@ -167,6 +170,10 @@ def zero_trust_gate(request: Request, db: Session = Depends(get_db)) -> None:
 
     verdict = evaluate(context)
     if verdict.allowed:
+        # Provisional clearance so the risk assessment itself may touch the
+        # session's risk state through the DB guard; a non-allow risk
+        # verdict re-fences the session below before anything else runs.
+        db_guard.set_verdict(db, verdict)
         risk_verdict = evaluate_session_risk(request, db, context)
         if risk_verdict is not None:
             verdict = risk_verdict

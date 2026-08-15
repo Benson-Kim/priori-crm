@@ -39,6 +39,28 @@ class UserRole(StrEnum):
 PRIVILEGED_ROLES: frozenset["UserRole"] = frozenset({UserRole.ADMIN, UserRole.MANAGER})
 
 
+class SessionStatus(StrEnum):
+    """Lifecycle of an authenticated user session (issue #67).
+
+    Continuous risk scoring moves a session from ACTIVE to
+    CHALLENGE_REQUIRED (step-up: re-run the login → OTP flow; the fresh
+    session it mints is the cleared one) or TERMINATED (dead forever —
+    logout, risk threshold crossed, or token/session mismatch). Neither
+    non-active state is ever cleared in place: trust is re-established
+    only by a full re-authentication that creates a NEW session.
+    """
+
+    ACTIVE = "active"
+    CHALLENGE_REQUIRED = "challenge_required"
+    TERMINATED = "terminated"
+
+    @classmethod
+    def db_check_values(cls) -> str:
+        """SQL IN-list literal for CHECK constraints (DocumentType pattern)."""
+        values = ", ".join(f"'{m.value}'" for m in cls)
+        return f"({values})"
+
+
 class ModuleKey(StrEnum):
     """Per-owner feature-toggleable application modules.
 
