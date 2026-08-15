@@ -19,12 +19,24 @@ import { OwnerProfileProvider } from "@/hooks/OwnerProfileProvider";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 export default function RequireAuth() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // Platform operators get their own console shell (#62, ADR-0011): the
+  // operator role is a disjoint authority axis with no tenant-data access,
+  // so the tenant shells (Business Central, Sales Desk) are meaningless for
+  // it and every tenant URL routes to /platform. This mirrors the backend's
+  // role isolation; the server-side gates remain authoritative.
+  if (
+    user?.role?.toLowerCase() === "platform_operator" &&
+    !location.pathname.startsWith("/platform")
+  ) {
+    return <Navigate to="/platform" replace />;
   }
 
   return (
