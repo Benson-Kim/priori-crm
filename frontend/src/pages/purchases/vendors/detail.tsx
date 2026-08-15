@@ -711,14 +711,14 @@ export default function VendorDetailPage() {
                       tabs={TABS}
                       activeTab={activeTab}
                       onTabChange={setActiveTab}
-                      className="gap-4"
+                      className="gap-2"
                     />
                   )}
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-4">
                     <Dropdown
                       disabled={isExporting}
                       trigger={
-                        <span className="inline-flex items-center gap-1.5 text-base font-medium text-gray-900">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900">
                           {isExporting ? "Exporting…" : "Export"}
                           <Download size={16} />
                         </span>
@@ -735,7 +735,7 @@ export default function VendorDetailPage() {
                           onClick: () => void handleExport("pdf"),
                         },
                       ]}
-                      className="flex items-center gap-2 px-4 py-3 border border-gray-300 text-priori-purple rounded-lg font-sans cursor-pointer bg-gray-50 hover:bg-purple-50 transition-colors"
+                      className="flex items-center gap-2 p-2.5 border border-gray-300 text-priori-purple rounded-lg font-sans cursor-pointer bg-gray-50 hover:bg-purple-50 transition-colors"
                     />
                     {/* Toolbar filter, so InlineSelect: same box as the
                         period picker beside it, options styled by us. */}
@@ -744,6 +744,7 @@ export default function VendorDetailPage() {
                       value={typeTab}
                       onChange={(value) => setTypeTab(value as VendorTxnType)}
                       aria-label="Transaction type"
+                      triggerClassName="p-2.5 text-sm"
                     />
                   </div>
                 </div>
