@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { customerStatusOptions, customerTypeOptions, type Currency, type CustomerStatus, type CustomerType } from "@/lib/enums";
 import { createCustomer } from "@/services/customerApi";
 import { checkEmailDuplicate } from "@/services/vendorApi";
@@ -58,7 +59,7 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
             email: "",
             phone: "",
             address: "",
-            country: "Kenya",
+            country: DEFAULT_COUNTRY,
             city: "",
             postalCode: "",
             website: "",
@@ -283,25 +284,18 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
                             Country <span className="text-red-500">*</span>
                         </label>
-                        <Input
-                            defaultValue="Kenya"
+                        {/*
+                          The backend contract (CustomerCreate.country) is an ISO
+                          3166-1 alpha-2 code, so the option values are alpha-2
+                          codes and only the labels are country names.
+                        */}
+                        <Select
+                            id="country"
+                            options={COUNTRIES}
                             {...register("country", { required: "Country is required" })}
-                            placeholder="Country"
                             error={errors.country?.message}
                         />
                     </div>
-
-                    {/* <select
-                            {...register("country", { required: "Country is required" })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
-                        >
-                            {COUNTRY_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
-
-                        {errors.country && <p className="text-red-500 text-xs mt-1">{errors.country.message}</p>}
-                    </div> */}
 
                     {/* Website and VAT Number */}
                     <div className="grid grid-cols-2 gap-3">
