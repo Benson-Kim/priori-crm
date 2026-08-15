@@ -2,8 +2,11 @@
 
 Atomicity contract
 
-All mutating methods call ``self._db.flush()`` only; commit/rollback is
-owned by ``get_db()``. The engage action additionally wraps its three
+All mutating methods call ``self._db.flush()`` only; the request-scoped
+commit is owned by ``CommitOnSuccessRoute`` (``app/common/routing.py``),
+which commits before the response is sent — ``get_db()``'s teardown commit
+is a safety net only, and rollback-on-exception still lives in
+``get_db()``. The engage action additionally wraps its three
 mutations (create customer → create deal → remove prospect) in a SAVEPOINT
 so a failure at ANY step rolls all of them back — a customer can never be
 orphaned by a failed deal creation, regardless of the caller's transaction

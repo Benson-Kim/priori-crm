@@ -2,8 +2,11 @@
 
 Atomicity contract
 
-All mutating methods call ``self._db.flush()`` only; commit/rollback is
-owned by ``get_db()``. ``create_for_won_deal`` runs inside the SAME
+All mutating methods call ``self._db.flush()`` only; the request-scoped
+commit is owned by ``CommitOnSuccessRoute`` (``app/common/routing.py``),
+which commits before the response is sent — ``get_db()``'s teardown commit
+is a safety net only, and rollback-on-exception still lives in
+``get_db()``. ``create_for_won_deal`` runs inside the SAME
 transaction as ``DealService.close`` marking the deal won, so a rolled
 back close never leaves an orphan checklist and a committed win never
 misses one. Every audit row is written in the same transaction as the

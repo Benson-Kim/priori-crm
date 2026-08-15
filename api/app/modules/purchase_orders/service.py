@@ -1580,8 +1580,9 @@ Best regards,
         BadRequestException: once sent, a PO is a durable record and cannot
         be deleted (cancel is disabled in v1, so there is no void path). A
         before-image audit row is written atomically with the delete
-        (committed by get_db()); this is always a hard delete and line items
-        cascade.
+        (committed by CommitOnSuccessRoute before the response; get_db()'s
+        teardown commit is a safety net only); this is always a hard delete
+        and line items cascade.
 
         Locked load: serializes with concurrent transitions (race-condition
         contract — all status-sensitive ops load FOR UPDATE) so the status

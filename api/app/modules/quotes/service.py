@@ -57,8 +57,11 @@ class QuoteService(BaseDocumentService):
 
     Atomicity contract
 
-    All mutating methods call self._db.flush() only. The session commit/rollback
-    is owned by get_db() in database.py. Multi-step mutations use
+    All mutating methods call self._db.flush() only. The request-scoped
+    commit is owned by CommitOnSuccessRoute (app/common/routing.py), which
+    commits before the response is sent; get_db()'s teardown commit is a
+    safety net only, and rollback-on-exception still lives in get_db().
+    Multi-step mutations use
     self._db.begin_nested() (SAVEPOINT) so inner failures roll back only
     the affected work, never the entire session.
 
