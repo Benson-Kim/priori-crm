@@ -3,16 +3,20 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table } from "@/components/ui/Table";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import {
+     isReportPeriodReady,
+     reportPeriodFromSearchParams,
+     resolveReportPeriod,
+     type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import { formatDisplayDate } from "@/lib/utils";
 import {
      getCashflow,
      getCashflowCounts,
-     isPeriodReady,
-     isValidRangePreset,
      type CashflowCategory,
      type CashflowCounts,
      type CashflowEntry,
-     type PeriodFilter,
 } from "@/services/statementsApi";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -42,18 +46,13 @@ export default function CashflowPage() {
      const [searchParams] = useSearchParams();
 
      // Filters may arrive via the URL (income-statement drill-down).
-     // Invalid or missing values fall back to safe defaults.
-     const [period, setPeriod] = useState<PeriodFilter>(() => {
-          const range = searchParams.get("range");
-          if (isValidRangePreset(range)) {
-               return {
-                    range,
-                    dateFrom: searchParams.get("dateFrom") ?? undefined,
-                    dateTo: searchParams.get("dateTo") ?? undefined,
-               };
-          }
-          return { range: "this_month" };
-     });
+     // reportPeriodFromSearchParams falls back to the default for anything
+     // missing, unparseable or stale, so a hand-edited URL cannot leave the
+     // page permanently un-ready.
+     const reportingDay = useReportingDate();
+     const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+          reportPeriodFromSearchParams(searchParams, reportingDay)
+     );
      const [categoryFilter, setCategoryFilter] = useState<CashflowCategory>(() => {
           const category = searchParams.get("category");
           return isCashflowCategory(category) ? category : "all";
@@ -73,8 +72,8 @@ export default function CashflowPage() {
      const [isLoading, setIsLoading] = useState(true);
      const [error, setError] = useState<string | null>(null);
 
-     const { range, dateFrom, dateTo } = period;
-     const periodReady = isPeriodReady(period);
+     const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+     const periodReady = isReportPeriodReady(period, reportingDay);
 
      // Debounce search so the ledger query is not hit on every keystroke.
      useEffect(() => {
@@ -98,7 +97,7 @@ export default function CashflowPage() {
           setIsLoading(true);
           setError(null);
           getCashflow({
-               period: { range, dateFrom, dateTo },
+               period: { range: "custom", dateFrom, dateTo },
                category: categoryFilter,
                accountCategory: accountCategory ?? undefined,
                search: debouncedSearch || undefined,
@@ -119,7 +118,6 @@ export default function CashflowPage() {
                });
      }, [
           periodReady,
-          range,
           dateFrom,
           dateTo,
           categoryFilter,
@@ -136,7 +134,7 @@ export default function CashflowPage() {
           if (!periodReady) return;
           const seq = ++countsSeq.current;
           getCashflowCounts({
-               period: { range, dateFrom, dateTo },
+               period: { range: "custom", dateFrom, dateTo },
                accountCategory: accountCategory ?? undefined,
                search: debouncedSearch || undefined,
           })
@@ -147,12 +145,12 @@ export default function CashflowPage() {
                     // Counts are decorative; the list error banner covers failures.
                     console.error("Failed to fetch cashflow counts:", err);
                });
-     }, [periodReady, range, dateFrom, dateTo, accountCategory, debouncedSearch]);
+     }, [periodReady, dateFrom, dateTo, accountCategory, debouncedSearch]);
 
      // Any filter change restarts pagination from the first page.
      useEffect(() => {
           setCurrentPage(1);
-     }, [categoryFilter, debouncedSearch, accountCategory, range, dateFrom, dateTo]);
+     }, [categoryFilter, debouncedSearch, accountCategory, dateFrom, dateTo]);
 
      const handleCategoryChange = useCallback((key: string) => {
           if (isCashflowCategory(key)) setCategoryFilter(key);
