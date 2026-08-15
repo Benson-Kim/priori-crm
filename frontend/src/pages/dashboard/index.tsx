@@ -172,10 +172,17 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
         <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xl font-bold text-gray-800">Overview</h2>
           <div className="flex items-center gap-3">
+            {/*
+              Select defaults to py-4; the picker trigger beside it is py-3,
+              so without this the currency box stands 8px taller than its
+              neighbour. Width is capped too — a 3-letter code does not need
+              the full flex basis.
+            */}
             <Select
               options={CURRENCY_OPTIONS}
               value={currency}
               onChange={onCurrencyChange}
+              wrapperClassName="py-3 w-auto"
             />
             <ReportPeriodPicker value={period} onChange={setPeriod} />
           </div>
