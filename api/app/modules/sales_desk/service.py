@@ -7,8 +7,9 @@ every row of an export — comes from the same snapshot and is internally
 consistent.
 
 Conventions:
-- every monetary value is a USD equivalent per the existing FX conventions
-  (``app.common.fx``), quantized to 2 dp on the aggregate;
+- every monetary value is aggregated as a USD equivalent per the existing
+  FX conventions (``app.common.fx``) and expressed in the requested
+  reporting currency (USD by default), quantized to 2 dp on the aggregate;
 - parked deals are excluded from ALL open aggregates (they live in the
   future pipeline);
 - "this period" for the won/lost KPIs and the rep-vs-quota panel is the
@@ -28,9 +29,9 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import BadRequestException, NotFoundException
-from app.common.fx import usd_equivalent
+from app.common.fx import convert_from_usd, usd_equivalent
 from app.common.reporting_time import reporting_date, reporting_timezone
-from app.constants.enums import DealStage, DealStatus
+from app.constants.enums import Currency, DealLostReason, DealStage, DealStatus
 from app.lib.config import settings
 from app.modules.deals.schemas import DealFilterParams, DealOwnerResponse
 from app.modules.deals.service import DealService
@@ -44,6 +45,7 @@ from app.modules.sales_desk.schemas import (
     BookingsMonth,
     ClosedPeriodKpi,
     ClosedStripColumn,
+    CloseReasonLine,
     DashboardKpis,
     DeskCompaniesResponse,
     DeskCompanyProfile,
@@ -67,8 +69,9 @@ logger = logging.getLogger(__name__)
 _ZERO = Decimal("0.00")
 _TWO_PLACES = Decimal("0.01")
 
-#: The desk's reporting currency: every value is converted server-side.
-DESK_CURRENCY = "USD"
+#: The desk's default reporting currency: every value is converted
+#: server-side, into USD unless the caller selects another lens (#57).
+DESK_CURRENCY = Currency.USD
 
 #: A deal is stale/cold once this many days pass with no logged activity
 #: (matches the NO_ACTIVITY_30 hygiene bucket and the frontend contract).
@@ -142,6 +145,18 @@ def _csv_safe_text(value: str | None) -> str:
     return text
 
 
+def _in_currency(usd_total: Decimal, currency: Currency) -> Decimal:
+    """Express a USD-aggregated total in the reporting currency (2 dp).
+
+    Aggregation always happens in USD (the FX table's pivot); the requested
+    lens is applied once per reported figure, so ratio fields computed from
+    the USD totals are unaffected by the conversion.
+    """
+    if currency == Currency.USD:
+        return usd_total.quantize(_TWO_PLACES)
+    return convert_from_usd(usd_total, currency)
+
+
 def write_csv_rows(rows: Iterable[list[str]], destination: str) -> int:
     """Write rows to ``destination`` as UTF-8 CSV; return the row count."""
     count = 0
@@ -174,7 +189,9 @@ class SalesDeskService:
     # Dashboard
 
     def get_dashboard(
-        self, owner_id: uuid.UUID | None = None
+        self,
+        owner_id: uuid.UUID | None = None,
+        currency: Currency = DESK_CURRENCY,
     ) -> SalesDeskDashboardResponse:
         """Everything Dashboard.svg renders, from one snapshot."""
         today = reporting_date()
@@ -200,7 +217,7 @@ class SalesDeskService:
             StagePipelineLine(
                 stage=stage,
                 stage_label=stage.label,
-                value=stage_totals[stage][0].quantize(_TWO_PLACES),
+                value=_in_currency(stage_totals[stage][0], currency),
                 deal_count=stage_totals[stage][1],
                 share=(
                     round(float(stage_totals[stage][0] / arr_total), 4)
@@ -261,13 +278,14 @@ class SalesDeskService:
         bookings = [
             BookingsMonth(
                 label=calendar.month_abbr[month],
-                won_value=buckets[(year, month)][0].quantize(_TWO_PLACES),
-                lost_value=buckets[(year, month)][1].quantize(_TWO_PLACES),
+                won_value=_in_currency(buckets[(year, month)][0], currency),
+                lost_value=_in_currency(buckets[(year, month)][1], currency),
             )
             for year, month in months
         ]
 
-        # Rep pipeline vs. quota: won value (this quarter) vs quarterly target
+        # Rep pipeline vs. quota: won value (this quarter) vs quarterly target.
+        # Attainment is computed on the USD figures, so the lens cannot move it.
         rep_quota = []
         for owner in self.repo.deal_owners(owner_id):
             quota = targets.get(owner.id, default_target)
@@ -275,8 +293,8 @@ class SalesDeskService:
             rep_quota.append(
                 RepQuotaLine(
                     user=self._user_response(owner),
-                    won_value=rep_won,
-                    quota=quota,
+                    won_value=_in_currency(rep_won, currency),
+                    quota=_in_currency(quota, currency),
                     percent=(round(float(rep_won / quota), 4) if quota else 0.0),
                 )
             )
@@ -294,24 +312,25 @@ class SalesDeskService:
         ]
 
         return SalesDeskDashboardResponse(
-            currency=DESK_CURRENCY,
+            currency=currency.value,
             kpis=DashboardKpis(
                 pipeline_weighted=PipelineWeightedKpi(
-                    value=weighted_total.quantize(_TWO_PLACES),
+                    value=_in_currency(weighted_total, currency),
                     open_deal_count=len(open_rows),
                 ),
                 total_arr_pipeline=TotalArrPipelineKpi(
-                    value=arr_total.quantize(_TWO_PLACES)
+                    value=_in_currency(arr_total, currency)
                 ),
                 won_this_period=ClosedPeriodKpi(
-                    value=won_value.quantize(_TWO_PLACES), deal_count=won_count
+                    value=_in_currency(won_value, currency), deal_count=won_count
                 ),
                 lost_this_period=ClosedPeriodKpi(
-                    value=lost_value.quantize(_TWO_PLACES), deal_count=lost_count
+                    value=_in_currency(lost_value, currency), deal_count=lost_count
                 ),
             ),
             bookings_12_months=bookings,
             pipeline_by_stage=pipeline_by_stage,
+            close_reasons=self._close_reason_lines(owner_id),
             rep_quota=rep_quota,
             recent_companies=recent_companies,
         )
@@ -349,7 +368,9 @@ class SalesDeskService:
     # Pipeline workspace aggregates (App.svg)
 
     def get_pipeline_overview(
-        self, owner_id: uuid.UUID | None = None
+        self,
+        owner_id: uuid.UUID | None = None,
+        currency: Currency = DESK_CURRENCY,
     ) -> PipelineOverviewResponse:
         """Rep scoreboard, stage strip, hygiene counts, open total."""
         today = reporting_date()
@@ -377,7 +398,7 @@ class SalesDeskService:
                 RepScoreboardCard(
                     user=self._user_response(owner),
                     open_count=open_count,
-                    open_value=open_value.quantize(_TWO_PLACES),
+                    open_value=_in_currency(open_value, currency),
                     win_rate=self._win_rate(won, lost),
                     cold_count=cold_count,
                 )
@@ -387,10 +408,13 @@ class SalesDeskService:
         team_lost = sum(lost for _, lost in closed_all.values())
         team = TeamScoreboardCard(
             open_count=len(team_open),
-            open_value=sum(
-                (usd_equivalent(row.value, row.currency) for row in team_open),
-                Decimal("0"),
-            ).quantize(_TWO_PLACES),
+            open_value=_in_currency(
+                sum(
+                    (usd_equivalent(row.value, row.currency) for row in team_open),
+                    Decimal("0"),
+                ),
+                currency,
+            ),
             win_rate=self._win_rate(team_won, team_lost),
             cold_count=sum(
                 1 for row in team_open if self._idle_days(row, today) > STALE_AFTER_DAYS
@@ -426,7 +450,7 @@ class SalesDeskService:
                 stage=stage,
                 stage_label=stage.label,
                 count=stage_totals[stage][0],
-                value=stage_totals[stage][1].quantize(_TWO_PLACES),
+                value=_in_currency(stage_totals[stage][1], currency),
                 avg_days_in_stage=(
                     round(stage_totals[stage][2] / stage_totals[stage][0])
                     if stage_totals[stage][0]
@@ -441,7 +465,7 @@ class SalesDeskService:
         lost_count = sum(lost for _, lost in closed_scoped.values())
 
         return PipelineOverviewResponse(
-            currency=DESK_CURRENCY,
+            currency=currency.value,
             reps=reps,
             team=team,
             stages=stages,
@@ -450,6 +474,7 @@ class SalesDeskService:
                 win_rate=self._win_rate(won_count, lost_count),
                 won_count=won_count,
                 lost_count=lost_count,
+                lost_reasons=self._close_reason_lines(owner_id),
             ),
             hygiene=HygieneCounts(
                 all=self.repo.total_deal_count(owner_id),
@@ -458,7 +483,7 @@ class SalesDeskService:
                 no_activity_30=no_activity_30,
                 open_45=open_45,
             ),
-            open_pipeline_total=open_total.quantize(_TWO_PLACES),
+            open_pipeline_total=_in_currency(open_total, currency),
         )
 
     # CSV exports
@@ -600,6 +625,27 @@ class SalesDeskService:
         filtered + ordered query the pipeline list serves.
         """
         return DealService(self.db, current_user=self.current_user)
+
+    def _close_reason_lines(self, owner_id: uuid.UUID | None) -> list[CloseReasonLine]:
+        """One bar per lost reason (all six, zero-count bars included, #57).
+
+        Shares are fractions of the lost deals in scope, so the bars answer
+        "why do we lose" rather than diluting against won deals.
+        """
+        counts = dict(self.repo.lost_reason_counts(owner_id))
+        lost_total = sum(counts.values())
+        return [
+            CloseReasonLine(
+                reason=reason,
+                count=counts.get(reason.value, 0),
+                share=(
+                    round(counts.get(reason.value, 0) / lost_total, 4)
+                    if lost_total
+                    else 0.0
+                ),
+            )
+            for reason in DealLostReason
+        ]
 
     def _closed_counts(
         self, owner_id: uuid.UUID | None

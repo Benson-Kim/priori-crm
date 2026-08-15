@@ -677,13 +677,13 @@
             "type": "string"
           },
           "lost_value": {
-            "description": "Lost value closed this month, USD",
+            "description": "Lost value closed this month, reporting currency",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Lost Value",
             "type": "string"
           },
           "won_value": {
-            "description": "Won value closed this month, USD",
+            "description": "Won value closed this month, reporting currency",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Won Value",
             "type": "string"
@@ -872,6 +872,31 @@
         "title": "CashflowSeriesResponse",
         "type": "object"
       },
+      "CloseReasonLine": {
+        "description": "One bar of the close-reason breakdown over LOST deals (#57).\n\nEvery ``DealLostReason`` member is always present (zero-count bars\nincluded), in enum order, so the bars keep a stable layout.",
+        "properties": {
+          "count": {
+            "description": "Lost deals closed with this reason",
+            "title": "Count",
+            "type": "integer"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DealLostReason"
+          },
+          "share": {
+            "description": "Share of all lost deals in scope, 0..1 (drives bar width)",
+            "title": "Share",
+            "type": "number"
+          }
+        },
+        "required": [
+          "reason",
+          "count",
+          "share"
+        ],
+        "title": "CloseReasonLine",
+        "type": "object"
+      },
       "ClosedPeriodKpi": {
         "description": "WON/LOST THIS PERIOD: closed value + count for the current quarter.",
         "properties": {
@@ -881,7 +906,7 @@
             "type": "integer"
           },
           "value": {
-            "description": "Closed value this period, USD equivalent",
+            "description": "Closed value this period, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
@@ -905,6 +930,14 @@
             "title": "Lost Count",
             "type": "integer"
           },
+          "lost_reasons": {
+            "description": "Lost-deal counts per close reason (owner-scoped, #57), one line per DealLostReason member in enum order",
+            "items": {
+              "$ref": "#/components/schemas/CloseReasonLine"
+            },
+            "title": "Lost Reasons",
+            "type": "array"
+          },
           "win_rate": {
             "anyOf": [
               {
@@ -926,7 +959,8 @@
           "count",
           "win_rate",
           "won_count",
-          "lost_count"
+          "lost_count",
+          "lost_reasons"
         ],
         "title": "ClosedStripColumn",
         "type": "object"
@@ -2471,6 +2505,19 @@
           "open_45"
         ],
         "title": "DealHygieneBucket",
+        "type": "string"
+      },
+      "DealLostReason": {
+        "description": "Enumerated 'main reason we lost' options (deal-desk parity).",
+        "enum": [
+          "Price too high",
+          "Lost to competitor",
+          "Bad timing",
+          "No budget",
+          "Went direct to Microsoft",
+          "No decision / went silent"
+        ],
+        "title": "DealLostReason",
         "type": "string"
       },
       "DealOwnerResponse": {
@@ -7487,7 +7534,7 @@
             "$ref": "#/components/schemas/ClosedStripColumn"
           },
           "currency": {
-            "description": "Reporting currency (always USD)",
+            "description": "Reporting currency every monetary value is converted into",
             "title": "Currency",
             "type": "string"
           },
@@ -7495,7 +7542,7 @@
             "$ref": "#/components/schemas/HygieneCounts"
           },
           "open_pipeline_total": {
-            "description": "Unweighted sum of open deal values in scope, USD equivalent",
+            "description": "Unweighted sum of open deal values in scope, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Open Pipeline Total",
             "type": "string"
@@ -7539,7 +7586,7 @@
             "type": "integer"
           },
           "value": {
-            "description": "Weighted open pipeline, USD equivalent",
+            "description": "Weighted open pipeline, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
@@ -10548,7 +10595,7 @@
             "type": "number"
           },
           "quota": {
-            "description": "Quarterly won-value target (owner setting), USD",
+            "description": "Quarterly won-value target (owner setting), reporting currency",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quota",
             "type": "string"
@@ -10557,7 +10604,7 @@
             "$ref": "#/components/schemas/DealOwnerResponse"
           },
           "won_value": {
-            "description": "Value won by this rep in the current quarter, USD equivalent",
+            "description": "Value won by this rep in the current quarter, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Won Value",
             "type": "string"
@@ -10586,7 +10633,7 @@
             "type": "integer"
           },
           "open_value": {
-            "description": "Open value, USD equivalent",
+            "description": "Open value, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Open Value",
             "type": "string"
@@ -10796,8 +10843,16 @@
             "title": "Bookings 12 Months",
             "type": "array"
           },
+          "close_reasons": {
+            "description": "All-time lost-deal counts per close reason (owner-scoped), one line per DealLostReason member in enum order",
+            "items": {
+              "$ref": "#/components/schemas/CloseReasonLine"
+            },
+            "title": "Close Reasons",
+            "type": "array"
+          },
           "currency": {
-            "description": "Reporting currency (always USD)",
+            "description": "Reporting currency every monetary value is converted into",
             "title": "Currency",
             "type": "string"
           },
@@ -10831,6 +10886,7 @@
           "kpis",
           "bookings_12_months",
           "pipeline_by_stage",
+          "close_reasons",
           "rep_quota",
           "recent_companies"
         ],
@@ -11207,7 +11263,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Open value at this stage, USD equivalent",
+            "description": "Open value at this stage, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
@@ -11243,7 +11299,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Open value at this stage, USD equivalent",
+            "description": "Open value at this stage, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
@@ -11649,7 +11705,7 @@
         "description": "TOTAL ARR PIPELINE: unweighted sum of open deal values.",
         "properties": {
           "value": {
-            "description": "Unweighted open pipeline, USD equivalent",
+            "description": "Unweighted open pipeline, reporting-currency equivalent",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
@@ -23907,7 +23963,7 @@
     },
     "/api/v1/sales-desk/dashboard": {
       "get": {
-        "description": "Everything the Sales Desk dashboard renders, computed server-side under one read snapshot: the four KPI cards (weighted pipeline, total ARR pipeline, won/lost this period \u2014 current org-local quarter), the rolling 12-month bookings chart (real close dates, org-local month boundaries), the active pipeline by stage (open stages only; parked deals excluded), each rep's won value against their quarterly target (owner settings), and the most recently added companies. All values are USD equivalents.",
+        "description": "Everything the Sales Desk dashboard renders, computed server-side under one read snapshot: the four KPI cards (weighted pipeline, total ARR pipeline, won/lost this period \u2014 current org-local quarter), the rolling 12-month bookings chart (real close dates, org-local month boundaries), the active pipeline by stage (open stages only; parked deals excluded), the close-reason bars (all-time lost-deal counts per enumerated reason, #57), each rep's won value against their quarterly target (owner settings), and the most recently added companies. All values are expressed in the requested reporting currency (USD by default).",
         "operationId": "get_dashboard_api_v1_sales_desk_dashboard_get",
         "parameters": [
           {
@@ -23927,6 +23983,17 @@
               ],
               "description": "Filter to one sales rep (deal/company owner)",
               "title": "Owner"
+            }
+          },
+          {
+            "description": "Reporting currency: every monetary value in the response is converted into it server-side (#57)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "USD",
+              "description": "Reporting currency: every monetary value in the response is converted into it server-side (#57)"
             }
           }
         ],
@@ -24196,7 +24263,7 @@
     },
     "/api/v1/sales-desk/pipeline/overview": {
       "get": {
-        "description": "The Pipeline page header in one round trip: per-rep scoreboard cards and the whole-team card (never owner-scoped \u2014 they are the selector), the per-stage summary strip with the CLOSED column, the activity-hygiene chip counts (same semantics as the list filters) and the open-pipeline total. Parked deals are excluded from every open aggregate.",
+        "description": "The Pipeline page header in one round trip: per-rep scoreboard cards and the whole-team card (never owner-scoped \u2014 they are the selector), the per-stage summary strip with the CLOSED column (including per-reason lost-deal counts, #57), the activity-hygiene chip counts (same semantics as the list filters) and the open-pipeline total. Parked deals are excluded from every open aggregate. All values are expressed in the requested reporting currency (USD by default).",
         "operationId": "get_pipeline_overview_api_v1_sales_desk_pipeline_overview_get",
         "parameters": [
           {
@@ -24216,6 +24283,17 @@
               ],
               "description": "Filter to one sales rep (deal/company owner)",
               "title": "Owner"
+            }
+          },
+          {
+            "description": "Reporting currency: every monetary value in the response is converted into it server-side (#57)",
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "USD",
+              "description": "Reporting currency: every monetary value in the response is converted into it server-side (#57)"
             }
           }
         ],
