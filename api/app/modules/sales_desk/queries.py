@@ -104,6 +104,21 @@ class SalesDeskRepository:
             query = query.filter(Deal.owner_id == owner_id)
         return query.all()
 
+    def lost_reason_counts(self, owner_id: uuid.UUID | None = None):
+        """``(close_reason, count)`` pairs over all LOST deals in scope.
+
+        Feeds the close-reason bars (#57): counts only — nothing monetary —
+        so the breakdown is identical under every reporting currency.
+        """
+        query = (
+            self.db.query(Deal.close_reason, func.count(Deal.id))
+            .filter(Deal.status == DealStatus.LOST.value)
+            .group_by(Deal.close_reason)
+        )
+        if owner_id:
+            query = query.filter(Deal.owner_id == owner_id)
+        return query.all()
+
     def total_deal_count(self, owner_id: uuid.UUID | None = None) -> int:
         """Every deal in scope, any status (the 'All deals' chip)."""
         query = self.db.query(func.count(Deal.id))

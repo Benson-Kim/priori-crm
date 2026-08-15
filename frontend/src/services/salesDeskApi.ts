@@ -131,6 +131,15 @@ export interface BookingsPoint {
     lost: number;
 }
 
+/** One bar of the lost-deals-by-reason breakdown (#57). */
+export interface CloseReasonSlice {
+    /** The enumerated lost reason, spelled the way the server offers it. */
+    reason: string;
+    count: number;
+    /** Share of all lost deals in scope, 0 to 1, drives the bar width. */
+    share: number;
+}
+
 /** One rep's closed-won total measured against their quarter quota. */
 export interface RepQuotaLine {
     id: string;
@@ -223,6 +232,8 @@ export interface ClosedSummary {
     lost_count: number;
     /** Won as a share of closed deals, 0 to 1. Null when nothing has closed. */
     win_rate: number | null;
+    /** Why the lost deals were lost: one bar per enumerated reason (#57). */
+    lost_reasons: CloseReasonSlice[];
 }
 
 /** Named activity filters over the open pipeline, with live counts. */
@@ -377,6 +388,7 @@ export interface SalesDeskDashboard {
     summary: SalesDeskSummary;
     by_stage: StagePipelineLine[];
     bookings: BookingsPoint[];
+    close_reasons: CloseReasonSlice[];
     rep_quota: RepQuotaLine[];
     recent_companies: RecentCompany[];
 }
@@ -385,15 +397,20 @@ export interface SalesDeskDashboard {
 const money = (value: string | number | null | undefined): number => Number(value ?? 0);
 
 /**
- * The Sales Desk dashboard, optionally scoped to one owner.
+ * The Sales Desk dashboard, optionally scoped to one owner and expressed in
+ * one reporting currency.
  *
- * Amounts arrive already expressed in the org's desk currency, which the
- * payload names. There is no client-side FX conversion here.
+ * Amounts arrive already converted server-side into the requested currency
+ * (USD when omitted), which the payload names. There is no client-side FX
+ * conversion here.
  */
-export async function getSalesDeskDashboard(ownerId?: string): Promise<SalesDeskDashboard> {
+export async function getSalesDeskDashboard(
+    ownerId?: string,
+    currency?: BillingCurrency
+): Promise<SalesDeskDashboard> {
     const data = await apiGet<Schema<"SalesDeskDashboardResponse">>(
         "/sales-desk/dashboard",
-        { owner: ownerId }
+        { owner: ownerId, currency }
     );
     const kpis = data.kpis;
 
@@ -420,6 +437,11 @@ export async function getSalesDeskDashboard(ownerId?: string): Promise<SalesDesk
             month: point.label,
             won: money(point.won_value),
             lost: money(point.lost_value),
+        })),
+        close_reasons: data.close_reasons.map((line) => ({
+            reason: line.reason,
+            count: line.count,
+            share: line.share,
         })),
         rep_quota: data.rep_quota.map((line) => ({
             id: line.user.id,
@@ -488,11 +510,19 @@ export async function exportPipelineCsv(query: PipelineQuery = {}): Promise<Blob
     return apiDownload("/sales-desk/exports/pipeline", dealListParams(query));
 }
 
-/** Rep cards, stage strip, filter counts and the open-pipeline total. */
-export async function getPipelineOverview(ownerId?: string): Promise<PipelineOverview> {
+/**
+ * Rep cards, stage strip, filter counts and the open-pipeline total,
+ * expressed in the requested reporting currency (USD when omitted).
+ */
+export async function getPipelineOverview(
+    ownerId?: string,
+    currency?: BillingCurrency
+): Promise<PipelineOverview> {
+    // The desk's aggregate endpoints scope by `owner` (not the deal list's
+    // `ownerId`); sending the wrong name silently returns unscoped numbers.
     const data = await apiGet<Schema<"PipelineOverviewResponse">>(
         "/sales-desk/pipeline/overview",
-        { ownerId }
+        { owner: ownerId, currency }
     );
 
     /** Hygiene counts arrive keyed by the server's names, not the filter keys. */
@@ -533,6 +563,11 @@ export async function getPipelineOverview(ownerId?: string): Promise<PipelineOve
             won_count: data.closed.won_count,
             lost_count: data.closed.lost_count,
             win_rate: data.closed.win_rate,
+            lost_reasons: data.closed.lost_reasons.map((line) => ({
+                reason: line.reason,
+                count: line.count,
+                share: line.share,
+            })),
         },
         filters: (Object.keys(ACTIVITY_LABELS) as ActivityFilterKey[]).map((key) => ({
             key,

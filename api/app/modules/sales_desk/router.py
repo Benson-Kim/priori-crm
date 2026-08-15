@@ -32,7 +32,7 @@ from app.common.dependencies import SalesDeskServiceDep
 from app.common.export_limiter import run_export
 from app.common.reporting_time import reporting_date
 from app.common.routing import CommitOnSuccessRoute
-from app.constants.enums import DealHygieneBucket, DealTab
+from app.constants.enums import Currency, DealHygieneBucket, DealTab
 from app.lib.config import settings
 from app.modules.deals.schemas import DealFilterParams
 from app.modules.sales_desk.audit import audit_sales_desk_export
@@ -57,6 +57,16 @@ _CSV_MEDIA_TYPE = "text/csv"
 OwnerParam = Annotated[
     UUID | None,
     Query(alias="owner", description="Filter to one sales rep (deal/company owner)"),
+]
+
+CurrencyParam = Annotated[
+    Currency,
+    Query(
+        description=(
+            "Reporting currency: every monetary value in the response is "
+            "converted into it server-side (#57)"
+        )
+    ),
 ]
 
 
@@ -96,17 +106,20 @@ def _file_response(path: str, filename: str) -> FileResponse:
         "total ARR pipeline, won/lost this period — current org-local "
         "quarter), the rolling 12-month bookings chart (real close dates, "
         "org-local month boundaries), the active pipeline by stage (open "
-        "stages only; parked deals excluded), each rep's won value against "
-        "their quarterly target (owner settings), and the most recently "
-        "added companies. All values are USD equivalents."
+        "stages only; parked deals excluded), the close-reason bars "
+        "(all-time lost-deal counts per enumerated reason, #57), each rep's "
+        "won value against their quarterly target (owner settings), and the "
+        "most recently added companies. All values are expressed in the "
+        "requested reporting currency (USD by default)."
     ),
     responses={200: {"description": "Dashboard payload"}},
 )
 def get_dashboard(
     service: SalesDeskServiceDep,
     owner: OwnerParam = None,
+    currency: CurrencyParam = Currency.USD,
 ) -> SalesDeskDashboardResponse:
-    return service.get_dashboard(owner)
+    return service.get_dashboard(owner, currency)
 
 
 @router.get(
@@ -191,18 +204,21 @@ def get_company(
     description=(
         "The Pipeline page header in one round trip: per-rep scoreboard "
         "cards and the whole-team card (never owner-scoped — they are the "
-        "selector), the per-stage summary strip with the CLOSED column, "
-        "the activity-hygiene chip counts (same semantics as the list "
-        "filters) and the open-pipeline total. Parked deals are excluded "
-        "from every open aggregate."
+        "selector), the per-stage summary strip with the CLOSED column "
+        "(including per-reason lost-deal counts, #57), the activity-hygiene "
+        "chip counts (same semantics as the list filters) and the "
+        "open-pipeline total. Parked deals are excluded from every open "
+        "aggregate. All values are expressed in the requested reporting "
+        "currency (USD by default)."
     ),
     responses={200: {"description": "Pipeline workspace aggregates"}},
 )
 def get_pipeline_overview(
     service: SalesDeskServiceDep,
     owner: OwnerParam = None,
+    currency: CurrencyParam = Currency.USD,
 ) -> PipelineOverviewResponse:
-    return service.get_pipeline_overview(owner)
+    return service.get_pipeline_overview(owner, currency)
 
 
 @router.get(
