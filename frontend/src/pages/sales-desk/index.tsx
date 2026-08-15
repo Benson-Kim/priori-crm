@@ -240,11 +240,12 @@ export default function SalesDeskDashboardPage() {
     const [currency, setCurrency] = useState<BillingCurrency>(DEFAULT_DESK_CURRENCY);
     const { reps: salesReps } = useSalesReps();
 
-    // Stale-response guard: only the latest request may write state.
+    // Stale-response guard: only the latest request may write state. The
+    // loading flag is raised in the lens handlers (never synchronously in
+    // this effect, per the hooks lint rule); mount starts with it already up.
     const seqRef = useRef(0);
     useEffect(() => {
         const seq = ++seqRef.current;
-        setIsLoading(true);
 
         getSalesDeskDashboard(ownerId || undefined, currency)
             .then((dashboard) => {
@@ -281,7 +282,10 @@ export default function SalesDeskDashboardPage() {
                         aria-label="Filter by sales rep"
                         options={repOptions}
                         value={ownerId}
-                        onChange={(event) => setOwnerId(event.target.value)}
+                        onChange={(event) => {
+                            setOwnerId(event.target.value);
+                            setIsLoading(true);
+                        }}
                     />
                 </div>
                 <div className="w-28">
@@ -289,9 +293,10 @@ export default function SalesDeskDashboardPage() {
                         aria-label="Reporting currency"
                         options={DESK_CURRENCY_OPTIONS}
                         value={currency}
-                        onChange={(event) =>
-                            setCurrency(event.target.value as BillingCurrency)
-                        }
+                        onChange={(event) => {
+                            setCurrency(event.target.value as BillingCurrency);
+                            setIsLoading(true);
+                        }}
                     />
                 </div>
             </div>
