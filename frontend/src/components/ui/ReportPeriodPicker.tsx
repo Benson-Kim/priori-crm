@@ -1,14 +1,22 @@
 /**
- * ReportPeriodPicker -- unified period selector for the Reports module.
+ * ReportPeriodPicker -- unified period selector for Reports and the
+ * dashboard.
  *
  * Single trigger button showing the current selection (e.g. "Jul 2026",
- * "Q3 2026", "2026", "Jan 1 – Jul 18, 2026") that opens a portal panel
- * containing mode tabs, year navigation, and mode-specific controls:
+ * "Q3 2026", "2026", "Last 12 months", "Jan 1 – Jul 18, 2026") that opens a
+ * portal panel containing mode tabs, year navigation, and mode-specific
+ * controls:
  *
+ *   recent  -- rolling windows (last 7 days / last month / last 12 months)
  *   month   -- 4×3 month grid, selected month highlighted
  *   quarter -- Q1-Q4 buttons
  *   year    -- year-only, no extra content (just navigate the year)
  *   custom  -- From / To CalendarPicker fields
+ *
+ * `recent` exists so the screens migrating off PeriodRangePicker keep the
+ * rolling presets it offered; the calendar modes can only name a fixed slice
+ * of the calendar, and a rolling window has to move with today. It carries
+ * no year, so the year navigation is hidden for it as it is for custom.
  *
  * Wire format: always sends range=custom + dateFrom + dateTo to the backend.
  * The 5-year max cap (1830 days) is enforced at the backend level.
@@ -19,7 +27,7 @@
 import { CalendarPicker } from "@/components/ui/CalendarPicker";
 import { useReportingDate } from "@/hooks/useReportingDate";
 import { calendarFromIso } from "@/lib/dateUtils";
-import { clampReportPeriodForYear, currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, type ReportPeriodFilter, type ReportPeriodMode } from "@/lib/reportUtils";
+import { clampReportPeriodForYear, currentYear, MIN_YEAR, MODE_LABELS, MONTH_SHORT, periodLabel, REPORT_PERIOD_PRESETS, type ReportPeriodFilter, type ReportPeriodMode, type ReportPeriodPreset } from "@/lib/reportUtils";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +36,7 @@ import { createPortal } from "react-dom";
 interface ReportPeriodPickerProps {
   value: ReportPeriodFilter;
   onChange: (value: ReportPeriodFilter) => void;
+  triggerClassName?: string;
   className?: string;
 }
 
@@ -37,6 +46,7 @@ interface ReportPeriodPickerProps {
 export function ReportPeriodPicker({
   value,
   onChange,
+  triggerClassName,
   className,
 }: Readonly<ReportPeriodPickerProps>) {
   const reportingDate = useReportingDate();
@@ -98,7 +108,11 @@ export function ReportPeriodPicker({
   const handleModeChange = (mode: ReportPeriodMode) => {
     const cal = calendarFromIso(reportingDate);
     const year = panelYear;
-    if (mode === "month") {
+    if (mode === "recent") {
+      // Keep whatever rolling window was already chosen; otherwise open on
+      // the first one so the tab is never in a half-selected state.
+      onChange({ mode, year, preset: value.preset ?? REPORT_PERIOD_PRESETS[0].value });
+    } else if (mode === "month") {
       onChange({ mode, year, month: cal.month });
       setPanelYear(year);
     } else if (mode === "quarter") {
@@ -137,6 +151,11 @@ export function ReportPeriodPicker({
     close();
   };
 
+  const selectPreset = (preset: ReportPeriodPreset) => {
+    onChange({ mode: "recent", year: panelYear, preset });
+    close();
+  };
+
   return (
     <div className={cn("relative inline-block", className)}>
       {/* Trigger */}
@@ -149,7 +168,8 @@ export function ReportPeriodPicker({
           "flex items-center gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
           "text-base font-normal leading-6 text-gray-900 transition-all cursor-pointer whitespace-nowrap",
           "hover:border-priori-purple/50",
-          isOpen && "border-priori-purple ring-1 ring-priori-purple/20"
+          isOpen && "border-priori-purple ring-1 ring-priori-purple/20",
+          triggerClassName
         )}
       >
         <CalendarDays size={16} className="shrink-0 text-gray-400" />
@@ -178,7 +198,7 @@ export function ReportPeriodPicker({
                 type="button"
                 onClick={() => handleModeChange(mode)}
                 className={cn(
-                  "flex-1 px-2 py-2 text-sm font-medium transition-colors",
+                  "flex-1 px-1 py-2 text-xs font-medium whitespace-nowrap transition-colors",
                   value.mode === mode
                     ? "bg-priori-purple text-white"
                     : "text-gray-500 hover:bg-gray-100"
@@ -189,8 +209,8 @@ export function ReportPeriodPicker({
             ))}
           </div>
 
-          {/* Year navigation (not shown for custom) */}
-          {value.mode !== "custom" && (
+          {/* Year navigation (meaningless for custom and rolling windows) */}
+          {value.mode !== "custom" && value.mode !== "recent" && (
             <div className="flex items-center justify-between mb-4">
               <button
                 type="button"
@@ -209,6 +229,27 @@ export function ReportPeriodPicker({
               >
                 <ChevronRight size={16} />
               </button>
+            </div>
+          )}
+
+          {/* Rolling windows */}
+          {value.mode === "recent" && (
+            <div className="flex flex-col gap-1.5">
+              {REPORT_PERIOD_PRESETS.map(({ value: preset, label }) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => selectPreset(preset)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors",
+                    value.preset === preset
+                      ? "bg-priori-purple/10 text-priori-purple font-semibold border border-priori-purple/30"
+                      : "text-gray-700 hover:bg-gray-100"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
