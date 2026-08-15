@@ -31,7 +31,7 @@ export const GENERIC_COMPLIANCE_REF: ComplianceRefConfig = {
 
 /**
  * Jurisdiction code -> Compliance Ref label/tooltip. Codes match
- * COUNTRY_OPTIONS in lib/constants (ISO 3166-1 alpha-2). Extend this map to
+ * COUNTRIES in lib/countries (ISO 3166-1 alpha-2). Extend this map to
  * add a jurisdiction; do not branch per form.
  */
 export const COMPLIANCE_REF_BY_JURISDICTION: Record<string, ComplianceRefConfig> = {

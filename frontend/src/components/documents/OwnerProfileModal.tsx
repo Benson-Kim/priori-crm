@@ -8,7 +8,8 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { ACCEPTED_IMAGE_TYPES, COUNTRY_OPTIONS } from "@/lib/constants";
+import { ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
+import { COUNTRIES } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import { type OwnerProfile, type OwnerProfileUpdate } from "@/services/ownerApi";
 import { CheckCircle, SquarePen, Trash, UploadCloud, X } from "lucide-react";
@@ -175,7 +176,8 @@ export function OwnerProfileModal({
             <Select
               value={form.jurisdiction ?? ""}
               onChange={(e) => update("jurisdiction", e.target.value)}
-              options={COUNTRY_OPTIONS}
+              options={COUNTRIES}
+              placeholder="Select country"
             />
           </label>
 

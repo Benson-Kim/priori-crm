@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/Select";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { COUNTRY_OPTIONS } from "@/lib/constants";
+import { COUNTRIES } from "@/lib/countries";
 import {
   documentDefaultsSchema,
   MAX_DEFAULT_TERMS_LENGTH,
@@ -131,7 +131,8 @@ export default function DocumentSettingsPage() {
             </span>
             <Select
               {...register("jurisdiction")}
-              options={COUNTRY_OPTIONS}
+              options={COUNTRIES}
+              placeholder="Select country"
               error={errors.jurisdiction?.message}
             />
             <span className="text-xs text-gray-400">
