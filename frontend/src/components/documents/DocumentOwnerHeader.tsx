@@ -1,33 +1,30 @@
 /**
  * DocumentOwnerHeader — the single owner identity block rendered on every
- * document. 
+ * document.
  *
- * In editable mode it exposes the logo upload/remove controls and an edit
- * modal behind the previously-dead "Update" buttons.
+ * Display-only: owner details are edited exclusively in Settings
+ * (/settings/organisation). On editor surfaces, privileged users get a
+ * subtle "Edit in Settings" link instead of inline edit controls.
  */
-import { SquarePen, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useCanEditOwner } from "@/hooks/auth-context";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
-import { ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
-import { OwnerProfileModal } from "./OwnerProfileModal";
 
 interface DocumentOwnerHeaderProps {
-  /** When true, request the logo + profile edit controls (editor only). */
+  /** When true, show the "Edit in Settings" link (editor surfaces only). */
   editable?: boolean;
 }
 
 export function DocumentOwnerHeader({
   editable = false,
 }: Readonly<DocumentOwnerHeaderProps>) {
-  const { profile, logoUrl, save, uploadLogo, removeLogo } = useOwnerProfile();
+  const { profile, logoUrl } = useOwnerProfile();
   // Only privileged users (MANAGER/ADMIN) may edit; the backend 403s everyone
-  // else, so never show edit controls to them 
+  // else, so never show the Settings link to them
   const canEdit = useCanEditOwner();
   const showEdit = editable && canEdit;
-  const [modalOpen, setModalOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [logoError, setLogoError] = useState(false);
   useEffect(() => {
     setLogoError(false);
@@ -35,89 +32,43 @@ export function DocumentOwnerHeader({
 
   const hasLogo = Boolean(logoUrl && !logoError);
 
-  const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      await uploadLogo(file);
-    }
-    e.target.value = "";
-  };
-
   return (
-    <>
-      <div className="flex flex-col gap-6">
-        {/* Logo */}
-        <div className="flex flex-col items-start gap-3">
-          {hasLogo ? (
-            <img
-              src={logoUrl as string}
-              alt=""
-              onError={() => setLogoError(true)}
-              className="max-h-12 w-auto"
-            />
-          ) : (
-            <div className="h-12 flex items-center text-gray-400 text-sm">
-              {profile?.hasLogo ? "" : "No logo"}
-            </div>
-          )}
-          {showEdit && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline"
-              >
-                Update <SquarePen size={18} />
-              </button>
-              {logoUrl && (
-                <button
-                  type="button"
-                  onClick={() => removeLogo()}
-                  className="text-red-500 font-bold text-sm flex items-center gap-1 hover:underline"
-                >
-                  Remove <Trash2 size={18} />
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_IMAGE_TYPES}
-                className="hidden"
-                onChange={handleLogoPick}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Owner identity */}
-        <div className="flex flex-col gap-1 text-gray-800">
-          <h3 className="font-bold text-base mb-1">{profile?.fullName ?? ""}</h3>
-          {profile?.address && <p className="text-sm">{profile.address}</p>}
-          {profile?.phone && <p className="text-sm">{profile.phone}</p>}
-          {profile?.email && <p className="text-sm">{profile.email}</p>}
-          {profile?.taxPin && (
-            <p className="text-sm">Tax PIN: {profile.taxPin}</p>
-          )}
-          {profile?.website && <p className="text-sm">{profile.website}</p>}
-          {showEdit && (
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="text-priori-purple font-bold text-sm flex items-center gap-1 hover:underline w-fit mt-1"
-            >
-              Update <SquarePen size={18} />
-            </button>
-          )}
-        </div>
+    <div className="flex flex-col gap-6">
+      {/* Logo */}
+      <div className="flex flex-col items-start gap-3">
+        {hasLogo ? (
+          <img
+            src={logoUrl as string}
+            alt=""
+            onError={() => setLogoError(true)}
+            className="max-h-12 w-auto"
+          />
+        ) : (
+          <div className="h-12 flex items-center text-gray-400 text-sm">
+            {profile?.hasLogo ? "" : "No logo"}
+          </div>
+        )}
       </div>
 
-      {modalOpen && (
-        <OwnerProfileModal
-          profile={profile}
-          onClose={() => setModalOpen(false)}
-          onSave={save}
-        />
-      )}
-    </>
+      {/* Owner identity */}
+      <div className="flex flex-col gap-1 text-gray-800">
+        <h3 className="font-bold text-base mb-1">{profile?.fullName ?? ""}</h3>
+        {profile?.address && <p className="text-sm">{profile.address}</p>}
+        {profile?.phone && <p className="text-sm">{profile.phone}</p>}
+        {profile?.email && <p className="text-sm">{profile.email}</p>}
+        {profile?.taxPin && (
+          <p className="text-sm">Tax PIN: {profile.taxPin}</p>
+        )}
+        {profile?.website && <p className="text-sm">{profile.website}</p>}
+        {showEdit && (
+          <Link
+            to="/settings/organisation"
+            className="text-gray-400 text-xs w-fit mt-1 hover:text-priori-purple hover:underline"
+          >
+            Edit in Settings
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }
