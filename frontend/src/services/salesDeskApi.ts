@@ -812,8 +812,10 @@ function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
         name: record.name,
         industry: record.industry ?? "",
         contact: record.contact,
-        email: record.email,
-        phone: record.phone,
+        // Optional on the customer record; the table renders a blank cell,
+        // matching how `industry` above is coerced.
+        email: record.email ?? "",
+        phone: record.phone ?? "",
         tenant: record.tenant,
         primary_currency: record.primary_currency as BillingCurrency,
         registered_on: record.registered_on,

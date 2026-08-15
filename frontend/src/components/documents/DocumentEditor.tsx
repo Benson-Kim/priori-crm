@@ -66,8 +66,10 @@ export interface DocumentInitialData {
   customerId?: string;
   customer?: {
     display_name: string;
-    email: string;
-    phone: string;
+    // Optional on the customer record, so absent for anyone stored without
+    // contact details; the API returns null rather than omitting them.
+    email?: string | null;
+    phone?: string | null;
     address?: string;
     currency?: string | null;
   };
@@ -360,8 +362,10 @@ export function DocumentEditor({
                 initialData?.customer
                   ? {
                     address: initialData.customer.address,
-                    phone: initialData.customer.phone,
-                    email: initialData.customer.email,
+                    // CustomerSelector treats these as absent-or-string;
+                    // the API's null means the same thing here.
+                    phone: initialData.customer.phone ?? undefined,
+                    email: initialData.customer.email ?? undefined,
                   }
                   : null
               }
