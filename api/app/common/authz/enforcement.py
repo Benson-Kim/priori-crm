@@ -31,6 +31,7 @@ import logging
 import uuid
 
 from fastapi import Depends, Request
+from sqlalchemy.exc import PendingRollbackError
 from sqlalchemy.orm import Session
 
 from app.common.audit import record_audit_event
@@ -141,6 +142,20 @@ def zero_trust_gate(request: Request, db: Session = Depends(get_db)) -> None:
     if not settings.ABAC_ENABLED:
         db_guard.set_verdict(db, _DISABLED_VERDICT)
         return
+
+    # A shared/inherited session may still hold the PREVIOUS request's
+    # transaction — e.g. a reports/sales-desk ``REPEATABLE READ READ ONLY``
+    # snapshot when the test fixtures reuse one session across requests.
+    # End it before this request's first write, exactly as
+    # ``_start_report_snapshot`` does for the auth read; on a fresh
+    # production session (one per request via get_db) this is a no-op.
+    if db.in_transaction():
+        try:
+            db.commit()
+        except PendingRollbackError:
+            # A prior request left the shared session broken mid-flush;
+            # heal it so this request starts from a clean transaction.
+            db.rollback()
 
     context = build_access_context(request)
     request.state.access_context = context
