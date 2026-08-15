@@ -2,7 +2,27 @@
 
 import { calendarFromIso, getTodayString, toISODateString } from "./dateUtils";
 
-export type ReportPeriodMode = "month" | "quarter" | "year" | "custom";
+export type ReportPeriodMode = "recent" | "month" | "quarter" | "year" | "custom";
+
+/**
+ * Rolling windows that the calendar modes cannot express.
+ *
+ * month/quarter/year all name a FIXED slice of the calendar; these three are
+ * relative to today and move with it. They exist because PeriodRangePicker
+ * offered them and the screens converging onto this component still need
+ * them — without these, "Last 12 Months" would degrade into a custom date
+ * pair that stops being "last 12 months" tomorrow.
+ */
+export type ReportPeriodPreset = "last_7_days" | "last_month" | "last_12_months";
+
+export const REPORT_PERIOD_PRESETS: {
+     value: ReportPeriodPreset;
+     label: string;
+}[] = [
+     { value: "last_7_days", label: "Last 7 days" },
+     { value: "last_month", label: "Last month" },
+     { value: "last_12_months", label: "Last 12 months" },
+];
 
 export interface ReportPeriodFilter {
      mode: ReportPeriodMode;
@@ -11,10 +31,24 @@ export interface ReportPeriodFilter {
      month?: number;
      /** 1-4; required for mode=quarter */
      quarter?: number;
+     /** required for mode=recent */
+     preset?: ReportPeriodPreset;
      /** YYYY-MM-DD; required for mode=custom */
      customFrom?: string;
      /** YYYY-MM-DD; required for mode=custom */
      customTo?: string;
+}
+
+/** Build a filter for one rolling preset (year is carried for the panel). */
+export function reportPeriodFromPreset(
+     preset: ReportPeriodPreset,
+     reportingDate: string = getTodayString()
+): ReportPeriodFilter {
+     return {
+          mode: "recent",
+          year: calendarFromIso(reportingDate).year,
+          preset,
+     };
 }
 
 export function clampReportPeriodForYear(
@@ -22,6 +56,9 @@ export function clampReportPeriodForYear(
      year: number,
      reportingDate: string
 ): ReportPeriodFilter {
+     // A rolling window has no year to clamp — it is relative to today.
+     if (filter.mode === "recent") return filter;
+
      const current = calendarFromIso(reportingDate);
      if (year !== current.year) return { ...filter, year };
 
@@ -57,7 +94,9 @@ export const MONTH_SHORT = [
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+// Key order drives the tab order in ReportPeriodPicker.
 export const MODE_LABELS: Record<ReportPeriodMode, string> = {
+     recent: "Recent",
      month: "Month",
      quarter: "Quarter",
      year: "Year",
@@ -69,6 +108,33 @@ export function resolveReportPeriod(filter: ReportPeriodFilter, todayStr: string
      dateTo: string | undefined;
 } {
      const y = filter.year;
+
+     // Rolling windows, resolved off the reporting date rather than the
+     // browser's clock. The arithmetic deliberately mirrors resolvePeriod()
+     // in statementsApi so a screen moving from PeriodRangePicker to this
+     // component keeps requesting exactly the same window.
+     if (filter.mode === "recent" && filter.preset != null) {
+          const [ty, tm, td] = todayStr.split("-").map(Number);
+          const today = new Date(Date.UTC(ty, tm - 1, td));
+
+          if (filter.preset === "last_7_days") {
+               const start = new Date(today);
+               start.setUTCDate(start.getUTCDate() - 6);
+               return { dateFrom: toISODateString(start), dateTo: todayStr };
+          }
+          if (filter.preset === "last_month") {
+               const start = new Date(Date.UTC(ty, tm - 2, 1));
+               const end = new Date(Date.UTC(ty, tm - 1, 0));
+               return {
+                    dateFrom: toISODateString(start),
+                    dateTo: toISODateString(end),
+               };
+          }
+          // last_12_months
+          const start = new Date(today);
+          start.setUTCFullYear(start.getUTCFullYear() - 1);
+          return { dateFrom: toISODateString(start), dateTo: todayStr };
+     }
 
      if (filter.mode === "month" && filter.month != null) {
           const m = filter.month;
@@ -145,6 +211,12 @@ function formatIsoShort(iso: string): string {
 }
 
 export function periodLabel(filter: ReportPeriodFilter): string {
+     if (filter.mode === "recent" && filter.preset != null) {
+          return (
+               REPORT_PERIOD_PRESETS.find((p) => p.value === filter.preset)?.label ??
+               "Select period"
+          );
+     }
      if (filter.mode === "month" && filter.month != null) {
           return `${MONTH_SHORT[filter.month - 1]} ${filter.year}`;
      }
