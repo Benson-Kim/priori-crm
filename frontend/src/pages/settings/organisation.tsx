@@ -9,31 +9,30 @@
  * Sends only the business-detail fields; the backend PUT applies
  * exclude_unset semantics, so document defaults edited on the Documents tab
  * are never wiped from here.
+ *
+ * Uses react-hook-form + zod (see validations/settingsSchema) so the Settings
+ * pages validate the same way as the customer/vendor forms. The logo stays a
+ * side channel — it is uploaded through its own endpoint, not the profile
+ * PUT, so it is deliberately not a form field.
  */
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle, Trash, UploadCloud } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useOwnerProfile } from "@/hooks/owner-profile-context";
 import { ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
-import type { OwnerProfileUpdate } from "@/services/ownerApi";
-
-type BusinessDetails = Pick<
-  OwnerProfileUpdate,
-  | "fullName"
-  | "locationWatermark"
-  | "address"
-  | "email"
-  | "phone"
-  | "taxPin"
-  | "website"
->;
+import {
+  organisationSchema,
+  type OrganisationFormData,
+} from "@/validations/settingsSchema";
 
 const FIELDS: {
-  key: keyof BusinessDetails;
+  key: keyof OrganisationFormData;
   label: string;
   type?: string;
   placeholder?: string;
@@ -48,20 +47,42 @@ const FIELDS: {
   { key: "website", label: "Website", placeholder: "https://example.com" },
 ];
 
+const EMPTY_FORM: OrganisationFormData = {
+  fullName: "",
+  locationWatermark: "",
+  address: "",
+  email: "",
+  phone: "",
+  taxPin: "",
+  website: "",
+};
+
 export default function OrganisationSettingsPage() {
   const { profile, logoUrl, loading, save, uploadLogo, removeLogo } =
     useOwnerProfile();
 
-  const [form, setForm] = useState<BusinessDetails | null>(null);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The profile bootstrap is async and can settle again later (a logo upload
+  // returns a fresh profile). Seed the form from the first one that lands and
+  // never again, so a refresh cannot overwrite what the user is typing.
+  const seeded = useRef(false);
 
-  // Seed the form once the profile bootstrap lands (and after saves).
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<OrganisationFormData>({
+    resolver: zodResolver(organisationSchema),
+    defaultValues: EMPTY_FORM,
+  });
+
   useEffect(() => {
-    if (profile && form === null) {
-      setForm({
+    if (profile && !seeded.current) {
+      seeded.current = true;
+      reset({
         fullName: profile.fullName ?? "",
         locationWatermark: profile.locationWatermark ?? "",
         address: profile.address ?? "",
@@ -71,16 +92,11 @@ export default function OrganisationSettingsPage() {
         website: profile.website ?? "",
       });
     }
-  }, [profile, form]);
+  }, [profile, reset]);
 
   if (loading && !profile) {
     return <LoadingState message="Loading organisation settings..." />;
   }
-
-  const update = (key: keyof BusinessDetails, value: string) => {
-    setSaved(false);
-    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
 
   const handleLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,27 +112,30 @@ export default function OrganisationSettingsPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!form) return;
+  const onSubmit = async (data: OrganisationFormData) => {
     setError(null);
-    if (!form.fullName?.trim()) {
-      setError("Business name is required.");
-      return;
-    }
-    setSaving(true);
     try {
-      await save(form);
+      // Listed field by field rather than spread: this tab must send only the
+      // business details so the PUT's exclude_unset leaves the Documents
+      // tab's defaults alone.
+      await save({
+        fullName: data.fullName,
+        locationWatermark: data.locationWatermark ?? "",
+        address: data.address ?? "",
+        email: data.email ?? "",
+        phone: data.phone ?? "",
+        taxPin: data.taxPin ?? "",
+        website: data.website ?? "",
+      });
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings.");
-    } finally {
-      setSaving(false);
     }
   };
 
   return (
     <div className="max-w-3xl flex flex-col gap-8">
-      {/* Branding & logo */}
+      {/* Branding & logo — its own endpoints, outside the profile form. */}
       <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
@@ -141,14 +160,16 @@ export default function OrganisationSettingsPage() {
           )}
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="outline-secondary"
               onClick={() => fileInputRef.current?.click()}
-              disabled={saving}
+              disabled={isSubmitting}
               className="flex items-center justify-center gap-2 border-gray-300 text-gray-600"
             >
               <UploadCloud size={18} /> Upload
             </Button>
             <Button
+              type="button"
               variant="outline-secondary"
               onClick={async () => {
                 setError(null);
@@ -162,7 +183,7 @@ export default function OrganisationSettingsPage() {
                   );
                 }
               }}
-              disabled={saving}
+              disabled={isSubmitting}
               className="flex items-center justify-center gap-2 border-gray-300 text-gray-600"
             >
               <Trash size={18} /> Remove
@@ -178,62 +199,70 @@ export default function OrganisationSettingsPage() {
         </div>
       </section>
 
-      {/* Business details */}
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Business details
-          </h2>
-          <p className="text-sm text-gray-500">
-            The organisation identity printed on quotes, invoices and
-            purchase orders.
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        // React's onChange is the bubbling input event, so any edit in any
+        // field below invalidates the "Saved." confirmation.
+        onChange={() => setSaved(false)}
+        noValidate
+        className="flex flex-col gap-8"
+      >
+        {/* Business details */}
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Business details
+            </h2>
+            <p className="text-sm text-gray-500">
+              The organisation identity printed on quotes, invoices and
+              purchase orders.
+            </p>
+          </div>
+          <div className="flex flex-col gap-5 rounded-xl border border-gray-200 bg-white p-6">
+            {FIELDS.map(({ key, label, type, placeholder, prefix }) => (
+              <label key={key} className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-gray-800">
+                  {label}
+                </span>
+                <Input
+                  {...register(key)}
+                  type={type ?? "text"}
+                  placeholder={placeholder}
+                  error={errors[key]?.message}
+                  prefix={
+                    prefix ? (
+                      <span className="text-gray-500 text-base font-medium">
+                        {prefix}
+                      </span>
+                    ) : undefined
+                  }
+                  wrapperClassName="bg-white"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {error && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </p>
-        </div>
-        <div className="flex flex-col gap-5 rounded-xl border border-gray-200 bg-white p-6">
-          {FIELDS.map(({ key, label, type, placeholder, prefix }) => (
-            <label key={key} className="flex flex-col gap-1.5">
-              <span className="text-sm font-semibold text-gray-800">
-                {label}
-              </span>
-              <Input
-                type={type ?? "text"}
-                value={(form?.[key] as string) ?? ""}
-                onChange={(e) => update(key, e.target.value)}
-                placeholder={placeholder}
-                prefix={
-                  prefix ? (
-                    <span className="text-gray-500 text-base font-medium">
-                      {prefix}
-                    </span>
-                  ) : undefined
-                }
-                wrapperClassName="bg-white"
-              />
-            </label>
-          ))}
-        </div>
-      </section>
-
-      {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-
-      <div className="flex items-center gap-4">
-        <Button
-          type="button"
-          variant="primary"
-          onClick={handleSave}
-          loading={saving}
-          className="flex items-center justify-center gap-2"
-        >
-          <CheckCircle size={18} /> Save changes
-        </Button>
-        {saved && !error && (
-          <span className="text-sm text-green-700">Saved.</span>
         )}
-      </div>
+
+        <div className="flex items-center gap-4">
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isSubmitting}
+            className="flex items-center justify-center gap-2"
+          >
+            <CheckCircle size={18} /> Save changes
+          </Button>
+          {saved && !error && (
+            <span className="text-sm text-green-700">Saved.</span>
+          )}
+        </div>
+      </form>
     </div>
   );
 }
