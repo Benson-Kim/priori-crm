@@ -1,8 +1,11 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
+import { PageErrorBoundary } from "@/components/errors/PageErrorBoundary";
+import RouteErrorBoundary from "@/components/errors/RouteErrorBoundary";
 import { LoadingState } from "@/components/ui/LoadingState";
 import LoginPage from "@/pages/auth/login";
+import NotFoundPage from "@/pages/errors/not-found";
 import RequireAuth from "./auth/RequireAuth";
 import RequireModule from "./auth/RequireModule";
 import DefaultLayout from "./layout/default-layout";
@@ -13,12 +16,17 @@ import SalesDeskLayout from "./layout/sales-desk-layout";
 // login page. This is the single biggest lever for first paint on slow
 // (3G) networks: heavy dependencies like recharts (dashboard/statements)
 // and react-pdf (document previews) stay out of the entry chunk entirely.
+// PageErrorBoundary sits inside the layout's <Outlet />, so a page that
+// throws — including a `lazy()` chunk that 404s after a deploy — renders the
+// error state with the sidebar and header still on screen.
 const lazyPage = (loader: () => Promise<{ default: ComponentType }>) => {
     const Page = lazy(loader);
     return (
-        <Suspense fallback={<LoadingState message="Loading..." className="h-64" />}>
-            <Page />
-        </Suspense>
+        <PageErrorBoundary>
+            <Suspense fallback={<LoadingState message="Loading..." className="h-64" />}>
+                <Page />
+            </Suspense>
+        </PageErrorBoundary>
     );
 };
 
@@ -26,6 +34,7 @@ const routes = [
     {
         path: "/login",
         element: <LoginPage />,
+        errorElement: <RouteErrorBoundary />,
     },
     {
         path: "/verify-otp",
@@ -41,6 +50,11 @@ const routes = [
     },
     {
         element: <RequireAuth />,
+        // Outer backstop for router-level failures across the whole authed
+        // area (a route that cannot render its element at all). Page-level
+        // throws are caught by PageErrorBoundary first, which keeps the
+        // chrome; this only takes over when the layout itself cannot render.
+        errorElement: <RouteErrorBoundary />,
         children: [
             {
                 path: "/",
@@ -599,7 +613,7 @@ const routes = [
     },
     {
         path: '*',
-        element: <div className="p-8">Page not found</div>
+        element: <NotFoundPage />,
     },
 ];
 
