@@ -149,6 +149,7 @@ export default function DocumentSettingsPage() {
                     setSaved(false);
                   }}
                   options={COUNTRIES}
+                  placeholder="Select country"
                   error={errors.jurisdiction?.message}
                 />
               )}

@@ -19,9 +19,9 @@ export const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 // snapshotted immutably onto issued documents. Do not reintroduce a hardcoded
 // company constant.
 
-// COUNTRY_OPTIONS removed: it listed only KE/UG/TZ and silently capped every
-// country picker in the app. lib/countries.ts (COUNTRIES + DEFAULT_COUNTRY) is
-// the single source of truth — the full ISO 3166-1 alpha-2 set.
+// COUNTRY_OPTIONS removed: country selection uses the full ISO 3166-1
+// alpha-2 list in lib/countries (COUNTRIES / DEFAULT_COUNTRY). Do not
+// reintroduce a regional subset here (#64).
 
 export const DEFAULT_CURRENCY = "KES";
 

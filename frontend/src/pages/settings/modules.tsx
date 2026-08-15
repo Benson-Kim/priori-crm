@@ -15,40 +15,11 @@ import { Navigate } from "react-router-dom";
 import { Badge } from "@/components/ui/Badge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useAuth } from "@/hooks/auth-context";
+import { moduleLabel } from "@/lib/module-labels";
 import {
   getModuleSettings,
   type ModuleSettingState,
 } from "@/services/ownerApi";
-
-/** Human labels for the known module keys (fallback: prettified key). */
-const MODULE_LABELS: Record<string, string> = {
-  customers: "Customers",
-  quotes: "Quotes",
-  invoices: "Invoices",
-  deals: "Deals",
-  nurture: "Nurture (Future Pipeline)",
-  onboarding: "Onboarding",
-  vendors: "Vendors",
-  expenses: "Expenses",
-  purchase_orders: "Purchase Orders",
-  statements: "Statements",
-  reports: "Reports",
-  sales_desk: "Sales Desk",
-  auth: "Authentication",
-  owner: "Organisation Profile",
-  health: "Health",
-  dashboard: "Dashboard",
-};
-
-function moduleLabel(key: string): string {
-  return (
-    MODULE_LABELS[key] ??
-    key
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ")
-  );
-}
 
 export default function ModuleSettingsPage() {
   const { user } = useAuth();

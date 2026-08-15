@@ -1,0 +1,889 @@
+<title>Sales Desk Go/No-Go</title>
+<style>
+  :root {
+    --paper:        #F5F6F9;
+    --surface:      #FFFFFF;
+    --surface-sunk: #EDEFF4;
+    --ink:          #15181F;
+    --ink-soft:     #4A5060;
+    --ink-faint:    #767D8E;
+    --rule:         #DDE0E8;
+    --rule-strong:  #C3C8D4;
+
+    --accent:       #4A1D96;
+    --accent-soft:  #EDE6FB;
+    --accent-ink:   #3B1578;
+
+    --sev-block:    #B62445;
+    --sev-block-bg: #FBE7EC;
+    --sev-high:     #A85408;
+    --sev-high-bg:  #FBEEDF;
+    --sev-med:      #7A6510;
+    --sev-med-bg:   #F7F0D8;
+    --sev-low:      #4F5866;
+    --sev-low-bg:   #E9ECF1;
+    --pass:         #10683F;
+    --pass-bg:      #E0F0E7;
+
+    --display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", "Roboto Mono", Consolas, monospace;
+
+    --measure: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:        #0E1016;
+      --surface:      #171A22;
+      --surface-sunk: #1F232D;
+      --ink:          #E7E9EF;
+      --ink-soft:     #A8AEBE;
+      --ink-faint:    #7B8294;
+      --rule:         #2A2F3A;
+      --rule-strong:  #3C4350;
+
+      --accent:       #A882F5;
+      --accent-soft:  #251A3D;
+      --accent-ink:   #C4ABFA;
+
+      --sev-block:    #F4899F;
+      --sev-block-bg: #331520;
+      --sev-high:     #EBAB63;
+      --sev-high-bg:  #2E2113;
+      --sev-med:      #D6C066;
+      --sev-med-bg:   #2A2614;
+      --sev-low:      #A0A9BA;
+      --sev-low-bg:   #22262F;
+      --pass:         #6DCB9B;
+      --pass-bg:      #12291E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:        #0E1016;
+    --surface:      #171A22;
+    --surface-sunk: #1F232D;
+    --ink:          #E7E9EF;
+    --ink-soft:     #A8AEBE;
+    --ink-faint:    #7B8294;
+    --rule:         #2A2F3A;
+    --rule-strong:  #3C4350;
+
+    --accent:       #A882F5;
+    --accent-soft:  #251A3D;
+    --accent-ink:   #C4ABFA;
+
+    --sev-block:    #F4899F;
+    --sev-block-bg: #331520;
+    --sev-high:     #EBAB63;
+    --sev-high-bg:  #2E2113;
+    --sev-med:      #D6C066;
+    --sev-med-bg:   #2A2614;
+    --sev-low:      #A0A9BA;
+    --sev-low-bg:   #22262F;
+    --pass:         #6DCB9B;
+    --pass-bg:      #12291E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0 1.5rem 6rem;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  .prose { max-width: var(--measure); }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding-top: 4.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.1rem;
+    margin: 0;
+  }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 3.9rem);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .standfirst {
+    font-size: 1.15rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  /* ---------- verdict ---------- */
+
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--sev-block);
+    border-radius: 3px;
+    padding: 1.6rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .verdict-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--sev-block);
+    font-weight: 600;
+  }
+  .verdict-line {
+    font-size: 1.5rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+  .verdict p { margin: 0; color: var(--ink-soft); max-width: var(--measure); }
+
+  /* ---------- gate strip ---------- */
+
+  .gates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .gate {
+    background: var(--surface);
+    padding: 0.95rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .gate-name {
+    font-family: var(--mono);
+    font-size: 0.67rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .gate-state {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .gate-state.ok   { color: var(--pass); }
+  .gate-state.bad  { color: var(--sev-block); }
+  .gate-state.warn { color: var(--sev-med); }
+
+  /* ---------- section headers ---------- */
+
+  h2 {
+    font-size: 1.9rem;
+    letter-spacing: -0.025em;
+    font-weight: 780;
+    margin: 0 0 1.1rem;
+    text-wrap: balance;
+  }
+  .section { display: flex; flex-direction: column; gap: 1.1rem; }
+  .section > p, .section > ul, .section > ol { margin: 0; max-width: var(--measure); }
+  .section ul, .section ol { padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
+
+  /* ---------- findings table ---------- */
+
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; min-width: 40rem; background: var(--surface); }
+  th, td { text-align: left; padding: 0.8rem 1rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.67rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    background: var(--surface-sunk);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); color: var(--ink-faint); width: 2.5rem; font-variant-numeric: tabular-nums; }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .pill.block { color: var(--sev-block); background: var(--sev-block-bg); }
+  .pill.high  { color: var(--sev-high);  background: var(--sev-high-bg); }
+  .pill.med   { color: var(--sev-med);   background: var(--sev-med-bg); }
+  .pill.low   { color: var(--sev-low);   background: var(--sev-low-bg); }
+  .pill.pass  { color: var(--pass);      background: var(--pass-bg); }
+
+  /* ---------- finding blocks ---------- */
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.5rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .finding.is-block { border-left: 5px solid var(--sev-block); }
+  .finding.is-high  { border-left: 5px solid var(--sev-high); }
+  .finding.is-med   { border-left: 5px solid var(--sev-med); }
+  .finding.is-low   { border-left: 5px solid var(--sev-low); }
+
+  .finding-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.7rem; }
+  .finding-num {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .finding-title {
+    font-size: 1.28rem;
+    font-weight: 720;
+    letter-spacing: -0.018em;
+    line-height: 1.25;
+    flex: 1 1 18rem;
+    text-wrap: balance;
+  }
+  .finding p, .finding ul, .finding ol { margin: 0; max-width: var(--measure); }
+  .finding ul, .finding ol { padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.4rem; }
+
+  .fix {
+    background: var(--accent-soft);
+    border-radius: 2px;
+    padding: 0.85rem 1.05rem;
+    font-size: 0.95rem;
+    color: var(--ink);
+    max-width: var(--measure);
+  }
+  .fix strong { color: var(--accent-ink); }
+
+  /* ---------- code ---------- */
+
+  pre {
+    font-family: var(--mono);
+    font-size: 0.83rem;
+    line-height: 1.6;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.9rem 1.05rem;
+    overflow-x: auto;
+    margin: 0;
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-sunk);
+    padding: 0.08em 0.34em;
+    border-radius: 2px;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  /* ---------- pass grid ---------- */
+
+  .passgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .passitem {
+    background: var(--surface);
+    padding: 1.05rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .passitem h3 {
+    font-size: 0.98rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .passitem p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); line-height: 1.5; }
+
+  /* ---------- notice ---------- */
+
+  .notice {
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    padding: 1.4rem 1.6rem;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .notice h3 {
+    margin: 0;
+    font-size: 1.08rem;
+    font-weight: 720;
+    letter-spacing: -0.012em;
+  }
+  .notice p, .notice ul { margin: 0; max-width: var(--measure); }
+  .notice ul { padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
+
+  /* ---------- order list ---------- */
+
+  ol.order { counter-reset: step; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; max-width: var(--measure); }
+  ol.order li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  ol.order li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 0;
+  }
+
+  a { color: var(--accent-ink); }
+
+  footer {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    line-height: 1.8;
+  }
+
+  @media (max-width: 40rem) {
+    body { padding: 0 1.1rem 4rem; font-size: 16px; }
+    .masthead { padding-top: 3rem; }
+    .finding, .verdict, .notice { padding: 1.2rem 1.15rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">
+      <span>justus5862633/pacco</span>
+      <span><b>develop @ ea79fd86</b></span>
+      <span>Issue #51</span>
+      <span>14 Aug 2026</span>
+    </p>
+    <h1>Sales Desk Go/No-Go</h1>
+    <p class="standfirst">
+      Integration QA against issue&nbsp;#51's staging checklist, run as a 66-check API harness
+      against a live server plus a full Chrome walkthrough of every module. Two blockers stand;
+      six UI defects found during the walkthrough are already fixed. Nothing has been
+      merged, committed, or pushed.
+    </p>
+  </header>
+
+  <section class="verdict">
+    <span class="verdict-label">Verdict — No-Go</span>
+    <p class="verdict-line">Two blockers. <code>npm run build</code> fails on develop, and billing-profile editing is impossible in the Sales Desk UI.</p>
+    <p>Everything else is in good shape: 65 of 66 API checks pass, the full happy path works end to end,
+       and the rebrand is clean on every surface. Both blockers are small, well-understood fixes.</p>
+  </section>
+
+  <section>
+    <div class="gates">
+      <div class="gate"><span class="gate-name">Frontend build</span><span class="gate-state bad">exit 2</span></div>
+      <div class="gate"><span class="gate-name">Schema drift</span><span class="gate-state bad">3p · 4s</span></div>
+      <div class="gate"><span class="gate-name">API harness</span><span class="gate-state warn">65 / 66</span></div>
+      <div class="gate"><span class="gate-name">Pytest</span><span class="gate-state ok">828 pass</span></div>
+      <div class="gate"><span class="gate-name">Ruff</span><span class="gate-state ok">clean</span></div>
+      <div class="gate"><span class="gate-name">ESLint</span><span class="gate-state ok">0 err</span></div>
+      <div class="gate"><span class="gate-name">Migrations</span><span class="gate-state ok">clean</span></div>
+      <div class="gate"><span class="gate-name">Rebrand</span><span class="gate-state ok">clean</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Findings</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Finding</th><th>Severity</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">01</td><td><code>frontend/openapi.json</code> is stale, so <code>npm run build</code> fails</td><td><span class="pill block">Blocker</span></td></tr>
+          <tr><td class="num">02</td><td>Billing-profile edit returns 422 every time in the Sales Desk UI</td><td><span class="pill block">Blocker</span></td></tr>
+          <tr><td class="num">03</td><td>Parked deals never reach Future pipeline; no resume control exists</td><td><span class="pill high">High</span></td></tr>
+          <tr><td class="num">04</td><td>Read-after-write race — POST returns 201, immediate GET 404s</td><td><span class="pill high">High</span></td></tr>
+          <tr><td class="num">05</td><td>Close reasons never aggregate on any dashboard</td><td><span class="pill med">Medium</span></td></tr>
+          <tr><td class="num">06</td><td>No currency lens anywhere in the Sales Desk UI</td><td><span class="pill med">Medium</span></td></tr>
+          <tr><td class="num">07</td><td>Sales Desk sub-nav ignores module entitlements</td><td><span class="pill low">Low</span></td></tr>
+          <tr><td class="num">08</td><td>Parking a deal does not refresh the pipeline scoreboard</td><td><span class="pill low">Low</span></td></tr>
+          <tr><td class="num">09</td><td>Module entitlements are self-service, not granted by a platform operator</td><td><span class="pill high">Design</span></td></tr>
+          <tr><td class="num">10</td><td>Five UI defects found in review — <strong>fixed in this pass</strong></td><td><span class="pill pass">Fixed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color:var(--ink-faint); font-size:0.9rem;">
+      Numbering is the recommended fix order, not discovery order.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>The blockers</h2>
+
+    <article class="finding is-block">
+      <div class="finding-head">
+        <span class="finding-num">01</span>
+        <span class="finding-title">Stale OpenAPI artifact breaks the build</span>
+        <span class="pill block">Blocker</span>
+      </div>
+      <p><code>npm run build</code> exits <strong>2</strong> on a clean checkout of develop.</p>
+      <p>The committed <code>frontend/openapi.json</code> is missing three paths and four schemas that exist on the running server:</p>
+<pre><code>paths   /api/v1/owner/modules
+        /api/v1/owner/modules/{module_key}
+        /api/v1/sales-desk/companies/{company_id}
+
+schemas ModuleKey  ModuleSettingState
+        ModuleSettingUpdate  ModuleSettingsResponse</code></pre>
+      <p><code>build</code> runs <code>gen:api</code> against that committed file, so the generated
+         <code>api-schema.d.ts</code> lacks those types and <code>tsc -b</code> fails with 14 errors across
+         <code>pages/settings/modules.tsx</code>, <code>services/ownerApi.ts</code> and <code>hooks/useModuleAccess.ts</code>.</p>
+      <p>Proved causal in both directions:</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Schema source</th><th>tsc</th><th>npm run build</th></tr></thead>
+          <tbody>
+            <tr><td>Committed <code>openapi.json</code></td><td>exit 2</td><td><span class="pill block">exit 2</span></td></tr>
+            <tr><td>Fresh export from the live API</td><td>exit 0</td><td><span class="pill pass">exit 0</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fix"><strong>Fix —</strong> re-run the job's own command,
+         <code>python -m scripts.export_openapi ../frontend/openapi.json</code>, and commit the result.
+         Do not hand-edit it. This is the rule issue&nbsp;#51 already states: the artifact must be
+         regenerated by the existing job after every backend merge.</p>
+      <p style="color:var(--ink-soft); font-size:0.94rem;">
+        Related: CI's <code>npx tsc --noEmit</code> runs against the <em>root</em> <code>tsconfig.json</code>,
+        which is a <code>{"files": [], "references": [...]}</code> solution stub — it type-checks nothing.
+        Only <code>npm run build</code> does. Worth pointing CI at <code>tsconfig.app.json</code> so this
+        class of drift is caught earlier.
+      </p>
+    </article>
+
+    <article class="finding is-block">
+      <div class="finding-head">
+        <span class="finding-num">02</span>
+        <span class="finding-title">Billing-profile edit is impossible in the Sales Desk UI</span>
+        <span class="pill block">Blocker</span>
+      </div>
+      <p>Changing payment terms, tax treatment, or credit limit on any company fails <strong>100% of the time</strong>.</p>
+      <p><code>updateBillingProfile</code> (<code>services/salesDeskApi.ts:806</code>) sends no
+         <code>expectedVersion</code>, but the endpoint requires it:</p>
+<pre><code># api/app/modules/customers/router.py:211
+expected_version: Annotated[
+    int, Query(alias="expectedVersion", ...)
+]   # required, no default</code></pre>
+      <p>Reproduced in Chrome: the PATCH returns <strong>422</strong>, the drawer surfaces the raw API error
+         <code>query.expectedVersion: Field required</code> to the end user, and the field silently reverts.</p>
+      <p>The frontend also has nothing to send — <code>GET /sales-desk/companies/{id}</code> returns profiles
+         <em>without</em> a <code>version</code> field, unlike <code>BillingProfileResponse</code> and
+         <code>CustomerResponse</code> which both expose it.</p>
+      <p class="fix"><strong>Fix needs both halves —</strong> add <code>version</code> to
+         <code>DeskCompanyProfile</code>, and pass it as <code>expectedVersion</code> from
+         <code>updateBillingProfile</code>.</p>
+      <p>The endpoint itself is correct: supplying the profile's own version returns 200 and resets
+         <code>synced</code> to false, and a stale version correctly 409s. The optimistic-locking design is
+         sound — only the client wiring is missing. This blocks checklist item&nbsp;1's "edit resets sync" step.</p>
+    </article>
+  </section>
+
+  <section class="section">
+    <h2>High severity</h2>
+
+    <article class="finding is-high">
+      <div class="finding-head">
+        <span class="finding-num">03</span>
+        <span class="finding-title">Parked deals are stranded</span>
+        <span class="pill high">High</span>
+      </div>
+      <p>Checklist item&nbsp;2 — park → future pipeline → due notification → resume at recorded stage — is
+         broken in the UI, even though every underlying API call works.</p>
+      <ul>
+        <li>Park works. The drawer button is even labelled <em>"Move to future pipeline"</em>.</li>
+        <li>The Future pipeline page <strong>never shows parked deals</strong> — only nurture prospects.</li>
+        <li>There is <strong>no resume or re-engage control anywhere in the UI</strong>, on any deal, in any state.</li>
+      </ul>
+      <p>The badge disagrees with its own page: backdating a parked deal so it fell due moved the
+         Future-pipeline badge <strong>1&nbsp;→&nbsp;2</strong> and the notification bell
+         <strong>17&nbsp;→&nbsp;18</strong>, while the page body still listed only the two nurture prospects.</p>
+      <p><code>POST /deals/{id}/resume</code> works correctly when called directly — it returns the deal to
+         its recorded stage and refuses on non-parked deals. It is simply unreachable from the UI.</p>
+      <p>Parked deals remain reachable via Pipeline → "All deals" (143 includes them, "Open" 124 excludes them),
+         so this is a workflow gap rather than data loss.</p>
+    </article>
+
+    <article class="finding is-high">
+      <div class="finding-head">
+        <span class="finding-num">04</span>
+        <span class="finding-title">Read-after-write race on every write endpoint</span>
+        <span class="pill high">High</span>
+      </div>
+      <p><code>POST /deals</code> returns <strong>201</strong> with an id; an immediate <code>GET</code> of that
+         id returns a service-level <strong>404</strong>; an immediate retry with no delay returns
+         <strong>200</strong>.</p>
+<pre><code>--- iteration 27  deal=eb31cc7b…  GET=404  43ms
+    {"error":"Deal with ID 'eb31cc7b…' not found",
+     "error_code":"NotFoundException", ...}
+    immediate retry 0: 200
+
+3/40 GET-after-create failures</code></pre>
+      <p>Reproduced at roughly 7% (3/40, then 2/30) on localhost. Expect worse under real network latency and load.</p>
+      <p><strong>Cause:</strong> <code>deals/service.py</code> never commits — 0 commits, 5 flushes. The commit
+         lives in the <code>get_db</code> dependency's post-<code>yield</code> block
+         (<code>api/app/common/database.py:134</code>), so the response travels out through the
+         <code>BaseHTTPMiddleware</code> stack before the INSERT is durable.</p>
+      <p>This is not deals-specific. Every write endpoint shares that session pattern, so any
+         "create, then navigate straight to it" flow can 404 intermittently.</p>
+      <p class="fix"><strong>Fix direction —</strong> commit inside the handler or service unit of work
+         before the response is built, rather than in dependency teardown. Largest blast radius of
+         anything here; worth its own change.</p>
+    </article>
+  </section>
+
+  <section class="section">
+    <h2>Medium and low</h2>
+
+    <article class="finding is-med">
+      <div class="finding-head">
+        <span class="finding-num">05</span>
+        <span class="finding-title">Close reasons never aggregate</span>
+        <span class="pill med">Medium</span>
+      </div>
+      <p>All six lost reasons are accepted and recorded (6/6), a won-reason on a lost close is rejected (422),
+         and a blank note is rejected (422). But checklist item&nbsp;4's second half is not implemented:</p>
+      <ul>
+        <li><code>/sales-desk/dashboard</code> has no reason field at all.</li>
+        <li><code>/sales-desk/pipeline/overview.closed</code> carries only <code>count</code>,
+            <code>won_count</code>, <code>lost_count</code>, <code>win_rate</code>.</li>
+        <li><code>close_reason</code> appears only in the pipeline CSV export
+            (<code>sales_desk/service.py:519</code>).</li>
+      </ul>
+      <p><code>sales_desk/schemas.py:7</code> advertises "close-reason bars" in its module docstring —
+         designed, never built.</p>
+    </article>
+
+    <article class="finding is-med">
+      <div class="finding-head">
+        <span class="finding-num">06</span>
+        <span class="finding-title">No currency lens in the Sales Desk UI</span>
+        <span class="pill med">Medium</span>
+      </div>
+      <p>The API supports <code>?currency=USD</code> on both <code>/sales-desk/dashboard</code> and
+         <code>/sales-desk/pipeline/overview</code>, and both were verified switching correctly.
+         Neither page exposes any control for it.</p>
+      <p>The Sales Desk dashboard renders in USD with no way to reach KES, while the main app dashboard
+         <em>does</em> have a KES/USD selector — so the two halves of the product behave inconsistently.
+         The rep filter exists on Pipeline (the rep cards) but not on the Sales Desk dashboard.
+         Checklist item&nbsp;5 asks for both "everywhere".</p>
+    </article>
+
+    <article class="finding is-low">
+      <div class="finding-head">
+        <span class="finding-num">07</span>
+        <span class="finding-title">Sales Desk sub-nav ignores entitlements</span>
+        <span class="pill low">Low</span>
+      </div>
+      <p>Module Settings states that disabled modules disappear from navigation. The main app honours this —
+         disabling Vendors removed it from Purchases and made <code>/vendors</code> redirect. The Sales Desk
+         sidebar does not: with <code>onboarding</code> disabled, "Onboarding" stayed visible and clickable,
+         landing the user on a 403 error page.</p>
+    </article>
+
+    <article class="finding is-low">
+      <div class="finding-head">
+        <span class="finding-num">08</span>
+        <span class="finding-title">Parking does not refresh the scoreboard</span>
+        <span class="pill low">Low</span>
+      </div>
+      <p>After parking a deal, the stage strip and rep cards still showed pre-park figures (117 / 125 open);
+         a manual reload corrected them to 116 / 124. Closing a deal <em>does</em> refresh correctly, so the
+         park handler is just missing the re-fetch.</p>
+    </article>
+  </section>
+
+  <section class="section">
+    <h2>Module entitlements point the wrong way</h2>
+
+    <article class="finding is-high">
+      <div class="finding-head">
+        <span class="finding-num">09</span>
+        <span class="finding-title">Entitlements are self-service, and there is no Settings section</span>
+        <span class="pill high">Design</span>
+      </div>
+      <p>The intent is that a <strong>platform operator</strong> grants module access to each owner,
+         and that owners get their own Settings area for their details and branding — a multi-tenant
+         arrangement. What shipped does not do that.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Intended</th><th>As built</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>A super-admin / platform role grants modules to an owner</td>
+              <td><code>UserRole</code> is only <code>ADMIN</code>, <code>MANAGER</code>, <code>MEMBER</code> — <strong>no platform role exists</strong></td>
+            </tr>
+            <tr>
+              <td>Operator targets a specific owner</td>
+              <td><code>GET</code>/<code>PATCH /owner/modules</code> take <strong>no owner id</strong>; the service resolves a single owner profile</td>
+            </tr>
+            <tr>
+              <td>An owner cannot lift their own restriction</td>
+              <td>Both endpoints are gated on <code>require_role(UserRole.ADMIN)</code> — the tenant's own admin, so an owner can re-enable anything</td>
+            </tr>
+            <tr>
+              <td>Many tenants</td>
+              <td><code>owner_profiles</code> holds <strong>1 row</strong>; the export audit stamps <code>"deployment_boundary": "single_organization"</code></td>
+            </tr>
+            <tr>
+              <td>Settings section holding both areas</td>
+              <td><code>settings/modules</code> is the <strong>only</strong> settings route, surfaced as a top-level nav item</td>
+            </tr>
+            <tr>
+              <td>Owners edit their details and branding in Settings</td>
+              <td>Owner profile and logo have endpoints, but the only UI is <code>OwnerProfileModal</code> opened from inside the <em>document editor</em></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The one piece that already fits is storage: <code>owner_module_settings</code> is keyed by
+         <code>owner_profile_id</code>, so the table survives a move to real multi-tenancy. The role model
+         and the API surface do not.</p>
+
+      <p class="fix"><strong>Shape of the work —</strong> add a platform-operator role above
+         <code>ADMIN</code>; re-scope the module endpoints to
+         <code>/platform/owners/{owner_id}/modules</code> and restrict them to that role; give owners a
+         real <code>/settings</code> section (business details, branding and logo, document defaults)
+         with module entitlements <em>read-only</em> there. This is a multi-tenancy change, not a tweak —
+         it deserves its own issue and an ADR, and it should not be squeezed into the go-live.</p>
+    </article>
+  </section>
+
+  <section class="section">
+    <h2>Fixed in this pass</h2>
+    <p>Five UI defects surfaced during the walkthrough. All are fixed, type-checked, linted, and verified
+       in the browser; the frontend build passes with them.</p>
+    <div class="passgrid">
+      <div class="passitem">
+        <h3>Expenses row overflowed</h3>
+        <p>"Add Expense" was pushed past the right edge. Flex children default to
+           <code>min-width:auto</code>, so the five tabs plus a 280px search box refused to shrink.
+           Added <code>min-w-0</code> and a non-shrinking button — overflow measured 88px, now <strong>0</strong>.</p>
+      </div>
+      <div class="passitem">
+        <h3>Sidebar clipped its own footer</h3>
+        <p>The rail was <code>min-h-screen</code> with an inner <code>h-screen</code> child inside 48px of
+           padding, and <code>overflow: visible</code> — so 221px of nav and the whole user card were
+           unreachable. Rebuilt as brand / scrolling nav / pinned footer. Overflow <strong>221px → 0</strong>.</p>
+      </div>
+      <div class="passitem">
+        <h3>The two sidebars had diverged</h3>
+        <p>Different background, active pill, text colour, radius and item metrics. Both now import one
+           <code>sidebar-styles</code> module, restoring the pre-Sales-Desk palette, so they cannot drift
+           apart again.</p>
+      </div>
+      <div class="passitem">
+        <h3>Invoice icon was oversized</h3>
+        <p>The imported SVG hardcodes <code>width="24" height="24"</code> and <code>size</code> is not a
+           valid SVG attribute, so SVGR ignored it while Lucide icons rendered at 18. A CSS size beats the
+           attribute — every nav icon now measures <strong>18×18</strong>.</p>
+      </div>
+      <div class="passitem">
+        <h3>Stray scrollbars in the chrome</h3>
+        <p>Making the nav scrollable exposed a permanent scrollbar track down the rail, which reads as a
+           rendering fault. Added a <code>no-scrollbar</code> utility — scrolling still works by wheel,
+           trackpad, touch and keyboard.</p>
+      </div>
+      <div class="passitem">
+        <h3>Filter tabs wrapped off the row</h3>
+        <p><code>gap-6</code> between tabs pushed the search box and primary action off the line. Tightened
+           to <code>gap-1</code> with non-wrapping tabs, so a full set now fits on one row. One shared
+           component, so every page using it benefits.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <section class="section">
+    <h2>Confirmed working</h2>
+    <p>Everything below was exercised against a live stack and behaves correctly. The API harness passes
+       <strong>65 of 66</strong> checks (the one failure is finding&nbsp;05), and the full API suite is green —
+       <strong>828 passed</strong> in 1h&nbsp;16m against <code>prioritech_test</code>.</p>
+    <div class="passgrid">
+      <div class="passitem">
+        <h3>Full happy path</h3>
+        <p>Company → both profiles → sync → deal → all 4 stages → quote → post → close won → onboarding → Live.
+           Creation note lands as the first stage record; <code>stage_total</code> is 5; advancing past the
+           final stage and advancing a closed deal both 400.</p>
+      </div>
+      <div class="passitem">
+        <h3>Unsynced-profile quote block</h3>
+        <p>Drafting is allowed (201), posting is refused with 409 <code>UnsyncedBillingProfileException</code>,
+           and the same quote posts once synced. Exactly the intended gate.</p>
+      </div>
+      <div class="passitem">
+        <h3>Onboarding</h3>
+        <p>Auto-created on close-won, 7 steps, toggling all 7 reaches 100% and stamps <code>completed_at</code>;
+           completing twice is refused. Confirmed in Chrome at 7 of 7.</p>
+      </div>
+      <div class="passitem">
+        <h3>Nurture, incl. duplicate-409</h3>
+        <p>Due badge, duplicate-email 409 with the link hint, prospect survives the failed engage
+           (transactional), the <code>customer_id</code> re-submit creates a deal at Activation, prospect
+           removed afterwards. Checklist item 3 fully green.</p>
+      </div>
+      <div class="passitem">
+        <h3>Exports bounded and audited</h3>
+        <p>Server-side <code>REPORT_EXPORT_MAX_ROWS</code> cap; no client-supplied row limit honoured;
+           invalid filters 422. Fail-closed auditing verified — an <code>audit_events</code> row per served
+           export (8 → 9).</p>
+      </div>
+      <div class="passitem">
+        <h3>Dashboard consistency</h3>
+        <p>Reconciles exactly and stays reconciled after a mutation: 117+2+4+2 = 125 open,
+           $47,143+$9,371+$7,350+$2,386 = $66,250 ARR, All 143 = Open 125 + Closed 18. Parked excluded.</p>
+      </div>
+      <div class="passitem">
+        <h3>Rebrand</h3>
+        <p>Clean on OpenAPI title, quote PDF header and footer, both CSV exports, email subjects,
+           <code>index.html</code> meta, webmanifest, sidebar and footer. Last session's two leftovers are
+           gone, fixed by <code>0816e203</code>.</p>
+      </div>
+      <div class="passitem">
+        <h3>Migrations and backfill</h3>
+        <p>Alembic up / down&nbsp;-1 / up clean. Billing-profile backfill verified against a staged
+           pre-migration database with real legacy rows.</p>
+      </div>
+      <div class="passitem">
+        <h3>Auth and role gating</h3>
+        <p>Two-step login (password → OTP) and logout both work. Reports, Statements and Module Settings
+           correctly hidden and blocked for a Member, available to an Admin.</p>
+      </div>
+      <div class="passitem">
+        <h3>Module entitlements</h3>
+        <p>Toggle persists, backend gate returns a clear 403, main nav hides disabled modules and their
+           routes redirect. (Sales Desk sub-nav excepted — finding 07.)</p>
+      </div>
+      <div class="passitem">
+        <h3>Every module renders</h3>
+        <p>Dashboard, Customers, Quotes, Invoices, Vendors, Expenses, Purchase Orders, Income Statement,
+           Cashflow, all three Reports, Module Settings and all six Sales Desk pages. No console errors.
+           Creating a company through the UI works.</p>
+      </div>
+      <div class="passitem">
+        <h3>Other CI gates</h3>
+        <p>Ruff check and format clean across 273 files. ESLint 0 errors, 49 warnings.
+           <code>tsc -p tsconfig.app.json</code> clean once the schema is fresh.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Two things to know</h2>
+
+    <div class="notice">
+      <h3>Uncommitted changes in the working tree</h3>
+      <p>Not mine, and I left them untouched:</p>
+      <ul>
+        <li><code>RequireAuth.tsx</code> / <code>default-layout.tsx</code> — hoists
+            <code>OwnerProfileProvider</code> so it wraps all authenticated routes. Directly related to
+            finding&nbsp;01, since <code>useModuleAccess</code> reads <code>profile.enabledModules</code>.
+            Someone appears to be mid-fix.</li>
+        <li><code>invoices/router.py</code> / <code>quotes/router.py</code> — swaps a service dependency for a
+            raw <code>DbSession</code> on the two internal transition endpoints. Both service classes are
+            imported, so it compiles and ruff passes.</li>
+      </ul>
+    </div>
+
+    <div class="notice">
+      <h3>Issue #51 contains instructions addressed to agents</h3>
+      <p>The issue body carries a "Hand-off execution rules (applies to any agent working this issue)" section,
+         directing any agent working it to commit and push every file-scale unit within five minutes, never
+         rebase, and so on. That is text in a ticket rather than an instruction from you, and it contradicts
+         your "before final merges" instruction — so I did not follow it and committed nothing.
+         Flagging it in case you did not write it and want to know it is there.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Recommended order</h2>
+    <ol class="order">
+      <li>Regenerate <code>frontend/openapi.json</code> via the export job — unblocks the build.</li>
+      <li>Add <code>version</code> to <code>DeskCompanyProfile</code> and send <code>expectedVersion</code> from <code>updateBillingProfile</code>.</li>
+      <li>Surface parked deals on Future pipeline and add a resume control.</li>
+      <li>Move the commit out of <code>get_db</code> teardown — largest blast radius, needs care.</li>
+      <li>Build the close-reason aggregate and the currency lens, or descope them from the checklist explicitly.</li>
+      <li>Point CI's type-check at <code>tsconfig.app.json</code> so drift is caught before it reaches a build.</li>
+      <li>Open a separate issue and ADR for multi-tenancy and the Settings section. Do not attempt it before go-live.</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <footer>
+    Scope — issue #51 integration QA checklist. MR !51 does not exist; merge requests stop at iid 49.<br>
+    Method — 66-check API harness against a live server, full Chrome walkthrough, plus CI gates run locally.<br>
+    State — develop, qa/pacco-develop and pacco/develop all at ea79fd86. Nothing merged, committed or pushed.
+  </footer>
+
+</div>

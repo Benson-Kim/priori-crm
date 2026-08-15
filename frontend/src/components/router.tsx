@@ -8,7 +8,9 @@ import LoginPage from "@/pages/auth/login";
 import NotFoundPage from "@/pages/errors/not-found";
 import RequireAuth from "./auth/RequireAuth";
 import RequireModule from "./auth/RequireModule";
+import RequirePlatformOperator from "./auth/RequirePlatformOperator";
 import DefaultLayout from "./layout/default-layout";
+import PlatformLayout from "./layout/platform-layout";
 import SalesDeskLayout from "./layout/sales-desk-layout";
 import SettingsLayout from "./layout/settings-layout";
 
@@ -640,6 +642,30 @@ const routes = [
                             },
                         ],
                     },
+                        ],
+                    },
+                ],
+            },
+            /*
+             * Platform-operator console (#62, ADR-0011): a third sibling
+             * shell with its own minimal chrome (no tenant sidebar). Gated
+             * on the platform_operator role, mirroring the backend's
+             * require_role(PLATFORM_OPERATOR) on every /platform route; the
+             * server-side gate remains authoritative. Tenant navigation
+             * never links here, and RequireAuth routes operators here away
+             * from the tenant shells.
+             */
+            {
+                path: "platform",
+                element: <RequirePlatformOperator />,
+                children: [
+                    {
+                        element: <PlatformLayout />,
+                        children: [
+                            {
+                                index: true,
+                                element: lazyPage(() => import("@/pages/platform")),
+                            },
                         ],
                     },
                 ],

@@ -60,8 +60,15 @@ export default function OTPPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await verifyOtp(email, value);
-      navigate(redirectTo, { replace: true });
+      const verifiedUser = await verifyOtp(email, value);
+      // Platform operators land on their own console, never the tenant
+      // shell (#62, ADR-0011); RequireAuth would redirect anyway, but going
+      // straight there avoids a bounce through "/".
+      const target =
+        verifiedUser.role?.toLowerCase() === "platform_operator"
+          ? "/platform"
+          : redirectTo;
+      navigate(target, { replace: true });
     } catch (err) {
       const message =
         err instanceof ApiError

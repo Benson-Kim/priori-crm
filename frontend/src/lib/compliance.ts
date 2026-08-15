@@ -30,10 +30,9 @@ export const GENERIC_COMPLIANCE_REF: ComplianceRefConfig = {
 };
 
 /**
- * Jurisdiction code -> Compliance Ref label/tooltip. Codes match COUNTRIES in
- * lib/countries (ISO 3166-1 alpha-2). Extend this map to add a jurisdiction;
- * do not branch per form. Anything unmapped falls back to the generic entry,
- * which is what lets the picker offer the full country list.
+ * Jurisdiction code -> Compliance Ref label/tooltip. Codes match
+ * COUNTRIES in lib/countries (ISO 3166-1 alpha-2). Extend this map to
+ * add a jurisdiction; do not branch per form.
  */
 export const COMPLIANCE_REF_BY_JURISDICTION: Record<string, ComplianceRefConfig> = {
   KE: {

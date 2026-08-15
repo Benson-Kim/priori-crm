@@ -293,7 +293,8 @@ class TestLockedTransitionConcurrency:
                 session.close()
 
         # Session 1 records a full payment and holds the row lock
-        # (record_payment flushes only; get_db owns the commit).
+        # (record_payment flushes only; in the request path the commit is
+        # owned by CommitOnSuccessRoute, app/common/routing.py).
         payment = SimpleNamespace(
             amount=Decimal("100.00"),
             payment_date=date.today(),
