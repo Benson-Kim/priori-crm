@@ -285,9 +285,28 @@ class ModuleSettingsResponse(BaseModel):
 
 
 class ModuleSettingUpdate(BaseModel):
-    """PATCH /owner/modules/{module_key} body."""
+    """PATCH /platform/owners/{owner_id}/modules/{module_key} body."""
 
     enabled: bool
+
+
+class PlatformOwnerSummary(BaseModel):
+    """One owner profile as listed on the platform-operator surface.
+
+    Deliberately identity-only (id + display name): the operator manages
+    entitlements, not tenant business data (ADR-0011).
+    """
+
+    id: uuid.UUID
+    full_name: str = Field(alias="fullName")
+
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+
+class PlatformOwnersResponse(BaseModel):
+    """Every owner profile (GET /platform/owners)."""
+
+    owners: list[PlatformOwnerSummary]
 
 
 class OwnerInfo(BaseModel):
