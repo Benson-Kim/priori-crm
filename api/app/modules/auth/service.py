@@ -182,7 +182,8 @@ class AuthService:
             # request-scoped transaction on a propagating exception,
             # which would otherwise discard the increment and make the cap
             # un-enforceable. The success path below only flush()es and lets
-            # get_db() own the commit.
+            # CommitOnSuccessRoute (app/common/routing.py) own the commit;
+            # get_db()'s teardown commit is a safety net only.
             otp.attempt_count += 1
             if otp.attempt_count >= settings.AUTH_MAX_OTP_ATTEMPTS:
                 otp.is_used = True
@@ -191,7 +192,9 @@ class AuthService:
 
         # Mark OTP as used and invalidate all other unused OTPs for this user.
         # Both writes flush within the request-scoped transaction; the commit
-        # is owned by get_db() once the request completes
+        # is owned by CommitOnSuccessRoute (app/common/routing.py), which
+        # commits before the response is sent; get_db()'s teardown commit
+        # is a safety net only.
         otp.is_used = True
         self._db.flush()
 
@@ -268,7 +271,9 @@ class AuthService:
             raise UnauthorizedException(_GENERIC_RESET_ERROR)
 
         # Apply the new password and burn the token, all within the
-        # request-scoped transaction; get_db() owns the commit on success.
+        # request-scoped transaction; CommitOnSuccessRoute
+        # (app/common/routing.py) owns the commit on success — get_db()'s
+        # teardown commit is a safety net only.
         user.password_hash = hash_password(new_password)
         reset.is_used = True
         self._db.flush()

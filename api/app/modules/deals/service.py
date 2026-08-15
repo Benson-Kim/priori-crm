@@ -2,8 +2,11 @@
 
 Atomicity contract
 
-All mutating methods call ``self._db.flush()`` only; commit/rollback is
-owned by ``get_db()``. Every audit row is written in the same transaction
+All mutating methods call ``self._db.flush()`` only; the request-scoped
+commit is owned by ``CommitOnSuccessRoute`` (``app/common/routing.py``),
+which commits before the response is sent — ``get_db()``'s teardown commit
+is a safety net only, and rollback-on-exception still lives in
+``get_db()``. Every audit row is written in the same transaction
 as the mutation it records (``common/audit.py`` contract).
 
 Stage/state rules (server-enforced — the UI only renders)
