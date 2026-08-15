@@ -11,8 +11,11 @@ axis, not a rung above ADMIN) must be storable. Widens the
 alongside the existing tenant roles. The column itself (String(20)) already
 fits the 17-character value; no data backfill is needed.
 
-Chained onto c0d1e2f3a4b5 (owner_module_settings), the single Alembic head
-on develop (verified by parsing revision/down_revision, per #55).
+Chained onto e2f3a4b5c6d7 (customer_optional_contact_drop_province), which
+in turn sits on c0d1e2f3a4b5 (owner_module_settings). Re-chained from
+c0d1e2f3a4b5 once e2f3a4b5c6d7 merged to develop ahead of this branch, so a
+single Alembic head holds (verified by parsing revision/down_revision,
+per #55).
 """
 
 from typing import Sequence, Union

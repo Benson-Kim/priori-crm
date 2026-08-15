@@ -87,7 +87,11 @@ export default function OrganisationSettingsPage() {
         locationWatermark: profile.locationWatermark ?? "",
         address: profile.address ?? "",
         email: profile.email ?? "",
-        phone: profile.phone ?? "",
+        // The field renders a "+254" prefix decoration, but the API stores
+        // E.164 (normalize_phone), so seeding verbatim reads "+254
+        // +254700000000". Strip the country code the same way
+        // use-customer-form.ts does; normalize_phone puts it back on save.
+        phone: (profile.phone ?? "").replace(/^\+?254/, "").trim(),
         taxPin: profile.taxPin ?? "",
         website: profile.website ?? "",
       });
