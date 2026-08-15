@@ -178,21 +178,14 @@ export default function TaxReportPage() {
     <div className="flex flex-col space-y-6">
       {/* Header controls card */}
       <div className="bg-transparent rounded-2xl border border-transparent py-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
-        <div className="">
-          <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
-          <p className="mt-1 text-sm">
-            {data?.filing_warning ??
-              "Confirm against eTIMS, customs, credit/debit notes, and the KRA auto-populated return before filing."}
-          </p>
-        </div>
+        <p className="font-semibold">{data?.report_label ?? "VAT reconciliation estimate"}</p>
         <div className="flex flex-wrap items-center gap-6">
-          <ReportPeriodPicker value={period} onChange={setPeriod} />
-          <Button variant="outline" onClick={handleExport} disabled={isExporting || !data}>
+          <ReportPeriodPicker value={period} onChange={setPeriod} className="px-2 py-1.5" />
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={isExporting || !data}>
             {isExporting ? "Exporting..." : "Export Excel"}
           </Button>
         </div>
       </div>
-
 
       {data?.completeness.status === "partial" && (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">

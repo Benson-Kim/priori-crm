@@ -260,7 +260,7 @@ export default function InvoicesPage() {
             header: "Customer Name",
             render: (item: InvoiceSummary) => (
                 <span
-                    className="font-medium text-gray-800 max-w-50 truncate block"
+                    className="font-medium text-gray-800 max-w-40 truncate block"
                     title={item.customer_name}
                 >
                     {item.customer_name}

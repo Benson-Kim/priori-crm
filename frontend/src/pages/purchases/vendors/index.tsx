@@ -193,7 +193,12 @@ export default function VendorsPage() {
             key: "name",
             header: "Vendor Name",
             render: (item: VendorSummary) => (
-                <span className=" text-content-primary">
+                // Clipped rather than allowed to set the column width: one long
+                // vendor name would otherwise widen the table for every row.
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
                     {item.vendor_name}
                 </span>
             ),
@@ -201,7 +206,14 @@ export default function VendorsPage() {
         {
             key: "email",
             header: "Email",
-            render: (item: VendorSummary) => <span className="text-gray-500">{item.email}</span>,
+            render: (item: VendorSummary) => (
+                <span
+                    className="block max-w-[190px] truncate text-gray-500"
+                    title={item.email ?? undefined}
+                >
+                    {item.email}
+                </span>
+            ),
         },
         {
             key: "phone",
