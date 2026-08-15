@@ -145,6 +145,48 @@ export function InlineSelect({
 
   const toggle = () => (isOpen ? close() : open());
 
+  /** The panel's selectable option buttons, in visual order. */
+  const enabledOptionButtons = () =>
+    Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="option"]:not(:disabled)'
+      ) ?? []
+    );
+
+  /**
+   * Arrow-key navigation over the option buttons — the part of the native
+   * <select>'s keyboard contract that real focusable buttons do not give for
+   * free. Focus (not aria-activedescendant) is the cursor, so Enter/Space
+   * select via the buttons' own click handling and focus() scrolls the option
+   * into view. Disabled options are excluded by the :not(:disabled) query, so
+   * the keyboard cannot land on them.
+   */
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      // The panel is portalled to the end of <body>, so letting Tab proceed
+      // would drop focus somewhere unrelated. Close and hand focus back.
+      e.preventDefault();
+      close();
+      triggerRef.current?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+    // From the filter box, Home/End must keep editing the query.
+    const inSearch = e.target === searchRef.current;
+    if (inSearch && (e.key === "Home" || e.key === "End")) return;
+    e.preventDefault();
+    const buttons = enabledOptionButtons();
+    if (buttons.length === 0) return;
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next: number;
+    if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = buttons.length - 1;
+    else if (current === -1) next = e.key === "ArrowDown" ? 0 : buttons.length - 1;
+    else if (e.key === "ArrowDown") next = Math.min(current + 1, buttons.length - 1);
+    else next = Math.max(current - 1, 0);
+    buttons[next].focus();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -182,6 +224,21 @@ export function InlineSelect({
       window.removeEventListener("resize", close);
     };
   }, [isOpen, close]);
+
+  // When there is no filter box to autoFocus, move focus into the panel — to
+  // the current selection when there is one — so arrow keys work immediately
+  // and the open panel is where the keyboard says it is.
+  useEffect(() => {
+    if (!isOpen || showSearch) return;
+    const target =
+      menuRef.current?.querySelector<HTMLButtonElement>(
+        'button[role="option"][aria-selected="true"]:not(:disabled)'
+      ) ??
+      menuRef.current?.querySelector<HTMLButtonElement>(
+        'button[role="option"]:not(:disabled)'
+      );
+    target?.focus();
+  }, [isOpen, showSearch]);
 
   const isDesk = variant === "sales-desk";
 
@@ -243,6 +300,7 @@ export function InlineSelect({
           <div
             ref={menuRef}
             role="listbox"
+            onKeyDown={handleMenuKeyDown}
             className={cn(
               "fixed z-50 mt-1 max-h-72 overflow-auto bg-white shadow-lg rounded-xl",
               "sd-menu",
@@ -307,6 +365,19 @@ export function InlineSelect({
                     ? "text-gray-400 cursor-not-allowed"
                     : opt.value === value
                       ? "bg-priori-purple/10 text-priori-purple font-semibold"
+                      : "text-gray-700 hover:bg-priori-purple hover:text-white"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+i-purple font-semibold"
                       : "text-gray-700 hover:bg-priori-purple hover:text-white"
                 )}
               >

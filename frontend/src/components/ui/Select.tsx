@@ -125,7 +125,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
          */}
         <select
           ref={nativeRef}
-          id={selectId}
+          id={selectId ? `${selectId}-native` : undefined}
           name={name}
           value={currentValue}
           disabled={disabled}
@@ -144,6 +144,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         </select>
 
         <InlineSelect
+          // The public id belongs on the trigger button, not the hidden
+          // native select: it is what <label htmlFor> should focus and name,
+          // now that the button is the interactive control.
+          id={selectId}
           options={options}
           value={currentValue}
           onChange={handleChange}
