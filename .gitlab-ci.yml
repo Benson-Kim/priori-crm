@@ -218,13 +218,6 @@ api:openapi-schema:
     - pip install -r requirements.txt
   script:
     - python -m scripts.export_openapi "$CI_PROJECT_DIR/frontend/openapi.json"
-    # TEMP(#57): also emit the exported schema into the job trace (base64 +
-    # sha256) so the sandboxed agent, whose token cannot download artifacts,
-    # can commit the job's own output verbatim. Reverted in the same MR.
-    - sha256sum "$CI_PROJECT_DIR/frontend/openapi.json"
-    - echo "OPENAPI_B64_BEGIN"
-    - base64 -w 0 "$CI_PROJECT_DIR/frontend/openapi.json" | fold -w 3800
-    - echo "OPENAPI_B64_END"
   artifacts:
     paths:
       - frontend/openapi.json
