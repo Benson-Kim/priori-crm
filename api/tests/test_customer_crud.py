@@ -263,3 +263,33 @@ def test_switching_company_to_individual_with_phone_allowed(db):
     )
 
     assert updated.customer_type == CustomerType.INDIVIDUAL
+
+
+# The list endpoint renders CustomerSummary straight off the ORM row, so the
+# optional contact fields have to be optional there too. Declaring them as
+# plain `str` made GET /customers 500 for the whole organisation as soon as
+# one customer had no email or phone — a state create() now allows.
+
+
+def test_list_customers_renders_rows_without_contact_details(db):
+    svc = CustomerService(db)
+    svc.create(_create_payload(email=None, phone=None, company_name="No Contact Ltd"))
+
+    result = svc.list_customers(PaginationParams(page=1, per_page=50))
+
+    row = next(r for r in result.items if r.display_name == "No Contact Ltd")
+    assert row.email is None
+    assert row.phone is None
+
+
+def test_list_customers_mixes_contactful_and_contactless_rows(db):
+    """One bad row must not take the page down with it."""
+    svc = CustomerService(db)
+    svc.create(_create_payload(email="has@acme.com", company_name="Has Contact Ltd"))
+    svc.create(_create_payload(email=None, phone=None, company_name="No Contact Ltd"))
+
+    result = svc.list_customers(PaginationParams(page=1, per_page=50))
+
+    by_name = {r.display_name: r for r in result.items}
+    assert by_name["Has Contact Ltd"].email == "has@acme.com"
+    assert by_name["No Contact Ltd"].email is None
