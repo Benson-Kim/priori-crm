@@ -214,19 +214,14 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
         <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xl font-bold text-gray-800">Overview</h2>
           <div className="flex items-center gap-3">
-            {/*
-              InlineSelect rather than Select: its default variant is the
-              same px-3 py-3 box as the ReportPeriodPicker trigger beside
-              it, so the pair lines up without a per-site height override,
-              and the options are styled by us rather than by the OS.
-            */}
             <InlineSelect
               options={CURRENCY_OPTIONS}
               value={currency}
               onChange={onCurrencyChange}
               aria-label="Display currency"
+              triggerClassName="bg-white"
             />
-            <ReportPeriodPicker value={period} onChange={setPeriod} />
+            <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
           </div>
         </div>
       </div>
@@ -330,7 +325,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
             {money(series?.net_total)}
           </p>
         </div>
-        <ReportPeriodPicker value={period} onChange={setPeriod} />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -474,7 +469,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
     <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
-        <ReportPeriodPicker value={period} onChange={setPeriod} />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -621,7 +616,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
           Last Transactions
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <ReportPeriodPicker value={period} onChange={setPeriod} />
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
           <Button variant="outline">View all</Button>
         </div>
       </div>

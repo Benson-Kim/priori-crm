@@ -1,11 +1,10 @@
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
-import { COUNTRY_OPTIONS } from "@/lib/constants";
 import { customerStatusOptions, customerTypeOptions, type Currency, type CustomerStatus, type CustomerType } from "@/lib/enums";
 import { createCustomer } from "@/services/customerApi";
 import { checkEmailDuplicate } from "@/services/vendorApi";
-import { Check, X } from "lucide-react";
+import { CheckCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Card } from "../ui/Card";
@@ -59,7 +58,7 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
             email: "",
             phone: "",
             address: "",
-            country: COUNTRY_OPTIONS[0].value,
+            country: "Kenya",
             city: "",
             postalCode: "",
             website: "",
@@ -146,18 +145,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     <p className="text-red-800 text-sm">{error}</p>
                 </div>
             )}
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] px-2 pb-4">
-                <Card className="rounded-xl bg-white border border-gray-300 flex flex-col gap-6 p-6">
-
-                    {/* Add New Customer Button */}
-                    <div className="p-4 border-2 border-priori-purple rounded-lg text-center">
-                        <button
-                            type="button"
-                            className="text-priori-purple font-semibold text-base flex items-center justify-center gap-2 w-full"
-                        >
-                            <span className="text-2xl">+</span> Add New Customer
-                        </button>
-                    </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[90vh]">
+                <Card padding="lg" className="rounded-xl  flex flex-col gap-6">
 
                     {/* Business Type */}
                     <div className="grid grid-cols-2 gap-3">
@@ -294,8 +283,15 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
                             Country <span className="text-red-500">*</span>
                         </label>
+                        <Input
+                            defaultValue="Kenya"
+                            {...register("country", { required: "Country is required" })}
+                            placeholder="Country"
+                            error={errors.country?.message}
+                        />
+                    </div>
 
-                        <select
+                    {/* <select
                             {...register("country", { required: "Country is required" })}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
                         >
@@ -305,7 +301,7 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         </select>
 
                         {errors.country && <p className="text-red-500 text-xs mt-1">{errors.country.message}</p>}
-                    </div>
+                    </div> */}
 
                     {/* Website and VAT Number */}
                     <div className="grid grid-cols-2 gap-3">
@@ -331,25 +327,25 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3 pt-4">
-                        <Button
-                            type="button"
-                            onClick={handleClose}
-                            disabled={isLoading}
-                            variant="outline"
-                            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <X size={20} /> Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={isLoading}
-                            className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Check size={20} /> {isLoading ? "Saving..." : "Save Customer"}
-                        </Button>
-                    </div>
                 </Card>
+                <div className="flex gap-3">
+                    <Button
+                        type="button"
+                        onClick={handleClose}
+                        disabled={isLoading}
+                        variant="outline"
+                        className="flex-1 text-gray-600 border border-gray-600"
+                    >
+                        <X size={20} /> Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="flex-1 font-semibold"
+                    >
+                        <CheckCircle size={20} /> {isLoading ? "Saving..." : "Save Customer"}
+                    </Button>
+                </div>
             </form>
         </Dialog >
     );

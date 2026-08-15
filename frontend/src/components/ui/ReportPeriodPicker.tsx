@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 interface ReportPeriodPickerProps {
   value: ReportPeriodFilter;
   onChange: (value: ReportPeriodFilter) => void;
+  triggerClassName?: string;
   className?: string;
 }
 
@@ -45,6 +46,7 @@ interface ReportPeriodPickerProps {
 export function ReportPeriodPicker({
   value,
   onChange,
+  triggerClassName,
   className,
 }: Readonly<ReportPeriodPickerProps>) {
   const reportingDate = useReportingDate();
@@ -166,7 +168,8 @@ export function ReportPeriodPicker({
           "flex items-center gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
           "text-base font-normal leading-6 text-gray-900 transition-all cursor-pointer whitespace-nowrap",
           "hover:border-priori-purple/50",
-          isOpen && "border-priori-purple ring-1 ring-priori-purple/20"
+          isOpen && "border-priori-purple ring-1 ring-priori-purple/20",
+          triggerClassName
         )}
       >
         <CalendarDays size={16} className="shrink-0 text-gray-400" />
