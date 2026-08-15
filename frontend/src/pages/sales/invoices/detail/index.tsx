@@ -413,11 +413,16 @@ export function InvoiceDetailPage() {
                     {/* Left Column: Customer Info Card */}
                     <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
                         <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
-                            <p className="flex items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
+                            <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
                                 {getNameInitials(customer.display_name)}
                             </p>
-                            <div className="flex-1">
-                                <p className="font-bold text-gray-800 text-[18px]">
+                            {/* min-w-0 lets the name wrap instead of forcing the row
+                                wider than the card and squashing the avatar. */}
+                            <div className="flex-1 min-w-0">
+                                <p
+                                    className="font-bold text-gray-800 text-[18px] wrap-break-word line-clamp-2"
+                                    title={customer.display_name}
+                                >
                                     {customer.display_name}
                                 </p>
                                 <p className="text-[14px] text-gray-400">
@@ -432,7 +437,12 @@ export function InvoiceDetailPage() {
                         {customer.email && (
                             <div className="p-4">
                                 <p className="text-gray-500 text-[14px]">Email</p>
-                                <p className="text-gray-800 font-bold text-[16px]">
+                                {/* wrap-break-word keeps a long address inside the card
+                                    border; the title carries the full value. */}
+                                <p
+                                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                                    title={customer.email}
+                                >
                                     {customer.email}
                                 </p>
                             </div>
@@ -440,7 +450,10 @@ export function InvoiceDetailPage() {
                         {customer.phone && (
                             <div className="p-4">
                                 <p className="text-gray-500 text-[14px]">Phone</p>
-                                <p className="text-gray-800 font-bold text-[16px]">
+                                <p
+                                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                                    title={customer.phone}
+                                >
                                     {customer.phone}
                                 </p>
                             </div>
@@ -448,7 +461,10 @@ export function InvoiceDetailPage() {
                         {customer.currency && (
                             <div className="p-4">
                                 <p className="text-gray-500 text-[14px]">Currency</p>
-                                <p className="text-gray-800 font-bold text-[16px]">
+                                <p
+                                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                                    title={customer.currency}
+                                >
                                     {customer.currency}
                                 </p>
                             </div>

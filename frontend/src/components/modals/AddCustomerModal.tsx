@@ -155,10 +155,23 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
                                 Customer Type <span className="text-red-500">*</span>
                             </label>
-                            <Select id="customerType" options={customerTypeOptions}
-                                {...register("customerType", { required: "Customer type is required" })}
-                                placeholder="Select customer type"
-                                error={errors.customerType?.message}
+                            {/*
+                              Controller rather than register: Select is a
+                              controlled component (it renders its own panel and
+                              needs `value` to display the selection), and
+                              register() never supplies a value prop.
+                            */}
+                            <Controller
+                                name="customerType"
+                                control={control}
+                                rules={{ required: "Customer type is required" }}
+                                render={({ field }) => (
+                                    <Select id="customerType" options={customerTypeOptions}
+                                        {...field}
+                                        placeholder="Select customer type"
+                                        error={errors.customerType?.message}
+                                    />
+                                )}
                             />
                         </div>
 
@@ -166,12 +179,18 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
                                 Status <span className="text-red-500">*</span>
                             </label>
-                            <Select id="status" options={customerStatusOptions}
-                                {...register("status", { required: "Customer status is required" })}
-                                placeholder="Select status"
-                                error={errors.status?.message}
+                            <Controller
+                                name="status"
+                                control={control}
+                                rules={{ required: "Customer status is required" }}
+                                render={({ field }) => (
+                                    <Select id="status" options={customerStatusOptions}
+                                        {...field}
+                                        placeholder="Select status"
+                                        error={errors.status?.message}
+                                    />
+                                )}
                             />
-
                         </div>
                     </div>
 
@@ -289,11 +308,18 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                           3166-1 alpha-2 code, so the option values are alpha-2
                           codes and only the labels are country names.
                         */}
-                        <Select
-                            id="country"
-                            options={COUNTRIES}
-                            {...register("country", { required: "Country is required" })}
-                            error={errors.country?.message}
+                        <Controller
+                            name="country"
+                            control={control}
+                            rules={{ required: "Country is required" }}
+                            render={({ field }) => (
+                                <Select
+                                    id="country"
+                                    options={COUNTRIES}
+                                    {...field}
+                                    error={errors.country?.message}
+                                />
+                            )}
                         />
                     </div>
 

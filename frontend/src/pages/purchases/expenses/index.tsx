@@ -210,7 +210,16 @@ export default function ExpensesPage() {
         {
             key: "vendorName",
             header: "Vendor Name",
-            render: (item: ExpenseSummary) => <span className="text-content-primary">{item.vendor_name}</span>,
+            // Clamped like the other list pages: with nowrap cells, one long
+            // vendor name would otherwise widen the table for every row.
+            render: (item: ExpenseSummary) => (
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
+                    {item.vendor_name}
+                </span>
+            ),
         },
         {
             key: "amount",
@@ -240,14 +249,20 @@ export default function ExpensesPage() {
 
     return (
         <div className="flex flex-col h-full space-y-4 font-sans">
-            {/* Top Header */}
-            <div className="flex justify-end mt-4">
+            {/* Top Header: both page-level actions, so the filter bar below
+                keeps the tabs and search on a single line. */}
+            <div className="flex flex-wrap justify-end items-center gap-3 mt-4">
                 <Button
                     variant="outline-secondary"
                     onClick={handleExport}
                     disabled={isExporting}
                 >
                     <Download size={20} /> {isExporting ? "Exporting..." : "Export Excel"}
+                </Button>
+                <Button
+                    variant="primary"
+                    onClick={() => navigate('/expenses/new')}>
+                    <Plus size={16} /> Add Expense
                 </Button>
             </div>
 
@@ -261,7 +276,7 @@ export default function ExpensesPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
 
                 {/* Actions Bar */}
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}
@@ -275,11 +290,7 @@ export default function ExpensesPage() {
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
-                        <Button
-                            variant="primary"
-                            onClick={() => navigate('/expenses/new')}>
-                            <Plus size={16} /> Add Expense
-                        </Button>
+
                     </div>
                 </div>
 

@@ -219,9 +219,9 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
               value={currency}
               onChange={onCurrencyChange}
               aria-label="Display currency"
-              triggerClassName="bg-white"
+              triggerClassName="bg-white p-2"
             />
-            <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+            <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
           </div>
         </div>
       </div>
@@ -325,7 +325,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
             {money(series?.net_total)}
           </p>
         </div>
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
       </div>
 
       {error && (
@@ -379,22 +379,32 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
 
 // Section-level widget: Top Sales
 
+/*
+ * Same rules as the transactions table: no bg-gray-50 here (Table already
+ * paints the header, and repeating it tints every body row), one line per
+ * cell, and the product name clamped by width with the full value in `title`.
+ */
 const SALES_COLUMNS = [
   {
     key: "product",
     header: "Product",
-    className: "font-normal bg-gray-50",
+    className: "font-normal w-[48%]",
     render: (item: TopSaleLine) => (
       <div className="flex items-center space-x-3">
         <p
-          className={`h-10 w-10 flex items-center justify-center text-white ${badgeForName(item.item_name)
+          className={`h-10 w-10 shrink-0 flex items-center justify-center text-white ${badgeForName(item.item_name)
             }`}
         >
           {getNameInitials(item.item_name).slice(0, 1) || "?"}
         </p>
-        <div className="flex flex-col">
-          <span className="text-[16px] leading-6 text-gray-600">{item.item_name}</span>
-          <span className="text-[14px] leading-5 text-gray-500">
+        <div className="flex min-w-0 flex-col">
+          <span
+            className="truncate text-sm leading-6 text-gray-600"
+            title={item.item_name}
+          >
+            {item.item_name}
+          </span>
+          <span className="whitespace-nowrap text-xs leading-5 text-gray-500">
             {item.document_count}{" "}
             {item.document_count === 1 ? "invoice" : "invoices"}
           </span>
@@ -405,9 +415,9 @@ const SALES_COLUMNS = [
   {
     key: "no_of_sales",
     header: "Sales No.",
-    className: "font-normal bg-gray-50",
+    className: "font-normal whitespace-nowrap w-[22%]",
     render: (item: TopSaleLine) => (
-      <span className="text-[16px] leading-6 text-gray-600">
+      <span className="text-sm leading-6 text-gray-600">
         {Number(item.units_sold)}
       </span>
     ),
@@ -415,9 +425,9 @@ const SALES_COLUMNS = [
   {
     key: "total_sale_amount",
     header: "Amount",
-    className: "font-normal bg-gray-50",
+    className: "font-normal whitespace-nowrap w-[30%]",
     render: (item: TopSaleLine) => (
-      <span className="font-medium text-[16px] leading-6 text-gray-800">
+      <span className="font-medium text-sm leading-6 text-gray-800">
         {money(item.amount)}
       </span>
     ),
@@ -469,7 +479,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
     <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
       </div>
 
       {error && (
@@ -486,6 +496,10 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
           data={topSales?.items ?? []}
           rowKey={(item) => item.item_name}
           className="border border-gray-200 rounded-xl"
+          // Half-width card: the shared 600px floor would scroll here, and
+          // fixed layout is what gives the truncated product name a width to
+          // clamp against (auto layout sizes columns to content instead).
+          tableClassName="min-w-0 table-fixed"
           emptyMessage="No sales available for the selected period."
         />
       )}
@@ -540,21 +554,32 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       });
   }, [periodReady, dateFrom, dateTo, currency]);
 
+  /*
+   * One line per row. `col.className` lands on the body cells as well as the
+   * header, so the header's own bg-gray-50 must not be repeated here \u2014 that is
+   * what was tinting every row grey.
+   *
+   * Free-text columns clamp by width rather than by font size: shrinking type
+   * to fit makes each row a different size and still cannot guarantee a fit
+   * for a name like "St. John Paul II Sabbatical Centre". The max-width sits
+   * on the span, not the <td>, because an auto-layout table does not honour
+   * max-width on a cell. The full value stays in `title`.
+   */
   const columns = [
     {
       key: "number",
       header: "#",
-      className: "w-[64px] font-normal bg-gray-50",
+      className: "w-[64px] font-normal whitespace-nowrap",
       render: (_item: DashboardTransaction, index: number) => (
-        <span className="text-[16px] leading-6 text-gray-800">{index + 1}.</span>
+        <span className="text-sm leading-6 text-gray-800">{index + 1}.</span>
       ),
     },
     {
       key: "date",
       header: "Date & Time",
-      className: "font-normal bg-gray-50",
+      className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
-        <span className="text-[16px] leading-6 text-gray-800">
+        <span className="text-sm leading-6 text-gray-800">
           {formatDate(item.date)} - {formatTime(item.recorded_at)}
         </span>
       ),
@@ -562,17 +587,25 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "id",
       header: "Reference",
-      className: "font-normal bg-gray-50",
+      className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
-        <span className="text-[16px] leading-6 text-gray-600">{item.ref_no}</span>
+        <span
+          className="block max-w-[120px] truncate text-sm leading-6 text-gray-600"
+          title={item.ref_no}
+        >
+          {item.ref_no}
+        </span>
       ),
     },
     {
       key: "product",
       header: "Product",
-      className: "font-normal bg-gray-50",
+      className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
-        <span className="text-[16px] leading-6 text-gray-800">
+        <span
+          className="block max-w-[150px] truncate text-sm leading-6 text-gray-800"
+          title={item.item_name ?? undefined}
+        >
           {item.item_name ?? "\u2014"}
         </span>
       ),
@@ -580,28 +613,36 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     {
       key: "customer",
       header: "Customer",
-      className: "font-normal bg-gray-50",
+      className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
-        <span className="text-[16px] leading-6 text-gray-800">{item.entity_name}</span>
+        <span
+          className="block max-w-[170px] truncate text-sm leading-6 text-gray-800"
+          title={item.entity_name}
+        >
+          {item.entity_name}
+        </span>
       ),
     },
     {
-      key: "website",
-      header: "Website",
-      className: "font-normal bg-gray-50",
+      key: "category",
+      header: "Category",
+      className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
-        <span className="text-[16px] leading-6 text-gray-600">
-          {item.website ?? "\u2014"}
+        <span
+          className="block max-w-[120px] truncate text-sm leading-6 text-gray-600"
+          title={item.category ?? undefined}
+        >
+          {item.category ?? "\u2014"}
         </span>
       ),
     },
     {
       key: "amount",
       header: "Amount",
-      className: "text-right font-normal bg-gray-50",
+      className: "text-right font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
         <span
-          className="text-[16px] leading-6 text-gray-800"
+          className="text-sm leading-6 text-gray-800"
         >
           {formatSignedMoney(item.amount, currency)}
         </span>
@@ -617,7 +658,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
-          <Button variant="outline">View all</Button>
+          <Button variant="outline" className="p-2">View all</Button>
         </div>
       </div>
 

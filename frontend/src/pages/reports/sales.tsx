@@ -259,12 +259,25 @@ export default function SalesReportPage() {
                     <div className="overflow-x-auto rounded-b-lg border border-white">
                       <Table
                         columns={[
-                          { key: "customer_name", header: "Customer" },
+                          {
+                            key: "customer_name",
+                            header: "Customer",
+                            render: (r) => (
+                              <span
+                                className="block max-w-[170px] truncate"
+                                title={r.customer_name}
+                              >
+                                {r.customer_name}
+                              </span>
+                            ),
+                          },
                           { key: "invoice_count", header: "Invoices", className: "text-right" },
                           { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
                         ]}
                         data={summary.revenue_by_customer}
                         rowKey={(r) => r.customer_id}
+                        // Half-width card: the shared 600px floor would scroll here.
+                        tableClassName="min-w-0"
                         emptyMessage="No data for this period."
                       />
                     </div>
@@ -274,12 +287,21 @@ export default function SalesReportPage() {
                     <div className="overflow-x-auto rounded-b-lg border border-white">
                       <Table
                         columns={[
-                          { key: "category", header: "Category" },
+                          {
+                            key: "category",
+                            header: "Category",
+                            render: (r) => (
+                              <span className="block max-w-[170px] truncate" title={r.category}>
+                                {r.category}
+                              </span>
+                            ),
+                          },
                           { key: "document_count", header: "Invoices", className: "text-right" },
                           { key: "amount", header: `Revenue (${currency})`, className: "text-right", render: (r) => fmt(r.amount) },
                         ]}
                         data={summary.revenue_by_category}
                         rowKey={(r) => r.category}
+                        tableClassName="min-w-0"
                         emptyMessage="No data for this period."
                       />
                     </div>

@@ -78,8 +78,15 @@ export default function SalesDeskCompaniesPage() {
                 header: "Company",
                 className: CELL_CLASS,
                 render: (company) => (
+                    // Clipped: a long company name would set the column width
+                    // for every row and push the table into a scroll.
                     <>
-                        <span className="block font-medium text-sd-ink">{company.name}</span>
+                        <span
+                            className="block max-w-[180px] truncate font-medium text-sd-ink"
+                            title={company.name}
+                        >
+                            {company.name}
+                        </span>
                         <span className="block text-xs text-sd-muted">{company.phone}</span>
                     </>
                 ),
@@ -98,8 +105,18 @@ export default function SalesDeskCompaniesPage() {
                 className: CELL_CLASS,
                 render: (company) => (
                     <>
-                        <span className="block text-sd-ink">{company.contact}</span>
-                        <span className="block text-xs text-sd-muted">{company.email}</span>
+                        <span
+                            className="block max-w-[180px] truncate text-sd-ink"
+                            title={company.contact ?? undefined}
+                        >
+                            {company.contact}
+                        </span>
+                        <span
+                            className="block max-w-[180px] truncate text-xs text-sd-muted"
+                            title={company.email ?? undefined}
+                        >
+                            {company.email}
+                        </span>
                     </>
                 ),
             },

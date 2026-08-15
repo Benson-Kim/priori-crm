@@ -1,0 +1,2 @@
+- do not include co-author (claude code) in your commits. All commits must be authored by benson-kim (bensonkimkam@gmail.com) or benson-priori(benson@priori.co.ke)
+- All git pulls done showing any other developer shall be rewrittent to have benson-priori as the author

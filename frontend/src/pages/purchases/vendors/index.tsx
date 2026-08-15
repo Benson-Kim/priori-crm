@@ -193,7 +193,12 @@ export default function VendorsPage() {
             key: "name",
             header: "Vendor Name",
             render: (item: VendorSummary) => (
-                <span className=" text-content-primary">
+                // Clipped rather than allowed to set the column width: one long
+                // vendor name would otherwise widen the table for every row.
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
                     {item.vendor_name}
                 </span>
             ),
@@ -201,7 +206,14 @@ export default function VendorsPage() {
         {
             key: "email",
             header: "Email",
-            render: (item: VendorSummary) => <span className="text-gray-500">{item.email}</span>,
+            render: (item: VendorSummary) => (
+                <span
+                    className="block max-w-[190px] truncate text-gray-500"
+                    title={item.email ?? undefined}
+                >
+                    {item.email}
+                </span>
+            ),
         },
         {
             key: "phone",
@@ -250,7 +262,7 @@ export default function VendorsPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
 
                 {/* Actions Bar */}
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}

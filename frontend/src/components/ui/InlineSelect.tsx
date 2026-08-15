@@ -13,12 +13,17 @@
 
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export interface InlineSelectOption {
   value: string;
   label: string;
+  /**
+   * Shown but not selectable. The line-items tax picker relies on this to
+   * surface a stored-but-invalid treatment without letting anyone pick it.
+   */
+  disabled?: boolean;
 }
 
 interface InlineSelectProps {
@@ -37,7 +42,24 @@ interface InlineSelectProps {
   disabled?: boolean;
   /** Per-site trigger overrides, e.g. the borderless company picker. */
   triggerClassName?: string;
+  /**
+   * Set by wrappers that own validation (the shared Select), so the trigger
+   * carries the invalid state and points at its own error text.
+   */
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  /** Fired when the panel closes, so a wrapper can mark the field touched. */
+  onClose?: () => void;
+  /**
+   * Show a filter box at the top of the panel. Defaults to on once the list is
+   * long enough to be worth scrolling (the country list is 249 entries), which
+   * is the type-ahead a native <select> used to give for free.
+   */
+  searchable?: boolean;
 }
+
+/** Lists at or above this length get a filter box unless told otherwise. */
+const SEARCHABLE_THRESHOLD = 12;
 
 const TRIGGER_STYLES = {
   default: [
@@ -76,8 +98,14 @@ export function InlineSelect({
   placeholder,
   disabled = false,
   triggerClassName,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+  onClose,
+  searchable,
 }: InlineSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -85,6 +113,12 @@ export function InlineSelect({
   const selected = options.find((o) => o.value === value);
   const selectedLabel = selected?.label ?? (value || placeholder || "");
   const labelId = label && id ? `${id}-label` : undefined;
+
+  const showSearch = searchable ?? options.length >= SEARCHABLE_THRESHOLD;
+  const trimmedQuery = query.trim().toLowerCase();
+  const visibleOptions = trimmedQuery
+    ? options.filter((o) => o.label.toLowerCase().includes(trimmedQuery))
+    : options;
 
   const open = () => {
     if (!triggerRef.current) return;
@@ -96,12 +130,62 @@ export function InlineSelect({
       // change the shape of the control.
       width: rect.width,
     });
+    // Every open starts from the full list rather than the last search.
+    setQuery("");
     setIsOpen(true);
   };
 
-  const close = () => setIsOpen(false);
+  // Stable so the dismiss listeners below can depend on it without being torn
+  // down and rebound on every render.
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setQuery("");
+    onClose?.();
+  }, [onClose]);
 
   const toggle = () => (isOpen ? close() : open());
+
+  /** The panel's selectable option buttons, in visual order. */
+  const enabledOptionButtons = () =>
+    Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="option"]:not(:disabled)'
+      ) ?? []
+    );
+
+  /**
+   * Arrow-key navigation over the option buttons — the part of the native
+   * <select>'s keyboard contract that real focusable buttons do not give for
+   * free. Focus (not aria-activedescendant) is the cursor, so Enter/Space
+   * select via the buttons' own click handling and focus() scrolls the option
+   * into view. Disabled options are excluded by the :not(:disabled) query, so
+   * the keyboard cannot land on them.
+   */
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      // The panel is portalled to the end of <body>, so letting Tab proceed
+      // would drop focus somewhere unrelated. Close and hand focus back.
+      e.preventDefault();
+      close();
+      triggerRef.current?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+    // From the filter box, Home/End must keep editing the query.
+    const inSearch = e.target === searchRef.current;
+    if (inSearch && (e.key === "Home" || e.key === "End")) return;
+    e.preventDefault();
+    const buttons = enabledOptionButtons();
+    if (buttons.length === 0) return;
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next: number;
+    if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = buttons.length - 1;
+    else if (current === -1) next = e.key === "ArrowDown" ? 0 : buttons.length - 1;
+    else if (e.key === "ArrowDown") next = Math.min(current + 1, buttons.length - 1);
+    else next = Math.max(current - 1, 0);
+    buttons[next].focus();
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -139,7 +223,22 @@ export function InlineSelect({
       window.removeEventListener("scroll", handleScroll, true);
       window.removeEventListener("resize", close);
     };
-  }, [isOpen]);
+  }, [isOpen, close]);
+
+  // When there is no filter box to autoFocus, move focus into the panel — to
+  // the current selection when there is one — so arrow keys work immediately
+  // and the open panel is where the keyboard says it is.
+  useEffect(() => {
+    if (!isOpen || showSearch) return;
+    const target =
+      menuRef.current?.querySelector<HTMLButtonElement>(
+        'button[role="option"][aria-selected="true"]:not(:disabled)'
+      ) ??
+      menuRef.current?.querySelector<HTMLButtonElement>(
+        'button[role="option"]:not(:disabled)'
+      );
+    target?.focus();
+  }, [isOpen, showSearch]);
 
   const isDesk = variant === "sales-desk";
 
@@ -170,6 +269,8 @@ export function InlineSelect({
         aria-labelledby={!ariaLabel && labelId ? labelId : undefined}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         onClick={toggle}
         className={cn(
           "flex w-full items-center justify-between gap-2 cursor-pointer",
@@ -199,6 +300,7 @@ export function InlineSelect({
           <div
             ref={menuRef}
             role="listbox"
+            onKeyDown={handleMenuKeyDown}
             className={cn(
               "fixed z-50 mt-1 max-h-72 overflow-auto bg-white shadow-lg rounded-xl",
               "sd-menu",
@@ -206,13 +308,52 @@ export function InlineSelect({
             )}
             style={{ top: coords.top, left: coords.left, width: coords.width }}
           >
-            {options.map((opt) => (
+            {showSearch && (
+              // Sticky so the filter stays reachable while the list scrolls.
+              <div className="sticky top-0 bg-white p-2 border-b border-gray-100">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  autoFocus
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter takes the only sensible candidate: the first match.
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const first = visibleOptions.find((o) => !o.disabled);
+                      if (first) {
+                        onChange(first.value);
+                        close();
+                        triggerRef.current?.focus();
+                      }
+                    }
+                  }}
+                  placeholder="Search..."
+                  aria-label="Filter options"
+                  className={cn(
+                    "w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm",
+                    "text-gray-900 placeholder:text-gray-400 outline-none",
+                    "focus:border-priori-purple focus:ring-1 focus:ring-priori-purple/20"
+                  )}
+                />
+              </div>
+            )}
+
+            {visibleOptions.length === 0 && (
+              <p className="px-4 py-3 text-sm text-gray-400">No matches</p>
+            )}
+
+            {visibleOptions.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 role="option"
+                disabled={opt.disabled}
                 aria-selected={opt.value === value}
+                aria-disabled={opt.disabled}
                 onClick={() => {
+                  if (opt.disabled) return;
                   onChange(opt.value);
                   close();
                   triggerRef.current?.focus();
@@ -220,9 +361,24 @@ export function InlineSelect({
                 className={cn(
                   "flex items-center w-full text-left transition-colors",
                   isDesk ? "px-3 py-2.5 text-[13px]" : "px-4 py-2.5 text-sm",
-                  opt.value === value
-                    ? "bg-priori-purple/10 text-priori-purple font-semibold"
-                    : "text-gray-700 hover:bg-priori-purple hover:text-white"
+                  opt.disabled
+                    ? "text-gray-400 cursor-not-allowed"
+                    : opt.value === value
+                      ? "bg-priori-purple/10 text-priori-purple font-semibold"
+                      : "text-gray-700 hover:bg-priori-purple hover:text-white"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+i-purple font-semibold"
+                      : "text-gray-700 hover:bg-priori-purple hover:text-white"
                 )}
               >
                 {opt.label}
