@@ -1837,8 +1837,15 @@
             "type": "string"
           },
           "email": {
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "id": {
             "format": "uuid",
@@ -1846,8 +1853,15 @@
             "type": "string"
           },
           "phone": {
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "status": {
             "title": "Status",
@@ -1859,8 +1873,6 @@
           "customer_type",
           "status",
           "display_name",
-          "email",
-          "phone",
           "balance",
           "currency",
           "created_at"
@@ -3371,8 +3383,15 @@
             "type": "string"
           },
           "email": {
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "id": {
             "description": "Customer id",
@@ -3414,8 +3433,15 @@
             ]
           },
           "phone": {
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "primary_currency": {
             "title": "Primary Currency",
@@ -3457,8 +3483,6 @@
           "name",
           "industry",
           "contact",
-          "email",
-          "phone",
           "tenant",
           "primary_currency",
           "registered_on",

@@ -1033,3 +1033,32 @@ def test_get_company_endpoint_and_404(client, db):
     assert body["needs_sync"] is True  # fresh profiles start unsynced
 
     assert missing.status_code == 404
+
+
+def test_companies_directory_renders_company_without_contact_details(db):
+    """DeskCompanyRow reads email/phone off the customer row.
+
+    Both became optional on the customer record, so declaring them as plain
+    `str` here 500'd the whole Companies directory (and the drawer) the
+    moment one company had neither.
+    """
+    svc_customers = CustomerService(db)
+    customer = svc_customers.create(
+        CustomerCreate(
+            customer_type=CustomerType.BUSINESS,
+            company_name="No Contact Ltd",
+            first_name="Alice",
+            last_name="Wanjiru",
+            email=None,
+            phone=None,
+            country="KE",
+        )
+    )
+
+    svc = _svc(db)
+    row = next(r for r in svc.get_companies().items if r.id == str(customer.id))
+
+    assert row.email is None
+    assert row.phone is None
+    # The drawer goes through the same assembly path, so it must agree.
+    assert svc.get_company(customer.id) == row
