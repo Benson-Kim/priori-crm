@@ -597,12 +597,16 @@ export default function CustomerDetailsPage() {
                     </p>
                     {statement.customer && (
                       <>
-                        <p className="text-sm text-gray-600">
-                          {statement.customer.phone}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {statement.customer.email}
-                        </p>
+                        {statement.customer.phone && (
+                          <p className="text-sm text-gray-600">
+                            {statement.customer.phone}
+                          </p>
+                        )}
+                        {statement.customer.email && (
+                          <p className="text-sm text-gray-600">
+                            {statement.customer.email}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
