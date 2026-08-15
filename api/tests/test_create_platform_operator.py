@@ -231,9 +231,7 @@ class TestCliSurface:
             db.commit()
 
         monkeypatch.setattr(database_module, "get_db_context", _test_session)
-        monkeypatch.setattr(
-            database_module, "check_database_connection", lambda: True
-        )
+        monkeypatch.setattr(database_module, "check_database_connection", lambda: True)
 
         with caplog.at_level("INFO"):
             main([])
