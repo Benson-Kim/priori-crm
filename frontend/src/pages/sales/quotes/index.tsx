@@ -322,7 +322,7 @@ export default function QuotesPage() {
 
             {/* Table Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}

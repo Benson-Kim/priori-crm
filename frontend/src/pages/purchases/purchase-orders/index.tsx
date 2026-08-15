@@ -275,8 +275,15 @@ export default function PurchaseOrdersPage() {
         {
             key: "vendorName",
             header: "Vendor Name",
+            // Clamped like the other list pages: with nowrap cells, one long
+            // vendor name would otherwise widen the table for every row.
             render: (item: PurchaseOrderSummary) => (
-                <span className="text-content-primary">{item.vendor_name}</span>
+                <span
+                    className="block max-w-[190px] truncate text-content-primary"
+                    title={item.vendor_name}
+                >
+                    {item.vendor_name}
+                </span>
             ),
         },
         {
@@ -340,7 +347,7 @@ export default function PurchaseOrdersPage() {
             {/* Top Card / Container */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
                 {/* Actions Bar */}
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}

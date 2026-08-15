@@ -224,7 +224,12 @@ export default function CustomersPage() {
             key: "name",
             header: "Customer Name",
             render: (item: CustomerSummary) => (
-                <span className=" text-content-primary">
+                // Clamped by width, with the full value in the title: a long
+                // company name would otherwise widen the table for every row.
+                <span
+                    className="block max-w-47.5 truncate text-content-primary"
+                    title={item.display_name}
+                >
                     {item.display_name}
                 </span>
             ),
@@ -232,7 +237,14 @@ export default function CustomersPage() {
         {
             key: "email",
             header: "Email",
-            render: (item: CustomerSummary) => <span className="text-gray-500">{item.email}</span>,
+            render: (item: CustomerSummary) => (
+                <span
+                    className="block max-w-47.5 truncate text-gray-500"
+                    title={item.email ?? undefined}
+                >
+                    {item.email}
+                </span>
+            ),
         },
         {
             key: "phone",
@@ -271,7 +283,7 @@ export default function CustomersPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
 
                 {/* Actions Bar */}
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
                         tabs={TABS}
                         activeTab={activeTab}

@@ -444,11 +444,16 @@ export default function CustomerDetailsPage() {
           {/* Left Column: Customer Info Card */}
           <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
             <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
-              <p className="flex items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
+              <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
                 {initials}
               </p>
-              <div className="flex-1">
-                <p className="font-bold text-gray-800 text-[18px]">
+              {/* min-w-0 lets the name wrap instead of forcing the row wider
+                  than the card and squashing the avatar into an oval. */}
+              <div className="flex-1 min-w-0">
+                <p
+                  className="font-bold text-gray-800 text-[18px] wrap-break-word line-clamp-2"
+                  title={displayName}
+                >
                   {displayName}
                 </p>
                 <p className="text-[14px] text-gray-400">
@@ -461,7 +466,12 @@ export default function CustomerDetailsPage() {
             {details.email && (
               <div className="p-4">
                 <p className="text-gray-500 text-[14px]">Email</p>
-                <p className="text-gray-800 font-bold text-[16px]">
+                {/* wrap-break-word keeps a long address inside the card border;
+                    the title carries the full value when it clamps. */}
+                <p
+                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  title={details.email}
+                >
                   {details.email}
                 </p>
               </div>
@@ -469,7 +479,10 @@ export default function CustomerDetailsPage() {
             {details.phone && (
               <div className="p-4">
                 <p className="text-gray-500 text-[14px]">Phone</p>
-                <p className="text-gray-800 font-bold text-[16px]">
+                <p
+                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  title={details.phone}
+                >
                   {details.phone}
                 </p>
               </div>
@@ -477,7 +490,10 @@ export default function CustomerDetailsPage() {
             {details.currency && (
               <div className="p-4">
                 <p className="text-gray-500 text-[14px]">Currency</p>
-                <p className="text-gray-800 font-bold text-[16px]">
+                <p
+                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  title={details.currency}
+                >
                   {details.currency}
                 </p>
               </div>
@@ -485,7 +501,10 @@ export default function CustomerDetailsPage() {
             {details.vat_number && (
               <div className="p-4">
                 <p className="text-gray-500 text-[14px]">Tax ID/Pin Number</p>
-                <p className="text-gray-800 font-bold text-[16px]">
+                <p
+                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  title={details.vat_number}
+                >
                   {details.vat_number}
                 </p>
               </div>
@@ -497,7 +516,8 @@ export default function CustomerDetailsPage() {
                   href={details.website}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-priori-purple hover:underline font-bold text-[16px]"
+                  title={details.website}
+                  className="text-priori-purple hover:underline font-bold text-[16px] wrap-break-word line-clamp-2"
                 >
                   {details.website}
                 </a>
