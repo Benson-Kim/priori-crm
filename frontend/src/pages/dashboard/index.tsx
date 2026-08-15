@@ -1,10 +1,17 @@
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { PeriodRangePicker } from "@/components/ui/PeriodRangePicker";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { Select } from "@/components/ui/Select";
 import { Table } from "@/components/ui/Table";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
+import {
+  defaultReportPeriod,
+  isReportPeriodReady,
+  resolveReportPeriod,
+  type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import { formatDate, formatDelta, getNameInitials, money } from "@/lib/utils";
 import {
   getCashflowSeries,
@@ -18,7 +25,6 @@ import {
   type TopSaleLine,
   type TopSales,
 } from "@/services/dashboardApi";
-import { isPeriodReady, type PeriodFilter } from "@/services/statementsApi";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   Bar,
@@ -123,13 +129,16 @@ interface SummaryWidgetProps {
 }
 
 function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   // Stale-response guard: only the latest request may write state.
   const seqRef = useRef(0);
@@ -144,7 +153,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getDashboardSummary({ range, dateFrom, dateTo }, currency)
+    getDashboardSummary({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
         if (seq === seqRef.current) setSummary(data);
       })
@@ -155,7 +164,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   return (
     <section>
@@ -168,12 +177,7 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
               value={currency}
               onChange={onCurrencyChange}
             />
-            <PeriodRangePicker
-              period={period}
-              onPeriodChange={setPeriod}
-              placeholder="Select range"
-              selectWrapperClassName="min-w-[220px]"
-            />
+            <ReportPeriodPicker value={period} onChange={setPeriod} />
           </div>
         </div>
       </div>
@@ -221,13 +225,16 @@ interface CashflowWidgetProps {
 }
 
 function CashflowWidget({ currency }: CashflowWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [series, setSeries] = useState<CashflowSeries | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -241,7 +248,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getCashflowSeries({ range, dateFrom, dateTo }, currency)
+    getCashflowSeries({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
         if (seq === seqRef.current) setSeries(data);
       })
@@ -252,7 +259,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   const chartData = useMemo<CashflowChartDatum[]>(
     () =>
@@ -273,12 +280,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
             {money(series?.net_total)}
           </p>
         </div>
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          placeholder="Select range"
-          selectWrapperClassName="min-w-[180px]"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} />
       </div>
 
       {error && (
@@ -372,13 +374,16 @@ interface TopSalesWidgetProps {
 }
 
 function TopSalesWidget({ currency }: TopSalesWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [topSales, setTopSales] = useState<TopSales | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -392,7 +397,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
     const seq = ++seqRef.current;
     setIsLoading(true);
     setError(null);
-    getTopSales({ range, dateFrom, dateTo }, currency, TOP_SALES_LIMIT)
+    getTopSales({ range: "custom" as const, dateFrom, dateTo }, currency, TOP_SALES_LIMIT)
       .then((data) => {
         if (seq === seqRef.current) setTopSales(data);
       })
@@ -403,18 +408,13 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   return (
     <section className="relative flex flex-col gap-4 p-6 rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          placeholder="Select range"
-          selectWrapperClassName="min-w-[180px]"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} />
       </div>
 
       {error && (
@@ -445,13 +445,16 @@ interface TransactionsWidgetProps {
 }
 
 function TransactionsWidget({ currency }: TransactionsWidgetProps) {
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_month" });
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() =>
+    defaultReportPeriod(reportingDay)
+  );
   const [transactions, setTransactions] = useState<DashboardTransactions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { range, dateFrom, dateTo } = period;
-  const periodReady = isPeriodReady(period);
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
   const seqRef = useRef(0);
   useEffect(() => {
@@ -466,7 +469,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     setIsLoading(true);
     setError(null);
     getRecentTransactions(
-      { range, dateFrom, dateTo },
+      { range: "custom" as const, dateFrom, dateTo },
       currency,
       RECENT_TRANSACTIONS_LIMIT,
     )
@@ -480,7 +483,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       .finally(() => {
         if (seq === seqRef.current) setIsLoading(false);
       });
-  }, [periodReady, range, dateFrom, dateTo, currency]);
+  }, [periodReady, dateFrom, dateTo, currency]);
 
   const columns = [
     {
@@ -558,12 +561,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
           Last Transactions
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <PeriodRangePicker
-            period={period}
-            onPeriodChange={setPeriod}
-            placeholder="Select range"
-            selectWrapperClassName="min-w-[180px]"
-          />
+          <ReportPeriodPicker value={period} onChange={setPeriod} />
           <Button variant="outline">View all</Button>
         </div>
       </div>
