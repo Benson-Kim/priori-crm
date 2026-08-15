@@ -1,16 +1,15 @@
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { InlineSelect } from "@/components/ui/InlineSelect";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
-import { Select } from "@/components/ui/Select";
 import { Table } from "@/components/ui/Table";
 import { useReportingDate } from "@/hooks/useReportingDate";
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from "@/lib/constants";
 import {
   defaultReportPeriod,
   isReportPeriodReady,
-  periodLabel,
   resolveReportPeriod,
   type ReportPeriodFilter,
 } from "@/lib/reportUtils";
@@ -27,7 +26,7 @@ import {
   type TopSaleLine,
   type TopSales,
 } from "@/services/dashboardApi";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -125,11 +124,9 @@ interface CashflowChartDatum {
 interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{ value: number; payload: CashflowChartDatum }>;
-  /** Label of the period the widget is filtered to, e.g. "Last 12 months". */
-  periodText?: string;
 }
 
-const CustomTooltip = ({ active, payload, periodText }: CustomTooltipProps) => {
+const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
 
   const { fullLabel } = payload[0].payload;
@@ -143,11 +140,6 @@ const CustomTooltip = ({ active, payload, periodText }: CustomTooltipProps) => {
     <div className="relative z-50 -translate-x-1/2 -translate-y-[calc(100%+14px)]">
       <div className="flex min-w-36 flex-col items-center justify-center rounded-3xl bg-[#f8f9fb] px-6 py-4 shadow-[0_8px_24px_rgba(16,24,40,0.12)]">
         <p className="text-[17px] font-medium text-gray-600">{fullLabel}</p>
-        {periodText && (
-          <p className="mt-0.5 text-[12px] font-medium text-gray-400">
-            {periodText}
-          </p>
-        )}
         <p
           className="mt-2 text-[20px] font-bold leading-7"
           style={{ color: CASHFLOW_COLORS.income }}
@@ -175,7 +167,7 @@ const CustomTooltip = ({ active, payload, periodText }: CustomTooltipProps) => {
 
 interface SummaryWidgetProps {
   currency: string;
-  onCurrencyChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onCurrencyChange: (value: string) => void;
 }
 
 function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
@@ -223,16 +215,16 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
           <h2 className="text-xl font-bold text-gray-800">Overview</h2>
           <div className="flex items-center gap-3">
             {/*
-              Select defaults to py-4; the picker trigger beside it is py-3,
-              so without this the currency box stands 8px taller than its
-              neighbour. Width is capped too — a 3-letter code does not need
-              the full flex basis.
+              InlineSelect rather than Select: its default variant is the
+              same px-3 py-3 box as the ReportPeriodPicker trigger beside
+              it, so the pair lines up without a per-site height override,
+              and the options are styled by us rather than by the OS.
             */}
-            <Select
+            <InlineSelect
               options={CURRENCY_OPTIONS}
               value={currency}
               onChange={onCurrencyChange}
-              wrapperClassName="py-3 w-auto"
+              aria-label="Display currency"
             />
             <ReportPeriodPicker value={period} onChange={setPeriod} />
           </div>
@@ -330,7 +322,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
   );
 
   return (
-    <Card padding="lg" className="relative flex flex-col p-6 justify-between rounded-xl">
+    <Card padding="lg" className="relative flex flex-col justify-between rounded-xl">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
         <div>
           <h4 className="text-lg leading-6 text-gray-500">Cash Flow</h4>
@@ -371,7 +363,7 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
               tick={{ fill: "#667085", fontSize: 12 }}
             />
             <Tooltip
-              content={<CustomTooltip periodText={periodLabel(period)} />}
+              content={<CustomTooltip />}
               cursor={{ fill: "transparent" }}
               offset={0}
               /*
@@ -479,7 +471,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
   }, [periodReady, dateFrom, dateTo, currency]);
 
   return (
-    <section className="relative flex flex-col gap-4 p-6 rounded-2xl border border-gray-200 bg-linear-to-br from-white/25 via-white/10 to-white/05 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
+    <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
         <ReportPeriodPicker value={period} onChange={setPeriod} />
@@ -502,7 +494,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
           emptyMessage="No sales available for the selected period."
         />
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -673,7 +665,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <SummaryWidget
         currency={currency}
-        onCurrencyChange={(event) => setCurrency(event.target.value)}
+        onCurrencyChange={setCurrency}
       />
 
       {/* Cashflow chart + Top Sales — side by side, each with own period */}

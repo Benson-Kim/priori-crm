@@ -2,16 +2,6 @@ import { DEFAULT_DUE_DATE_DAYS } from "./constants";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export const DATE_RANGE_OPTIONS = [
-  { label: "Last 7 Days", value: "last_7_days" },
-  { label: "This Month", value: "this_month" },
-  { label: "Last Month", value: "last_month" },
-  { label: "This Quarter", value: "this_quarter" },
-  { label: "This Year", value: "this_year" },
-  { label: "Last 12 Months", value: "last_12_months" },
-  { label: "Custom Range", value: "custom" },
-];
-
 /**
  * Format a Date object as an ISO date string (YYYY-MM-DD).
  * Uses UTC methods to avoid timezone-shift bugs where local midnight
