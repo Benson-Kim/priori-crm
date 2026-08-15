@@ -64,9 +64,7 @@ def _login_session(client, email: str) -> tuple[str, str]:
         )
         assert resp.status_code == 200
     code = send.call_args[0][1]
-    resp = client.post(
-        "/api/v1/auth/verify-otp", json={"email": email, "code": code}
-    )
+    resp = client.post("/api/v1/auth/verify-otp", json={"email": email, "code": code})
     assert resp.status_code == 200
     body = resp.json()
     return body["access_token"], body["refresh_token"]
@@ -124,9 +122,7 @@ class TestImpossibleTravel:
         _seed_user(db, "traveler@mail.com")
         access, _ = _login_session(client, "traveler@mail.com")
 
-        ok = client.get(
-            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
-        )
+        ok = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
         assert ok.status_code == 200
 
         challenged = client.get(
@@ -174,9 +170,7 @@ class TestImpossibleTravel:
 
         # The session is dead everywhere: even a clean follow-up request
         # from the original location is refused.
-        after = client.get(
-            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
-        )
+        after = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
         assert after.status_code == 401
         assert _session_events(db, "session_terminated")
 
@@ -201,9 +195,7 @@ class TestImpossibleTravel:
         assert ok.status_code == 200
 
         # The challenged session is never cleared in place.
-        stale = client.get(
-            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
-        )
+        stale = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
         assert stale.status_code == 401
         assert stale.json()["error_code"] == "STEP_UP_REQUIRED"
 
@@ -317,9 +309,7 @@ class TestRefreshAndLogout:
         assert resp.status_code == 401
         assert resp.json()["error_code"] == "STEP_UP_REQUIRED"
 
-    def test_logout_terminates_the_session_and_kills_access_tokens(
-        self, client, db
-    ):
+    def test_logout_terminates_the_session_and_kills_access_tokens(self, client, db):
         _seed_user(db, "leaver@mail.com")
         access, refresh = _login_session(client, "leaver@mail.com")
 

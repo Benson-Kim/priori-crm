@@ -216,9 +216,7 @@ def _terminate(
     )
 
 
-def assess_session_risk(
-    db: Session, context: AccessContext
-) -> PolicyVerdict | None:
+def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | None:
     """Re-score the request's session; return a verdict when not cleared.
 
     Called by the zero-trust gate AFTER the static rules allowed the
