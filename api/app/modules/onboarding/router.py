@@ -15,11 +15,12 @@ from fastapi import APIRouter, Path, Query
 
 from app.common.dependencies import OnboardingServiceDep
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.routing import CommitOnSuccessRoute
 from app.modules.onboarding.schemas import OnboardingResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 @router.get(

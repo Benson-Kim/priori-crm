@@ -9,11 +9,19 @@ from app.constants.settings_defaults import DEFAULT_DEAL_STAGE_PROBABILITIES
 class UserRole(StrEnum):
     """Authorization roles for application users.
 
-    ADMIN can perform any action. MANAGER may perform destructive and
+    PLATFORM_OPERATOR is outside the tenant role set — a separate authority
+    axis, not a rung above ADMIN (ADR-0011: platform and tenant authority
+    are disjoint axes). It is the platform (deployment) operator that grants
+    per-owner module entitlements via the /platform API. It is deliberately
+    NOT a tenant role — it carries no implicit access to tenant business
+    data, is not in PRIVILEGED_ROLES, and must never satisfy a tenant role
+    check (do not wire hierarchical/ordered role comparisons off this enum).
+    ADMIN can perform any tenant action. MANAGER may perform destructive and
     financial operations (hard-delete, record-payment, approve, convert).
     MEMBER may perform ordinary create/update operations only.
     """
 
+    PLATFORM_OPERATOR = "platform_operator"
     ADMIN = "admin"
     MANAGER = "manager"
     MEMBER = "member"

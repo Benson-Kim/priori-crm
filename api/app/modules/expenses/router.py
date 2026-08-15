@@ -27,6 +27,7 @@ from app.common.dependencies import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.common.uploads import validate_upload
 from app.lib.storage import storage_service
 from app.modules.expenses.schemas import (
@@ -48,7 +49,7 @@ from app.modules.expenses.service import ExpenseService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 # CREATE

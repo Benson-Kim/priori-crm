@@ -2,7 +2,7 @@ import { cva } from "class-variance-authority";
 
 export const buttonVariants = cva(
   [
-    "inline-flex gap-1.5 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium",
+    "inline-flex gap-2 items-center justify-center whitespace-nowrap rounded-lg text-[20px] font-medium",
     "transition-colors duration-150",
     /*
      * The ring was previously set to both `ring-2` and `ring-0`, so the later
@@ -16,7 +16,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-priori-purple text-priori-purple-foreground hover:bg-priori-purple/90",
+          "bg-priori-purple text-white hover:bg-priori-purple/90",
         primary: "bg-priori-purple text-white hover:bg-priori-purple/90",
         danger: "bg-danger text-white hover:bg-danger/90",
         success: "bg-success text-white hover:bg-success/90",

@@ -14,8 +14,10 @@ export interface DocumentViewerData {
   customerId?: string;
   customer?: {
     display_name: string;
-    email: string;
-    phone: string;
+    // Optional on the customer record, so absent for anyone stored without
+    // contact details; the API returns null rather than omitting them.
+    email?: string | null;
+    phone?: string | null;
     address?: string;
   };
   transactionDate?: string;
@@ -102,8 +104,12 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
                     {data.customer.address}
                   </p>
                 )}
-                <p className="text-sm text-gray-600">{data.customer.phone}</p>
-                <p className="text-sm text-gray-600">{data.customer.email}</p>
+                {data.customer.phone && (
+                  <p className="text-sm text-gray-600">{data.customer.phone}</p>
+                )}
+                {data.customer.email && (
+                  <p className="text-sm text-gray-600">{data.customer.email}</p>
+                )}
               </>
             )}
           </div>

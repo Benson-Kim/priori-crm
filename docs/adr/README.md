@@ -20,5 +20,6 @@ Each ADR follows [`0000-template.md`](0000-template.md): **Status · Context · 
 | [0008](0008-scalability-and-horizontal-scaling.md) | Scalability & horizontal scaling | Accepted |
 | [0009](0009-rebrand-to-business-central-presentation-only.md) | Rebrand to "Business Central" at the presentation layer only | Accepted |
 | [0010](0010-billing-profile-sync-as-internal-posting-flag.md) | Billing-profile "sync" is an internal posting/readiness flag | Accepted |
+| [0011](0011-platform-operator-and-tenant-scoped-module-entitlements.md) | Platform-operator role and operator-granted module entitlements | Accepted |
 
 Related backlog: [`../work-items.md`](../work-items.md).

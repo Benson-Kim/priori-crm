@@ -23,12 +23,6 @@ const countryOptions = [
     { value: "TZ", label: "Tanzania" },
 ];
 
-const provinceOptions = [
-    { value: "nairobi", label: "Nairobi" },
-    { value: "coastal", label: "Coastal" },
-    { value: "rift-valley", label: "Rift Valley" },
-];
-
 export function CustomerDetailsForm({
     initialData,
     onCancel,
@@ -56,7 +50,6 @@ export function CustomerDetailsForm({
             address: "",
             address2: "",
             country: "",
-            province: "",
             city: "",
             postalCode: "",
         },
@@ -73,17 +66,18 @@ export function CustomerDetailsForm({
     const onSubmit = (data: CustomerFormData) => {
         onSave?.({
             ...data,
-            phone: normalizeKenyanPhoneNumber(data.phone),
+            phone: normalizeKenyanPhoneNumber(data.phone ?? ""),
         });
     };
 
-    function Field({ id, label, children, }: Readonly<{
-        id: string; label: string; children: React.ReactNode;
+    function Field({ id, label, required = false, children, }: Readonly<{
+        id: string; label: string; required?: boolean; children: React.ReactNode;
     }>) {
         return (
             <div className="flex flex-col gap-2">
                 <label htmlFor={id} className="text-sm font-semibold leading-6 text-gray-900">
                     {label}
+                    {required && <span className="text-red-500"> *</span>}
                 </label>
                 {children}
             </div>
@@ -198,7 +192,7 @@ export function CustomerDetailsForm({
                             )}
                         />
                     </Field>
-                    <Field id="phone" label="Phone">
+                    <Field id="phone" label="Phone" required={customerType === "individual"}>
                         <Controller
                             name="phone"
                             control={control}
@@ -331,7 +325,7 @@ export function CustomerDetailsForm({
                     />
                 </div>
 
-                {/* Country & Province */}
+                {/* Country */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                     <Controller
                         name="country"
@@ -343,19 +337,6 @@ export function CustomerDetailsForm({
                                 options={countryOptions}
                                 placeholder="Select country"
                                 error={errors.country?.message}
-                            />
-                        )}
-                    />
-                    <Controller
-                        name="province"
-                        control={control}
-                        render={({ field }) => (
-                            <Select
-                                id="province"
-                                {...field}
-                                options={provinceOptions}
-                                placeholder="Select province/state/county"
-                                error={errors.province?.message}
                             />
                         )}
                     />

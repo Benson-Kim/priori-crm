@@ -18,7 +18,6 @@
 import { apiGet } from "@/lib/api";
 import type { Schema } from "@/lib/apiTypes";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
-import { toISODateString } from "@/lib/dateUtils";
 import type { PaginatedApiResponse } from "@/lib/types";
 
 // Response contracts (generated from the FastAPI OpenAPI schema).
@@ -50,24 +49,6 @@ export interface PeriodFilter {
   dateTo?: string;
 }
 
-export function isValidRangePreset(
-  value: string | null
-): value is RangePreset {
-  return value != null && (RANGE_PRESETS as readonly string[]).includes(value);
-}
-
-/**
- * Whether the period can be sent to the API. Presets are always ready; a
- * custom range needs both dates, in order. Checking here avoids firing
- * requests that are guaranteed to 400 while the user is mid-selection.
- */
-export function isPeriodReady(period: PeriodFilter): boolean {
-  if (period.range !== "custom") return true;
-  return Boolean(
-    period.dateFrom && period.dateTo && period.dateFrom <= period.dateTo
-  );
-}
-
 /**
  * Build the wire query params for a period + currency.
  *
@@ -83,58 +64,6 @@ export function buildPeriodParams(period: PeriodFilter, currency: string) {
     dateTo: period.range === "custom" ? period.dateTo : undefined,
     currency,
   };
-}
-
-/**
- * Resolve a PeriodFilter preset to concrete {start, end} ISO dates.
- * Mirrors the RANGE_PRESETS set; `undefined` means "no filter" so the backend
- * applies its own default (last 12 months).
- */
-export function resolvePeriod(
-  period: PeriodFilter
-): { start?: string; end?: string } {
-  const now = new Date();
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-
-  const startOf = (d: Date) => toISODateString(d);
-  const endStr = toISODateString(end);
-
-  switch (period.range) {
-    case "last_7_days": {
-      const s = new Date(end);
-      s.setUTCDate(s.getUTCDate() - 6);
-      return { start: startOf(s), end: endStr };
-    }
-    case "this_month": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "last_month": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, 1));
-      const e = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 0));
-      return { start: startOf(s), end: toISODateString(e) };
-    }
-    case "this_quarter": {
-      const q = Math.floor(end.getUTCMonth() / 3);
-      const s = new Date(Date.UTC(end.getUTCFullYear(), q * 3, 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "this_year": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "last_12_months": {
-      const s = new Date(end);
-      s.setUTCFullYear(s.getUTCFullYear() - 1);
-      return { start: startOf(s), end: endStr };
-    }
-    case "custom":
-      return { start: period.dateFrom, end: period.dateTo };
-    default:
-      return {};
-  }
 }
 
 /** Overview cards: revenue / expenses / net profit / margin with deltas. */

@@ -16,6 +16,7 @@ from app.common.dependencies import (
 )
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.modules.invoices.schemas import (
     InvoiceCalculationResponse,
     InvoiceCreate,
@@ -37,7 +38,7 @@ from app.modules.invoices.service import InvoiceService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 # CREATE

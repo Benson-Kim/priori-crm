@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
-import { COUNTRY_OPTIONS } from "@/lib/constants";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { customerStatusOptions, customerTypeOptions, type Currency, type CustomerStatus, type CustomerType } from "@/lib/enums";
 import { createCustomer } from "@/services/customerApi";
 import { checkEmailDuplicate } from "@/services/vendorApi";
-import { Check, X } from "lucide-react";
+import { CheckCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Card } from "../ui/Card";
@@ -17,13 +17,12 @@ interface QuickCustomerForm {
     companyName?: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phone: string;
+    email?: string;
+    phone?: string;
     address: string;
     country: string;
     city: string;
-    province: string;
-    postalCode: string;
+    postalCode?: string;
     website?: string;
     vatNumber?: string;
 }
@@ -60,9 +59,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
             email: "",
             phone: "",
             address: "",
-            country: COUNTRY_OPTIONS[0].value,
+            country: DEFAULT_COUNTRY,
             city: "",
-            province: "",
             postalCode: "",
             website: "",
             vatNumber: "",
@@ -70,6 +68,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
     });
 
     const emailValue = useWatch({ name: "email", control });
+    const customerTypeValue = useWatch({ name: "customerType", control });
+    const phoneRequired = customerTypeValue === "individual";
 
 
     const onSubmit = async (data: QuickCustomerForm) => {
@@ -83,13 +83,12 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                 status: data.status,
                 firstName: data.firstName,
                 lastName: data.lastName,
-                email: data.email,
-                phone: data.phone,
+                email: data.email || undefined,
+                phone: data.phone || undefined,
                 address: data.address,
                 country: data.country,
                 city: data.city,
-                province: data.province,
-                postalCode: data.postalCode,
+                postalCode: data.postalCode || undefined,
                 currency: "KES" satisfies Currency,
                 website: data.website || undefined,
                 vatNumber: data.vatNumber || undefined,
@@ -147,18 +146,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     <p className="text-red-800 text-sm">{error}</p>
                 </div>
             )}
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[75vh] px-2 pb-4">
-                <Card className="rounded-xl bg-white border border-gray-300 flex flex-col gap-6 p-6">
-
-                    {/* Add New Customer Button */}
-                    <div className="p-4 border-2 border-priori-purple rounded-lg text-center">
-                        <button
-                            type="button"
-                            className="text-priori-purple font-semibold text-base flex items-center justify-center gap-2 w-full"
-                        >
-                            <span className="text-2xl">+</span> Add New Customer
-                        </button>
-                    </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-h-[90vh]">
+                <Card padding="lg" className="rounded-xl  flex flex-col gap-6">
 
                     {/* Business Type */}
                     <div className="grid grid-cols-2 gap-3">
@@ -208,12 +197,11 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     {/* Email */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Email <span className="text-red-500">*</span>
+                            Email
                         </label>
                         <>
                             <Input
                                 {...register("email", {
-                                    required: "Email is required",
                                     pattern: {
                                         value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                                         message: "Invalid email address"
@@ -231,10 +219,15 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     {/* Phone */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
-                            Phone <span className="text-red-500">*</span>
+                            Phone
+                            {phoneRequired && <span className="text-red-500"> *</span>}
                         </label>
                         <Input
-                            {...register("phone", { required: "Phone is required" })}
+                            {...register("phone", {
+                                validate: (value) =>
+                                    !phoneRequired || !!value ||
+                                    "Phone number is required for individual customers.",
+                            })}
                             prefix="+254"
                             type="tel"
                             placeholder="700 000 000"
@@ -257,8 +250,8 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         />
                     </div>
 
-                    {/* City, Province, Postal Code */}
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* City & Postal Code */}
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
                                 City <span className="text-red-500">*</span>
@@ -274,24 +267,10 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Province <span className="text-red-500">*</span>
-                            </label>
-                            <Input
-                                {...register("province", {
-                                    required: "Province is required",
-                                    minLength: { value: 2, message: "Province must be at least 2 characters" }
-                                })}
-                                placeholder="Province"
-                                error={errors.province?.message}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Postal Code <span className="text-red-500">*</span>
+                                Postal Code
                             </label>
                             <Input
                                 {...register("postalCode", {
-                                    required: "Postal code is required",
                                     minLength: { value: 3, message: "Postal code must be at least 3 characters" }
                                 })}
                                 placeholder="00100"
@@ -305,17 +284,17 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         <label className="block text-sm font-semibold text-gray-900 mb-2">
                             Country <span className="text-red-500">*</span>
                         </label>
-
-                        <select
+                        {/*
+                          The backend contract (CustomerCreate.country) is an ISO
+                          3166-1 alpha-2 code, so the option values are alpha-2
+                          codes and only the labels are country names.
+                        */}
+                        <Select
+                            id="country"
+                            options={COUNTRIES}
                             {...register("country", { required: "Country is required" })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-priori-purple"
-                        >
-                            {COUNTRY_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
-
-                        {errors.country && <p className="text-red-500 text-xs mt-1">{errors.country.message}</p>}
+                            error={errors.country?.message}
+                        />
                     </div>
 
                     {/* Website and VAT Number */}
@@ -342,25 +321,25 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3 pt-4">
-                        <Button
-                            type="button"
-                            onClick={handleClose}
-                            disabled={isLoading}
-                            variant="outline"
-                            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <X size={20} /> Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={isLoading}
-                            className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Check size={20} /> {isLoading ? "Saving..." : "Save Customer"}
-                        </Button>
-                    </div>
                 </Card>
+                <div className="flex gap-3">
+                    <Button
+                        type="button"
+                        onClick={handleClose}
+                        disabled={isLoading}
+                        variant="outline"
+                        className="flex-1 text-gray-600 border border-gray-600"
+                    >
+                        <X size={20} /> Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="flex-1 font-semibold"
+                    >
+                        <CheckCircle size={20} /> {isLoading ? "Saving..." : "Save Customer"}
+                    </Button>
+                </div>
             </form>
         </Dialog >
     );

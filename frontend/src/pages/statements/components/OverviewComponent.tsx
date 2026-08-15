@@ -1,10 +1,14 @@
-import { PeriodRangePicker } from "@/components/ui/PeriodRangePicker";
+import { ReportPeriodPicker } from "@/components/ui/ReportPeriodPicker";
 import { DEFAULT_CURRENCY } from "@/lib/constants";
 import { formatDelta, money } from "@/lib/utils";
+import { useReportingDate } from "@/hooks/useReportingDate";
+import {
+     isReportPeriodReady,
+     resolveReportPeriod,
+     type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import {
      getStatementOverview,
-     isPeriodReady,
-     type PeriodFilter,
      type StatementOverview,
 } from "@/services/statementsApi";
 import { useEffect, useRef, useState } from "react";
@@ -12,8 +16,8 @@ import { MetricCard } from "@/components/ui/MetricCard";
 
 
 interface OverviewComponentProps {
-     period: PeriodFilter;
-     onPeriodChange: (period: PeriodFilter) => void;
+     period: ReportPeriodFilter;
+     onPeriodChange: (period: ReportPeriodFilter) => void;
      currency?: string;
 }
 
@@ -33,8 +37,9 @@ export const OverviewComponent = ({
      const [isLoading, setIsLoading] = useState(false);
      const [error, setError] = useState<string | null>(null);
 
-     const { range, dateFrom, dateTo } = period;
-     const periodReady = isPeriodReady(period);
+     const reportingDay = useReportingDate();
+     const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+     const periodReady = isReportPeriodReady(period, reportingDay);
 
      // Stale-response guard: only the latest request may write state, so
      // rapid period switching can never paint out-of-order results.
@@ -50,7 +55,7 @@ export const OverviewComponent = ({
           const seq = ++seqRef.current;
           setIsLoading(true);
           setError(null);
-          getStatementOverview({ range, dateFrom, dateTo }, currency)
+          getStatementOverview({ range: "custom", dateFrom, dateTo }, currency)
                .then((data) => {
                     if (seq === seqRef.current) setOverview(data);
                })
@@ -62,7 +67,7 @@ export const OverviewComponent = ({
                .finally(() => {
                     if (seq === seqRef.current) setIsLoading(false);
                });
-     }, [periodReady, range, dateFrom, dateTo, currency]);
+     }, [periodReady, dateFrom, dateTo, currency]);
 
      const marginValue =
           isLoading || overview?.profit_margin.percent == null
@@ -74,12 +79,7 @@ export const OverviewComponent = ({
                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <h2 className="text-xl font-bold text-gray-800">Overview</h2>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                         <PeriodRangePicker
-                              period={period}
-                              onPeriodChange={onPeriodChange}
-                              placeholder="Select range"
-                              selectWrapperClassName="min-w-[220px]"
-                         />
+                         <ReportPeriodPicker value={period} onChange={onPeriodChange} />
                     </div>
                </div>
 

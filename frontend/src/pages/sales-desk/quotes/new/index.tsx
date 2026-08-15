@@ -22,9 +22,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
+import { StatusChip } from "@/components/ui/Chip";
 import { InlineSelect } from "@/components/ui/InlineSelect";
 import { Input } from "@/components/ui/Input";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SyncPill } from "@/components/ui/SyncPill";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -49,9 +52,6 @@ import {
     type QuoteLineInput,
     type QuoteRow,
 } from "@/services/salesDeskApi";
-import { SyncPill } from "@/components/ui/SyncPill";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { StatusChip } from "@/components/ui/Chip";
 
 export default function SalesDeskQuoteBuilderPage() {
     const navigate = useNavigate();
@@ -313,7 +313,7 @@ export default function SalesDeskQuoteBuilderPage() {
                 <section className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-sd-border bg-sd-card">
                     <div className="flex flex-wrap items-center gap-3 border-b border-sd-border px-5 py-3">
                         {/* Borderless per the design: reads as a heading, not a field. */}
-                        <div className="min-w-[220px] flex-1">
+                        <div className="min-w-55 flex-1">
                             <InlineSelect
                                 variant="sales-desk"
                                 aria-label="Deal to quote"
@@ -397,7 +397,7 @@ export default function SalesDeskQuoteBuilderPage() {
                     </p>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[860px] text-left">
+                        <table className="w-full min-w-215 text-left">
                             <thead>
                                 <tr className="border-b border-sd-border text-[13px] font-semibold text-sd-ink">
                                     <th scope="col" className="px-5 py-3">Product</th>
@@ -609,7 +609,7 @@ export default function SalesDeskQuoteBuilderPage() {
                 </section>
 
                 {/* Recent quotes rail */}
-                <aside className="w-full shrink-0 xl:w-[280px]">
+                <aside className="w-full shrink-0 xl:w-70">
                     <h2 className="text-[10px] font-bold tracking-[1px] text-sd-muted uppercase">
                         Recent quotes
                     </h2>

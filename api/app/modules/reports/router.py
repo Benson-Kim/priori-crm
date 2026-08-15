@@ -28,6 +28,7 @@ from app.common.excel import ExcelExporter
 from app.common.export_limiter import run_export
 from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.reporting_time import reporting_date
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import Currency
 from app.lib.config import settings
 from app.modules.reports.audit import authorize_and_audit_report_access
@@ -50,9 +51,10 @@ from app.modules.statements.schemas import RangePreset, ResolvedPeriod
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
+    route_class=CommitOnSuccessRoute,
     dependencies=[
         Depends(authorize_and_audit_report_access, scope="function"),
-    ]
+    ],
 )
 
 _exporter = ExcelExporter()

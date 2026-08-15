@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 
 from app.common.dependencies import StatementsServiceDep
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import Currency
 from app.modules.statements.schemas import (
     CashflowCounts,
@@ -25,7 +26,7 @@ from app.modules.statements.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 # Shared query-parameter annotations
 RangeParam = Annotated[

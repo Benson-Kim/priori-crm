@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, status
 
 from app.common.dependencies import DealQuoteServiceDep, DealServiceDep
 from app.common.pagination import PaginatedResponse, PaginationParams
+from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import DealHygieneBucket, DealTab
 from app.modules.deals.schemas import (
     DealActivityCreate,
@@ -26,7 +27,7 @@ from app.modules.quotes.schemas import QuoteResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=CommitOnSuccessRoute)
 
 
 @router.post(

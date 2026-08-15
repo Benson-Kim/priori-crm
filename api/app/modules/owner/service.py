@@ -189,13 +189,14 @@ class OwnerService:
         )
         return {row.module_key: row.enabled for row in rows}
 
-    def module_settings(self) -> list[ModuleSettingState]:
-        """Effective state of EVERY module key (admin settings screen).
+    def _module_settings_for_profile(
+        self, profile: OwnerProfile
+    ) -> list[ModuleSettingState]:
+        """Effective state of EVERY module key for one owner profile.
 
         Missing override = enabled (default-on). Essential modules are
         always enabled regardless of any (never-created) override row.
         """
-        profile = self.get_or_create()
         overrides = self._module_overrides(profile)
         return [
             ModuleSettingState(
@@ -206,18 +207,51 @@ class OwnerService:
             for key in ModuleKey
         ]
 
+    def module_settings(self) -> list[ModuleSettingState]:
+        """Effective module states for the live owner (read-only settings screen)."""
+        return self._module_settings_for_profile(self.get_or_create())
+
+    def _get_owner_profile_or_404(self, owner_profile_id: uuid.UUID) -> OwnerProfile:
+        """Resolve an owner profile by id — 404, never implicit creation.
+
+        The /platform API must not get-or-create: an entitlement row can
+        never precede its tenant (ADR-0011).
+        """
+        from app.common.exceptions import NotFoundException
+
+        profile = self._db.get(OwnerProfile, owner_profile_id)
+        if profile is None:
+            raise NotFoundException(
+                detail="Owner profile not found", resource="owner_profile"
+            )
+        return profile
+
+    def owner_profiles(self) -> list[OwnerProfile]:
+        """Every owner profile, for the platform-operator listing (ADR-0011)."""
+        return self._db.query(OwnerProfile).order_by(OwnerProfile.full_name).all()
+
+    def module_settings_for_owner(
+        self, owner_profile_id: uuid.UUID
+    ) -> list[ModuleSettingState]:
+        """Effective module states of one owner (platform-operator view)."""
+        return self._module_settings_for_profile(
+            self._get_owner_profile_or_404(owner_profile_id)
+        )
+
     def enabled_modules_map(self) -> dict[str, bool]:
         """module_key -> effective enabled state, for the bootstrap response."""
         return {s.module_key: s.enabled for s in self.module_settings()}
 
-    def set_module_enabled(
-        self, module_key: ModuleKey, enabled: bool
+    def set_module_enabled_for_owner(
+        self, owner_profile_id: uuid.UUID, module_key: ModuleKey, enabled: bool
     ) -> ModuleSettingState:
-        """Upsert one module override (admin only; audited).
+        """Upsert one module override for one owner (platform operator; audited).
 
-        Disabling an essential module is a 422 — those are core
-        infrastructure (auth, owner, health, dashboard) and the router
-        gates deliberately do not exist for them.
+        Entitlements are operator-granted (ADR-0011): this is the only
+        write path, invoked from the /platform API. Disabling an essential
+        module is a 422 — those are core infrastructure (auth, owner,
+        health, dashboard) and the router gates deliberately do not exist
+        for them.
         """
         from app.common.audit import record_audit_event
         from app.common.exceptions import ValidationException
@@ -231,7 +265,7 @@ class OwnerService:
                 errors=[{"field": "module_key", "reason": "essential_module"}],
             )
 
-        profile = self.get_or_create()
+        profile = self._get_owner_profile_or_404(owner_profile_id)
         row = (
             self._db.query(OwnerModuleSetting)
             .filter(

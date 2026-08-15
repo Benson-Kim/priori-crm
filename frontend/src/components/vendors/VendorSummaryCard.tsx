@@ -5,16 +5,24 @@
  * every row paid/pending, and exports to Excel / PDF.
  *
  * The backend card endpoints take explicit period_start/period_end (the same
- * contract as the vendor statement), so a preset is resolved to concrete dates
- * here before the request. The reusable PeriodRangePicker still drives the UX.
+ * contract as the vendor statement), so the chosen period is resolved to
+ * concrete dates before the request. ReportPeriodPicker drives the UX, and
+ * resolveReportPeriod does the resolving - this file used to carry its own
+ * copy of that switch, duplicating resolvePeriod() in statementsApi.
  */
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { useReportingDate } from "@/hooks/useReportingDate";
 import { toISODateString } from "@/lib/dateUtils";
+import {
+  currentYear,
+  isReportPeriodReady,
+  resolveReportPeriod,
+  type ReportPeriodFilter,
+} from "@/lib/reportUtils";
 import { formatCurrency, formatDate, saveBlob } from "@/lib/utils";
-import { isPeriodReady, type PeriodFilter } from "@/services/statementsApi";
 import {
   exportVendorCardExcel,
   exportVendorCardPdf,
@@ -24,7 +32,7 @@ import {
 } from "@/services/vendorApi";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { PeriodRangePicker } from "../ui/PeriodRangePicker";
+import { ReportPeriodPicker } from "../ui/ReportPeriodPicker";
 
 interface VendorSummaryCardProps {
   vendorId: string;
@@ -34,53 +42,6 @@ interface VendorSummaryCardProps {
 }
 
 const PER_PAGE = 5;
-
-/**
- * Resolve a PeriodFilter preset to concrete {start, end} ISO dates.
- * Mirrors the RANGE_PRESETS set; `undefined` means "no filter" so the backend
- * applies its own default (last 12 months).
- */
-function resolvePeriod(
-  period: PeriodFilter
-): { start?: string; end?: string } {
-  const now = new Date();
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-
-  const startOf = (d: Date) => toISODateString(d);
-  const endStr = toISODateString(end);
-
-  switch (period.range) {
-    case "last_7_days": {
-      const s = new Date(end);
-      s.setUTCDate(s.getUTCDate() - 6);
-      return { start: startOf(s), end: endStr };
-    }
-    case "this_month": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "last_month": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, 1));
-      const e = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 0));
-      return { start: startOf(s), end: toISODateString(e) };
-    }
-    case "this_quarter": {
-      const q = Math.floor(end.getUTCMonth() / 3);
-      const s = new Date(Date.UTC(end.getUTCFullYear(), q * 3, 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "this_year": {
-      const s = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
-      return { start: startOf(s), end: endStr };
-    }
-    case "custom":
-      return { start: period.dateFrom, end: period.dateTo };
-    default:
-      return {};
-  }
-}
 
 function stateBadge(state: "paid" | "pending") {
   const variant: BadgeVariant = state === "pending" ? "pending" : "paid";
@@ -93,8 +54,12 @@ export function VendorSummaryCard({
   title,
   currency,
 }: Readonly<VendorSummaryCardProps>) {
-  // Default preset gives an immediate, useful window without a 12-month load.
-  const [period, setPeriod] = useState<PeriodFilter>({ range: "this_year" });
+  // Year-to-date gives an immediate, useful window without a 12-month load.
+  const reportingDay = useReportingDate();
+  const [period, setPeriod] = useState<ReportPeriodFilter>(() => ({
+    mode: "year",
+    year: currentYear(reportingDay),
+  }));
   const [page, setPage] = useState(1);
   const [data, setData] = useState<VendorCardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,15 +67,15 @@ export function VendorSummaryCard({
   const [error, setError] = useState<string | null>(null);
 
   const periodParams = useCallback(() => {
-    const { start, end } = resolvePeriod(period);
+    const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
     const params: { period_start?: string; period_end?: string } = {};
-    if (start) params.period_start = start;
-    if (end) params.period_end = end;
+    if (dateFrom) params.period_start = dateFrom;
+    if (dateTo) params.period_end = dateTo;
     return params;
-  }, [period]);
+  }, [period, reportingDay]);
 
   const fetchCard = useCallback(async () => {
-    if (!isPeriodReady(period)) return;
+    if (!isReportPeriodReady(period, reportingDay)) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -125,7 +90,7 @@ export function VendorSummaryCard({
     } finally {
       setIsLoading(false);
     }
-  }, [vendorId, card, page, period, periodParams]);
+  }, [vendorId, card, page, period, periodParams, reportingDay]);
 
   useEffect(() => {
     void fetchCard();
@@ -188,11 +153,7 @@ export function VendorSummaryCard({
         />
 
         {/* Date filter */}
-        <PeriodRangePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          selectWrapperClassName="min-w-[160px] py-1.5"
-        />
+        <ReportPeriodPicker value={period} onChange={setPeriod} />
       </div>
 
       {/* Transaction list */}

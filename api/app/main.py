@@ -48,6 +48,7 @@ from app.modules.invoices.router import router as invoices_router
 from app.modules.nurture.router import router as nurture_router
 from app.modules.onboarding.router import router as onboarding_router
 from app.modules.owner.router import router as owner_router
+from app.modules.platform.router import router as platform_router
 from app.modules.purchase_orders.router import router as purchase_orders_router
 from app.modules.quotes.router import router as quotes_router
 from app.modules.reports.router import router as reports_router
@@ -216,6 +217,12 @@ def _register_routers(app: FastAPI) -> None:
         dependencies=_module_gate(ModuleKey.PURCHASE_ORDERS),
     )
     app.include_router(owner_router, prefix=f"{api_prefix}/owner", tags=["Owner"])
+    # Platform-operator surface (ADR-0011): owner-id-scoped module
+    # entitlement grants. Never module-gated — platform administration must
+    # keep working even when every toggleable module is disabled.
+    app.include_router(
+        platform_router, prefix=f"{api_prefix}/platform", tags=["Platform"]
+    )
     app.include_router(
         statements_router,
         prefix=f"{api_prefix}/statements",

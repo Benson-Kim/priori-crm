@@ -638,6 +638,108 @@ export async function moveDealToFuturePipeline(
     announceDeskChange();
 }
 
+// Parked deals — the future pipeline's other half (nurture prospects being
+// the first). A parked deal keeps its recorded stage as resume_stage and
+// waits for its re-engage date, when the future-pipeline badge counts it due.
+
+/** A parked deal, shaped for the future-pipeline page's cards. */
+export interface ParkedDealRow {
+    id: string;
+    company: string;
+    product: string;
+    seats: number;
+    /** Annual contract value in the deal's own billing currency. */
+    value: number;
+    billing_currency: BillingCurrency;
+    /** The stage the deal was parked at, where resuming returns it. */
+    resume_stage_label: string;
+    /** ISO date (yyyy-mm-dd) the parking ends. */
+    parked_until: string;
+    /** Days until that date. Negative once it has passed. */
+    days_until: number;
+    urgency: ProspectUrgency;
+    /** Why the deal was parked — the note recorded when it left the pipeline. */
+    note: string;
+    owner_id: string;
+    owner_name: string;
+    owner_initials: string;
+    owner_color: string;
+}
+
+/**
+ * Due state for a parked deal's re-engage date. Nurture rows get this from
+ * the server; a deal only carries the date, so it is a date-only subtraction
+ * in the browser's timezone, which can disagree with the server's org-local
+ * boundary right around midnight — the badge stays a reading, the resume
+ * endpoint stays the authority.
+ */
+function parkedDueState(parkedUntil: string): {
+    days_until: number;
+    urgency: ProspectUrgency;
+} {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(`${parkedUntil}T00:00:00`);
+    const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+    return {
+        days_until: days,
+        urgency: days < 0 ? "overdue" : days === 0 ? "today" : "scheduled",
+    };
+}
+
+function toParkedDealRow(record: Schema<"DealResponse">): ParkedDealRow {
+    const { days_until, urgency } = parkedDueState(record.parked_until ?? "");
+    return {
+        id: record.id,
+        company: record.company_name,
+        product: record.product,
+        seats: record.seats,
+        value: money(record.value),
+        billing_currency: record.currency as BillingCurrency,
+        // stage_label is the stage the deal reached — for a parked deal, the
+        // stage it resumes at.
+        resume_stage_label: record.stage_label,
+        parked_until: record.parked_until ?? "",
+        days_until,
+        urgency,
+        note: record.latest_record?.note ?? "",
+        owner_id: record.owner.id,
+        owner_name: record.owner.name,
+        owner_initials: record.owner.initials,
+        owner_color: avatarColor(record.owner.id),
+    };
+}
+
+/**
+ * Parked deals, soonest re-engage date first.
+ *
+ * The deals list has no parked-only tab (its tabs are all/open/won/lost), so
+ * this reads the full list and keeps the parked rows — the same set "All
+ * deals" carries and "Open" excludes on the pipeline.
+ */
+export async function getParkedDeals(ownerId?: string): Promise<ParkedDealRow[]> {
+    const rows = await apiGetAll<Schema<"DealResponse">>("/deals", {
+        tab: "all",
+        showClosed: true,
+        ownerId,
+    });
+    return rows
+        .filter((record) => record.status === "parked")
+        .map(toParkedDealRow)
+        .sort((a, b) => a.parked_until.localeCompare(b.parked_until));
+}
+
+/**
+ * Return a parked deal to the stage it was parked at (its resume_stage).
+ * The server refuses non-parked deals with a 400.
+ */
+export async function resumeDeal(dealId: string): Promise<PipelineDeal> {
+    const deal = await apiPost<Schema<"DealResponse">>(`/deals/${dealId}/resume`, {});
+    // The deal leaves the future pipeline's due queue and rejoins the open book.
+    announceDeskChange();
+    return toPipelineDeal(deal);
+}
+
 // Company endpoints
 
 /** A company's posting profile in one currency, as the UI consumes it. */
@@ -651,6 +753,8 @@ export interface CompanyBillingProfile {
     synced: boolean;
     /** True when this is the company's default transacting currency. */
     is_default: boolean;
+    /** Optimistic-locking version, echoed back as `expectedVersion` on edits. */
+    version: number;
 }
 
 /** A row in the companies directory. */
@@ -708,8 +812,10 @@ function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
         name: record.name,
         industry: record.industry ?? "",
         contact: record.contact,
-        email: record.email,
-        phone: record.phone,
+        // Optional on the customer record; the table renders a blank cell,
+        // matching how `industry` above is coerced.
+        email: record.email ?? "",
+        phone: record.phone ?? "",
         tenant: record.tenant,
         primary_currency: record.primary_currency as BillingCurrency,
         registered_on: record.registered_on,
@@ -725,6 +831,7 @@ function toCompanyRowFromServer(record: Schema<"DeskCompanyRow">): CompanyRow {
             credit_limit: money(profile.credit_limit),
             synced: profile.synced,
             is_default: profile.is_default,
+            version: profile.version,
         })),
         needs_sync: record.needs_sync,
         open_deal_count: record.open_deal_count,
@@ -802,11 +909,15 @@ export interface BillingProfilePatch {
 /**
  * Edit a profile's terms. Any change clears the sync flag: accounting is
  * holding the previous terms until the profile is pushed again.
+ *
+ * The endpoint uses optimistic locking: `expectedVersion` must be the
+ * profile's `version` from the last read, and a stale value returns 409.
  */
 export async function updateBillingProfile(
     companyId: string,
     currency: BillingCurrency,
-    patch: BillingProfilePatch
+    patch: BillingProfilePatch,
+    expectedVersion: number
 ): Promise<CompanyRow> {
     if (patch.credit_limit !== undefined) {
         if (!Number.isFinite(patch.credit_limit) || patch.credit_limit < 0) {
@@ -815,7 +926,7 @@ export async function updateBillingProfile(
     }
 
     await apiPatch<Schema<"BillingProfileResponse">>(
-        `/customers/${companyId}/profiles/${currency}`,
+        `/customers/${companyId}/profiles/${currency}?expectedVersion=${expectedVersion}`,
         {
             ...(patch.terms !== undefined ? { paymentTerms: patch.terms } : {}),
             ...(patch.tax !== undefined ? { taxTreatment: patch.tax } : {}),

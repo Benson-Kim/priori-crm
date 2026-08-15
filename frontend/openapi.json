@@ -1094,8 +1094,7 @@
             "firstName": "John",
             "lastName": "Doe",
             "phone": "0712345678",
-            "postalCode": "00100",
-            "province": "Nairobi County"
+            "postalCode": "00100"
           },
           {
             "address": "456 Business Ave",
@@ -1109,7 +1108,6 @@
             "last_name": "Smith",
             "phone": "+254700000000",
             "postal_code": "00100",
-            "province": "Nairobi",
             "vat_number": "KE1234567890",
             "website": "https://acme.com"
           }
@@ -1191,10 +1189,17 @@
             "description": "Customer type"
           },
           "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Email address",
-            "format": "email",
-            "title": "Email",
-            "type": "string"
+            "title": "Email"
           },
           "firstName": {
             "description": "First name",
@@ -1235,9 +1240,16 @@
             "title": "Ownerid"
           },
           "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Phone number in international format",
-            "title": "Phone",
-            "type": "string"
+            "title": "Phone"
           },
           "postalCode": {
             "anyOf": [
@@ -1263,20 +1275,6 @@
               }
             ],
             "description": "Which billing profile (USD|KES) is the default"
-          },
-          "province": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "minLength": 2,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "State/Province",
-            "title": "Province"
           },
           "tenantDomain": {
             "anyOf": [
@@ -1321,9 +1319,7 @@
         "required": [
           "customerType",
           "firstName",
-          "lastName",
-          "email",
-          "phone"
+          "lastName"
         ],
         "title": "CustomerCreate",
         "type": "object"
@@ -1565,8 +1561,15 @@
             "type": "string"
           },
           "email": {
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "first_name": {
             "title": "First Name",
@@ -1605,8 +1608,15 @@
             "title": "Owner Id"
           },
           "phone": {
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "postal_code": {
             "anyOf": [
@@ -1629,17 +1639,6 @@
               }
             ],
             "title": "Primary Currency"
-          },
-          "province": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Province"
           },
           "status": {
             "title": "Status",
@@ -1695,8 +1694,6 @@
           "status",
           "first_name",
           "last_name",
-          "email",
-          "phone",
           "currency",
           "balance",
           "created_at",
@@ -1806,8 +1803,15 @@
             "type": "string"
           },
           "email": {
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "id": {
             "format": "uuid",
@@ -1815,8 +1819,15 @@
             "type": "string"
           },
           "phone": {
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "status": {
             "title": "Status",
@@ -1828,8 +1839,6 @@
           "customer_type",
           "status",
           "display_name",
-          "email",
-          "phone",
           "balance",
           "currency",
           "created_at"
@@ -2018,17 +2027,6 @@
                 "type": "null"
               }
             ]
-          },
-          "province": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Province"
           },
           "tenantDomain": {
             "anyOf": [
@@ -3305,6 +3303,11 @@
           "tax_treatment": {
             "title": "Tax Treatment",
             "type": "string"
+          },
+          "version": {
+            "description": "Optimistic-locking version; pass as expectedVersion when editing the profile",
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
@@ -3314,7 +3317,8 @@
           "tax_treatment",
           "credit_limit",
           "synced",
-          "is_default"
+          "is_default",
+          "version"
         ],
         "title": "DeskCompanyProfile",
         "type": "object"
@@ -3332,8 +3336,15 @@
             "type": "string"
           },
           "email": {
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "id": {
             "description": "Customer id",
@@ -3375,8 +3386,15 @@
             ]
           },
           "phone": {
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           },
           "primary_currency": {
             "title": "Primary Currency",
@@ -3418,8 +3436,6 @@
           "name",
           "industry",
           "contact",
-          "email",
-          "phone",
           "tenant",
           "primary_currency",
           "registered_on",
@@ -5933,6 +5949,84 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "ModuleKey": {
+        "description": "Per-owner feature-toggleable application modules.\n\nEach key identifies a functional module whose availability can be\nswitched on/off per owner profile via ``owner_module_settings``.\nA missing settings row means the module is ENABLED (default-on).\n\nMembers listed in :data:`ESSENTIAL_MODULES` are core infrastructure\n(auth, owner profile, health, dashboard) and can never be disabled \u2014\ntheir routers carry no module gate and the admin API rejects attempts\nto disable them with a 422.",
+        "enum": [
+          "customers",
+          "quotes",
+          "invoices",
+          "deals",
+          "nurture",
+          "onboarding",
+          "vendors",
+          "expenses",
+          "purchase_orders",
+          "statements",
+          "reports",
+          "sales_desk",
+          "auth",
+          "owner",
+          "health",
+          "dashboard"
+        ],
+        "title": "ModuleKey",
+        "type": "string"
+      },
+      "ModuleSettingState": {
+        "description": "Effective entitlement state of one application module.\n\n``enabled`` is the RESOLVED state (explicit override, or the default-on\nwhen no ``owner_module_settings`` row exists). ``essential`` marks core\nmodules that can never be disabled (the UI renders them locked).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "essential": {
+            "title": "Essential",
+            "type": "boolean"
+          },
+          "moduleKey": {
+            "title": "Modulekey",
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleKey",
+          "enabled",
+          "essential"
+        ],
+        "title": "ModuleSettingState",
+        "type": "object"
+      },
+      "ModuleSettingUpdate": {
+        "description": "PATCH /platform/owners/{owner_id}/modules/{module_key} body.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ModuleSettingUpdate",
+        "type": "object"
+      },
+      "ModuleSettingsResponse": {
+        "description": "Every module key with its effective state (GET /owner/modules).",
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleSettingState"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modules"
+        ],
+        "title": "ModuleSettingsResponse",
+        "type": "object"
+      },
       "NurtureDueState": {
         "description": "Server-computed due badge, rendered directly by the UI.\n\n``state`` is ``overdue`` / ``today`` / ``in_days`` (with ``in_days``\ncarrying N), computed against the org-local accounting date boundary.\n``label`` is the chip text verbatim: \"Overdue\", \"Today\", \"45d\".",
         "properties": {
@@ -6556,6 +6650,13 @@
               }
             ],
             "title": "Email"
+          },
+          "enabledModules": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Enabledmodules",
+            "type": "object"
           },
           "fullName": {
             "title": "Fullname",
@@ -7449,6 +7550,43 @@
           "open_deal_count"
         ],
         "title": "PipelineWeightedKpi",
+        "type": "object"
+      },
+      "PlatformOwnerSummary": {
+        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity-only (id + display name): the operator manages\nentitlements, not tenant business data (ADR-0011).",
+        "properties": {
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fullName"
+        ],
+        "title": "PlatformOwnerSummary",
+        "type": "object"
+      },
+      "PlatformOwnersResponse": {
+        "description": "Every owner profile (GET /platform/owners).",
+        "properties": {
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformOwnerSummary"
+            },
+            "title": "Owners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "owners"
+        ],
+        "title": "PlatformOwnersResponse",
         "type": "object"
       },
       "ProfitMarginMetric": {
@@ -14911,6 +15049,25 @@
             }
           },
           {
+            "description": "Filter by customer (company)",
+            "in": "query",
+            "name": "customerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by customer (company)",
+              "title": "Customerid"
+            }
+          },
+          {
             "description": "Activity-hygiene bucket (open deals only): active_week | quiet_8_30 | no_activity_30 | open_45",
             "in": "query",
             "name": "hygiene",
@@ -19098,6 +19255,33 @@
         ]
       }
     },
+    "/api/v1/owner/modules": {
+      "get": {
+        "description": "Per-owner module entitlements: every ModuleKey with its RESOLVED enabled state (missing override row = enabled) and whether it is essential (never disableable). Admin only, READ-ONLY: entitlements are granted by the platform operator via the /platform API (ADR-0011); there is no tenant-facing write.",
+        "operationId": "list_module_settings_api_v1_owner_modules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List every module with its effective entitlement state (read-only)",
+        "tags": [
+          "Owner"
+        ]
+      }
+    },
     "/api/v1/owner/settings/sales-pricing": {
       "get": {
         "description": "The documented price-list source for the Quotes & pricing UI (issue #44): the seeded product catalog with server-derived Annual/seat (monthly x 12 at list) and 10-seat ARR (monthly x 12 x 10) columns, the annual billing discount applied by the quote builder, and the display-only FX conventions (units per 1 USD) behind USD-equivalent totals and the conversions row. All values are decimal strings.",
@@ -19146,6 +19330,157 @@
         "summary": "Simple ping",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/api/v1/platform/owners": {
+      "get": {
+        "description": "Identity-only listing (id + display name) of the owner profiles whose module entitlements the platform operator administers. The operator role carries no access to tenant business data.",
+        "operationId": "list_owners_api_v1_platform_owners_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformOwnersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List every owner profile (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/platform/owners/{owner_id}/modules": {
+      "get": {
+        "description": "Every ModuleKey with its RESOLVED enabled state for the given owner (missing override row = enabled) and whether it is essential (never disableable).",
+        "operationId": "list_owner_module_settings_api_v1_platform_owners__owner_id__modules_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "404": {
+            "description": "Unknown owner id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List one owner's module entitlements (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/platform/owners/{owner_id}/modules/{module_key}": {
+      "patch": {
+        "description": "Upsert the per-owner override for one toggleable module. Disabling an essential module (auth, owner, health, dashboard) returns 422. Unknown owner ids return 404 \u2014 an owner profile is never created implicitly. Every change is audited.",
+        "operationId": "update_owner_module_setting_api_v1_platform_owners__owner_id__modules__module_key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "module_key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModuleKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleSettingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleSettingState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "404": {
+            "description": "Unknown owner id"
+          },
+          "422": {
+            "description": "Unknown module key, or essential module"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant or revoke one module for one owner (platform operator only)",
+        "tags": [
+          "Platform"
         ]
       }
     },
@@ -23513,6 +23848,58 @@
           }
         ],
         "summary": "Sales Desk companies directory",
+        "tags": [
+          "Sales Desk"
+        ]
+      }
+    },
+    "/api/v1/sales-desk/companies/{company_id}": {
+      "get": {
+        "description": "A single company exactly as the directory lists it \u2014 industry, primary contact, billing profiles with their accounting sync state, owning rep and deal counts \u2014 assembled by the same path as `GET /sales-desk/companies`, so the drawer and the table can never disagree about a company. 404 when the company does not exist.",
+        "operationId": "get_company_api_v1_sales_desk_companies__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskCompanyRow"
+                }
+              }
+            },
+            "description": "Company row"
+          },
+          "404": {
+            "description": "Company not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One Sales Desk company row",
         "tags": [
           "Sales Desk"
         ]
