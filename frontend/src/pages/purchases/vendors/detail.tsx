@@ -9,7 +9,7 @@ import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Pagination } from "@/components/ui/Pagination";
-import { Select } from "@/components/ui/Select";
+import { InlineSelect } from "@/components/ui/InlineSelect";
 import { Table } from "@/components/ui/Table";
 import { formatCurrency, formatDate, getNameInitials, saveBlob } from "@/lib/utils";
 import {
@@ -717,11 +717,13 @@ export default function VendorDetailPage() {
                       ]}
                       className="flex items-center gap-2 px-4 py-3 border border-gray-300 text-priori-purple rounded-lg font-sans cursor-pointer bg-gray-50 hover:bg-purple-50 transition-colors"
                     />
-                    <Select
+                    {/* Toolbar filter, so InlineSelect: same box as the
+                        period picker beside it, options styled by us. */}
+                    <InlineSelect
                       options={TYPE_TABS}
                       value={typeTab}
-                      onChange={(e) => setTypeTab(e.target.value as VendorTxnType)}
-                      wrapperClassName="px-4 py-3"
+                      onChange={(value) => setTypeTab(value as VendorTxnType)}
+                      aria-label="Transaction type"
                     />
                   </div>
                 </div>
