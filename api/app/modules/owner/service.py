@@ -95,9 +95,11 @@ class OwnerService:
     def _schedule_object_cleanup(self, *keys: str | None) -> None:
         """Delete superseded storage objects only after the tx commits.
 
-        Thin wrapper over the shared ``storage_tx`` helper: the
-        service flushes but never commits (the request-scoped ``get_db`` owns
-        the commit), so the old object is only deleted once the outer
+        Thin wrapper over the shared ``storage_tx`` helper: the service
+        flushes but never commits (the request-scoped commit is owned by
+        ``CommitOnSuccessRoute`` in ``app/common/routing.py``; ``get_db()``'s
+        teardown commit is a safety net only), so the old object is only
+        deleted once the outer
         transaction actually commits — a later rollback never orphans the new
         key. Best-effort: a failed delete is logged, never raised.
         """
