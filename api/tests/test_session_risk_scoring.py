@@ -297,7 +297,9 @@ class TestScoreDecay:
         session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
         db.commit()
 
-        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        )
 
         event = _session_events(db, "session_challenged")[-1]
         assert event.after["risk_score"] == 80
@@ -314,7 +316,9 @@ class TestSessionLifetime:
         session.created_at = datetime.now(UTC) - timedelta(hours=5)
         db.commit()
 
-        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        )
         db.refresh(session)
         assert session.status == SessionStatus.TERMINATED.value
         # Distinct from a risk kill, so the trail stays readable.
@@ -328,7 +332,9 @@ class TestSessionLifetime:
         session.last_seen_at = datetime.now(UTC) - timedelta(hours=4)
         db.commit()
 
-        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        )
         db.refresh(session)
         assert session.status == SessionStatus.TERMINATED.value
         assert session.termination_reason == "session idle timeout"
@@ -337,7 +343,9 @@ class TestSessionLifetime:
         _seed_user(db, "working@mail.com")
         access, _ = _login_session(client, "working@mail.com")
 
-        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 200
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access)).status_code == 200
+        )
         session = db.get(UserSession, _sid(access))
         assert session.status == SessionStatus.ACTIVE.value
 

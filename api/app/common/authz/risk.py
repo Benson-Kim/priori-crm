@@ -235,9 +235,7 @@ def _detect_impossible_travel(
     if speed_kmh <= settings.RISK_IMPOSSIBLE_TRAVEL_KMH:
         return False
 
-    _add_risk(
-        session, settings.RISK_SCORE_IMPOSSIBLE_TRAVEL, context.requested_at
-    )
+    _add_risk(session, settings.RISK_SCORE_IMPOSSIBLE_TRAVEL, context.requested_at)
     _audit_session_event(
         db,
         session,
@@ -560,9 +558,7 @@ def note_privilege_escalation(request: Request, db: Session) -> None:
         return
 
     session.escalation_count += 1
-    _add_risk(
-        session, settings.RISK_SCORE_PRIVILEGE_ESCALATION, context.requested_at
-    )
+    _add_risk(session, settings.RISK_SCORE_PRIVILEGE_ESCALATION, context.requested_at)
     _audit_session_event(
         db,
         session,
