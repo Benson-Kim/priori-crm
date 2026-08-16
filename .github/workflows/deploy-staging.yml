@@ -196,6 +196,8 @@ jobs:
           SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
           APP_DIR: ${{ secrets.STAGING_APP_DIR }}
         run: |
+          # shellcheck disable=SC2029 # client-side expansion is deliberate:
+          # both values are validated earlier and spliced single-quoted.
           ssh "$SSH_TARGET" \
             "APP_DIR='$APP_DIR' HEALTH_URL='$STAGING_HEALTH_URL' bash -s" \
             < deploy/staging_release.sh
@@ -233,6 +235,7 @@ jobs:
           rsync -az deploy/staging.htaccess "$SSH_TARGET:$DOCROOT/.htaccess"
 
       - name: Smoke test
+        id: smoke
         # The release script already booted and health-checked the app from
         # the host itself; this verifies the same thing over the public
         # network path the browser will use. Passenger reloads lazily, so a
@@ -269,3 +272,22 @@ jobs:
           echo "  the network path between GitHub and staging (DNS/proxy/firewall), not"
           echo "  in the app."
           exit 1
+
+      - name: Diagnose smoke-test failure from the staging host
+        # The on-host verdict from staging_release.sh is minutes old by now
+        # and the SPA cutover happened in between. Re-run the health check
+        # from the host AT FAILURE TIME (same piped-script pattern as
+        # "Install, migrate, restart"): if the URL answers there, the app and
+        # Passenger are fine and the GitHub-to-host network path is the
+        # problem; if it fails there too, the script's log tails say why.
+        # Reporting only — it never changes the run's outcome.
+        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          # shellcheck disable=SC2029 # client-side expansion is deliberate:
+          # both values are validated earlier and spliced single-quoted.
+          ssh -o ConnectTimeout=15 "$SSH_TARGET" \
+            "APP_DIR='$APP_DIR' HEALTH_URL='$STAGING_HEALTH_URL' bash -s" \
+            < deploy/staging_diagnose.sh || true
