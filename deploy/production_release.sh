@@ -42,19 +42,58 @@ python3.12 -m venv "$REL/venv"
 "$REL/venv/bin/pip" install --quiet -r "$REL/api/requirements.txt"
 
 # --- backup ------------------------------------------------------------------
-# Read DATABASE_URL from the shared .env. This is why .env must be readable by
-# the deploy user (deploy:deploy 0600), not root-only — see §5.1.
-set -a
-# shellcheck disable=SC1091
-. "$ROOT/shared/.env"
-set +a
-: "${DATABASE_URL:?DATABASE_URL missing from $ROOT/shared/.env}"
+# Read DATABASE_URL from the shared .env WITHOUT sourcing it. The file is
+# python-dotenv format (pydantic-settings loads it in the app), which is NOT
+# shell: the documented template value `APP_NAME=Business Central` is a valid
+# dotenv line, but sourced under `set -e` it assigns APP_NAME=Business and then
+# executes `Central` as a command, aborting every deploy. Other legal dotenv
+# values can be misparsed or even executed the same way. The per-release venv
+# already contains python-dotenv (a dependency of pydantic-settings), so parse
+# the file with the same parser the app uses.
+# This is also why .env must be readable by the deploy user (deploy:deploy
+# 0600), not root-only — see §5.1.
+#
+# The database password must never appear in pg_dump's argv — argv is visible
+# in `ps` to every local account. The helper below splits the password out
+# into a throwaway pgpass file (0600, wildcard match) consumed via PGPASSFILE,
+# and prints a password-free libpq URL. It also normalises the SQLAlchemy
+# driver form (postgresql+psycopg2://), which libpq rejects but config.py
+# accepts (api/app/lib/config.py:135).
+PGPASSFILE="$(mktemp)" # mktemp creates 0600 — never widen this
+export PGPASSFILE
+trap 'rm -f "$PGPASSFILE"' EXIT
 
-# libpq parses postgresql:// and postgres:// only; it rejects the SQLAlchemy
-# driver form. config.py accepts either (api/app/lib/config.py:135), so the
-# .env may legitimately hold postgresql+psycopg2://. Normalise rather than
-# betting on which one is there.
-PG_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+[a-z0-9_]+://#postgresql://#')"
+PG_URL="$(ENV_FILE="$ROOT/shared/.env" "$REL/venv/bin/python" - <<'PY'
+import os
+from urllib.parse import unquote, urlsplit, urlunsplit
+
+from dotenv import dotenv_values
+
+env_file = os.environ["ENV_FILE"]
+url = (dotenv_values(env_file).get("DATABASE_URL") or "").strip()
+if not url:
+    raise SystemExit(f"DATABASE_URL missing from {env_file}")
+
+scheme, sep, rest = url.partition("://")
+if not sep:
+    raise SystemExit(f"DATABASE_URL in {env_file} is not a URL")
+parts = urlsplit(scheme.partition("+")[0] + "://" + rest)
+
+# pgpass escapes backslash and colon; libpq percent-decodes the URL password,
+# so decode before writing. Wildcard fields sidestep host/db matching rules.
+password = unquote(parts.password or "")
+with open(os.environ["PGPASSFILE"], "w") as fh:
+    fh.write("*:*:*:*:" + password.replace("\\", "\\\\").replace(":", "\\:") + "\n")
+
+netloc = parts.hostname or ""
+if parts.port:
+    netloc = f"{netloc}:{parts.port}"
+if parts.username:
+    netloc = f"{parts.username}@{netloc}"
+print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
+PY
+)"
+[ -n "$PG_URL" ] || { log "FATAL: could not extract DATABASE_URL from $ROOT/shared/.env"; exit 1; }
 
 command -v pg_dump >/dev/null || {
   log "FATAL: pg_dump not found — install postgresql-client"
