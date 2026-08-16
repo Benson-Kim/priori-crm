@@ -230,7 +230,9 @@ production, but nothing waits on it:
 
 If they install it later, the guarded migrations will **not** re-run — Alembic has
 already recorded them. Close the gap with the catch-up script, which is idempotent
-and safe to run even if contrib is still missing:
+and safe to run even if contrib is still missing (`deploy-staging.yml` ships it to
+`~/apps/priori-api/deploy/` on every deploy, so the path below exists once the
+first deploy has run):
 
 ```bash
 psql -h localhost -U priori_crm_staging -d priori_crm_staging_db \
@@ -559,8 +561,9 @@ This is the delicate part. It moves nothing until the last moment.
 mkdir -p /srv/priori/{releases,shared,backups}
 
 # 2. Move the live .env into shared/ (adjust the source path from §2.0).
-#    deploy must be able to read it: the release script sources it for
-#    DATABASE_URL, and systemd reads it too.
+#    deploy must be able to read it: the release script parses it (with
+#    python-dotenv — it is NOT shell syntax and is never sourced) for
+#    DATABASE_URL, and the app reads it too.
 cp <current-app-dir>/.env /srv/priori/shared/.env
 chown deploy:deploy /srv/priori/shared/.env
 chmod 600 /srv/priori/shared/.env
@@ -745,9 +748,22 @@ ssh deploy@accounting.priori.co.ke 'readlink -f /srv/priori/current; ls /srv/pri
 
 Do not let the first rollback be during an incident.
 
+Pick a release that is **not** the one currently serving. Beware the obvious
+one-liner: `ls /srv/priori/releases | head -1` is a trap — hex commit SHAs sort
+before `pre-pipeline-*`, so it selects the release you just deployed and the
+rehearsal would "roll back" `current` to itself, proving nothing.
+
 ```bash
-gh workflow run -R Benson-Kim/priori-crm rollback-production.yml --ref main \
-  -f sha=$(ssh deploy@accounting.priori.co.ke 'ls /srv/priori/releases | head -1')
+# What is serving right now?
+CURRENT=$(ssh deploy@accounting.priori.co.ke 'basename "$(readlink -f /srv/priori/current)"')
+
+# Newest release that is NOT the current one — after the first pipeline
+# deploy that is the pre-pipeline-* seed from §2.3.
+TARGET=$(ssh deploy@accounting.priori.co.ke \
+  "ls -1t /srv/priori/releases | grep -vx '$CURRENT' | head -1")
+
+echo "current=$CURRENT  rolling back to=$TARGET"   # TARGET must differ from CURRENT
+gh workflow run -R Benson-Kim/priori-crm rollback-production.yml --ref main -f sha="$TARGET"
 ```
 
 Confirm the site still serves, then deploy forward again. **The one thing rollback
@@ -773,7 +789,9 @@ type `deploy`.
   ssh deploy@accounting.priori.co.ke \
     'ls -1dt /srv/priori/releases/* | tail -n +4 | xargs -r rm -rf'
   ```
-- `/srv/priori/backups` likewise; keep enough history to matter.
+- `/srv/priori/backups` prunes itself: `deploy/production_release.sh` keeps the
+  newest 14 dumps and deletes older ones on each deploy. Copy anything you want
+  to keep longer (e.g. a pre-incident dump) out of that directory.
 
 **Known cost.** CI runs twice on every push to `develop` (standalone, plus inside the
 deploy run). See §3.7 of [`deployment.md`](./deployment.md) for the one-line fix if

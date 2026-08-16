@@ -173,5 +173,7 @@ jobs:
               echo "does **not** revert the migration. If the previous release cannot"
               echo "run against the new schema, restore"
               echo "\`/srv/priori/backups/pre-$SHA.dump\` by hand — see §5.3."
+              echo "(On a redeploy of an existing SHA the dump is timestamped instead;"
+              echo "the release log prints the exact path.)"
             } >> "$GITHUB_STEP_SUMMARY"
           fi

@@ -34,6 +34,11 @@ cd "$APP_DIR"
 log "Installing dependencies"
 pip install --quiet --upgrade -r requirements.txt
 
+# Expand/contract discipline applies here too: the migration runs while the
+# OLD code keeps serving until the Passenger restart marker below is touched
+# (and Passenger reloads lazily, on the next request). Migrations must
+# therefore be backward-compatible with the previous release — add nullable
+# columns first, drop old ones a release later. See deployment.md §5.3.
 log "Running migrations"
 alembic upgrade head
 

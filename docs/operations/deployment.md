@@ -511,15 +511,28 @@ so do it first.
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
+      # Abridged — .github/workflows/deploy-staging.yml is authoritative. The
+      # real file additionally validates STAGING_SSH_USER/HOST and requires
+      # STAGING_DOCROOT / STAGING_APP_DIR to be nonempty absolute paths BEFORE
+      # arming any rsync --delete (an empty docroot would otherwise make the
+      # destination "$SSH_TARGET:/"), and carries the full exclude lists.
+      #
+      # Order matters: API first, SPA cutover last. The SPA rsync is the only
+      # user-visible change, so it must not run until API upload + install +
+      # migrate + restart have all succeeded — otherwise a failed API deploy
+      # leaves staging serving a new frontend against the old API.
       - name: Deploy
         env:
           SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
         run: |
-          rsync -az --delete frontend/dist/ "$SSH_TARGET:~/staging.crm.priori.co.ke/"
-          rsync -az deploy/staging.htaccess "$SSH_TARGET:~/staging.crm.priori.co.ke/.htaccess"
           rsync -az --delete --exclude '.env' --exclude 'uploads/' \
-                --exclude '__pycache__' api/ "$SSH_TARGET:~/apps/priori-api/"
-          ssh "$SSH_TARGET" 'bash -s' < deploy/staging_release.sh
+                --exclude '__pycache__' api/ "$SSH_TARGET:$APP_DIR/"
+          rsync -az deploy/enable_trgm_indexes.sql "$SSH_TARGET:$APP_DIR/deploy/"
+          ssh "$SSH_TARGET" "APP_DIR='$APP_DIR' bash -s" < deploy/staging_release.sh
+          rsync -az --delete --exclude '.htaccess' --exclude 'api/' \
+                --exclude '.well-known/' --exclude 'cgi-bin/' \
+                frontend/dist/ "$SSH_TARGET:$DOCROOT/"
+          rsync -az deploy/staging.htaccess "$SSH_TARGET:$DOCROOT/.htaccess"
 
       - name: Smoke test
         run: |
@@ -541,6 +554,21 @@ pip install --upgrade -r requirements.txt
 alembic upgrade head
 mkdir -p tmp && touch tmp/restart.txt   # Passenger reloads on this
 ```
+
+**Expand/contract applies to staging too.** `alembic upgrade head` runs while the
+OLD code is still serving — Passenger reloads only after `tmp/restart.txt` is
+touched, and lazily, on the next request after that. A migration the previous
+release cannot run against therefore breaks staging for the window between the
+migration and the reload (and indefinitely if the deploy fails in between). Write
+migrations the same way §5.3 demands for production: add nullable, backfill,
+contract a release later. Staging is the rehearsal for exactly that discipline.
+
+**What the smoke test does and does not prove.** The health check verifies the
+service is alive, not that the new commit is the one serving — the `version` field
+in the payload is the static `APP_VERSION`, not a build stamp, and Passenger's lazy
+reload makes a brief stale-serve window possible even on a green deploy. Exposing a
+commit marker (e.g. `GIT_SHA` in the health payload) would close this, but that is
+an application change deliberately left out of this pipeline MR (§8).
 
 ---
 
@@ -571,7 +599,7 @@ swaps atomically with the API. systemd resolves `WorkingDirectory` at start, so
 `systemctl restart` after the swap picks up the new release with no unit-file edit.
 
 **Ownership of `shared/.env` is `deploy:deploy 0600`, not root-only.** The release
-script sources it (for `DATABASE_URL`) and the systemd unit reads it, both as `deploy`
+script parses it (for `DATABASE_URL`) and the systemd unit reads it, both as `deploy`
 — root-owned `0600` is permission-denied on the line right before the backup. Be
 clear-eyed about the consequence: **anyone who can run a deploy can read every
 production secret.** That is the real trust boundary, and it is why the deploy key is
@@ -662,43 +690,47 @@ jobs:
 fail loudly, all before anything user-facing changes.**
 
 ```bash
+# Abridged — deploy/production_release.sh is the authoritative, fully
+# commented copy. The shape is:
 set -euo pipefail
 REL="/srv/priori/releases/$CI_COMMIT_SHA"
 PREV="$(readlink -f /srv/priori/current || true)"
+# (warns loudly if $PREV = $REL: redeploying the live SHA has no rollback target)
 
 ln -sfn /srv/priori/shared/.env     "$REL/api/.env"
 ln -sfn /srv/priori/shared/uploads  "$REL/api/uploads"
 
 python3.12 -m venv "$REL/venv"
-"$REL/venv/bin/pip" install --upgrade pip
 "$REL/venv/bin/pip" install -r "$REL/api/requirements.txt"
 
-set -a; . /srv/priori/shared/.env; set +a
+# DATABASE_URL comes out of the shared .env via python-dotenv IN THE RELEASE
+# VENV — the file is dotenv syntax, not shell. Sourcing it would execute
+# legal values (`APP_NAME=Business Central` runs `Central` under set -e).
+# The same helper splits the password into a throwaway 0600 PGPASSFILE so
+# pg_dump's argv (visible in `ps` to every local account) never carries
+# credentials, and normalises postgresql+psycopg2:// to postgresql:// for
+# libpq.
+PG_URL="$(... python -c 'from dotenv import dotenv_values; ...' ...)"
 
-# libpq parses postgresql:// and postgres:// only — it rejects the SQLAlchemy driver
-# form. config.py accepts EITHER (api/app/lib/config.py:135), so prod may legitimately
-# hold either. Normalise rather than betting on which one is in the .env.
-PG_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+[a-z0-9_]+://#postgresql://#')"
-command -v pg_dump >/dev/null || { echo "pg_dump missing — install postgresql-client"; exit 1; }
+# Backup, under umask 077 with backups/ at 0700 (dumps hold customer and
+# financial data). A failed pg_dump deletes its partial file; an existing
+# pre-$SHA.dump is never overwritten (a timestamped name is used instead);
+# only the newest 14 dumps are retained.
 pg_dump -Fc "$PG_URL" > "/srv/priori/backups/pre-$CI_COMMIT_SHA.dump"
 
 # Migrate as its own step; failure aborts here, service untouched.
 cd "$REL/api" && "$REL/venv/bin/alembic" upgrade head
 
-ln -sfn "$REL" /srv/priori/current
-sudo systemctl restart priori-api
-sudo systemctl reload nginx
-
-for i in $(seq 1 30); do
-  if curl -fsS https://accounting.priori.co.ke/api/v1/health | grep -q '"status":"healthy"'; then
-    echo "deploy ok: $CI_COMMIT_SHA"; exit 0
-  fi
-  sleep 2
-done
-echo "health check failed — rolling back to $PREV"
-ln -sfn "$PREV" /srv/priori/current
-sudo systemctl restart priori-api
-exit 1
+# The ENTIRE cutover — symlink swap, restart, reload, health check — is one
+# function on one rollback path. A nonzero systemctl restart or nginx reload
+# used to abort via set -e AFTER the swap but BEFORE the rollback, stranding
+# production on a dead release; now any cutover failure repoints the symlink
+# to $PREV and restarts.
+if ! cutover; then
+  ln -sfn "$PREV" /srv/priori/current
+  sudo /usr/bin/systemctl restart priori-api
+  exit 1
+fi
 ```
 
 ### 5.3 What rollback covers, and what it does not
@@ -716,7 +748,10 @@ A deliberate rollback (as opposed to the automatic health-check one) is its own
 manual workflow; it only repoints the symlink to a release already on disk:
 
 ```yaml
-# .github/workflows/rollback-production.yml
+# .github/workflows/rollback-production.yml — abridged; the real file also
+# validates the input (release directory name: [A-Za-z0-9._-], which admits
+# both commit SHAs and the pre-pipeline-* seed), records what was rolled back
+# FROM and TO in the run summary for the audit trail, and health-checks after.
 on:
   workflow_dispatch:
     inputs:
