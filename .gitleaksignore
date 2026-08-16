@@ -12,7 +12,15 @@
 # see CLAUDE.md on the commit-authorship rewrite.
 #
 # Add an entry ONLY after confirming the match is not a real secret. For new code
-# prefer an inline `# gitleaks:allow` comment, which reviewers see in the diff.
+# prefer an inline `# gitleaks:allow` comment, which reviewers see in the diff —
+# it also survives history rewrites, and a fingerprint does not. The commit in
+# each line below is part of the key, so rebasing or re-authoring a commit that
+# an entry names silently un-ignores it. CLAUDE.md's rule about rewriting pulled
+# commits to benson-priori makes that churn routine, so if this file starts
+# reporting again after a rewrite, re-run the scan and refresh the fingerprints
+# rather than assuming a new secret appeared:
+#
+#   gitleaks git . --redact --report-format json --report-path leaks.json
 
 # Throwaway JWT signing keys for the CI test database — literal
 # "ci-test-secret-key-at-least-32-characters-long". Never valid anywhere; the
