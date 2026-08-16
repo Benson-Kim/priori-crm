@@ -28,6 +28,13 @@ log "new release:      $REL"
 
 [ -d "$REL/api" ] || { log "FATAL: $REL/api missing — rsync did not land"; exit 1; }
 
+if [ -n "$PREV" ] && [ "$PREV" = "$REL" ]; then
+  # Redeploying the live SHA is allowed (e.g. after a host-side fix), but be
+  # loud about the consequence: there is no distinct release to fall back to.
+  log "WARNING: $CI_COMMIT_SHA is already the live release — this redeploy has"
+  log "         NO distinct rollback target; a failed health check cannot roll back."
+fi
+
 # --- shared state ------------------------------------------------------------
 # Secrets and user uploads live outside the release so they survive rollback.
 ln -sfn "$ROOT/shared/.env" "$REL/api/.env"
@@ -100,10 +107,39 @@ command -v pg_dump >/dev/null || {
   exit 1
 }
 
+# The dump holds customer and financial data — never world-readable. umask 077
+# makes the file 0600 at creation (no chmod-after-write exposure window), and
+# the directory itself is locked to the deploy user.
+umask 077
 mkdir -p "$ROOT/backups"
+chmod 700 "$ROOT/backups"
+
 BACKUP="$ROOT/backups/pre-$CI_COMMIT_SHA.dump"
+if [ -e "$BACKUP" ]; then
+  # Redeploying a SHA must not overwrite the dump taken before its FIRST
+  # deploy — that one reflects the pre-migration schema and is the valuable
+  # copy. Timestamp the new file instead.
+  BACKUP="$ROOT/backups/pre-$CI_COMMIT_SHA-$(date -u '+%Y%m%d%H%M%S').dump"
+  log "pre-$CI_COMMIT_SHA.dump already exists — writing $BACKUP instead"
+fi
+
 log "Backing up to $BACKUP"
-pg_dump -Fc "$PG_URL" > "$BACKUP"
+# Remove the partial file if pg_dump fails: a truncated dump that restores
+# cleanly up to the truncation point is worse than no dump at all.
+pg_dump -Fc "$PG_URL" > "$BACKUP" || {
+  rc=$?
+  rm -f "$BACKUP"
+  log "FATAL: pg_dump failed (exit $rc) — partial dump removed"
+  exit "$rc"
+}
+
+# Retention: keep the newest 14 dumps so backups/ cannot grow without bound
+# (each dump is a full database copy). 14 comfortably covers the release
+# cadence here while keeping the restore window wide; adjust deliberately if
+# that changes. Dump filenames contain no whitespace by construction, so the
+# ls|tail|xargs pipeline is safe. `|| true`: pruning is best-effort and must
+# not fail the deploy under pipefail.
+ls -1t "$ROOT/backups"/*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f -- || true
 
 # --- migrate -----------------------------------------------------------------
 # Its own step. If this fails, `set -e` aborts here: the symlink still points at
@@ -112,31 +148,47 @@ log "Running migrations"
 cd "$REL/api"
 "$REL/venv/bin/alembic" upgrade head
 
-# --- cut over ----------------------------------------------------------------
+# --- cut over, verify, or put it back -----------------------------------------
 # systemd resolves WorkingDirectory at start, and nginx's root is
 # $ROOT/current/frontend/dist, so this one symlink swaps API and SPA together.
+#
+# The ENTIRE cutover — symlink swap, restart, reload, health check — feeds ONE
+# rollback path. Calling the function in an `if` suspends errexit inside it,
+# so a nonzero `systemctl restart` or `nginx reload` cannot abort the script
+# after the symlink swap but before the rollback — which would leave
+# production pointed at a release that never came up.
+cutover() {
+  ln -sfn "$REL" "$ROOT/current" &&
+    sudo /usr/bin/systemctl restart "$SERVICE" &&
+    sudo /usr/bin/systemctl reload nginx || {
+    log "cutover command failed (symlink/restart/reload)"
+    return 1
+  }
+  for i in $(seq 1 30); do
+    if curl -fsS --max-time 10 "$HEALTH_URL" | grep -q '"status":"healthy"'; then
+      log "deploy ok: $CI_COMMIT_SHA (healthy after ${i} attempt(s))"
+      return 0
+    fi
+    sleep 2
+  done
+  log "health check FAILED at $HEALTH_URL"
+  return 1
+}
+
 log "Switching current -> $REL"
-ln -sfn "$REL" "$ROOT/current"
-sudo /usr/bin/systemctl restart "$SERVICE"
-sudo /usr/bin/systemctl reload nginx
+if cutover; then
+  exit 0
+fi
 
-# --- verify, or put it back --------------------------------------------------
-for i in $(seq 1 30); do
-  if curl -fsS --max-time 10 "$HEALTH_URL" | grep -q '"status":"healthy"'; then
-    log "deploy ok: $CI_COMMIT_SHA (healthy after ${i} attempt(s))"
-    exit 0
-  fi
-  sleep 2
-done
-
-log "health check FAILED at $HEALTH_URL"
-if [ -n "$PREV" ] && [ -d "$PREV" ]; then
+# --- roll back ----------------------------------------------------------------
+if [ -n "$PREV" ] && [ -d "$PREV" ] && [ "$PREV" != "$REL" ]; then
   log "rolling back to $PREV"
-  ln -sfn "$PREV" "$ROOT/current"
-  sudo /usr/bin/systemctl restart "$SERVICE"
+  ln -sfn "$PREV" "$ROOT/current" || { log "FATAL: could not repoint current at $PREV"; exit 1; }
+  sudo /usr/bin/systemctl restart "$SERVICE" || log "WARNING: restart failed during rollback — check $SERVICE by hand"
+  sudo /usr/bin/systemctl reload nginx || log "WARNING: nginx reload failed during rollback"
   log "rolled back — NOTE: the migration above was NOT reverted (§5.3)."
   log "If the old code cannot run against the new schema, restore $BACKUP by hand."
 else
-  log "no previous release to roll back to — service left on $REL"
+  log "no previous (distinct) release to roll back to — service left on $REL"
 fi
 exit 1
