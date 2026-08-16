@@ -692,11 +692,11 @@ been deleted — the original directories are untouched.
 > exist yet* — that is what makes it stop short of touching the droplet. Once §2.6 is
 > done, this exact command performs a **real production deploy**. Do this step first.
 
-It costs one run and proves the three things that cannot be checked locally:
-`secrets: inherit` gives gitleaks a usable token; CodeQL can upload under the
-caller's permissions; and — the important one — `download-artifact` resolves an
-artifact produced by a *called* workflow. That last step is the only one that would
-fail **after** all CI has already passed, which is the most expensive place to find a
+It costs one run and proves the two things that cannot be checked locally: the
+security scanners run clean when `security.yml` is *called* rather than triggered
+directly; and — the important one — `download-artifact` resolves an artifact
+produced by a *called* workflow. That last step is the only one that would fail
+**after** all CI has already passed, which is the most expensive place to find a
 problem.
 
 ```bash
