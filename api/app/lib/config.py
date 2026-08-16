@@ -261,6 +261,68 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
+    def validate_risk_threshold_invariants(self) -> "Settings":
+        """Fail fast on risk-threshold configurations that break the model.
+
+        Two invariants the graduated risk model (#67) depends on:
+
+        1. ``RISK_CHALLENGE_THRESHOLD < RISK_TERMINATE_THRESHOLD``. The
+           fields are independently valid, so without this a deployment
+           could set challenge ABOVE terminate — and a soft-only score
+           at/above terminate but below challenge would match NEITHER
+           branch (the terminate branch requires hard evidence, the
+           challenge branch is never reached) and silently stay ALLOW.
+        2. The largest possible single-evaluation SOFT batch — session-start
+           signals (new device + new country + unusual hour) plus the mild
+           volume deviation, and likewise the mid-session shape (device
+           change + mild volume) — must sit strictly BELOW the terminate
+           threshold. This is the defence-in-depth backstop behind the
+           soft-clamp rule: even if the clamp regressed, no single batch of
+           soft evidence from a clean score could cross the terminate line.
+           Misconfigured weights must fail at startup, not silently void
+           the documented false-positive tolerance.
+        """
+        errors: list[str] = []
+
+        if self.RISK_CHALLENGE_THRESHOLD >= self.RISK_TERMINATE_THRESHOLD:
+            errors.append(
+                "RISK_CHALLENGE_THRESHOLD "
+                f"({self.RISK_CHALLENGE_THRESHOLD}) must be strictly less "
+                f"than RISK_TERMINATE_THRESHOLD ({self.RISK_TERMINATE_THRESHOLD})"
+            )
+
+        session_start_batch = (
+            self.RISK_SCORE_NEW_DEVICE
+            + self.RISK_SCORE_NEW_COUNTRY
+            + self.RISK_SCORE_UNUSUAL_HOUR
+            + self.RISK_SCORE_VOLUME_ANOMALY
+        )
+        if session_start_batch >= self.RISK_TERMINATE_THRESHOLD:
+            errors.append(
+                "the maximum single-evaluation soft-signal sum "
+                "(RISK_SCORE_NEW_DEVICE + RISK_SCORE_NEW_COUNTRY + "
+                "RISK_SCORE_UNUSUAL_HOUR + RISK_SCORE_VOLUME_ANOMALY = "
+                f"{session_start_batch}) must be strictly less than "
+                f"RISK_TERMINATE_THRESHOLD ({self.RISK_TERMINATE_THRESHOLD})"
+            )
+
+        mid_session_batch = (
+            self.RISK_SCORE_DEVICE_CHANGE + self.RISK_SCORE_VOLUME_ANOMALY
+        )
+        if mid_session_batch >= self.RISK_TERMINATE_THRESHOLD:
+            errors.append(
+                "the mid-session soft-signal sum (RISK_SCORE_DEVICE_CHANGE + "
+                f"RISK_SCORE_VOLUME_ANOMALY = {mid_session_batch}) must be "
+                "strictly less than RISK_TERMINATE_THRESHOLD "
+                f"({self.RISK_TERMINATE_THRESHOLD})"
+            )
+
+        if errors:
+            raise ValueError("Invalid risk-scoring configuration: " + "; ".join(errors))
+
+        return self
+
+    @model_validator(mode="after")
     def validate_production_hardening(self) -> "Settings":
         """Fail fast on insecure configuration in production."""
         if self.ENVIRONMENT != "production":
