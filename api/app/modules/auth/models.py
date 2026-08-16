@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -211,6 +212,84 @@ class UserSession(Base):
         return (
             f"<UserSession {self.id} user={self.user_id} "
             f"status={self.status} risk={self.risk_score}>"
+        )
+
+
+class UserBaseline(Base):
+    """Per-user behavioural baseline for graduated risk scoring (issue #67).
+
+    Records what is NORMAL for one user — known devices, typical countries,
+    typical active hours, and typical per-window request volume per
+    data-sensitivity class — so the risk detectors can weigh *deviation
+    from this user's own behaviour* instead of firing on absolutes. A new
+    device or country is a SOFT signal only when the user has an
+    established baseline that it deviates from.
+
+    Trust enters this table exclusively through a passed OTP step-up
+    (``AuthService.verify_otp`` absorbs the verifying request's context):
+    an attacker holding a stolen password or token has no inbox and so can
+    never launder their device or location into the victim's baseline.
+    Hour and volume statistics, by contrast, learn continuously from
+    scored requests — they exist to suppress false positives, not to grant
+    trust, so poisoning them buys an attacker nothing they did not already
+    have.
+    """
+
+    __tablename__ = "user_behavior_baselines"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    known_devices: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        comment="Device fingerprints trusted via a passed OTP step-up",
+    )
+    known_countries: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        comment="ISO country codes trusted via a passed OTP step-up",
+    )
+    hour_counts: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        comment="Requests observed per tenant-local hour ('0'..'23')",
+    )
+    hour_observations: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+        comment="Total observations behind hour_counts (min-sample gate)",
+    )
+    volume_baselines: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        comment=(
+            "Per sensitivity class: EWMA of requests per volume window "
+            "{class: {ewma, count, windows, window_started_at}}"
+        ),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user: Mapped["User"] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<UserBaseline user={self.user_id} "
+            f"devices={len(self.known_devices or [])} "
+            f"countries={len(self.known_countries or [])}>"
         )
 
 
