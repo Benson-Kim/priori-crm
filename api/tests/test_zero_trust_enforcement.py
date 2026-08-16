@@ -75,7 +75,7 @@ def _freeze_local_hour(monkeypatch, hour: int) -> datetime:
 
 @pytest.fixture
 def off_hours_window(monkeypatch):
-    """Enable the 22h → 6h off-hours window (conftest disables it suite-wide)."""
+    """Pin the 22h → 6h off-hours window explicitly (conftest keeps it live)."""
     monkeypatch.setattr(settings, "ABAC_OFF_HOURS_START", 22)
     monkeypatch.setattr(settings, "ABAC_OFF_HOURS_END", 6)
 
@@ -139,6 +139,33 @@ class TestSameRoleDifferentContext:
         _freeze_local_hour(monkeypatch, 23)
         resp = client.get("/api/v1/invoices", headers=_auth(admin, stepped_up=False))
         assert resp.status_code == 200
+
+    def test_nightly_internal_scheduler_call_is_never_challenged(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """The nightly cron (02:00, inside the window) must keep working.
+
+        A machine caller has no inbox: an OTP challenge for it is a
+        permanent lockout, not a step-up. Its trust model stays
+        verify_internal_secret's constant-time comparison — which still
+        rejects a wrong secret below.
+        """
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "night-secret")
+        _freeze_local_hour(monkeypatch, 2)
+
+        ok = client.post(
+            "/api/v1/invoices/internal/transition-overdue",
+            headers={"X-Internal-Secret": "night-secret"},
+        )
+        assert ok.status_code == 200
+
+        # The exemption never weakens the secret check itself.
+        bad = client.post(
+            "/api/v1/invoices/internal/transition-overdue",
+            headers={"X-Internal-Secret": "wrong"},
+        )
+        assert bad.status_code == 401
+        assert bad.json().get("error_code") != "STEP_UP_REQUIRED"
 
     def test_denylisted_ip_denied_even_with_valid_admin_token(
         self, client, db, monkeypatch

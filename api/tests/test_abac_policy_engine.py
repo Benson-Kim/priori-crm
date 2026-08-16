@@ -60,7 +60,7 @@ def _context(
 
 @pytest.fixture
 def off_hours_window(monkeypatch):
-    """Enable the 22h → 6h off-hours window (conftest disables it suite-wide)."""
+    """Pin the 22h → 6h off-hours window explicitly (conftest keeps it live)."""
     monkeypatch.setattr(settings, "ABAC_OFF_HOURS_START", 22)
     monkeypatch.setattr(settings, "ABAC_OFF_HOURS_END", 6)
 
@@ -228,3 +228,44 @@ class TestAuthzMatrix:
         verdict = evaluate(_context())
         assert verdict.decision is Decision.ALLOW
         assert verdict.rule == "default"
+
+
+class TestServicePrincipal:
+    """Machine-to-machine callers can never answer an OTP challenge.
+
+    The nightly scheduler (cron 02:00 — inside the default 22→6 window)
+    drives CONFIDENTIAL-write internal endpoints with only the
+    X-Internal-Secret header; a CHALLENGE for it is a permanent lockout,
+    not a step-up. Its trust model is verify_internal_secret's
+    constant-time comparison, which still runs. DENY rules still apply.
+    """
+
+    def test_service_writer_not_challenged_off_hours(self, off_hours_window):
+        verdict = evaluate(
+            _context(
+                method="POST",
+                path="/api/v1/invoices/internal/transition-overdue",
+                local_hour=2,
+                principal="service",
+            )
+        )
+        assert verdict.decision is Decision.ALLOW
+
+    def test_service_writer_not_challenged_for_unknown_geo(self, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_TRUST_CONTEXT_HEADERS", True)
+        verdict = evaluate(
+            _context(
+                method="POST",
+                path="/api/v1/invoices/1/payments",
+                geo=None,
+                principal="service",
+            )
+        )
+        assert verdict.decision is Decision.ALLOW
+
+    def test_service_caller_still_denied_by_ip_reputation(self, off_hours_window):
+        verdict = evaluate(
+            _context(ip_denylisted=True, local_hour=2, principal="service")
+        )
+        assert verdict.decision is Decision.DENY
+        assert verdict.rule == "ip_reputation"

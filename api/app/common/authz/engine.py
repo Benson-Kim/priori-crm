@@ -144,6 +144,20 @@ def _rule_off_hours(context: AccessContext) -> PolicyVerdict | None:
     """
     if not is_off_hours(context.local_hour):
         return None
+    if context.principal == "service":
+        # A machine-to-machine caller (X-Internal-Secret) has no inbox, so
+        # an OTP challenge is unanswerable — for it, CHALLENGE is a
+        # permanent lockout, and the nightly scheduled jobs (cron 02:00,
+        # inside the default 22→6 window) hit CONFIDENTIAL-write internal
+        # endpoints every night. Its trust model is the constant-time
+        # secret comparison (verify_internal_secret still runs and still
+        # refuses a wrong secret) plus the process boundary. This cannot
+        # be abused to dodge a step-up: an authenticated user stays
+        # principal "user" whatever headers they add (user_id wins in
+        # build_access_context), and without a bearer token the RBAC
+        # gates refuse business routes regardless. DENY rules (IP
+        # reputation, geo blocklist) still apply to service callers.
+        return None
     if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
         return None
     if context.sensitivity is SensitivityLevel.RESTRICTED or (
@@ -172,6 +186,12 @@ def _rule_unknown_geo_restricted_write(
     rule stays silent — absence of infrastructure is not an anomaly.
     """
     if settings.ABAC_TRUST_CONTEXT_HEADERS is not True:
+        return None
+    if context.principal == "service":
+        # Same reasoning as the off-hours rule: a machine cannot answer an
+        # OTP challenge, and a scheduler's server-to-server call never
+        # passes the geo-stamping edge anyway. verify_internal_secret owns
+        # its trust; DENY rules still apply.
         return None
     if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
         # Same reasoning as the off-hours rule: a fresh OTP is the answer to
