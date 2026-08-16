@@ -94,6 +94,16 @@ after the initial OTP.
      repeated failed step-ups (exhausting the OTP budget terminates the
      challenged sessions it was trying to launder), and token/session
      identity anomalies (terminate).
+   - **Threshold crossings act in the crossing request** (review F4): a
+     privilege-escalation 403 that pushes the score over a line commits
+     the transition (challenge or terminate) and its audit evidence
+     atomically with the increment, under the same row lock. The crossing
+     request itself still returns its RBAC 403 — the action was already
+     denied, and rewriting the in-flight response would obscure the RBAC
+     answer without denying anything more; the trail shows the
+     `privilege_escalation` event and the `session_terminated` /
+     `session_challenged` transition together, and every *subsequent*
+     request is refused (401).
    - **Absorption**: a passed OTP step-up folds the verifying request's
      context (device, country, hour) into the user's baseline —
      `verify_otp` proves inbox control from that context, so the same new

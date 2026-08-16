@@ -484,16 +484,29 @@ class TestPrivilegeEscalation:
         """#67 review F4: the 403 that crosses the line acts immediately.
 
         note_privilege_escalation used to add points and commit WITHOUT
-        evaluating the thresholds: a session at 80 taking +25 completed an
-        ordinary 403, and the next request saw the score with no current
-        hard signal — clamped to a challenge instead of the direct
-        termination the taxonomy documents for hard evidence.
+        evaluating the thresholds: the crossing completed an ordinary 403
+        and the next request saw the score with no current hard signal —
+        clamped to a challenge instead of the direct termination the
+        taxonomy documents for hard evidence.
+
+        Pinned semantics (ADR-0012): the crossing request KEEPS its RBAC
+        403 — the request was already denied, and rewriting the in-flight
+        response would obscure the RBAC answer without denying anything
+        more. The termination and its audit evidence commit atomically
+        with the increment, so every SUBSEQUENT request 401s.
+
+        Scenario note: the entry score must sit below the challenge
+        threshold (60) or the zero-trust gate challenges the request
+        before RBAC ever runs; from there the default +25 cannot reach
+        the terminate line (100), so the escalation weight is raised for
+        the test. What is under test is the crossing, not the weight.
         """
+        monkeypatch.setattr(settings, "RISK_SCORE_PRIVILEGE_ESCALATION", 60)
         _seed_user(db, "escalator@mail.com", role=UserRole.MEMBER)
         access, _ = _login_session(client, "escalator@mail.com")
 
         session = db.get(UserSession, _sid(access))
-        session.risk_score = 80
+        session.risk_score = 45  # gate admits (<60); 45 + 60 crosses 100
         session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
         db.commit()
 
@@ -504,7 +517,7 @@ class TestPrivilegeEscalation:
 
         db.refresh(session)
         assert session.status == SessionStatus.TERMINATED.value
-        assert "privilege-escalation" in session.termination_reason
+        assert "escalation" in session.termination_reason
         assert _session_events(db, "session_terminated")
 
         dead = client.get("/api/v1/customers", headers=_bearer(access))

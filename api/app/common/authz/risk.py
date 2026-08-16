@@ -514,7 +514,12 @@ def _terminate(
     from app.common.token_denylist import revoke_session_access
 
     session.status = SessionStatus.TERMINATED.value
-    session.termination_reason = reason
+    # The column is a bounded VARCHAR: clamp to it, because a terminate
+    # must NEVER fail for the length of its own explanation — an
+    # over-long reason would 500 the request and leave the risky session
+    # alive. The audit event below carries the full reason regardless.
+    limit = type(session).termination_reason.type.length
+    session.termination_reason = reason if limit is None else reason[:limit]
     # Push the sid onto the shared denylist so the session's live access
     # tokens die on the token-validation path itself, everywhere — not
     # only where the gate re-checks session status (#67 review F5).
@@ -751,15 +756,16 @@ def note_privilege_escalation(request: Request, db: Session) -> None:
     # (privilege-escalation attempts) to a challenge instead of the direct
     # escalation the model documents. The transition and its audit
     # evidence now persist atomically with the increment, under the same
-    # row lock, before the 403 goes out.
+    # row lock, before the 403 goes out. Pinned semantics (ADR-0012): the
+    # crossing request keeps its RBAC 403 — the action was already
+    # denied — while the transition governs every subsequent request.
     score = effective_score(session, context.requested_at)
     if score >= settings.RISK_TERMINATE_THRESHOLD:
         _terminate(
             db,
             session,
             context,
-            f"risk score {score} crossed terminate threshold "
-            "(privilege-escalation attempts)",
+            f"risk score {score} crossed terminate threshold (escalation)",
         )
     elif (
         score >= settings.RISK_CHALLENGE_THRESHOLD
