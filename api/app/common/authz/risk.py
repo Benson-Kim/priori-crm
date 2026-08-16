@@ -344,43 +344,39 @@ def _detect_volume_anomaly(
     fired = False
 
     mild_ceiling = baselines.volume_ceiling(baseline, cls)
-    if not store.hit(f"risk:vol:{sid}:{cls}", mild_ceiling, window).allowed:
-        if store.hit(f"risk:vol:fired:{sid}:{cls}", 1, window).allowed:
-            _add_risk(
-                session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at
-            )
-            _audit_session_event(
-                db,
-                session,
-                context,
-                "volume_anomaly",
-                {
-                    "window_seconds": window,
-                    "max_requests": mild_ceiling,
-                    "sensitivity_class": cls,
-                },
-            )
-            fired = True
+    over_mild = not store.hit(f"risk:vol:{sid}:{cls}", mild_ceiling, window).allowed
+    if over_mild and store.hit(f"risk:vol:fired:{sid}:{cls}", 1, window).allowed:
+        _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
+        _audit_session_event(
+            db,
+            session,
+            context,
+            "volume_anomaly",
+            {
+                "window_seconds": window,
+                "max_requests": mild_ceiling,
+                "sensitivity_class": cls,
+            },
+        )
+        fired = True
 
     exfil_ceiling = (
         settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
     )
-    if not store.hit(f"risk:volx:{sid}", exfil_ceiling, window).allowed:
-        if store.hit(f"risk:volx:fired:{sid}", 1, window).allowed:
-            _add_risk(
-                session, settings.RISK_SCORE_EXFILTRATION, context.requested_at
-            )
-            _audit_session_event(
-                db,
-                session,
-                context,
-                "exfiltration_volume",
-                {
-                    "window_seconds": window,
-                    "max_requests": exfil_ceiling,
-                },
-            )
-            fired = True
+    over_exfil = not store.hit(f"risk:volx:{sid}", exfil_ceiling, window).allowed
+    if over_exfil and store.hit(f"risk:volx:fired:{sid}", 1, window).allowed:
+        _add_risk(session, settings.RISK_SCORE_EXFILTRATION, context.requested_at)
+        _audit_session_event(
+            db,
+            session,
+            context,
+            "exfiltration_volume",
+            {
+                "window_seconds": window,
+                "max_requests": exfil_ceiling,
+            },
+        )
+        fired = True
 
     return fired
 

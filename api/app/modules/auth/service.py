@@ -4,6 +4,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -28,6 +29,9 @@ from app.constants.enums import SessionStatus
 from app.lib.config import settings
 from app.lib.email import email_service
 from app.modules.auth.models import OTPCode, PasswordResetToken, User, UserSession
+
+if TYPE_CHECKING:
+    from app.common.authz.context import AccessContext
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +157,7 @@ class AuthService:
     # Verify OTP (Step 2)
 
     def verify_otp(
-        self, email: str, code: str, context=None
+        self, email: str, code: str, context: "AccessContext | None" = None
     ) -> tuple[str, str, User]:
         """Verify OTP and return (access_token, refresh_token, user).
 

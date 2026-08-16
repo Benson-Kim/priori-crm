@@ -234,7 +234,10 @@ class TestSoftSignalFalsePositives:
     def test_single_new_device_allows_and_logs(self, client, db, trusted_ctx):
         user = _seed_user(db, "newlaptop@mail.com")
         _seed_baseline(
-            db, user, devices=("client:known-laptop",), countries=("KE",),
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
             hours=_all_hours(),
         )
 
@@ -555,10 +558,18 @@ class TestBaselineLearningUnits:
             db,
             user,
             volumes={
-                "internal": {"ewma": 1.0, "count": 0, "windows": 5,
-                             "window_started_at": None},
-                "confidential": {"ewma": 1e6, "count": 0, "windows": 5,
-                                 "window_started_at": None},
+                "internal": {
+                    "ewma": 1.0,
+                    "count": 0,
+                    "windows": 5,
+                    "window_started_at": None,
+                },
+                "confidential": {
+                    "ewma": 1e6,
+                    "count": 0,
+                    "windows": 5,
+                    "window_started_at": None,
+                },
             },
         )
         assert (

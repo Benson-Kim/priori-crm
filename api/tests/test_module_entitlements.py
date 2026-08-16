@@ -20,7 +20,7 @@ Pins the entitlement contract:
 import uuid
 
 from app.common.audit import AuditEvent
-from app.common.security import create_access_token, hash_password
+from app.common.security import hash_password
 from app.constants.enums import ESSENTIAL_MODULES, ModuleKey, UserRole
 from app.modules.auth.models import User
 from app.modules.owner.service import OwnerService
