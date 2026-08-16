@@ -89,11 +89,45 @@ second pair of eyes.
   switch `deploy-production.yml` from `workflow_dispatch` to `push` on `main` — it is
   about four lines.
 
-### 0.3 Merge the branch
+### 0.3 Keep GitLab and GitHub in sync — or auto-deploy silently does nothing
 
-The work is on `duo/chore/deployment-pipeline`, branched from `develop`. Open the MR
-on GitLab as usual. **Do not merge until 0.1 is done** — the moment it lands on
-`develop`, `deploy-staging.yml` starts firing.
+This is the one piece of plumbing the pipeline cannot supply itself, and it is easy to
+miss because nothing errors when it is absent.
+
+**Work happens on GitLab; deploys run on GitHub.** `deploy-staging.yml` triggers on a
+push to `develop` **on GitHub**. Merge an MR on GitLab and GitHub's `develop` does not
+move, so no deploy runs — no failure, no red run, just silence. Staging quietly serves
+the previous release while GitLab shows the merge as done.
+
+**Fix: a GitLab push mirror.** GitLab → Settings → Repository → *Mirroring
+repositories*:
+
+| Field | Value |
+|---|---|
+| Git repository URL | `https://<github-user>@github.com/Benson-Kim/priori-crm.git` |
+| Mirror direction | **Push** |
+| Password | a GitHub personal access token with `repo` scope |
+
+Every merge on GitLab then propagates to GitHub within a minute or two and the deploy
+fires on its own.
+
+> ⚠️ **Pick one direction and stay with it.** A push mirror makes GitLab authoritative
+> for the mirrored branches and force-updates GitHub to match. If you also merge pull
+> requests *on GitHub*, the next mirror run can overwrite those commits. Either merge
+> on GitLab and let the mirror carry it (recommended — it matches how the team already
+> works), or merge on GitHub and push to GitLab yourself. Do not do both.
+
+**Without the mirror**, this is the manual step after every GitLab merge:
+
+```bash
+git checkout develop && git pull gitlab develop && git push origin develop
+```
+
+### 0.4 Merge the branch
+
+The work is on `duo/chore/deployment-pipeline`, branched from `develop`, and is
+already pushed to GitHub as PR #45. **Do not merge until 0.1 and 0.3 are done** — the
+moment it lands on GitHub's `develop`, `deploy-staging.yml` starts firing.
 
 ---
 
@@ -763,9 +797,18 @@ columns nullable, backfill, and drop the old column a release later.
 
 ## Part 3 — Day to day
 
-**Normal flow.** Merge to `develop` → staging updates itself. When you want that in
-production, merge `develop` → `main`, then run `deploy-production.yml` and type
-`deploy`.
+**Normal flow.** Merge to `develop` on GitLab → the mirror pushes it to GitHub (§0.3)
+→ staging updates itself. When you want that in production, merge `develop` → `main`,
+let it mirror, then run `deploy-production.yml` and type `deploy`.
+
+**If a merge produces no staging deploy, check the mirror first.** That is the failure
+mode with no error message: GitLab shows the merge, GitHub never saw it, and staging
+keeps serving the old release.
+
+```bash
+git fetch origin gitlab
+git rev-parse origin/develop gitlab/develop   # two identical SHAs, or the mirror is behind
+```
 
 **Watch for:**
 
