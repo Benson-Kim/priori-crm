@@ -7,7 +7,7 @@ name: Deploy production
 # Why workflow_dispatch rather than an environment approval: this repository is
 # private on a plan without branch protection or environment protection rules —
 #
-#   $ gh api repos/Benson-Kim/priori-crm/branches/main/protection
+#   $ gh api repos/benson-priori/priori-crm/branches/main/protection
 #   Upgrade to GitHub Pro or make this repository public ... (HTTP 403)
 #
 # so required-reviewer approval is not available. The gate this file provides is
