@@ -92,8 +92,17 @@ class Settings(BaseSettings):
     # terminate threshold kills the session outright. Scores decay with
     # time (see RISK_DECAY_PER_HOUR) so benign noise accumulated over a
     # long-lived session cannot eventually challenge a legitimate user.
+    # Thresholds implement the graduated, evidence-weighted model:
+    # low risk (< challenge) = allow + log; moderate = OTP step-up;
+    # high (>= terminate) = kill the session. The terminate default (100)
+    # sits ABOVE the largest possible single-request batch of SOFT signals
+    # (new device 25 + new country 25 + unusual hour 10 + volume 30 = 90),
+    # so soft evidence alone — the benign-unusual shapes: new place, new
+    # laptop, night work, a busy minute — can reach a challenge but NEVER
+    # a termination. Only HARD signals (impossible travel, exfiltration-
+    # scale reads) or hard+soft corroboration cross the terminate line.
     RISK_CHALLENGE_THRESHOLD: int = Field(default=60, ge=1, le=10000)
-    RISK_TERMINATE_THRESHOLD: int = Field(default=90, ge=1, le=10000)
+    RISK_TERMINATE_THRESHOLD: int = Field(default=100, ge=1, le=10000)
     # Impossible travel: implied speed between consecutive geolocated
     # requests above this many km/h is an anomaly (900 ≈ airliner cruise).
     RISK_IMPOSSIBLE_TRAVEL_KMH: int = Field(default=900, ge=100, le=10000)
@@ -101,6 +110,24 @@ class Settings(BaseSettings):
     RISK_SCORE_DEVICE_CHANGE: int = Field(default=25, ge=0, le=10000)
     RISK_SCORE_VOLUME_ANOMALY: int = Field(default=30, ge=0, le=10000)
     RISK_SCORE_PRIVILEGE_ESCALATION: int = Field(default=25, ge=0, le=10000)
+    # SOFT signals against the per-user behavioural baseline (issue #67):
+    # evaluated once, on a session's first scored request, and only when the
+    # user HAS a baseline to deviate from. Individually all sit below the
+    # challenge threshold (allow + log); in combination they can reach a
+    # step-up but never a termination (see RISK_TERMINATE_THRESHOLD).
+    # Weights: an unknown device or country is real evidence (25 each — two
+    # together still allow); an odd hour is the weakest signal there is (10)
+    # because night work is how deadlines get met.
+    RISK_SCORE_NEW_DEVICE: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_NEW_COUNTRY: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_UNUSUAL_HOUR: int = Field(default=10, ge=0, le=10000)
+    # HARD signal: exfiltration-scale reads. A burst this far past the
+    # ordinary ceiling is not a busy minute; it terminates directly.
+    RISK_SCORE_EXFILTRATION: int = Field(default=100, ge=0, le=10000)
+    # Minimum hour observations before the unusual-hour signal may fire:
+    # with fewer samples the user HAS no "typical hours" and absence of
+    # history must not read as anomaly (fail-safe degradation).
+    RISK_BASELINE_MIN_HOUR_OBSERVATIONS: int = Field(default=50, ge=1, le=100000)
     # Data-access volume ceiling: requests per rolling window per session.
     # Counted in the shared RateLimitStore (Redis in production), NOT on the
     # session row: a Postgres counter is rolled back by any failing request,
@@ -108,6 +135,24 @@ class Settings(BaseSettings):
     # endpoints that error.
     RISK_VOLUME_WINDOW_SECONDS: int = Field(default=60, ge=5, le=3600)
     RISK_VOLUME_MAX_REQUESTS: int = Field(default=300, ge=1, le=100000)
+    # Typical-volume learning (issue #67): the per-user baseline keeps an
+    # EWMA of requests per window PER SENSITIVITY CLASS. Once at least
+    # RISK_VOLUME_MIN_LEARNED_WINDOWS active windows are observed for a
+    # class, the mild-volume ceiling adapts to
+    #   clamp(ewma * RISK_VOLUME_DEVIATION_MULTIPLIER,
+    #         RISK_VOLUME_MIN_CEILING, RISK_VOLUME_MAX_REQUESTS)
+    # so a user who typically reads 10 invoices/minute is flagged (softly)
+    # at 40, not at the global 300. Unlearned classes use the global
+    # ceiling. The mild signal is SOFT either way — it logs or corroborates,
+    # never challenges alone. The exfiltration HARD ceiling is absolute:
+    # RISK_VOLUME_MAX_REQUESTS * RISK_VOLUME_EXFIL_MULTIPLIER requests per
+    # window across all classes, because no legitimate workflow reads at 5x
+    # the global ceiling regardless of personal habits.
+    RISK_VOLUME_DEVIATION_MULTIPLIER: int = Field(default=4, ge=2, le=100)
+    RISK_VOLUME_MIN_CEILING: int = Field(default=30, ge=1, le=100000)
+    RISK_VOLUME_MIN_LEARNED_WINDOWS: int = Field(default=3, ge=1, le=1000)
+    RISK_VOLUME_LEARNING_ALPHA: float = Field(default=0.3, ge=0.01, le=1.0)
+    RISK_VOLUME_EXFIL_MULTIPLIER: int = Field(default=5, ge=2, le=100)
     # Points shed per hour since the last anomaly. Without decay, benign
     # noise (a browser auto-update +25, one busy minute +30, a stray 403
     # +25) accumulates past the challenge threshold on any long-lived
