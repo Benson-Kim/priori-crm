@@ -15,8 +15,10 @@ on:
   # builds against a contract exported from that exact commit.
   # See docs/operations/deployment.md §3.1.
   workflow_call:
+  # `develop` is deliberately absent — deploy-staging.yml calls this workflow on
+  # every push there. See §3.7 and the note in api-ci.yml.
   push:
-    branches: [main, develop]
+    branches: [main]
     paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
   pull_request:
     branches: [main, develop]
