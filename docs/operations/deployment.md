@@ -429,9 +429,11 @@ Shared hosting cannot keep a daemon alive, and nothing new needs building:
 (outbox drain every 5 min, nightly transitions) driven by `API_BASE_URL` and
 `INTERNAL_API_SECRET`.
 
-It currently targets one environment. To cover staging as well, either add a matrix
-over the two base URLs, or add a second workflow with staging's secrets. cPanel Cron
-Jobs are the fallback if the schedule should not depend on GitHub.
+It runs a per-environment matrix (production + staging). The staging leg skips with
+a notice while `STAGING_API_BASE_URL` / `STAGING_INTERNAL_API_SECRET` are unset, so
+the every-5-minutes schedule is not red before staging exists; the production leg
+fails loudly on missing secrets — that is the alert. cPanel Cron Jobs are the
+fallback if the schedule should not depend on GitHub.
 
 ### 4.5 Postgres extensions — resolved, not a blocker
 
