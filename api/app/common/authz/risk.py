@@ -456,7 +456,19 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
 
     from app.modules.auth.models import UserSession
 
-    session = db.get(UserSession, context.session_id)
+    # Locked read (SELECT ... FOR UPDATE), mirroring note_privilege_
+    # escalation (M3): without it, concurrent requests of one session each
+    # read the same stale risk_score, run the detectors on it, and commit
+    # independently computed replacements — last-writer-wins, so N parallel
+    # anomalies accumulate as one and stay below the thresholds (review
+    # F1). The gate already serialized same-session requests at the trail-
+    # state UPDATE's row lock; taking the lock at the READ merely moves it
+    # ahead of the detectors so every increment lands on committed state.
+    # A firing detector commits immediately (releasing the lock); a clean
+    # request holds it exactly as long as the trail-state update always
+    # did. (SQLite has no FOR UPDATE; its whole-database write lock
+    # serializes writers anyway. CI runs Postgres.)
+    session = db.get(UserSession, context.session_id, with_for_update=True)
     if session is None:
         # A signed token naming a session we never minted (or one purged):
         # zero trust says refuse, not shrug.

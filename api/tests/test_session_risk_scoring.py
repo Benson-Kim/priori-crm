@@ -413,6 +413,42 @@ class TestRiskEvidenceIsDurable:
         assert blocked.json()["error_code"] == "STEP_UP_REQUIRED"
 
 
+class TestConcurrentScoringAtomicity:
+    """#67 review F1: risk mutations must not be last-writer-wins.
+
+    The session row is loaded under SELECT ... FOR UPDATE before the
+    detectors read ``risk_score``, so concurrent requests of one session
+    serialize their read-modify-write instead of committing independently
+    computed replacements — an attacker firing several anomalies in
+    parallel would otherwise keep only ONE increment and stay below the
+    challenge/terminate thresholds. Mirrors the M3 fix in
+    note_privilege_escalation. SQLite ignores FOR UPDATE; CI runs the
+    suite on Postgres, where the lock is real and this load serializes.
+    """
+
+    def test_gate_loads_the_session_row_locked(self, client, db, monkeypatch):
+        _seed_user(db, "parallel@mail.com")
+        access, _ = _login_session(client, "parallel@mail.com")
+
+        from sqlalchemy.orm import Session as SaSession
+
+        lock_loads: list[bool] = []
+        original_get = SaSession.get
+
+        def spy(self, entity, ident, **kw):
+            if getattr(entity, "__name__", "") == "UserSession":
+                lock_loads.append(bool(kw.get("with_for_update")))
+            return original_get(self, entity, ident, **kw)
+
+        monkeypatch.setattr(SaSession, "get", spy)
+        resp = client.get("/api/v1/customers", headers=_bearer(access))
+        assert resp.status_code == 200
+
+        # The gate's load — the first UserSession read of the request —
+        # must carry the row lock.
+        assert lock_loads and lock_loads[0] is True
+
+
 class TestPrivilegeEscalation:
     def test_rbac_rejections_accumulate_and_force_step_up(
         self, client, db, monkeypatch
