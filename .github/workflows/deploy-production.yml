@@ -1,0 +1,171 @@
+name: Deploy production
+
+# Production deploys are never automatic. A maintainer runs this workflow from
+# the Actions tab, on main, and types "deploy" to confirm; the full CI suite
+# then runs against that commit before anything ships.
+#
+# Why workflow_dispatch rather than an environment approval: this repository is
+# private on a plan without branch protection or environment protection rules —
+#
+#   $ gh api repos/Benson-Kim/priori-crm/branches/main/protection
+#   Upgrade to GitHub Pro or make this repository public ... (HTTP 403)
+#
+# so required-reviewer approval is not available. The gate this file provides is
+# real (nothing reaches production without a deliberate human act) but the
+# approver and the triggerer are necessarily the same person. GitHub Pro would
+# unlock true four-eyes approval and change about four lines here.
+# See docs/operations/deployment.md §3.3.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# Called workflows only receive what the caller grants — see §3.1.
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate and record what is being deployed
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          [ "$CONFIRM" = "deploy" ] || {
+            echo "confirm must be exactly \"deploy\" (got: \"$CONFIRM\")"
+            exit 1
+          }
+          [ "$REF_NAME" = "main" ] || {
+            echo "production deploys run from main only (got: \"$REF_NAME\")"
+            exit 1
+          }
+          # workflow_dispatch resolves github.sha to the branch tip at trigger
+          # time, which can differ from whatever the maintainer was looking at
+          # before clicking. Record the exact commit so the audit trail is real.
+          {
+            echo "### Deploying to production"
+            echo ""
+            echo "- **commit:** \`$SHA\`"
+            echo "- **subject:** $(git log -1 --pretty=%s "$SHA")"
+            echo "- **author:** $(git log -1 --pretty='%an' "$SHA")"
+            echo "- **triggered by:** @${{ github.actor }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  api-ci:
+    needs: guard
+    uses: ./.github/workflows/api-ci.yml
+    secrets: inherit
+
+  ui-ci:
+    needs: guard
+    uses: ./.github/workflows/ui-ci.yml
+    secrets: inherit
+
+  security:
+    needs: guard
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+  deploy:
+    needs: [api-ci, ui-ci, security]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://accounting.priori.co.ke
+    env:
+      # Production is same-origin: nginx serves the SPA at / and proxies /api.
+      VITE_API_BASE_URL: https://accounting.priori.co.ke
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Download OpenAPI schema
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-schema
+          path: ${{ github.workspace }}/frontend
+
+      - name: Build SPA
+        working-directory: frontend
+        env:
+          VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/frontend/openapi.json
+        run: |
+          test -n "$VITE_API_BASE_URL" || {
+            echo "VITE_API_BASE_URL is empty — the bundle would call undefined/api/v1/"
+            exit 1
+          }
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" || { echo "PROD_SSH_KEY is not set"; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo "PROD_KNOWN_HOSTS is not set"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
+          REL: /srv/priori/releases/${{ github.sha }}
+        run: |
+          ssh "$SSH_TARGET" "mkdir -p '$REL/api' '$REL/frontend/dist'"
+          rsync -az --exclude '__pycache__/' --exclude '.venv/' --exclude 'tests/' \
+            api/ "$SSH_TARGET:$REL/api/"
+          rsync -az --delete frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
+
+      - name: Back up, migrate, cut over
+        # Everything consequential happens here, in deploy/production_release.sh:
+        # pg_dump, then alembic, then the symlink swap and restart, then a health
+        # check that rolls the symlink back if the new release does not come up.
+        env:
+          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
+          SHA: ${{ github.sha }}
+        run: |
+          ssh "$SSH_TARGET" "CI_COMMIT_SHA='$SHA' bash -s" < deploy/production_release.sh
+
+      - name: Record outcome
+        if: always()
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "Production is running \`$SHA\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Deploy failed"
+              echo ""
+              echo "The release script rolls the symlink back automatically, but it"
+              echo "does **not** revert the migration. If the previous release cannot"
+              echo "run against the new schema, restore"
+              echo "\`/srv/priori/backups/pre-$SHA.dump\` by hand — see §5.3."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

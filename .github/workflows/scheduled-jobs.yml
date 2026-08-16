@@ -40,6 +40,21 @@ on:
 jobs:
   internal-jobs:
     runs-on: ubuntu-latest
+    # One run per environment. The API has no in-process scheduler, so staging
+    # needs its own caller once it exists — shared cPanel hosting cannot keep a
+    # daemon alive either, which is why this workflow covers both.
+    # See docs/operations/deployment.md §4.4.
+    strategy:
+      fail-fast: false # a staging failure must not stop the production drain
+      matrix:
+        include:
+          - environment: production
+            base_url_secret: API_BASE_URL
+            internal_secret: INTERNAL_API_SECRET
+          - environment: staging
+            base_url_secret: STAGING_API_BASE_URL
+            internal_secret: STAGING_INTERNAL_API_SECRET
+    name: internal-jobs (${{ matrix.environment }})
     steps:
       - name: Resolve task
         id: task
@@ -57,19 +72,33 @@ jobs:
           echo "Resolved scheduled task: $task"
 
       - name: Validate configuration
+        id: config
         env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
-          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          ENVIRONMENT: ${{ matrix.environment }}
+          API_BASE_URL: ${{ secrets[matrix.base_url_secret] }}
+          INTERNAL_API_SECRET: ${{ secrets[matrix.internal_secret] }}
         run: |
-          if [ -z "$API_BASE_URL" ] || [ -z "$INTERNAL_API_SECRET" ]; then
-            echo "API_BASE_URL and INTERNAL_API_SECRET repository secrets must be set." >&2
+          if [ -n "$API_BASE_URL" ] && [ -n "$INTERNAL_API_SECRET" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Production must alert loudly: a missing secret there means the outbox
+          # is not draining and nobody would know. Staging is allowed to be
+          # unconfigured — it is provisioned after production, and failing every
+          # 5 minutes until then is 288 red runs a day that teach people to
+          # ignore this workflow.
+          if [ "$ENVIRONMENT" = "production" ]; then
+            echo "${{ matrix.base_url_secret }} and ${{ matrix.internal_secret }} must be set." >&2
             exit 1
           fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::$ENVIRONMENT has no ${{ matrix.base_url_secret }} secret; skipping."
 
       - name: Run internal job(s)
+        if: steps.config.outputs.configured == 'true'
         env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
-          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          API_BASE_URL: ${{ secrets[matrix.base_url_secret] }}
+          INTERNAL_API_SECRET: ${{ secrets[matrix.internal_secret] }}
           TASK: ${{ steps.task.outputs.task }}
         run: |
           set -eu
@@ -100,6 +129,10 @@ jobs:
           if [ "$TASK" = "nightly-transitions" ]; then
             call_internal "/api/v1/invoices/internal/transition-overdue"
             call_internal "/api/v1/quotes/internal/transition-expired"
+            # Was missing here while .gitlab/ci/scheduled-jobs.yml had it, so
+            # overdue expenses never transitioned on the GitHub scheduler.
+            # Matters now that GitHub runs operations.
+            call_internal "/api/v1/expenses/internal/transition-overdue"
             call_internal "/api/v1/auth/internal/purge-otps"
             call_internal "/api/v1/internal/email-outbox/drain?limit=200"
           else

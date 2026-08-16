@@ -1,0 +1,28 @@
+# SPA fallback for the MochaHost (LiteSpeed) staging docroot.
+#
+# Deployed to ~/staging.crm.priori.co.ke/.htaccess by deploy-staging.yml.
+# See docs/operations/deployment.md §4.2.
+
+RewriteEngine On
+
+# The API is a Passenger-mounted Python app at /api. Bail out before the SPA
+# fallback below, which would otherwise answer API calls with index.html —
+# the failure looks like "the API returns HTML", which is a confusing hour.
+RewriteCond %{REQUEST_URI} ^/api
+RewriteRule ^ - [L]
+
+# Real files and directories (hashed JS/CSS bundles, assets) serve as-is.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Everything else is a client-side route owned by react-router.
+RewriteRule ^ index.html [L]
+
+# The entry HTML must not be cached, or browsers keep loading an old bundle
+# after a deploy. Hashed assets under /assets/ are safe to cache forever.
+<IfModule mod_headers.c>
+  <FilesMatch "index\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
