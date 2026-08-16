@@ -4,9 +4,10 @@ A per-session behavioural score, re-evaluated on EVERY request by the
 zero-trust gate — trust is "right now", not "since login". Signals are
 graduated by evidence weight (issue #67):
 
-SOFT (low weight; escalate only in combination; by construction their
-maximum single-request sum stays below the terminate threshold, so soft
-evidence alone can challenge but never hard-lock a legitimate user):
+SOFT (low weight; escalate only in combination; structurally they can
+challenge but NEVER terminate — a score at the terminate threshold with no
+HARD signal in the evaluation clamps to a challenge, so soft evidence
+alone can never hard-lock a legitimate user, whatever it accumulates to):
 
 - **New device / new country / unusual hour** — the session's first
   scored request deviates from the user's own behavioural baseline
@@ -316,8 +317,12 @@ def _detect_volume_anomaly(
     session: "UserSession",  # noqa: F821
     context: AccessContext,
     baseline,
-) -> bool:
+) -> tuple[bool, bool]:
     """Request volume inside the rolling window exceeds a ceiling.
+
+    Returns ``(soft_fired, hard_fired)`` so the caller can tell the mild
+    deviation apart from the exfiltration signal: only the latter is HARD
+    evidence that may carry a termination.
 
     Two ceilings, matching the signal taxonomy (#67):
 
@@ -339,7 +344,8 @@ def _detect_volume_anomaly(
     window = settings.RISK_VOLUME_WINDOW_SECONDS
     sid = str(session.id)
     cls = context.sensitivity.value
-    fired = False
+    soft_fired = False
+    hard_fired = False
 
     mild_ceiling = baselines.volume_ceiling(baseline, cls)
     over_mild = not store.hit(f"risk:vol:{sid}:{cls}", mild_ceiling, window).allowed
@@ -356,7 +362,7 @@ def _detect_volume_anomaly(
                 "sensitivity_class": cls,
             },
         )
-        fired = True
+        soft_fired = True
 
     exfil_ceiling = (
         settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
@@ -374,9 +380,9 @@ def _detect_volume_anomaly(
                 "max_requests": exfil_ceiling,
             },
         )
-        fired = True
+        hard_fired = True
 
-    return fired
+    return soft_fired, hard_fired
 
 
 def _terminate(
@@ -478,10 +484,15 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
 
     # Behavioural signals for this request. Each returns whether it fired,
     # so a clean request stays a pure read plus the trail-state update.
-    fired = _evaluate_session_start_softs(db, session, context, baseline)
-    fired |= _detect_impossible_travel(db, session, context)
-    fired |= _detect_device_change(db, session, context)
-    fired |= _detect_volume_anomaly(db, session, context, baseline)
+    # SOFT and HARD evidence are tracked apart: only a batch carrying HARD
+    # evidence (impossible travel, exfiltration-scale reads) may terminate.
+    soft_fired = _evaluate_session_start_softs(db, session, context, baseline)
+    hard_fired = _detect_impossible_travel(db, session, context)
+    soft_fired |= _detect_device_change(db, session, context)
+    volume_soft, volume_hard = _detect_volume_anomaly(db, session, context, baseline)
+    soft_fired |= volume_soft
+    hard_fired |= volume_hard
+    fired = soft_fired or hard_fired
 
     # Continuous learning (typical hours, typical per-class volume) rides
     # the request transaction: losing an increment to a rollback only
@@ -490,18 +501,36 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
 
     score = effective_score(session, context.requested_at)
     verdict: PolicyVerdict | None = None
-    if score >= settings.RISK_TERMINATE_THRESHOLD:
+    if score >= settings.RISK_TERMINATE_THRESHOLD and hard_fired:
         verdict = _terminate(
             db, session, context, f"risk score {score} crossed terminate threshold"
         )
     elif score >= settings.RISK_CHALLENGE_THRESHOLD:
+        # A score at/above the terminate threshold WITHOUT hard evidence in
+        # this batch clamps to a challenge. The single-batch weight sums
+        # guarantee softs-from-zero stay below terminate, but a score that
+        # legitimately sat just under the challenge line (softs + decay)
+        # plus one more soft batch can cross it — a new laptop, a new
+        # country, hours of work, then a browser auto-update in a busy
+        # minute. That shape must step up, never hard-lock (issue #67's
+        # false-positive tolerance). An attacker gains nothing: the
+        # challenge is already a wall they cannot answer, and failing the
+        # OTP budget terminates the challenged session anyway.
         session.status = SessionStatus.CHALLENGE_REQUIRED.value
+        clamped = score >= settings.RISK_TERMINATE_THRESHOLD
+        why = f"risk score {score} crossed challenge threshold"
+        if clamped:
+            why = (
+                f"risk score {score} crossed terminate threshold on soft "
+                "evidence alone; clamped to challenge (termination requires "
+                "a hard signal)"
+            )
         _audit_session_event(
             db,
             session,
             context,
             "session_challenged",
-            {"why": f"risk score {score} crossed challenge threshold"},
+            {"why": why, "soft_clamp": clamped},
         )
         verdict = PolicyVerdict(
             decision=Decision.CHALLENGE,

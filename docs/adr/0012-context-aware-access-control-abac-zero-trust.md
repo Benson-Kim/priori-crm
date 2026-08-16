@@ -80,9 +80,12 @@ after the initial OTP.
      own baseline*, once per session, and only when there is history to
      deviate from. Individually each stays below the challenge threshold
      (allow + log); their maximum single-request sum (90) sits below the
-     terminate threshold (100) **by construction**, so soft evidence
-     alone — a new place, a new laptop, night work, one busy minute — can
-     at worst force a step-up, never a termination.
+     terminate threshold (100), and — **structurally** — a score crossing
+     the terminate threshold with no HARD signal in the evaluation clamps
+     to a challenge (audited as `soft_clamp`), so soft evidence alone — a
+     new place, a new laptop, night work, one busy minute — can at worst
+     force a step-up, never a termination, whatever it accumulates to
+     across requests.
    - **HARD signals escalate directly**: impossible travel (70 — an
      immediate challenge; termination only with corroboration, because
      carrier-NAT geolocation jitter is a real false-positive source),

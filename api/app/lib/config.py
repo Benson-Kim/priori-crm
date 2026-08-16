@@ -94,13 +94,16 @@ class Settings(BaseSettings):
     # long-lived session cannot eventually challenge a legitimate user.
     # Thresholds implement the graduated, evidence-weighted model:
     # low risk (< challenge) = allow + log; moderate = OTP step-up;
-    # high (>= terminate) = kill the session. The terminate default (100)
-    # sits ABOVE the largest possible single-request batch of SOFT signals
-    # (new device 25 + new country 25 + unusual hour 10 + volume 30 = 90),
-    # so soft evidence alone — the benign-unusual shapes: new place, new
-    # laptop, night work, a busy minute — can reach a challenge but NEVER
-    # a termination. Only HARD signals (impossible travel, exfiltration-
-    # scale reads) or hard+soft corroboration cross the terminate line.
+    # high (>= terminate) = kill the session. Termination additionally
+    # requires a HARD signal (impossible travel, exfiltration-scale reads)
+    # in the evaluation that crosses the line: soft evidence alone — the
+    # benign-unusual shapes: new place, new laptop, night work, a busy
+    # minute — can reach a challenge but NEVER a termination, whatever it
+    # accumulates to across batches (a soft-only crossing clamps to a
+    # challenge, audited). The terminate default (100) also sits ABOVE the
+    # largest possible single-request batch of SOFT signals (new device 25
+    # + new country 25 + unusual hour 10 + volume 30 = 90) for defence in
+    # depth.
     RISK_CHALLENGE_THRESHOLD: int = Field(default=60, ge=1, le=10000)
     RISK_TERMINATE_THRESHOLD: int = Field(default=100, ge=1, le=10000)
     # Impossible travel: implied speed between consecutive geolocated

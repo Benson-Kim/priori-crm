@@ -301,6 +301,60 @@ class TestSoftSignalFalsePositives:
         assert again.status_code == 401
         assert again.json()["error_code"] == "STEP_UP_REQUIRED"
 
+    def test_soft_only_terminate_crossing_clamps_to_challenge(
+        self, client, db, trusted_ctx
+    ):
+        """Accumulated soft evidence can cross 100 across batches — clamp it.
+
+        A session sitting just under the challenge line (softs + decay)
+        plus one more soft batch (device change) can cross the terminate
+        threshold with zero hard evidence: a new laptop, a new country,
+        hours of work, then a browser auto-update in a busy minute.
+        Termination requires a HARD signal; this must step up, never kill.
+        """
+        user = _seed_user(db, "unlucky@mail.com")
+        _seed_baseline(
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+
+        session, headers = _craft_session(db, user)
+        now = datetime.now(UTC)
+        # Mid-session shape: start-softs already evaluated, device known,
+        # accumulated soft score one point under the terminate line with a
+        # fresh decay anchor.
+        session.risk_score = settings.RISK_TERMINATE_THRESHOLD - 1
+        session.risk_updated_at = now
+        session.last_seen_at = now
+        session.device_fingerprint = "client:known-laptop"
+        db.commit()
+
+        resp = client.get(
+            "/api/v1/customers", headers={**headers, **NEW_DEVICE, **KE_GEO}
+        )
+        assert resp.status_code == 401
+        assert resp.json()["error_code"] == "STEP_UP_REQUIRED", (
+            "a soft-only crossing of the terminate threshold must clamp "
+            "to a challenge, never terminate"
+        )
+        db.refresh(session)
+        assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
+        assert session.risk_score >= settings.RISK_TERMINATE_THRESHOLD
+
+        challenged = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "session",
+                AuditEvent.action == "session_challenged",
+            )
+            .all()
+        )
+        assert challenged
+        assert challenged[-1].after.get("soft_clamp") is True
+
     def test_empty_baseline_fires_nothing(self, client, db, trusted_ctx):
         """No history = nothing to deviate from = no penalty (fail-safe)."""
         user = _seed_user(db, "firstday@mail.com")
