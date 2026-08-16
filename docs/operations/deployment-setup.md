@@ -273,9 +273,31 @@ ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
   'ls -la ~/crm-staging/web/ && echo "--- mount ---" && cat ~/crm-staging/web/api/.htaccess'
 ```
 
-The `.htaccess` should contain `PassengerAppRoot /home/priori/apps/priori-api`. If
-`api/` is missing, the Application URL in the table above was not set to the `/api`
-path — fix it in Setup Python App before continuing.
+**Confirmed on this account, 2026-08-16.** The docroot holds exactly the three
+host-created directories the deploy must not delete, and the mount is wired:
+
+```console
+$ ls -la ~/crm-staging/web/
+drwxr-xr-x 3 priori priori .well-known      # AutoSSL validation
+drwxr-xr-x 2 priori priori api              # the Passenger mount
+drwxr-xr-x 2 priori priori cgi-bin
+
+$ cat ~/crm-staging/web/api/.htaccess
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/priori/apps/priori-api"
+PassengerBaseURI "/api"
+PassengerPython "/home/priori/virtualenv/apps/priori-api/3.12/bin/python"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+```
+
+`PassengerBaseURI "/api"` is the line that makes `API_V1_PREFIX=/v1` correct in §1.4:
+Passenger strips that base URI, so the app must register its routes at `/v1/...` for
+the public URL to be `/api/v1/...`. If you ever change the Application URL, that
+`.env` value has to change with it.
+
+If `api/` is missing, the Application URL was not given the `/api` path — fix it in
+Setup Python App before continuing, or the SPA will serve and every API call will
+404.
 
 **Verify** — cPanel → **SSL/TLS Status**: `staging.crm.priori.co.ke` shows an AutoSSL
 certificate. The deploy's smoke test is an HTTPS call and will fail without one.
