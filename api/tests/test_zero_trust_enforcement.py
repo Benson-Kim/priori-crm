@@ -27,7 +27,7 @@ from app.common.audit import AuditEvent
 from app.common.authz import db_guard
 from app.common.authz.engine import ALLOW_VERDICT, Decision, PolicyVerdict
 from app.common.exceptions import ForbiddenException
-from app.common.security import create_access_token, hash_password
+from app.common.security import hash_password
 from app.constants.enums import UserRole
 from app.lib.config import settings
 from app.modules.auth.models import User

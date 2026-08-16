@@ -107,19 +107,21 @@ def absorb_context(db: Session, user_id, context: AccessContext | None) -> None:
     baseline = get_or_create_baseline(db, user_id)
     changed = False
 
-    if context.device_fingerprint:
-        if _remember(
-            baseline.known_devices, context.device_fingerprint, _MAX_KNOWN_DEVICES
-        ):
-            flag_modified(baseline, "known_devices")
-            changed = True
+    if context.device_fingerprint and _remember(
+        baseline.known_devices, context.device_fingerprint, _MAX_KNOWN_DEVICES
+    ):
+        flag_modified(baseline, "known_devices")
+        changed = True
 
-    if context.geo is not None and context.geo.country:
-        if _remember(
+    if (
+        context.geo is not None
+        and context.geo.country
+        and _remember(
             baseline.known_countries, context.geo.country, _MAX_KNOWN_COUNTRIES
-        ):
-            flag_modified(baseline, "known_countries")
-            changed = True
+        )
+    ):
+        flag_modified(baseline, "known_countries")
+        changed = True
 
     _bump_hour(baseline, context.local_hour)
     flag_modified(baseline, "hour_counts")
@@ -154,7 +156,7 @@ def _bump_hour(baseline, local_hour: int) -> None:
 def _hour_is_usual(baseline, local_hour: int) -> bool:
     """Whether the hour (or an adjacent one) has ever been observed.
 
-    Adjacent hours count so a habitual 08:00–17:00 worker starting at
+    Adjacent hours count so a habitual 08:00-17:00 worker starting at
     07:40 one morning is not an anomaly — bucket edges are not habits.
     """
     for offset in (-1, 0, 1):
@@ -257,11 +259,10 @@ def learn_request(baseline, context: AccessContext) -> None:
             windows = int(entry.get("windows", 0))
             alpha = settings.RISK_VOLUME_LEARNING_ALPHA
             previous = float(entry.get("ewma", 0.0))
-            entry["ewma"] = (
-                float(count)
-                if windows == 0
-                else alpha * count + (1 - alpha) * previous
-            )
+            if windows == 0:
+                entry["ewma"] = float(count)
+            else:
+                entry["ewma"] = alpha * count + (1 - alpha) * previous
             entry["windows"] = windows + 1
             entry["count"] = 1
             entry["window_started_at"] = now.isoformat()
@@ -280,9 +281,8 @@ def volume_ceiling(baseline, sensitivity_class: str) -> int:
     past the configured global maximum.
     """
     entry = (baseline.volume_baselines or {}).get(sensitivity_class)
-    if not entry or int(entry.get("windows", 0)) < (
-        settings.RISK_VOLUME_MIN_LEARNED_WINDOWS
-    ):
+    min_windows = settings.RISK_VOLUME_MIN_LEARNED_WINDOWS
+    if not entry or int(entry.get("windows", 0)) < min_windows:
         return settings.RISK_VOLUME_MAX_REQUESTS
     adaptive = int(
         float(entry.get("ewma", 0.0)) * settings.RISK_VOLUME_DEVIATION_MULTIPLIER
