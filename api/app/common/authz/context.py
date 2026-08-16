@@ -33,6 +33,7 @@ Signal sources are deliberately pluggable-but-simple:
 import hashlib
 import ipaddress
 import re
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -275,6 +276,26 @@ def _parse_stepped_up_at(value: object) -> datetime | None:
         return None
 
 
+def _is_verified_service_caller(request: Request) -> bool:
+    """Whether the caller presents the CORRECT machine-to-machine secret.
+
+    The "service" principal is exempt from the OTP-challenge rules (a
+    machine has no inbox — the H1 exemption), so it must never be granted
+    on header PRESENCE alone: anyone could attach a garbage
+    X-Internal-Secret to dodge the off-hours / unknown-geo challenges
+    (review H9). Classification requires the header VALUE to match
+    ``INTERNAL_API_SECRET`` in constant time — the same comparison
+    ``verify_internal_secret`` makes on the gated routes, which still runs
+    and still owns its own rejection. A wrong or unconfigured secret
+    classifies the caller as anonymous (fail closed).
+    """
+    supplied = request.headers.get("X-Internal-Secret")
+    expected = settings.INTERNAL_API_SECRET
+    if not supplied or not expected:
+        return False
+    return secrets.compare_digest(supplied, expected)
+
+
 def build_access_context(request: Request) -> AccessContext:
     """Assemble the per-request :class:`AccessContext`."""
     token = _decode_token_leniently(request)
@@ -285,9 +306,7 @@ def build_access_context(request: Request) -> AccessContext:
     principal: PrincipalType
     if user_id is not None:
         principal = "user"
-    elif request.headers.get("X-Internal-Secret"):
-        # Machine-to-machine caller; verify_internal_secret still owns the
-        # constant-time secret comparison on the routes that require it.
+    elif _is_verified_service_caller(request):
         principal = "service"
     else:
         principal = "anonymous"

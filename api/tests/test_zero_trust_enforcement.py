@@ -159,13 +159,47 @@ class TestSameRoleDifferentContext:
         )
         assert ok.status_code == 200
 
-        # The exemption never weakens the secret check itself.
+        # The exemption never weakens the secret check itself — and (H9) a
+        # WRONG secret never earns the service classification in the first
+        # place: the caller stays anonymous, so the gate's off-hours rule
+        # challenges it before verify_internal_secret would even run.
+        # Either way: 401, and the nightly job only works with the real
+        # secret.
         bad = client.post(
             "/api/v1/invoices/internal/transition-overdue",
             headers={"X-Internal-Secret": "wrong"},
         )
         assert bad.status_code == 401
-        assert bad.json().get("error_code") != "STEP_UP_REQUIRED"
+
+    def test_garbage_internal_secret_cannot_dodge_challenges(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """#67 review H9: service classification requires a VERIFIED secret.
+
+        If header PRESENCE alone classified the caller as "service", anyone
+        could attach a garbage X-Internal-Secret to inherit the machine
+        exemption from the off-hours / unknown-geo challenge rules. The
+        principal is granted only when the header value matches
+        INTERNAL_API_SECRET in constant time.
+        """
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "real-secret-value")
+        _freeze_local_hour(monkeypatch, 2)
+
+        spoof = client.post(
+            "/api/v1/invoices/internal/transition-overdue",
+            headers={"X-Internal-Secret": "garbage"},
+        )
+        assert spoof.status_code == 401
+        assert spoof.json()["error_code"] == "STEP_UP_REQUIRED"
+
+        # With no secret configured at all, presence earns nothing either.
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "")
+        unconfigured = client.post(
+            "/api/v1/invoices/internal/transition-overdue",
+            headers={"X-Internal-Secret": "anything"},
+        )
+        assert unconfigured.status_code == 401
+        assert unconfigured.json()["error_code"] == "STEP_UP_REQUIRED"
 
     def test_denylisted_ip_denied_even_with_valid_admin_token(
         self, client, db, monkeypatch
