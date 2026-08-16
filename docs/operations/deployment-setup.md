@@ -81,8 +81,50 @@ on GitLab as usual. **Do not merge until 0.1 is done** — the moment it lands o
 
 ## Part 1 — Staging (MochaHost, cPanel)
 
-Host `69.72.248.125`, SSH is open (OpenSSH 9.9 — the old runbook's "port 22 is
-filtered" note is stale).
+Host `69.72.248.125`, cPanel user `priori`. SSH is open (OpenSSH 9.9 — the old
+runbook's "ports 21/22 are filtered at the network edge" note is stale; that block
+was lifted, which is why this design uses SSH where the genesis-prestige runbook
+could not).
+
+### 1.0 Get access without the account password  ⚠️ do this first
+
+Every step below needs either cPanel or SSH. If you do not have the cPanel account
+password, **you very likely do not need it** — key-based SSH bypasses it entirely,
+and the key is installed from the web UI.
+
+```bash
+# On your machine. This is the same key CI will use later (§1.5) — not throwaway work.
+ssh-keygen -t ed25519 -f ~/.ssh/priori-staging-deploy -N "" -C "github-actions-staging"
+cat ~/.ssh/priori-staging-deploy.pub
+```
+
+1. Reach cPanel through the **MochaHost client portal** → *Login to cPanel*. That
+   button is single sign-on: it authenticates from the billing account and does
+   **not** prompt for the cPanel password.
+2. cPanel → **SSH Access** → *Manage SSH Keys* → **Import Key**, paste the `.pub`
+   contents.
+3. **Authorize** the key — a separate click after importing, and the step people
+   miss. An imported-but-unauthorized key still fails with `Permission denied`.
+
+**Verify** — must print `priori`, with no password prompt:
+
+```bash
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke whoami
+```
+
+| Result | Meaning |
+|---|---|
+| `priori` | Fully unblocked; continue to §1.1 |
+| `Shell access is not enabled on your account!` | The key worked, but shell is off. Stop and say so — the deploy transport has to change to FTPS + cron |
+| `Permission denied (publickey,...,password)` | Key not authorized (step 3), or pasted with a line break |
+
+While logged into the portal, you can usually also **reset the cPanel password**
+there without knowing the old one. Worth doing anyway, but not required for any step
+in this guide.
+
+> If you cannot reach cPanel at all, staging is blocked until someone can. **Part 2
+> (production) is entirely independent — do that instead**; it is the live site and
+> the higher-value half.
 
 ### 1.1 Create the database — and prove the extensions work  ⚠️ the real blocker
 
@@ -100,7 +142,7 @@ In cPanel → **PostgreSQL Databases**, create:
 Then run the extension check **over SSH, not in phpPgAdmin**:
 
 ```bash
-ssh <cpaneluser>@staging.crm.priori.co.ke
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke
 command -v psql || echo "no psql — use the phpPgAdmin fallback below"
 
 PGPASSWORD='<password>' psql -h localhost -U priori_staging -d priori_staging \
@@ -162,9 +204,9 @@ the app sees the path. Getting this pair wrong 404s every route.
 both, and if cPanel placed the app somewhere other than what you typed, following the
 defaults below silently writes config into a directory nothing reads:
 
-- the **application root**, e.g. `/home/<cpaneluser>/apps/priori-api` → used in §1.4
+- the **application root**, e.g. `/home/priori/apps/priori-api` → used in §1.4
   and as `STAGING_APP_DIR` in §1.5
-- the **virtualenv path**, e.g. `/home/<cpaneluser>/virtualenv/apps/priori-api/3.12`
+- the **virtualenv path**, e.g. `/home/priori/virtualenv/apps/priori-api/3.12`
   → `deploy/staging_release.sh` expects exactly this shape
 
 Also create the docroot directory if it does not exist: cPanel → **Domains** →
@@ -173,23 +215,16 @@ confirm `staging.crm.priori.co.ke` points at `~/staging.crm.priori.co.ke`.
 **Verify** — cPanel → **SSL/TLS Status**: `staging.crm.priori.co.ke` shows an AutoSSL
 certificate. The deploy's smoke test is an HTTPS call and will fail without one.
 
-### 1.3 Create a deploy SSH key
+### 1.3 The deploy SSH key
 
-Generate a **dedicated** keypair on your machine — never reuse a personal key, since
-anyone who can run a deploy can use it:
+Already done in §1.0 — `~/.ssh/priori-staging-deploy` is the key CI will use, and it
+is deliberately a **dedicated** keypair rather than a personal one, because anyone who
+can run a deploy can use it.
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/priori-staging-deploy -N "" -C "github-actions-staging"
-```
-
-Install the public half on the host — cPanel → **SSH Access** → Manage SSH Keys →
-Import, paste the contents of `~/.ssh/priori-staging-deploy.pub`, then **Authorize**
-it.
-
-**Verify** — this must print the username, not a password prompt:
+**Re-verify before moving on**, since the next steps all run over it:
 
 ```bash
-ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke whoami
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke whoami
 ```
 
 ### 1.4 Create the staging `.env` on the host
@@ -201,12 +236,12 @@ cPanel used `~/apps/priori-api`. Confirm first, because the command would otherw
 happily create a new directory that nothing reads:
 
 ```bash
-ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke \
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
   'ls -d ~/apps/priori-api && ls ~/apps/priori-api'
 ```
 
 ```bash
-ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke \
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
   'cat > ~/apps/priori-api/.env' <<'ENV'
 APP_NAME=Business Central
 ENVIRONMENT=staging
@@ -235,7 +270,7 @@ AWS_REGION=af-south-1
 SES_SENDER_EMAIL=noreply@priori.co.ke
 
 STORAGE_BACKEND=local
-UPLOAD_DIR=/home/<cpaneluser>/apps/priori-api/uploads
+UPLOAD_DIR=/home/priori/apps/priori-api/uploads
 
 # Gates the internal job endpoints; they fail closed if unset.
 # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -248,7 +283,7 @@ ENV
 Replace every `<...>`. Then lock it down and create the uploads directory:
 
 ```bash
-ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke \
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
   'chmod 600 ~/apps/priori-api/.env && mkdir -p ~/apps/priori-api/uploads'
 ```
 
@@ -262,10 +297,10 @@ From the repo directory:
 ```bash
 gh secret set STAGING_SSH_KEY      < ~/.ssh/priori-staging-deploy
 gh secret set STAGING_KNOWN_HOSTS --body "$(ssh-keyscan -H staging.crm.priori.co.ke 2>/dev/null)"
-gh secret set STAGING_SSH_USER    --body "<cpaneluser>"
+gh secret set STAGING_SSH_USER    --body "priori"
 gh secret set STAGING_SSH_HOST    --body "staging.crm.priori.co.ke"
-gh secret set STAGING_DOCROOT     --body "/home/<cpaneluser>/staging.crm.priori.co.ke"
-gh secret set STAGING_APP_DIR     --body "/home/<cpaneluser>/apps/priori-api"
+gh secret set STAGING_DOCROOT     --body "/home/priori/staging.crm.priori.co.ke"
+gh secret set STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
 ```
 
 Use absolute paths, not `~` — rsync targets do not expand it reliably.
