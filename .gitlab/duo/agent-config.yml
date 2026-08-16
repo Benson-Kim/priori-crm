@@ -15,7 +15,7 @@ setup_script:
   # apt first (default image runs as root); pip fallback if the image is
   # not Debian-based; never hard-fail the flow over tooling.
   - apt-get update -qq || true
-  - apt-get install -y -qq shellcheck || pip install --quiet shellcheck-py || echo "WARNING: shellcheck could not be installed"
+  - 'apt-get install -y -qq shellcheck || pip install --quiet shellcheck-py || echo "WARNING - shellcheck could not be installed"'
   - shellcheck --version || true
 
 network_policy:
