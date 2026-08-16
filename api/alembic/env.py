@@ -17,7 +17,12 @@ from app.modules.quotes.models import Quote  # noqa: F401
 from app.modules.vendors.models import Vendor  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
+# alembic.ini is parsed by configparser with BasicInterpolation, where `%` starts a
+# substitution. A percent-encoded character in the password — `%40` for `@`, `%23`
+# for `#`, anything urlencode produces — then blows up with "invalid interpolation
+# syntax" before a single migration runs. Doubling the sign is configparser's own
+# escape and leaves URLs without one untouched.
+config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL).replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
