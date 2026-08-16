@@ -625,4 +625,38 @@ def note_privilege_escalation(request: Request, db: Session) -> None:
         "privilege_escalation",
         {"escalation_count": session.escalation_count},
     )
+
+    # Evaluate the thresholds HERE, inside the same locked transaction
+    # (review F4). Scoring without transitioning left the crossing in
+    # limbo: a session at 50 taking +25 completed an ordinary 403, and the
+    # NEXT request found the score without any current hard signal — so
+    # the gate clamped what the taxonomy defines as HARD evidence
+    # (privilege-escalation attempts) to a challenge instead of the direct
+    # escalation the model documents. The transition and its audit
+    # evidence now persist atomically with the increment, under the same
+    # row lock, before the 403 goes out.
+    score = effective_score(session, context.requested_at)
+    if score >= settings.RISK_TERMINATE_THRESHOLD:
+        _terminate(
+            db,
+            session,
+            context,
+            f"risk score {score} crossed terminate threshold "
+            "(privilege-escalation attempts)",
+        )
+    elif (
+        score >= settings.RISK_CHALLENGE_THRESHOLD
+        and session.status == SessionStatus.ACTIVE.value
+    ):
+        session.status = SessionStatus.CHALLENGE_REQUIRED.value
+        _audit_session_event(
+            db,
+            session,
+            context,
+            "session_challenged",
+            {
+                "why": f"risk score {score} crossed challenge threshold",
+                "soft_clamp": False,
+            },
+        )
     db.commit()

@@ -474,6 +474,58 @@ class TestPrivilegeEscalation:
         assert challenged.status_code == 401
         assert challenged.json()["error_code"] == "STEP_UP_REQUIRED"
 
+    def test_escalation_crossing_terminates_in_the_same_request(
+        self, client, db, monkeypatch
+    ):
+        """#67 review F4: the 403 that crosses the line acts immediately.
+
+        note_privilege_escalation used to add points and commit WITHOUT
+        evaluating the thresholds: a session at 80 taking +25 completed an
+        ordinary 403, and the next request saw the score with no current
+        hard signal — clamped to a challenge instead of the direct
+        termination the taxonomy documents for hard evidence.
+        """
+        _seed_user(db, "escalator@mail.com", role=UserRole.MEMBER)
+        access, _ = _login_session(client, "escalator@mail.com")
+
+        session = db.get(UserSession, _sid(access))
+        session.risk_score = 80
+        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+
+        resp = client.delete(
+            f"/api/v1/invoices/{uuid.uuid4()}", headers=_bearer(access)
+        )
+        assert resp.status_code == 403
+
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+        assert "privilege-escalation" in session.termination_reason
+        assert _session_events(db, "session_terminated")
+
+        dead = client.get("/api/v1/customers", headers=_bearer(access))
+        assert dead.status_code == 401
+
+    def test_escalation_crossing_challenges_in_the_same_request(
+        self, client, db
+    ):
+        """A challenge-line crossing transitions the status atomically too."""
+        _seed_user(db, "prober3@mail.com", role=UserRole.MEMBER)
+        access, _ = _login_session(client, "prober3@mail.com")
+
+        session = db.get(UserSession, _sid(access))
+        session.risk_score = 40
+        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+
+        resp = client.delete(
+            f"/api/v1/invoices/{uuid.uuid4()}", headers=_bearer(access)
+        )
+        assert resp.status_code == 403
+
+        db.refresh(session)
+        assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
+
     def test_single_rejection_does_not_challenge(self, client, db):
         _seed_user(db, "curious@mail.com", role=UserRole.MEMBER)
         access, _ = _login_session(client, "curious@mail.com")
