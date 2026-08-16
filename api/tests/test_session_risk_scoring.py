@@ -629,9 +629,8 @@ class TestRefreshAndLogout:
         """The sid denylist holds even where the gate does not run (F5)."""
         _seed_user(db, "walker@mail.com")
         access, refresh = _login_session(client, "walker@mail.com")
-        assert client.post(
-            "/api/v1/auth/logout", json={"refresh_token": refresh}
-        ).status_code == 200
+        out = client.post("/api/v1/auth/logout", json={"refresh_token": refresh})
+        assert out.status_code == 200
 
         monkeypatch.setattr(settings, "ABAC_ENABLED", False)
         dead = client.get("/api/v1/customers", headers=_bearer(access))
@@ -679,9 +678,7 @@ class TestChallengeFenceIntegrity:
         assert read.json()["error_code"] == "STEP_UP_REQUIRED"
 
         # RESTRICTED read and an INTERNAL write: equally fenced.
-        assert (
-            client.get("/api/v1/owner", headers=_bearer(access)).status_code == 401
-        )
+        assert client.get("/api/v1/owner", headers=_bearer(access)).status_code == 401
         write = client.post("/api/v1/customers", json={}, headers=_bearer(access))
         assert write.status_code == 401
 
