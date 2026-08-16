@@ -705,6 +705,10 @@ class TestTokenEdgeCases:
             "/api/v1/auth/refresh", json={"refresh_token": legacy_refresh}
         )
         assert resp.status_code == 401
+        # The refusal names its real cause: nothing was revoked, so the
+        # revoked-token message would send the user hunting for a theft
+        # that never happened.
+        assert "legacy" in resp.json()["error"].lower()
 
     def test_unknown_session_id_is_refused(self, client, db):
         user = _seed_user(db, "phantom@mail.com")

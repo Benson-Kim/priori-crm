@@ -240,7 +240,10 @@ class TestRefreshTokenReuse:
         user = self._user(db, email="normal@acme.test")
         service = AuthService(db)
 
-        token1, _jti, _exp = create_refresh_token(str(user.id))
+        # Minted via the session path: a sid-less legacy token is refused
+        # outright since #67 review F7, so "normal rotation" means a
+        # session-carrying token — the only kind the login flow mints.
+        token1 = self._session_token(db, user)
         _access, token2 = service.refresh_access_token(token1)
         # No reuse occurred: the rotated token keeps working.
         _access2, token3 = service.refresh_access_token(token2)

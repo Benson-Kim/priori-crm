@@ -419,8 +419,13 @@ class AuthService:
             # re-runs login → OTP once, minting a tracked, scorable
             # session. The legacy ACCESS token keeps working for its
             # remaining minutes (graceful for in-flight requests); only
-            # the refresh path forces the one-time re-auth.
-            raise UnauthorizedException("Refresh token has been revoked.")
+            # the refresh path forces the one-time re-auth. The message
+            # is deliberately NOT the revoked-token one: nothing was
+            # revoked, and telling the user their token was would send
+            # them (and support) hunting for a theft that never happened.
+            raise UnauthorizedException(
+                "Legacy refresh token without a session; please sign in again."
+            )
         session = self._get_session(sid)
         if session is None:
             raise UnauthorizedException("Refresh token has been revoked.")
