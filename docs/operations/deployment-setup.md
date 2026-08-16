@@ -97,18 +97,40 @@ In cPanel → **PostgreSQL Databases**, create:
 - user `priori_staging` with a generated password
 - add the user to the database with **ALL PRIVILEGES**
 
-Then cPanel → **phpPgAdmin** → select `priori_staging` → SQL tab:
+Then run the extension check **over SSH, not in phpPgAdmin**:
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+```bash
+ssh <cpaneluser>@staging.crm.priori.co.ke
+command -v psql || echo "no psql — use the phpPgAdmin fallback below"
+
+PGPASSWORD='<password>' psql -h localhost -U priori_staging -d priori_staging \
+  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' \
+  -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto;' \
+  -c "SELECT extname FROM pg_extension WHERE extname IN ('pg_trgm','pgcrypto');"
 ```
 
-**Verify** — run this and expect two rows:
+**Verify** — the last statement must list **both** extensions:
 
-```sql
-SELECT extname FROM pg_extension WHERE extname IN ('pg_trgm', 'pgcrypto');
 ```
+  extname
+-----------
+ pg_trgm
+ pgcrypto
+(2 rows)
+```
+
+> **Why not phpPgAdmin?** Its SQL window wraps every statement in
+> `SELECT COUNT(*) AS total FROM (<your sql>) AS sub` to paginate results, which is
+> not valid around a `CREATE`. You get:
+>
+> ```
+> ERROR: syntax error at or near "CREATE"
+> LINE 1: SELECT COUNT(*) AS total FROM (CREATE EXTENSION IF NOT EXIST...
+> ```
+>
+> That is the tool, not Postgres — the command never reached the server, so it tells
+> you nothing about permissions. If you must use phpPgAdmin, untick **Paginate
+> results** on the SQL page first, then run one statement at a time.
 
 If you get `ERROR: permission denied to create extension`, open a MochaHost support
 ticket:
