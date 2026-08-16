@@ -96,15 +96,32 @@ def get_or_create_baseline(db: Session, user_id) -> "UserBaseline":  # noqa: F82
 
 
 def _remember(values: list, value: str, cap: int) -> bool:
-    """Append ``value`` (most-recent-last, capped); True when it was new."""
+    """Record ``value`` most-recent-last (LRU, capped); True when new.
+
+    An already-known value is MOVED to the most-recent slot (#67 H13):
+    the cap then evicts the least-recently-VERIFIED entry, never a device
+    or country still in active, re-verified use.
+    """
     if value in values:
+        values.remove(value)
+        values.append(value)
         return False
     values.append(value)
     del values[:-cap]
     return True
 
 
-def absorb_context(db: Session, user_id, context: AccessContext | None) -> None:
+@dataclass(frozen=True, slots=True)
+class AbsorptionResult:
+    """What a step-up absorption actually added to the baseline."""
+
+    new_device: bool = False
+    new_country: bool = False
+
+
+def absorb_context(
+    db: Session, user_id, context: AccessContext | None
+) -> AbsorptionResult:
     """Fold a step-up-verified request's context into the user's baseline.
 
     Called by ``verify_otp`` on SUCCESS only: completing the login → OTP
@@ -113,6 +130,14 @@ def absorb_context(db: Session, user_id, context: AccessContext | None) -> None:
     absorbed device/country stop firing as soft signals, so the user is
     never repeatedly challenged for the same context.
 
+    Absorption is permanent trust, so it leaves a durable trace (#67
+    H13): every absorption writes a ``baseline_absorbed`` audit event,
+    and a NEW device additionally triggers a user notification (sent by
+    the caller, which knows the user's email) — a compromised inbox is
+    exactly the scenario where that mail is the victim's only tell.
+    Known entries are LRU-touched so the cap evicts the least-recently-
+    verified context, never one still in active use.
+
     Flush-only: rides the verify-otp request transaction, atomic with the
     session mint (``CommitOnSuccessRoute`` owns the commit).
     """
@@ -120,33 +145,53 @@ def absorb_context(db: Session, user_id, context: AccessContext | None) -> None:
         # No gate context (direct service call outside a request): there is
         # nothing trustworthy to absorb, and inventing a context would let
         # non-request code paths write trust. Skip quietly.
-        return
+        return AbsorptionResult()
 
     baseline = get_or_create_baseline(db, user_id)
-    changed = False
+    new_device = False
+    new_country = False
 
-    if context.device_fingerprint and _remember(
-        baseline.known_devices, context.device_fingerprint, _MAX_KNOWN_DEVICES
-    ):
+    if context.device_fingerprint:
+        new_device = _remember(
+            baseline.known_devices, context.device_fingerprint, _MAX_KNOWN_DEVICES
+        )
+        # Both a new entry and an LRU touch reorder the list: persist.
         flag_modified(baseline, "known_devices")
-        changed = True
 
-    if (
-        context.geo is not None
-        and context.geo.country
-        and _remember(
+    if context.geo is not None and context.geo.country:
+        new_country = _remember(
             baseline.known_countries, context.geo.country, _MAX_KNOWN_COUNTRIES
         )
-    ):
         flag_modified(baseline, "known_countries")
-        changed = True
 
     _bump_hour(baseline, context.local_hour)
     flag_modified(baseline, "hour_counts")
 
     baseline.updated_at = datetime.now(UTC)
+
+    # Durable trace of trust entering the baseline (append-only trail,
+    # #31): what was absorbed, from where, and whether it was new.
+    from app.common.audit import record_audit_event
+
+    record_audit_event(
+        db,
+        actor_id=user_id,
+        entity_type="baseline",
+        entity_id=user_id,
+        action="baseline_absorbed",
+        after={
+            "device_fingerprint": context.device_fingerprint,
+            "country": context.geo.country if context.geo else None,
+            "local_hour": context.local_hour,
+            "ip": context.ip,
+            "new_device": new_device,
+            "new_country": new_country,
+            "known_devices": len(baseline.known_devices),
+            "known_countries": len(baseline.known_countries),
+        },
+    )
     db.flush()
-    if changed:
+    if new_device or new_country:
         logger.info(
             "Baseline absorbed step-up context for user %s",
             user_id,
@@ -155,6 +200,7 @@ def absorb_context(db: Session, user_id, context: AccessContext | None) -> None:
                 "countries": len(baseline.known_countries),
             },
         )
+    return AbsorptionResult(new_device=new_device, new_country=new_country)
 
 
 def _bump_hour(baseline, local_hour: int) -> None:

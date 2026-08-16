@@ -186,6 +186,50 @@ class TestBaselineAbsorption:
         assert baseline.known_devices.count("client:known-laptop") == 1
         assert baseline.known_countries.count("KE") == 1
 
+    def test_absorption_is_audited_and_new_device_notifies(
+        self, client, db, trusted_ctx
+    ):
+        """#67 H13: permanent trust entering the baseline leaves a trace.
+
+        Every absorption writes a ``baseline_absorbed`` audit event; a
+        NEW device additionally notifies the account owner — a
+        compromised inbox is exactly where that mail is the only tell.
+        """
+        _seed_user(db, "traced@mail.com")
+        with patch(
+            "app.modules.auth.service.AuthService._send_new_device_alert"
+        ) as alert:
+            _login_session(client, "traced@mail.com", headers={**NEW_DEVICE, **US_GEO})
+        alert.assert_called_once()
+
+        events = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "baseline",
+                AuditEvent.action == "baseline_absorbed",
+            )
+            .all()
+        )
+        assert events
+        assert events[-1].after["new_device"] is True
+        assert events[-1].after["country"] == "US"
+
+        # A re-login from the SAME (now known) device does not re-alert.
+        with patch(
+            "app.modules.auth.service.AuthService._send_new_device_alert"
+        ) as alert:
+            _login_session(client, "traced@mail.com", headers={**NEW_DEVICE, **US_GEO})
+        alert.assert_not_called()
+
+    def test_remember_touches_existing_entries_lru(self, db):
+        """H13: the cap evicts the least-recently-VERIFIED entry."""
+        values = ["a", "b", "c"]
+        assert baselines._remember(values, "a", cap=3) is False
+        assert values == ["b", "c", "a"], "re-verified entry moves to most-recent"
+        # A new entry now evicts "b" (least recently verified), not "a".
+        assert baselines._remember(values, "d", cap=3) is True
+        assert values == ["c", "a", "d"]
+
     def test_passed_step_up_stops_repeat_challenges_for_same_context(
         self, client, db, trusted_ctx
     ):

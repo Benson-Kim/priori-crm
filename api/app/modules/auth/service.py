@@ -255,7 +255,16 @@ class AuthService:
         # transaction, atomic with the session mint.
         from app.common.authz.baselines import absorb_context
 
-        absorb_context(self._db, user.id, context)
+        absorption = absorb_context(self._db, user.id, context)
+        if absorption.new_device:
+            # A never-seen device just became permanently trusted (#67
+            # H13): tell the account owner. A compromised inbox (SIM swap)
+            # is exactly the case where this mail is the victim's only
+            # tell. Fail-safe: a send failure never blocks the login.
+            self._send_new_device_alert(
+                user.email,
+                country=(context.geo.country if context and context.geo else None),
+            )
 
         access_token = create_access_token(subject=str(user.id), extra=claims)
         refresh_token, _jti, _exp = create_refresh_token(
@@ -805,6 +814,21 @@ class AuthService:
             query = query.filter(OTPCode.id != exclude_id)
         query.update({"is_used": True}, synchronize_session="fetch")
         self._db.flush()
+
+    def _send_new_device_alert(self, recipient: str, country: str | None) -> None:
+        """Notify the owner that a new device entered their baseline (H13).
+
+        Best-effort by design: absorption already happened and is audited;
+        a delivery failure must never fail the login that triggered it.
+        """
+        try:
+            email_service.send_new_device_alert(recipient, country=country)
+        except Exception as exc:
+            logger.error(
+                "Failed to send new-device alert",
+                exc_info=exc,
+                extra={"recipient": recipient},
+            )
 
     def _send_otp_email(self, recipient: str, otp_code: str) -> None:
         """Send OTP via email. Log-only in development if SES is not configured."""
