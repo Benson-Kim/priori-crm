@@ -95,7 +95,9 @@ jobs:
         env:
           SHA: ${{ inputs.sha }}
         run: |
-          for i in $(seq 1 30); do
+          # `_` not `i`: the counter is never read (unlike the analogous loop
+          # in production_release.sh, which logs the attempt number).
+          for _ in $(seq 1 30); do
             if curl -fsS --max-time 10 https://accounting.priori.co.ke/api/v1/health \
               | grep -q '"status":"healthy"'; then
               echo "production healthy on $SHA"
