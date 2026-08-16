@@ -99,7 +99,7 @@ class EmailService:
         return self._send(
             recipient=recipient,
             subject=subject,
-            body_html=f"<pre style=\"font-family:inherit\">{body_text}</pre>",
+            body_html=f'<pre style="font-family:inherit">{body_text}</pre>',
             body_text=body_text,
         )
 

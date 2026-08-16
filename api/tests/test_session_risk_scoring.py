@@ -510,9 +510,7 @@ class TestPrivilegeEscalation:
         dead = client.get("/api/v1/customers", headers=_bearer(access))
         assert dead.status_code == 401
 
-    def test_escalation_crossing_challenges_in_the_same_request(
-        self, client, db
-    ):
+    def test_escalation_crossing_challenges_in_the_same_request(self, client, db):
         """A challenge-line crossing transitions the status atomically too."""
         _seed_user(db, "prober3@mail.com", role=UserRole.MEMBER)
         access, _ = _login_session(client, "prober3@mail.com")

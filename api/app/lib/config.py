@@ -58,8 +58,7 @@ class Settings(BaseSettings):
     # X-Geo-* headers deliberately stay out: they are stamped by the
     # edge/CDN on the way in, never sent by browser JavaScript.
     CORS_ALLOW_HEADERS: str = (
-        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret,"
-        "X-Device-Fingerprint"
+        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret,X-Device-Fingerprint"
     )
 
     # Context-aware access control (ABAC + zero trust, issue #67).
