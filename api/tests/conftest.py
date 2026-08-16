@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -127,6 +128,25 @@ def reset_auth_throttle():
     yield
     _auth_throttle_store.cache_clear()
     _refresh_token_denylist.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def mute_new_device_alerts():
+    """Mute the new-device absorption alert (#67 H13) suite-wide.
+
+    Every FIRST login in a test absorbs a never-seen (derived) device
+    fingerprint, which triggers the owner-notification email from deep
+    inside verify_otp. The OTP mail is explicitly patched per test; this
+    one would otherwise reach the real SES client (ENVIRONMENT here is
+    "test", not "development", so the dev-mode skip does not apply) and
+    stall the suite on credential resolution. Tests asserting the alert
+    patch AuthService._send_new_device_alert explicitly.
+    """
+    with patch(
+        "app.lib.email.EmailService.send_new_device_alert",
+        return_value={"MessageId": "muted-in-tests"},
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)
