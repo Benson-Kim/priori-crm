@@ -592,7 +592,15 @@ def note_privilege_escalation(request: Request, db: Session) -> None:
 
     from app.modules.auth.models import UserSession
 
-    session = db.get(UserSession, context.session_id)
+    # Locked read (SELECT ... FOR UPDATE): concurrent 403 probes on one
+    # session would otherwise each read the same stale score/count and
+    # commit last-write-wins — N parallel probes accumulating as one, which
+    # is exactly the "repeated probing is free" hole this function closes.
+    # The commit right below releases the lock immediately, so the window
+    # is microseconds. It also refreshes past the gate's earlier read, so
+    # the increment lands on the freshest committed state. (SQLite has no
+    # FOR UPDATE; its whole-database locking serializes writers anyway.)
+    session = db.get(UserSession, context.session_id, with_for_update=True)
     if session is None or session.status == SessionStatus.TERMINATED.value:
         return
 
