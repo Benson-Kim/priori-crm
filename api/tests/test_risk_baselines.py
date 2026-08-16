@@ -760,3 +760,36 @@ class TestBaselineLearningUnits:
         assert baseline.hour_counts["9"] == 2499
         assert "23" not in baseline.hour_counts  # 1 // 2 == 0: pruned
         assert baseline.hour_observations == 2499
+
+    def test_concurrent_first_insert_is_idempotent(self, db, monkeypatch):
+        """#67 review H14 (prior L3): the first-INSERT race must not 500.
+
+        Two concurrent first-scored requests both observe "no baseline"
+        and both INSERT; the loser's IntegrityError must roll back only
+        the attempted insert (savepoint) and re-fetch the winner's row.
+        The lost race is simulated by blinding the initial lookup while a
+        'concurrent' row already exists.
+        """
+        from sqlalchemy.orm import Session as SaSession
+
+        user = _seed_user(db, "racer@mail.com")
+        # The concurrent request already inserted (and committed) the row.
+        _seed_baseline(db, user)
+        db.expunge_all()  # forget it locally so db.get would re-query
+
+        calls = {"n": 0}
+        original_get = SaSession.get
+
+        def blinded_first_get(self, entity, ident, **kw):
+            if getattr(entity, "__name__", "") == "UserBaseline":
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    return None  # the race window: row invisible to us
+            return original_get(self, entity, ident, **kw)
+
+        monkeypatch.setattr(SaSession, "get", blinded_first_get)
+        baseline = baselines.get_or_create_baseline(db, user.id)
+        assert baseline is not None
+        assert baseline.user_id == user.id
+        # And the surrounding transaction is still usable (no 500 shape).
+        db.flush()
