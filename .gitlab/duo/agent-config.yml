@@ -1,0 +1,33 @@
+# Duo Agent Platform flow-execution config.
+# NOTE: this file is read ONLY from the default branch (main); copies on
+# other branches are ignored. See
+# https://docs.gitlab.com/user/duo_agent_platform/flows/execution/agent-config-yaml/
+#
+# Why this exists: agent sessions in this project repeatedly hit two walls
+# during verification passes (MR !69 hardening, MR !68 authz review):
+#   - shellcheck could not be provisioned (binary download 403), so the
+#     shell-quality pass over deploy/*.sh and workflow run: blocks was
+#     skipped and had to fall back to `bash -n` only;
+#   - PyPI egress was blocked, so python-dotenv/pytest/ruff could not be
+#     installed and verification had to lean entirely on the MR CI pipeline.
+
+setup_script:
+  # apt first (default image runs as root); pip fallback if the image is
+  # not Debian-based; never hard-fail the flow over tooling.
+  - apt-get update -qq || true
+  - apt-get install -y -qq shellcheck || pip install --quiet shellcheck-py || echo "WARNING: shellcheck could not be installed"
+  - shellcheck --version || true
+
+network_policy:
+  include_recommended_allowed: true
+  allowed_domains:
+    # apt mirrors (Debian and Ubuntu bases)
+    - deb.debian.org
+    - security.debian.org
+    - archive.ubuntu.com
+    - security.ubuntu.com
+    - ports.ubuntu.com
+    # Python package index, so sessions can install python-dotenv, pytest,
+    # ruff, shellcheck-py etc. for local verification
+    - pypi.org
+    - files.pythonhosted.org
