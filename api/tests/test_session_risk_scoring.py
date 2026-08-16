@@ -656,6 +656,36 @@ class TestRefreshAndLogout:
         assert dead.status_code == 401
 
 
+class TestChallengeFenceIntegrity:
+    """#67 review H15: a CHALLENGED session is fail-closed everywhere.
+
+    The gate re-scores before ANY handler runs (app-level dependency; no
+    websockets, mounts or static routes exist to slip past it), so a
+    challenged session must be refused CONFIDENTIAL/RESTRICTED reads and
+    all writes until the step-up passes.
+    """
+
+    def test_challenged_session_cannot_read_confidential(self, client, db):
+        _seed_user(db, "fenced@mail.com", role=UserRole.ADMIN)
+        access, _ = _login_session(client, "fenced@mail.com")
+
+        session = db.get(UserSession, _sid(access))
+        session.status = SessionStatus.CHALLENGE_REQUIRED.value
+        db.commit()
+
+        # CONFIDENTIAL read: refused with the step-up contract.
+        read = client.get("/api/v1/invoices", headers=_bearer(access))
+        assert read.status_code == 401
+        assert read.json()["error_code"] == "STEP_UP_REQUIRED"
+
+        # RESTRICTED read and an INTERNAL write: equally fenced.
+        assert (
+            client.get("/api/v1/owner", headers=_bearer(access)).status_code == 401
+        )
+        write = client.post("/api/v1/customers", json={}, headers=_bearer(access))
+        assert write.status_code == 401
+
+
 class TestTokenEdgeCases:
     def test_legacy_token_without_sid_still_works(self, client, db):
         user = _seed_user(db, "legacy@mail.com")
@@ -691,8 +721,10 @@ class TestTokenEdgeCases:
         assert "terminated" in resp.json()["error"].lower()
 
     def test_password_reset_terminates_sessions(self, client, db):
+        """#67 H16: a reset kills EVERY session, and none can refresh."""
         _seed_user(db, "resetter@mail.com")
         access, _ = _login_session(client, "resetter@mail.com")
+        access_2, refresh_2 = _login_session(client, "resetter@mail.com")
         assert (
             client.get("/api/v1/customers", headers=_bearer(access)).status_code == 200
         )
@@ -716,5 +748,19 @@ class TestTokenEdgeCases:
         assert session.status == SessionStatus.TERMINATED.value
         assert session.termination_reason == "password_reset"
 
+        # EVERY session dies, not just the newest.
+        session_2 = db.get(UserSession, _sid(access_2))
+        assert session_2.status == SessionStatus.TERMINATED.value
+
         dead = client.get("/api/v1/customers", headers=_bearer(access))
         assert dead.status_code == 401
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access_2)).status_code
+            == 401
+        )
+
+        # A terminated session cannot refresh its way back to life.
+        refreshed = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_2}
+        )
+        assert refreshed.status_code == 401
