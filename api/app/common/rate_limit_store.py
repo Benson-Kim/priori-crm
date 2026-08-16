@@ -27,9 +27,23 @@ class RateLimitResult:
 
 
 class RateLimitStore(Protocol):
-    """Records a request against a client window and reports if it's allowed."""
+    """Records a request against a client window and reports if it's allowed.
 
-    def hit(self, key: str, limit: int, window_seconds: int) -> RateLimitResult: ...
+    ``cost`` weights one hit as ``cost`` units against the window (#67:
+    export/bulk-read requests move far more data per request than a point
+    read, so the risk volume counters charge them more). ``set_flag`` /
+    ``get_flag`` are simple TTL'd markers used to carry evidence across
+    window boundaries (e.g. "this session crossed the exfiltration ceiling
+    inside a window the next scored request no longer sees").
+    """
+
+    def hit(
+        self, key: str, limit: int, window_seconds: int, cost: int = 1
+    ) -> RateLimitResult: ...
+
+    def set_flag(self, key: str, ttl_seconds: int) -> None: ...
+
+    def get_flag(self, key: str) -> bool: ...
 
 
 class InMemoryRateLimitStore:
@@ -44,13 +58,16 @@ class InMemoryRateLimitStore:
     def __init__(self, max_clients: int = 1024) -> None:
         self.max_clients = max_clients
         self._requests: OrderedDict[str, list[datetime]] = OrderedDict()
+        self._flags: dict[str, float] = {}
 
     @property
     def requests(self) -> OrderedDict[str, list[datetime]]:
         """Exposed for tests/observability."""
         return self._requests
 
-    def hit(self, key: str, limit: int, window_seconds: int) -> RateLimitResult:
+    def hit(
+        self, key: str, limit: int, window_seconds: int, cost: int = 1
+    ) -> RateLimitResult:
         now = datetime.now()
         window = timedelta(seconds=window_seconds)
 
@@ -68,8 +85,22 @@ class InMemoryRateLimitStore:
         if len(self._requests[key]) >= limit:
             return RateLimitResult(allowed=False, retry_after=window_seconds)
 
-        self._requests[key].append(now)
+        # A weighted hit records ``cost`` units; crossing happens on the
+        # NEXT hit, mirroring the single-unit behaviour.
+        self._requests[key].extend([now] * max(1, cost))
         return RateLimitResult(allowed=True, retry_after=0)
+
+    def set_flag(self, key: str, ttl_seconds: int) -> None:
+        self._flags[key] = time.time() + max(1, ttl_seconds)
+
+    def get_flag(self, key: str) -> bool:
+        expiry = self._flags.get(key)
+        if expiry is None:
+            return False
+        if expiry <= time.time():
+            del self._flags[key]
+            return False
+        return True
 
 
 class RedisRateLimitStore:
@@ -128,17 +159,19 @@ class RedisRateLimitStore:
             self._fallback = fallback
         return fallback
 
-    def hit(self, key: str, limit: int, window_seconds: int) -> RateLimitResult:
+    def hit(
+        self, key: str, limit: int, window_seconds: int, cost: int = 1
+    ) -> RateLimitResult:
         # If Redis was not initialized, use fallback immediately
         if self._redis is None:
-            return self._fallback_store.hit(key, limit, window_seconds)
+            return self._fallback_store.hit(key, limit, window_seconds, cost=cost)
 
         # Bucket the key by the current fixed window so the TTL and counter reset together.
         window_id = int(time.time()) // window_seconds
         redis_key = f"{self._key_prefix}:{key}:{window_id}"
         try:
             pipe = self._redis.pipeline()
-            pipe.incr(redis_key)
+            pipe.incrby(redis_key, max(1, cost))
             pipe.expire(redis_key, window_seconds)
             count, _ = pipe.execute()
             count = int(count)
@@ -148,12 +181,40 @@ class RedisRateLimitStore:
                 "ALERT: REDIS_RATE_LIMIT_OUTAGE",
                 exc_info=exc,
             )
-            return self._fallback_store.hit(key, limit, window_seconds)
+            return self._fallback_store.hit(key, limit, window_seconds, cost=cost)
 
         if count > limit:
             retry_after = window_seconds - (int(time.time()) % window_seconds)
             return RateLimitResult(allowed=False, retry_after=max(1, retry_after))
         return RateLimitResult(allowed=True, retry_after=0)
+
+    def set_flag(self, key: str, ttl_seconds: int) -> None:
+        if self._redis is None:
+            self._fallback_store.set_flag(key, ttl_seconds)
+            return
+        try:
+            self._redis.set(
+                f"{self._key_prefix}:flag:{key}", "1", ex=max(1, ttl_seconds)
+            )
+        except self._redis_exc as exc:
+            logger.error(
+                "Rate-limit Redis backend unavailable on set_flag; flag not persisted",
+                exc_info=exc,
+            )
+
+    def get_flag(self, key: str) -> bool:
+        if self._redis is None:
+            return self._fallback_store.get_flag(key)
+        try:
+            return bool(self._redis.exists(f"{self._key_prefix}:flag:{key}"))
+        except self._redis_exc as exc:
+            # Fails open, consistent with the store's posture: an outage
+            # degrades to "no volume evidence", never a lockout.
+            logger.error(
+                "Rate-limit Redis backend unavailable on get_flag; failing open",
+                exc_info=exc,
+            )
+            return False
 
 
 def build_rate_limit_store(

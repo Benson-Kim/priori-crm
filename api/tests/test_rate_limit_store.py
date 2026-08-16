@@ -33,8 +33,9 @@ class _FakePipeline:
         self._fail = fail
         self._key = None
 
-    def incr(self, key):
+    def incrby(self, key, amount=1):
         self._key = key
+        self._amount = amount
         return self
 
     def expire(self, key, seconds):
@@ -43,17 +44,29 @@ class _FakePipeline:
     def execute(self):
         if self._fail:
             raise ConnectionError("redis down")
-        self._store[self._key] = self._store.get(self._key, 0) + 1
+        self._store[self._key] = self._store.get(self._key, 0) + self._amount
         return [self._store[self._key], True]
 
 
 class _FakeRedis:
     def __init__(self, fail=False):
         self._store = {}
+        self._flags = {}
         self._fail = fail
 
     def pipeline(self):
         return _FakePipeline(self._store, fail=self._fail)
+
+    def set(self, key, value, ex=None, nx=None):
+        if self._fail:
+            raise ConnectionError("redis down")
+        self._flags[key] = value
+        return True
+
+    def exists(self, key):
+        if self._fail:
+            raise ConnectionError("redis down")
+        return 1 if key in self._flags else 0
 
 
 def _redis_store_with(fake) -> RedisRateLimitStore:
@@ -76,3 +89,17 @@ class TestRedisStore:
         store = _redis_store_with(_FakeRedis(fail=True))
         result = store.hit("user:1", limit=1, window_seconds=60)
         assert result.allowed is True
+
+    def test_weighted_cost_uses_incrby(self):
+        store = _redis_store_with(_FakeRedis())
+        assert store.hit("u", limit=30, window_seconds=60, cost=25).allowed is True
+        assert store.hit("u", limit=30, window_seconds=60, cost=25).allowed is False
+
+    def test_flags_roundtrip_and_fail_open(self):
+        store = _redis_store_with(_FakeRedis())
+        assert store.get_flag("mark") is False
+        store.set_flag("mark", ttl_seconds=60)
+        assert store.get_flag("mark") is True
+
+        broken = _redis_store_with(_FakeRedis(fail=True))
+        assert broken.get_flag("mark") is False  # fails open, never locks out

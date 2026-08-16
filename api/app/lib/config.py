@@ -162,7 +162,19 @@ class Settings(BaseSettings):
     RISK_VOLUME_MIN_CEILING: int = Field(default=30, ge=1, le=100000)
     RISK_VOLUME_MIN_LEARNED_WINDOWS: int = Field(default=3, ge=1, le=1000)
     RISK_VOLUME_LEARNING_ALPHA: float = Field(default=0.3, ge=0.01, le=1.0)
+    # The exfiltration ceiling counts BOTH served requests and rate-limiter
+    # rejections (429s feed the same counters — see
+    # risk.note_rate_limit_rejection), so it is reachable regardless of
+    # RATE_LIMIT_PER_MINUTE: hammering past the limiter is itself the
+    # evidence. It is also charged per-user across all of a user's
+    # sessions, so splitting reads over N parallel logins buys nothing.
     RISK_VOLUME_EXFIL_MULTIPLIER: int = Field(default=5, ge=2, le=100)
+    # Export/bulk-read endpoints move far more data per request than a
+    # point read; they are charged this many units against the volume
+    # window (issue #51: exports bounded + audited). At the defaults one
+    # export ≈ 25 point reads, so 60 exports/window reach the exfiltration
+    # ceiling that would otherwise need 1500 requests.
+    RISK_VOLUME_EXPORT_COST: int = Field(default=25, ge=1, le=1000)
     # Points shed per hour since the last anomaly. Without decay, benign
     # noise (a browser auto-update +25, one busy minute +30, a stray 403
     # +25) accumulates past the challenge threshold on any long-lived

@@ -101,6 +101,16 @@ _MIN_ELAPSED_HOURS = 1.0 / 3600.0
 #: absurd speed. An attacker relaying from another region clears this floor.
 _MIN_TRAVEL_DISTANCE_KM = 100.0
 
+#: How many volume windows an exfiltration-ceiling crossing observed on
+#: the RATE-LIMITED path stays visible to the gate. The limiter rejects
+#: before the gate runs, and with the Redis fixed windows the attacker's
+#: next SERVED request often lands in a fresh window whose counter no
+#: longer shows the crossing — so the crossing latches a flag that
+#: bridges the boundary. Two windows is enough to bridge; deliberately
+#: short so a fresh, legitimate re-login after the burst is not chased by
+#: stale evidence for long.
+_EXFIL_LATCH_WINDOWS = 2
+
 
 @lru_cache(maxsize=1)
 def _volume_store() -> RateLimitStore:
@@ -321,6 +331,69 @@ def _evaluate_session_start_softs(
     return bool(signals)
 
 
+def _request_cost(path: str) -> int:
+    """Volume units one request charges against the window (#67 H12).
+
+    Export and bulk-read endpoints (``/export``, ``/exports/...``) move
+    far more data per request than a point read, so counting them as one
+    unit let a slow trickle of full-table exports stay under every
+    ceiling. They are charged ``RISK_VOLUME_EXPORT_COST`` units instead,
+    consistent with issue #51's "exports bounded + audited" posture.
+    """
+    segments = path.split("/")
+    if "export" in segments or "exports" in segments:
+        return settings.RISK_VOLUME_EXPORT_COST
+    return 1
+
+
+def note_rate_limit_rejection(request: Request) -> None:
+    """Count a rate-limiter 429 as data-access volume evidence (#67 F8).
+
+    The authenticated rate limiter rejects at RATE_LIMIT_PER_MINUTE
+    BEFORE the zero-trust gate runs, so the exfiltration detector — whose
+    ceiling sits far above the limiter — could never see the hammering
+    that proves exfiltration at scale: the harder an attacker pulled, the
+    less the risk model saw. Every rejection now charges the same shared
+    volume counters the gate reads (per session and per user), and a
+    ceiling crossing observed here latches a short-lived flag so the
+    evidence survives the window boundary between the burst and the
+    attacker's next SERVED request. No DB access: this runs on the
+    middleware's 429 path and must stay cheap and fail-safe.
+    """
+    from app.common.authz.context import _decode_token_leniently
+    from app.common.authz.sensitivity import classify_path
+
+    payload = _decode_token_leniently(request)
+    if not payload:
+        return
+    sid = payload.get("sid")
+    if not sid:
+        return
+    uid = payload.get("sub")
+
+    store = _volume_store()
+    window = settings.RISK_VOLUME_WINDOW_SECONDS
+    latch_ttl = _EXFIL_LATCH_WINDOWS * window
+    cost = _request_cost(request.url.path)
+    cls = classify_path(request.url.path).value
+    exfil_ceiling = (
+        settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
+    )
+
+    # Mild per-class counter: the gate compares it against the adaptive
+    # ceiling; here the global ceiling only bounds the bookkeeping.
+    store.hit(
+        f"risk:vol:{sid}:{cls}", settings.RISK_VOLUME_MAX_REQUESTS, window, cost=cost
+    )
+    if not store.hit(f"risk:volx:{sid}", exfil_ceiling, window, cost=cost).allowed:
+        store.set_flag(f"risk:volx:latch:{sid}", latch_ttl)
+    if (
+        uid
+        and not store.hit(f"risk:volu:{uid}", exfil_ceiling, window, cost=cost).allowed
+    ):
+        store.set_flag(f"risk:volu:latch:{uid}", latch_ttl)
+
+
 def _detect_volume_anomaly(
     db: Session,
     session: "UserSession",  # noqa: F821
@@ -352,12 +425,16 @@ def _detect_volume_anomaly(
     store = _volume_store()
     window = settings.RISK_VOLUME_WINDOW_SECONDS
     sid = str(session.id)
+    uid = str(session.user_id)
     cls = context.sensitivity.value
+    cost = _request_cost(context.path)
     soft_fired = False
     hard_fired = False
 
     mild_ceiling = baselines.volume_ceiling(baseline, cls)
-    over_mild = not store.hit(f"risk:vol:{sid}:{cls}", mild_ceiling, window).allowed
+    over_mild = not store.hit(
+        f"risk:vol:{sid}:{cls}", mild_ceiling, window, cost=cost
+    ).allowed
     if over_mild and store.hit(f"risk:vol:fired:{sid}:{cls}", 1, window).allowed:
         _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
         _audit_session_event(
@@ -376,8 +453,25 @@ def _detect_volume_anomaly(
     exfil_ceiling = (
         settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
     )
-    over_exfil = not store.hit(f"risk:volx:{sid}", exfil_ceiling, window).allowed
-    if over_exfil and store.hit(f"risk:volx:fired:{sid}", 1, window).allowed:
+    # Three exfiltration evidence sources, all HARD:
+    # - the session's own served-request window;
+    # - the PER-USER aggregate window (H11): volume split over N parallel
+    #   sessions of one user still sums against one ceiling, so N logins
+    #   cannot divide the reads N ways and stay under it;
+    # - the latches set by the rate-limited path (F8): a crossing observed
+    #   among 429s survives the window boundary to the next served request.
+    over_exfil = not store.hit(
+        f"risk:volx:{sid}", exfil_ceiling, window, cost=cost
+    ).allowed
+    over_user = not store.hit(
+        f"risk:volu:{uid}", exfil_ceiling, window, cost=cost
+    ).allowed
+    latched = store.get_flag(f"risk:volx:latch:{sid}") or store.get_flag(
+        f"risk:volu:latch:{uid}"
+    )
+    if (over_exfil or over_user or latched) and store.hit(
+        f"risk:volx:fired:{sid}", 1, window
+    ).allowed:
         _add_risk(session, settings.RISK_SCORE_EXFILTRATION, context.requested_at)
         _audit_session_event(
             db,
@@ -387,6 +481,8 @@ def _detect_volume_anomaly(
             {
                 "window_seconds": window,
                 "max_requests": exfil_ceiling,
+                "scope": "user" if (over_user and not over_exfil) else "session",
+                "rate_limited_evidence": latched,
             },
         )
         hard_fired = True

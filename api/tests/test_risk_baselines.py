@@ -496,6 +496,111 @@ class TestExfiltrationScaleReads:
         assert session.status == SessionStatus.ACTIVE.value
 
 
+class TestExfilEvasionPaths:
+    """#67 review F8 + H11 + H12: the exfiltration ceiling cannot be dodged."""
+
+    def test_rate_limited_hammering_still_terminates(self, client, db, monkeypatch):
+        """F8 regression, with rate limiting ENABLED.
+
+        The limiter rejects at RATE_LIMIT_PER_MINUTE before the gate runs,
+        so the exfiltration detector never saw the hammering that proves
+        exfiltration at scale. 429s now charge the same volume counters
+        (and latch the crossing across the window boundary), so backing
+        off after a rejected burst does not launder the evidence: the
+        next SERVED request terminates the session.
+        """
+        # Exfil ceiling 13 * 5 = 65: above the limiter's 60/min, so only
+        # the 429 evidence can cross it — without the F8 feed the served
+        # requests alone (~61) never reach the ceiling.
+        monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+        monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 13)
+        monkeypatch.setattr(settings, "RISK_VOLUME_EXFIL_MULTIPLIER", 5)
+
+        _seed_user(db, "hammer@mail.com")
+        access, _ = _login_session(client, "hammer@mail.com")
+
+        statuses = []
+        for _ in range(75):
+            statuses.append(
+                client.get("/api/v1/customers", headers=_bearer(access)).status_code
+            )
+        assert 429 in statuses, "the limiter must actually engage"
+        assert 401 not in statuses[: statuses.index(429)]
+
+        # The attacker waits out the limiter window; the crossing latched.
+        monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+        killed = client.get("/api/v1/customers", headers=_bearer(access))
+        assert killed.status_code == 401
+        assert "terminated" in killed.json()["error"].lower()
+
+        session = db.get(UserSession, _sid(access))
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+
+    def test_parallel_sessions_cannot_split_the_exfil_volume(
+        self, client, db, monkeypatch
+    ):
+        """H11: volume is charged per USER as well as per session.
+
+        N parallel logins split per-session counters N ways, each under
+        its ceiling; the per-user aggregate window sums them back.
+        """
+        monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 4)
+        monkeypatch.setattr(settings, "RISK_VOLUME_EXFIL_MULTIPLIER", 5)  # 20/user
+
+        _seed_user(db, "splitter@mail.com")
+        access_a, _ = _login_session(client, "splitter@mail.com")
+        access_b, _ = _login_session(client, "splitter@mail.com")
+
+        # Session A stays comfortably under its own exfil ceiling (12<20).
+        for _ in range(12):
+            resp = client.get("/api/v1/customers", headers=_bearer(access_a))
+            assert resp.status_code == 200
+
+        # Session B also stays under ITS ceiling — but the user aggregate
+        # crosses, which is HARD evidence and terminates.
+        statuses_b = []
+        for _ in range(12):
+            statuses_b.append(
+                client.get("/api/v1/customers", headers=_bearer(access_b)).status_code
+            )
+        assert 401 in statuses_b
+
+        session_b = db.get(UserSession, _sid(access_b))
+        db.refresh(session_b)
+        assert session_b.status == SessionStatus.TERMINATED.value
+
+        exfil_events = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "session",
+                AuditEvent.action == "exfiltration_volume",
+            )
+            .all()
+        )
+        assert exfil_events and exfil_events[-1].after["scope"] == "user"
+
+        # The sibling session dies on its next request too.
+        assert (
+            client.get("/api/v1/customers", headers=_bearer(access_a)).status_code
+            == 401
+        )
+
+    def test_export_requests_are_weighted(self):
+        """H12: export/bulk endpoints charge RISK_VOLUME_EXPORT_COST units."""
+        from app.common.authz.risk import _request_cost
+
+        assert _request_cost("/api/v1/reports/sales/export") == (
+            settings.RISK_VOLUME_EXPORT_COST
+        )
+        assert _request_cost("/api/v1/sales-desk/exports/pipeline") == (
+            settings.RISK_VOLUME_EXPORT_COST
+        )
+        assert _request_cost("/api/v1/customers") == 1
+        # Similar-looking names never inherit the weight.
+        assert _request_cost("/api/v1/exporters") == 1
+
+
 class TestAdaptiveVolumeCeiling:
     def test_learned_typical_volume_lowers_the_mild_ceiling(
         self, client, db, monkeypatch

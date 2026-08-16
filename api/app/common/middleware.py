@@ -250,6 +250,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         result = self._store.hit(client_id, self.max_requests, self.WINDOW_SECONDS)
 
         if not result.allowed:
+            # Feed the rejection into the session risk volume counters
+            # (#67 review F8): the limiter rejects BEFORE the zero-trust
+            # gate runs, so without this the exfiltration detector never
+            # saw hammering at scale — the harder an attacker pulled, the
+            # less the risk model observed. Best-effort: evidence must
+            # never break the 429 path itself.
+            try:
+                from app.common.authz.risk import note_rate_limit_rejection
+
+                note_rate_limit_rejection(request)
+            except Exception:
+                logger.exception(
+                    "Failed to record rate-limit rejection as risk evidence"
+                )
             logger.warning(
                 f"Rate limit exceeded for {client_id}",
                 extra={
