@@ -143,14 +143,22 @@ jobs:
           SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
           APP_DIR: ${{ secrets.STAGING_APP_DIR }}
         run: |
-          # .env is host-managed (it holds the staging secrets and
-          # API_V1_PREFIX=/v1) and uploads/ is user data — both must survive
-          # --delete. tmp/ is Passenger's restart directory, recreated by the
-          # release script but excluded so a deploy never races a restart.
+          # Excluded from --delete, and why each one matters:
+          #   .env       host-managed; holds the staging secrets and
+          #              API_V1_PREFIX=/v1, and CI never sees it
+          #   uploads/   user data
+          #   tmp/       Passenger's restart directory (cPanel scaffold) —
+          #              excluded so a deploy cannot race a restart marker
+          #   public/    cPanel scaffold, part of the standard Passenger app
+          #              layout. Not ours to remove, and its absence can stop
+          #              the app being served.
+          # passenger_wsgi.py is deliberately NOT excluded: cPanel generates a
+          # stub there and ours must replace it (it is the a2wsgi shim).
           rsync -az --delete \
             --exclude '.env' \
             --exclude 'uploads/' \
             --exclude 'tmp/' \
+            --exclude 'public/' \
             --exclude '__pycache__/' \
             --exclude '.venv/' \
             --exclude 'tests/' \
