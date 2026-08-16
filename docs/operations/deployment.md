@@ -375,6 +375,81 @@ fingerprint in `.gitleaksignore`, one comment per group explaining why. History 
 scanned rather than just the tip, because a secret committed and later deleted is
 still there for anyone who clones.
 
+### 3.8 CodeQL and dependency review need Advanced Security — the deploy gate could never go green
+
+Discovered when PR #45's own checks were reviewed. Two of `security.yml`'s three jobs
+failed on every single run, and not for anything in the code:
+
+```
+CodeQL             Code scanning is not enabled for this repository.
+                   Please enable code scanning in the repository settings.
+Dependency review  Dependency review is not supported on this repository.
+                   Please ensure that Dependency graph is enabled along with
+                   GitHub Advanced Security
+```
+
+Both need GitHub Advanced Security, which a **private repository on the free plan**
+does not have — the same wall as §3.3, where reading branch protection returns
+`Upgrade to GitHub Pro or make this repository public`.
+
+This mattered far more than a red column on a PR. Both deploy workflows gate on
+`needs: [api-ci, ui-ci, security]`, so a job that can never succeed meant **no push to
+`develop` could ever reach staging and no dispatch could ever reach production**. The
+pipeline would have merged looking complete and shipped nothing.
+
+Making the repository public would clear the wall, and it was considered and rejected:
+the runbooks name hosts, SSH users and absolute paths, the git history is exposed in
+full and permanently once published, and ADR-0012's risk thresholds only deter an
+attacker who cannot read them. So the two jobs were replaced with equivalents that run
+anywhere:
+
+| Was | Now | Note |
+|---|---|---|
+| CodeQL (SAST) | ruff `S` in `api-ci` lint; GitLab SAST for depth | Checked against bandit: 0 high, 1 documented false positive |
+| Dependency review | `pip-audit` + `npm audit --audit-level=high` | Gates merges, not deploys — see below |
+| `gitleaks-action` | pinned `gitleaks` binary, checksum-verified | The action 403'd on `/pulls/{n}/commits`; the binary needs no token |
+
+Neither `continue-on-error` nor an `if:` skip would have done for the *replacement*.
+A skipped job satisfies nothing if branch protection ever becomes available, and a
+permanently-red check trains everyone to stop reading the column.
+
+**The dependency scan gates merges, not deploys** — and that is the same lesson
+applied once more rather than an exception to it. Advisory databases move on their
+own: a CVE published against an unchanged transitive dependency turns `pip-audit` or
+`npm audit` red with no commit involved. Gating deploys on that makes production
+unshippable at a moment nobody chose, including the moment a hotfix is needed. It is
+the defect this section exists to remove, only stochastic instead of permanent, and
+`ecdsa` shows it is not hypothetical — a high-severity advisory with no fix available
+is already in the tree today.
+
+Nothing is given up by the split. A deploy ships the exact dependency set that
+already passed on the pull request; only the database changed in between, and the
+answer to a new advisory is a dependency bump on a branch, not a blocked release.
+Secret detection still gates deploys, because it can only fail on something actually
+present in the commits being shipped.
+
+Mechanically, `dependency-scan` carries `if: ${{ !inputs.deploy_gate }}` against a
+`workflow_call` input defaulting to `true`. `inputs` is null under `push` and
+`pull_request` and populated on a call, which is the only reliable way to tell the
+two apart: `github.event_name` inside a called workflow reports the *caller's* event,
+so a deploy triggered by a push to `develop` looks exactly like CI on `develop`.
+Passing `deploy_gate: false` forces the scan on a called run if that is ever wanted.
+
+Clearing the new scanners took real dependency work, not just wiring: six high npm
+advisories (`postcss`, `react-router`, `nanoid` — all fixed within existing semver
+ranges, lockfile only) and four Python ones (`python-multipart` → 0.0.31,
+`pydantic-settings` → 2.14.2). One Python finding has no fix and is ignored by ID with
+the reasoning recorded in `api/requirements.txt`: PYSEC-2026-1325, the Minerva timing
+side-channel in `ecdsa`, unreachable because `JWT_ALGORITHM` is HS256 and no EC key is
+ever signed with.
+
+The first successful gitleaks run over the full history — 2,853 commits — found twelve
+matches, all reviewed and none live: throwaway CI signing keys (the current ones now
+carry inline `# gitleaks:allow`) and test fixture constants. They are retired by
+fingerprint in `.gitleaksignore`, one comment per group explaining why. History is
+scanned rather than just the tip, because a secret committed and later deleted is
+still there for anyone who clones.
+
 ---
 
 ## 4. Staging — MochaHost (cPanel / LiteSpeed / Passenger)
