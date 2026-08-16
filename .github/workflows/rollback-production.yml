@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Release SHA to roll back to (must exist under /srv/priori/releases/)"
+        description: "Release to roll back to: a commit SHA or the pre-pipeline-* seed (must exist under /srv/priori/releases/)"
         required: true
         type: string
 
@@ -36,9 +36,15 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
         run: |
           test -n "$SSH_KEY" || { echo "PROD_SSH_KEY is not set"; exit 1; }
           test -n "$KNOWN_HOSTS" || { echo "PROD_KNOWN_HOSTS is not set"; exit 1; }
+          # An empty user or host makes SSH_TARGET degenerate ("@host" or
+          # "user@") in every later step — fail here, with a clear name.
+          test -n "$SSH_USER" || { echo "PROD_SSH_USER is not set"; exit 1; }
+          test -n "$SSH_HOST" || { echo "PROD_SSH_HOST is not set"; exit 1; }
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
@@ -49,31 +55,56 @@ jobs:
         env:
           SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
           SHA: ${{ inputs.sha }}
+          ACTOR: ${{ github.actor }}
         run: |
-          # Validate the input before it reaches a remote shell.
+          # Validate the input before it reaches a remote shell. Release
+          # directories are commit SHAs plus the pre-pipeline-* seed from the
+          # initial droplet restructure (deployment-setup.md §2.3) — a
+          # hex-only check would refuse the seed, making the documented
+          # rollback rehearsal (§2.8) impossible. Anything outside this
+          # conservative set (spaces, quotes, slashes, ..) is refused.
           case "$SHA" in
-            *[!0-9a-fA-F]* | "") echo "sha must be a hex commit SHA"; exit 1 ;;
+            *[!A-Za-z0-9._-]* | "" | . | ..)
+              echo "sha must be a release directory name ([A-Za-z0-9._-] only)"
+              exit 1
+              ;;
           esac
-          ssh "$SSH_TARGET" bash -s <<EOF
+          # Record what is being rolled back FROM and TO before touching
+          # anything — the audit trail mirrors deploy-production.yml's guard.
+          FROM="$(ssh "$SSH_TARGET" 'readlink -f /srv/priori/current' || echo '<unreadable>')"
+          {
+            echo "### Production rollback"
+            echo ""
+            echo "- **from:** \`$FROM\`"
+            echo "- **to:** \`/srv/priori/releases/$SHA\`"
+            echo "- **triggered by:** @$ACTOR"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Quoted heredoc: nothing in the body expands on the runner; the
+          # validated release name travels via the remote environment.
+          ssh "$SSH_TARGET" "REL_SHA='$SHA' bash -s" <<'EOF'
           set -euo pipefail
-          REL="/srv/priori/releases/$SHA"
-          [ -d "\$REL" ] || { echo "no such release: \$REL"; exit 1; }
-          echo "rolling back from \$(readlink -f /srv/priori/current) to \$REL"
-          ln -sfn "\$REL" /srv/priori/current
+          REL="/srv/priori/releases/$REL_SHA"
+          [ -d "$REL" ] || { echo "no such release: $REL"; exit 1; }
+          echo "rolling back from $(readlink -f /srv/priori/current) to $REL"
+          ln -sfn "$REL" /srv/priori/current
           sudo /usr/bin/systemctl restart priori-api
           sudo /usr/bin/systemctl reload nginx
           EOF
 
       - name: Verify
+        env:
+          SHA: ${{ inputs.sha }}
         run: |
           for i in $(seq 1 30); do
             if curl -fsS --max-time 10 https://accounting.priori.co.ke/api/v1/health \
               | grep -q '"status":"healthy"'; then
-              echo "production healthy on ${{ inputs.sha }}"
+              echo "production healthy on $SHA"
+              echo "- **result:** health check passed" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 2
           done
           echo "health check never passed after rollback — the database schema may"
           echo "be ahead of this release (§5.3)."
+          echo "- **result:** health check FAILED — schema may be ahead of this release (§5.3)" >> "$GITHUB_STEP_SUMMARY"
           exit 1

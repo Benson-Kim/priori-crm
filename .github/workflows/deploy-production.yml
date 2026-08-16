@@ -123,9 +123,15 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
         run: |
           test -n "$SSH_KEY" || { echo "PROD_SSH_KEY is not set"; exit 1; }
           test -n "$KNOWN_HOSTS" || { echo "PROD_KNOWN_HOSTS is not set"; exit 1; }
+          # An empty user or host makes SSH_TARGET degenerate ("@host" or
+          # "user@") in every later step — fail here, with a clear name.
+          test -n "$SSH_USER" || { echo "PROD_SSH_USER is not set"; exit 1; }
+          test -n "$SSH_HOST" || { echo "PROD_SSH_HOST is not set"; exit 1; }
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
