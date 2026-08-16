@@ -41,10 +41,57 @@ after the initial OTP.
 5. **CHALLENGE reuses the existing login → OTP flow.** It surfaces as 401
    `STEP_UP_REQUIRED` with `details.challenge = "otp"`; the fresh token
    pair from `/auth/login` + `/auth/verify-otp` satisfies it.
+
+   **This holds only because `verify_otp` stamps a `sua`
+   ("stepped-up-at") claim that the static rules read.** A challenge is
+   satisfiable exactly when re-authenticating changes an input the rule
+   evaluates. The session-risk CHALLENGE qualifies naturally — it flips
+   `session.status`, and re-login mints a new session row. The *static*
+   rules do not: `_rule_off_hours` is a pure function of the wall clock,
+   the path's sensitivity and the HTTP method, none of which a new token
+   moves. Without `sua` this decision was false for them, and the 401 was
+   an unconditional lockout for the whole 22:00→06:00 window — the user
+   re-authenticated, got the identical refusal, and had no way through.
+   Any future rule returning CHALLENGE must honour `sua` for the same
+   reason.
+
+   `sua` rides in both tokens and is carried across refresh rotation
+   **unchanged**: re-stamping it would let a stolen refresh token launder
+   an indefinite step-up without ever proving an OTP. `iat` cannot serve
+   this purpose because rotation resets it by design. A missing claim
+   reads as "not stepped up" (fail closed). The lease lasts
+   `ABAC_STEP_UP_TTL_MINUTES`, defaulted to a work shift (8h) rather than
+   a transaction (30min): at 30min a night shift would demand ~16 OTP
+   emails, and the security property is identical at any TTL because an
+   attacker holding a stolen token has no inbox and so can never mint the
+   claim at all.
 6. **Continuous session risk scoring** (second tranche of #67): a
    per-session behavioural score persisted per request, with impossible
    travel, unusual data-access volume and privilege-escalation detection;
    crossing thresholds triggers automatic step-up or session termination.
+
+7. **Risk scores decay; sessions expire.** Points shed at
+   `RISK_DECAY_PER_HOUR` from the last anomaly. An undecayed score is a
+   ratchet: benign noise (a browser auto-update +25, one busy minute +30,
+   a stray 403 +25) reaches the 60-point challenge threshold on any
+   long-lived session, so a legitimate user is eventually challenged for
+   nothing. Decay is computed on read and settled into the column only
+   when a detector fires, so a quiet session costs no writes. It applies
+   **only to the score** — a session already flipped to
+   `challenge_required` or `terminated` is never restored in place, so the
+   "trust is re-established only by re-authentication" invariant holds.
+   Sessions also expire on `SESSION_MAX_AGE_HOURS` and
+   `SESSION_IDLE_TIMEOUT_MINUTES`, each with its own audited reason so an
+   expiry never reads as a risk kill.
+
+8. **Risk evidence is durable, split by what is exploitable.** Score
+   increments and status transitions commit explicitly — the 4xx they
+   cause would otherwise roll back the evidence for it, making repeated
+   probing free. The data-access volume counter lives in the shared
+   `RateLimitStore`, not on the session row, for the same reason: a
+   Postgres counter is rolled back by any failing request, so an attacker
+   probing endpoints that error would reset their own window. Trail state
+   (last seen, geo, fingerprint) rides the request transaction.
 
 ## What it does today
 - `api/app/common/authz/sensitivity.py` — `SensitivityLevel` + ordered

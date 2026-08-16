@@ -12,6 +12,10 @@ Decisions:
 - ALLOW      — proceed to authentication / RBAC as before.
 - CHALLENGE  — the caller must step up (re-run the login → OTP flow) before
                this action is allowed; surfaced as 401 ``STEP_UP_REQUIRED``.
+               Every rule that can return CHALLENGE MUST also honour the
+               ``sua`` step-up claim, or the challenge is unanswerable and
+               the 401 becomes a lockout: a new token pair changes neither
+               the wall clock nor the requested path.
 - DENY       — contextual refusal (e.g. denylisted IP); surfaced as 403.
 - TERMINATE  — the session is dead (risk threshold crossed); surfaced as
                401 and the session can never be used again.
@@ -24,6 +28,7 @@ directly unit-testable.
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 
 from app.common.authz.context import AccessContext
 from app.common.authz.sensitivity import SensitivityLevel
@@ -96,13 +101,22 @@ def _rule_ip_reputation(context: AccessContext) -> PolicyVerdict | None:
     return None
 
 
+@lru_cache(maxsize=8)
+def _parse_geo_blocklist(raw: str) -> frozenset[str]:
+    """Parse ``ABAC_GEO_BLOCKLIST`` into upper-case ISO country codes.
+
+    Cached on the raw string, matching ``_parse_denylist``: this runs on
+    every request, and a settings change (tests monkeypatch it) invalidates
+    the entry naturally.
+    """
+    return frozenset(
+        code.strip().upper() for code in raw.split(",") if code.strip()
+    )
+
+
 def _rule_geo_blocklist(context: AccessContext) -> PolicyVerdict | None:
     """Requests geolocated to a blocked country are refused."""
-    blocklist = {
-        code.strip().upper()
-        for code in settings.ABAC_GEO_BLOCKLIST.split(",")
-        if code.strip()
-    }
+    blocklist = _parse_geo_blocklist(settings.ABAC_GEO_BLOCKLIST)
     if not blocklist:
         return None
     if context.geo and context.geo.country and context.geo.country in blocklist:
@@ -121,8 +135,18 @@ def _rule_off_hours(context: AccessContext) -> PolicyVerdict | None:
     CONFIDENTIAL write inside the off-hours window requires a fresh OTP
     round-trip. Reads of CONFIDENTIAL data stay allowed so night-shift
     lookups do not lock anyone out of read paths.
+
+    A caller who has already completed that round trip within
+    ``ABAC_STEP_UP_TTL_MINUTES`` passes: the challenge has been *answered*.
+    Without this, the rule reads only the wall clock and the path, so no
+    amount of re-authenticating could ever clear it — the 401 would be a
+    hard lockout for the whole window, not a step-up. Someone working a
+    late shift proves who they are once and then works; someone holding a
+    stolen token has no inbox and so can never produce the claim at all.
     """
     if not is_off_hours(context.local_hour):
+        return None
+    if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
         return None
     if context.sensitivity is SensitivityLevel.RESTRICTED or (
         context.sensitivity is SensitivityLevel.CONFIDENTIAL and context.is_write
@@ -150,6 +174,10 @@ def _rule_unknown_geo_restricted_write(
     rule stays silent — absence of infrastructure is not an anomaly.
     """
     if settings.ABAC_TRUST_CONTEXT_HEADERS is not True:
+        return None
+    if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
+        # Same reasoning as the off-hours rule: a fresh OTP is the answer to
+        # this challenge, so honour it rather than looping the caller.
         return None
     if (
         context.sensitivity is SensitivityLevel.RESTRICTED

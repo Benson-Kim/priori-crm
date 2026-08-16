@@ -74,14 +74,24 @@ class Settings(BaseSettings):
     # disables the window (the test suite pins 0/0 for determinism).
     ABAC_OFF_HOURS_START: int = Field(default=22, ge=0, le=23)
     ABAC_OFF_HOURS_END: int = Field(default=6, ge=0, le=23)
+    # How long a completed OTP step-up satisfies the static context rules.
+    # Sized to a WORK SHIFT, not a transaction: 30min across a 22h→6h night
+    # would mean ~16 OTP emails, which is nagging rather than security. The
+    # guarantee is unchanged at any TTL — an attacker holding a stolen token
+    # has no inbox, so they can never mint a fresh `sua` claim at all.
+    ABAC_STEP_UP_TTL_MINUTES: int = Field(default=480, ge=1, le=1440)
     # Audit ALLOW decisions too (deny/challenge/terminate always audited).
-    ABAC_AUDIT_ALLOW_DECISIONS: bool = True
+    # Default OFF: one audit INSERT per business request is real write
+    # amplification, and the non-allow decisions — the ones with evidentiary
+    # value — are always recorded regardless of this switch.
+    ABAC_AUDIT_ALLOW_DECISIONS: bool = False
 
     # Continuous session risk scoring (issue #67). Behavioural anomalies
     # add their score to the session; crossing the challenge threshold
     # forces a step-up (login → OTP mints a fresh session), crossing the
-    # terminate threshold kills the session outright. Scores never decay
-    # within a session.
+    # terminate threshold kills the session outright. Scores decay with
+    # time (see RISK_DECAY_PER_HOUR) so benign noise accumulated over a
+    # long-lived session cannot eventually challenge a legitimate user.
     RISK_CHALLENGE_THRESHOLD: int = Field(default=60, ge=1, le=10000)
     RISK_TERMINATE_THRESHOLD: int = Field(default=90, ge=1, le=10000)
     # Impossible travel: implied speed between consecutive geolocated
@@ -92,8 +102,22 @@ class Settings(BaseSettings):
     RISK_SCORE_VOLUME_ANOMALY: int = Field(default=30, ge=0, le=10000)
     RISK_SCORE_PRIVILEGE_ESCALATION: int = Field(default=25, ge=0, le=10000)
     # Data-access volume ceiling: requests per rolling window per session.
+    # Counted in the shared RateLimitStore (Redis in production), NOT on the
+    # session row: a Postgres counter is rolled back by any failing request,
+    # which would let an attacker reset their own window for free by probing
+    # endpoints that error.
     RISK_VOLUME_WINDOW_SECONDS: int = Field(default=60, ge=5, le=3600)
     RISK_VOLUME_MAX_REQUESTS: int = Field(default=300, ge=1, le=100000)
+    # Points shed per hour since the last anomaly. Without decay, benign
+    # noise (a browser auto-update +25, one busy minute +30, a stray 403
+    # +25) accumulates past the challenge threshold on any long-lived
+    # session. Decay applies ONLY to the score: a session already flipped to
+    # challenge_required or terminated is never restored in place.
+    RISK_DECAY_PER_HOUR: int = Field(default=10, ge=0, le=10000)
+    # Session lifetimes. Exceeding either terminates the session with its
+    # own audited reason, so an expiry is never mistaken for a risk kill.
+    SESSION_MAX_AGE_HOURS: int = Field(default=24, ge=1, le=8760)
+    SESSION_IDLE_TIMEOUT_MINUTES: int = Field(default=720, ge=5, le=43200)
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

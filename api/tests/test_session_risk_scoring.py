@@ -22,6 +22,7 @@ zero-trust gate. These tests pin:
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -220,7 +221,7 @@ class TestVolumeAnomaly:
         session = db.get(UserSession, _sid(access))
         assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
         events = _session_events(db, "volume_anomaly")
-        assert events and events[-1].after["request_count"] == 4
+        assert events and events[-1].after["max_requests"] == 3
 
     def test_volume_under_ceiling_is_clean(self, client, db, monkeypatch):
         monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 10)
@@ -233,6 +234,142 @@ class TestVolumeAnomaly:
                 == 200
             )
         assert db.get(UserSession, _sid(access)).risk_score == 0
+
+
+class TestScoreDecay:
+    """Benign noise must not accumulate into a false challenge.
+
+    Without decay the score is a ratchet: a browser auto-update (+25), one
+    busy minute (+30) and a stray 403 (+25) put ANY long-lived session past
+    the 60-point threshold, and the user is challenged for doing nothing.
+    """
+
+    def test_old_points_decay_below_the_threshold(self, client, db):
+        _seed_user(db, "veteran@mail.com")
+        access, _ = _login_session(client, "veteran@mail.com")
+        session = db.get(UserSession, _sid(access))
+
+        # 80 points earned over a working day, last anomaly 9 hours ago.
+        session.risk_score = 80
+        session.risk_updated_at = datetime.now(UTC) - timedelta(hours=9)
+        db.commit()
+
+        resp = client.get("/api/v1/customers", headers=_bearer(access))
+        assert resp.status_code == 200, "decayed noise must not challenge"
+
+    def test_recent_points_still_challenge(self, client, db):
+        """Decay must not blunt a burst that just happened."""
+        _seed_user(db, "attacker@mail.com")
+        access, _ = _login_session(client, "attacker@mail.com")
+        session = db.get(UserSession, _sid(access))
+
+        session.risk_score = 80
+        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=2)
+        db.commit()
+
+        resp = client.get("/api/v1/customers", headers=_bearer(access))
+        assert resp.status_code == 401
+        assert resp.json()["error_code"] == "STEP_UP_REQUIRED"
+
+    def test_challenged_status_never_decays_back_to_active(self, client, db):
+        """The status is sticky: only re-authentication restores trust."""
+        _seed_user(db, "flagged@mail.com")
+        access, _ = _login_session(client, "flagged@mail.com")
+        session = db.get(UserSession, _sid(access))
+
+        session.status = SessionStatus.CHALLENGE_REQUIRED.value
+        session.risk_score = 80
+        # Long enough ago that the SCORE would decay to zero.
+        session.risk_updated_at = datetime.now(UTC) - timedelta(days=3)
+        db.commit()
+
+        resp = client.get("/api/v1/customers", headers=_bearer(access))
+        assert resp.status_code == 401
+        db.refresh(session)
+        assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
+
+    def test_decision_audit_records_the_score_it_acted_on(self, client, db):
+        """A row saying 80 for a decision taken on a decayed value is a lie."""
+        _seed_user(db, "auditee@mail.com")
+        access, _ = _login_session(client, "auditee@mail.com")
+        session = db.get(UserSession, _sid(access))
+        session.risk_score = 80
+        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+
+        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+
+        event = _session_events(db, "session_challenged")[-1]
+        assert event.after["risk_score"] == 80
+        assert event.after["effective_score"] == 80
+        assert event.after["decay_per_hour"] == settings.RISK_DECAY_PER_HOUR
+
+
+class TestSessionLifetime:
+    def test_session_past_max_age_is_terminated(self, client, db, monkeypatch):
+        monkeypatch.setattr(settings, "SESSION_MAX_AGE_HOURS", 1)
+        _seed_user(db, "ancient@mail.com")
+        access, _ = _login_session(client, "ancient@mail.com")
+        session = db.get(UserSession, _sid(access))
+        session.created_at = datetime.now(UTC) - timedelta(hours=5)
+        db.commit()
+
+        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+        # Distinct from a risk kill, so the trail stays readable.
+        assert session.termination_reason == "max session age exceeded"
+
+    def test_idle_session_is_terminated(self, client, db, monkeypatch):
+        monkeypatch.setattr(settings, "SESSION_IDLE_TIMEOUT_MINUTES", 30)
+        _seed_user(db, "afk@mail.com")
+        access, _ = _login_session(client, "afk@mail.com")
+        session = db.get(UserSession, _sid(access))
+        session.last_seen_at = datetime.now(UTC) - timedelta(hours=4)
+        db.commit()
+
+        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 401
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+        assert session.termination_reason == "session idle timeout"
+
+    def test_active_session_within_limits_is_untouched(self, client, db):
+        _seed_user(db, "working@mail.com")
+        access, _ = _login_session(client, "working@mail.com")
+
+        assert client.get("/api/v1/customers", headers=_bearer(access)).status_code == 200
+        session = db.get(UserSession, _sid(access))
+        assert session.status == SessionStatus.ACTIVE.value
+
+
+class TestRiskEvidenceIsDurable:
+    """A score bump must outlive the rejection it causes.
+
+    The route class commits only when the handler RETURNS; an exception
+    propagates straight past it. Anything relying on that commit vanishes on
+    the very requests an attacker is generating, which makes probing free.
+    """
+
+    def test_volume_window_survives_failing_requests(self, client, db, monkeypatch):
+        monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 3)
+        monkeypatch.setattr(settings, "RISK_CHALLENGE_THRESHOLD", 30)
+        _seed_user(db, "prober2@mail.com")
+        access, _ = _login_session(client, "prober2@mail.com")
+
+        # Burn the window on requests that all 404 — every one of these rolls
+        # the request transaction back.
+        for _ in range(3):
+            assert (
+                client.get(
+                    f"/api/v1/customers/{uuid.uuid4()}", headers=_bearer(access)
+                ).status_code
+                == 404
+            )
+
+        # The counter still remembers them, so the next request crosses.
+        blocked = client.get("/api/v1/customers", headers=_bearer(access))
+        assert blocked.status_code == 401
+        assert blocked.json()["error_code"] == "STEP_UP_REQUIRED"
 
 
 class TestPrivilegeEscalation:

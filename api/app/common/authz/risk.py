@@ -17,8 +17,28 @@ Crossing ``RISK_CHALLENGE_THRESHOLD`` flips the session to
 ``challenge_required`` (the client re-runs the existing login → OTP flow;
 the fresh session it mints is the cleared one). Crossing
 ``RISK_TERMINATE_THRESHOLD`` terminates the session outright. Neither
-state is ever cleared in place, and the risk score never decays within a
-session: a session that misbehaved stays suspect for its whole life.
+state is ever cleared in place.
+
+**Scores decay** (``RISK_DECAY_PER_HOUR``). An undecayed score is a ratchet:
+benign noise — a browser auto-update (+25), one busy minute (+30), a stray
+403 (+25) — accumulates past the challenge threshold on any long-lived
+session, so a legitimate user is eventually challenged for nothing. Decay
+applies ONLY to the score; a session already flipped to
+``challenge_required`` or ``terminated`` is never restored in place, so the
+"trust is re-established only by re-authentication" invariant holds.
+
+**Durability is split by what an attacker can exploit.** Score increments
+and status transitions COMMIT explicitly: the 4xx they cause would
+otherwise roll back the very evidence for it. The volume counter lives in
+the shared ``RateLimitStore``, not on the session row, because a Postgres
+counter is rolled back by any failing request — an attacker probing
+endpoints that error would reset their own window for free. Trail state
+(last seen, geo, fingerprint) rides the request transaction: it is written
+every request and losing it on a failure is not exploitable.
+
+Sessions also expire: ``SESSION_MAX_AGE_HOURS`` (absolute) and
+``SESSION_IDLE_TIMEOUT_MINUTES`` (since last seen), each terminating with
+its own audited reason so an expiry is never mistaken for a risk kill.
 
 Every anomaly and every state transition is audited on the append-only
 ``audit_events`` trail (entity_type ``session``), consistent with #31.
@@ -31,6 +51,7 @@ the access-token lifetime.
 import logging
 import math
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -38,6 +59,7 @@ from sqlalchemy.orm import Session
 from app.common.audit import record_audit_event
 from app.common.authz.context import AccessContext
 from app.common.authz.engine import Decision, PolicyVerdict
+from app.common.rate_limit_store import RateLimitStore, build_rate_limit_store
 from app.constants.enums import SessionStatus
 from app.lib.config import settings
 
@@ -53,6 +75,23 @@ _MIN_ELAPSED_HOURS = 1.0 / 3600.0
 #: movement and GPS jitter over a few seconds would otherwise compute as an
 #: absurd speed. An attacker relaying from another region clears this floor.
 _MIN_TRAVEL_DISTANCE_KM = 100.0
+
+
+@lru_cache(maxsize=1)
+def _volume_store() -> RateLimitStore:
+    """Shared counter for the data-access volume window.
+
+    Reuses the rate-limiter's store (Redis in production, in-memory
+    fallback) rather than a column on ``user_sessions``: it survives the
+    rollback of a failing request, so probing endpoints that error cannot
+    reset the window, and it costs no Postgres write per request. Built the
+    same way as ``_auth_throttle_store``, so a multi-worker deployment
+    shares one window.
+    """
+    return build_rate_limit_store(
+        backend=settings.RATE_LIMIT_BACKEND,
+        redis_url=settings.REDIS_URL,
+    )
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -76,6 +115,41 @@ def _aware(value: datetime | None) -> datetime | None:
     return value
 
 
+def effective_score(
+    session: "UserSession",  # noqa: F821
+    now: datetime,
+) -> int:
+    """The session's risk score with elapsed decay applied.
+
+    Read-only: decay is computed, never written, so a quiet session costs
+    no UPDATE per request. The stored score is settled to this value only
+    when a detector actually fires (see :func:`_add_risk`).
+    """
+    raw = session.risk_score or 0
+    updated_at = _aware(session.risk_updated_at)
+    if raw <= 0 or updated_at is None or settings.RISK_DECAY_PER_HOUR <= 0:
+        return max(raw, 0)
+    elapsed_hours = (now - updated_at).total_seconds() / 3600.0
+    if elapsed_hours <= 0:
+        return raw
+    shed = int(settings.RISK_DECAY_PER_HOUR * elapsed_hours)
+    return max(raw - shed, 0)
+
+
+def _add_risk(
+    session: "UserSession",  # noqa: F821
+    points: int,
+    now: datetime,
+) -> None:
+    """Settle the decayed score, then add ``points`` and stamp the clock.
+
+    Settling at bump time (rather than on every request) is what keeps
+    decay free: between anomalies nothing is written.
+    """
+    session.risk_score = effective_score(session, now) + points
+    session.risk_updated_at = now
+
+
 def _audit_session_event(
     db: Session,
     session: "UserSession",  # noqa: F821
@@ -83,6 +157,14 @@ def _audit_session_event(
     action: str,
     detail: dict,
 ) -> None:
+    """Record one session event, with the score AS THE DECISION SAW IT.
+
+    Both the raw stored score and the decayed effective score go in, plus
+    the decay rate: with decay in play a row reporting only the raw value
+    could read 80 for a decision actually taken on 45, which would make the
+    trail unreconstructable — the opposite of what an audit trail is for.
+    """
+    now = context.requested_at
     record_audit_event(
         db,
         actor_id=context.user_id,
@@ -91,6 +173,8 @@ def _audit_session_event(
         action=action,
         after={
             "risk_score": session.risk_score,
+            "effective_score": effective_score(session, now),
+            "decay_per_hour": settings.RISK_DECAY_PER_HOUR,
             "path": context.path,
             "method": context.method,
             "ip": context.ip,
@@ -103,7 +187,7 @@ def _detect_impossible_travel(
     db: Session,
     session: "UserSession",  # noqa: F821
     context: AccessContext,
-) -> None:
+) -> bool:
     """Speed between the last and current geolocation above the plausible cap."""
     geo = context.geo
     last_seen = _aware(session.last_seen_at)
@@ -114,20 +198,22 @@ def _detect_impossible_travel(
         or session.last_lon is None
         or last_seen is None
     ):
-        return
+        return False
 
     distance_km = haversine_km(session.last_lat, session.last_lon, geo.lat, geo.lon)
     if distance_km < _MIN_TRAVEL_DISTANCE_KM:
-        return
+        return False
     elapsed_hours = max(
         (context.requested_at - last_seen).total_seconds() / 3600.0,
         _MIN_ELAPSED_HOURS,
     )
     speed_kmh = distance_km / elapsed_hours
     if speed_kmh <= settings.RISK_IMPOSSIBLE_TRAVEL_KMH:
-        return
+        return False
 
-    session.risk_score += settings.RISK_SCORE_IMPOSSIBLE_TRAVEL
+    _add_risk(
+        session, settings.RISK_SCORE_IMPOSSIBLE_TRAVEL, context.requested_at
+    )
     _audit_session_event(
         db,
         session,
@@ -141,20 +227,21 @@ def _detect_impossible_travel(
             "to": [geo.lat, geo.lon],
         },
     )
+    return True
 
 
 def _detect_device_change(
     db: Session,
     session: "UserSession",  # noqa: F821
     context: AccessContext,
-) -> None:
+) -> bool:
     """The presenting device/browser changed mid-session."""
     current = context.device_fingerprint
     previous = session.device_fingerprint
     if not current or not previous or current == previous:
-        return
+        return False
 
-    session.risk_score += settings.RISK_SCORE_DEVICE_CHANGE
+    _add_risk(session, settings.RISK_SCORE_DEVICE_CHANGE, context.requested_at)
     _audit_session_event(
         db,
         session,
@@ -162,44 +249,42 @@ def _detect_device_change(
         "device_change",
         {"from": previous, "to": current},
     )
+    return True
 
 
 def _detect_volume_anomaly(
     db: Session,
     session: "UserSession",  # noqa: F821
     context: AccessContext,
-) -> None:
+) -> bool:
     """Request volume inside the rolling window exceeds the ceiling.
 
-    The bump fires exactly once per window (at the crossing), so a burst
-    raises the score by one step rather than once per extra request.
+    Counted in the shared store, keyed on the session. A second single-slot
+    key latches the bump so a sustained burst raises the score once per
+    window at the crossing, rather than once per excess request.
     """
-    window_started = _aware(session.window_started_at)
-    window_seconds = settings.RISK_VOLUME_WINDOW_SECONDS
-    now = context.requested_at
+    store = _volume_store()
+    window = settings.RISK_VOLUME_WINDOW_SECONDS
+    sid = str(session.id)
 
-    if (
-        window_started is None
-        or (now - window_started).total_seconds() > window_seconds
-    ):
-        session.window_started_at = now
-        session.window_request_count = 1
-        return
+    if store.hit(f"risk:vol:{sid}", settings.RISK_VOLUME_MAX_REQUESTS, window).allowed:
+        return False
+    if not store.hit(f"risk:vol:fired:{sid}", 1, window).allowed:
+        # Already scored this window's crossing.
+        return False
 
-    session.window_request_count += 1
-    if session.window_request_count == settings.RISK_VOLUME_MAX_REQUESTS + 1:
-        session.risk_score += settings.RISK_SCORE_VOLUME_ANOMALY
-        _audit_session_event(
-            db,
-            session,
-            context,
-            "volume_anomaly",
-            {
-                "window_seconds": window_seconds,
-                "request_count": session.window_request_count,
-                "max_requests": settings.RISK_VOLUME_MAX_REQUESTS,
-            },
-        )
+    _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
+    _audit_session_event(
+        db,
+        session,
+        context,
+        "volume_anomaly",
+        {
+            "window_seconds": window,
+            "max_requests": settings.RISK_VOLUME_MAX_REQUESTS,
+        },
+    )
+    return True
 
 
 def _terminate(
@@ -220,6 +305,34 @@ def _terminate(
         rule="session_risk",
         reason=reason,
     )
+
+
+def _check_lifetime(
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+) -> PolicyVerdict | None:
+    """Absolute-age and idle expiry, each with its own audited reason.
+
+    Distinct from a risk kill: a session ending because it is simply old
+    should never read, in the trail, as a session ending because it
+    misbehaved.
+    """
+    now = context.requested_at
+
+    created_at = _aware(session.created_at)
+    if created_at is not None:
+        age_hours = (now - created_at).total_seconds() / 3600.0
+        if age_hours > settings.SESSION_MAX_AGE_HOURS:
+            return _terminate(db, session, context, "max session age exceeded")
+
+    last_seen = _aware(session.last_seen_at)
+    if last_seen is not None:
+        idle_minutes = (now - last_seen).total_seconds() / 60.0
+        if idle_minutes > settings.SESSION_IDLE_TIMEOUT_MINUTES:
+            return _terminate(db, session, context, "session idle timeout")
+
+    return None
 
 
 def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | None:
@@ -247,7 +360,9 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
         )
 
     if session.user_id != context.user_id:
-        return _terminate(db, session, context, "token/session identity mismatch")
+        return _commit_and_return(
+            db, _terminate(db, session, context, "token/session identity mismatch")
+        )
 
     if session.status == SessionStatus.TERMINATED.value:
         return PolicyVerdict(
@@ -263,32 +378,35 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
             reason="Session awaiting step-up verification",
         )
 
-    # Behavioural signals for this request.
-    _detect_impossible_travel(db, session, context)
-    _detect_device_change(db, session, context)
-    _detect_volume_anomaly(db, session, context)
+    expiry = _check_lifetime(db, session, context)
+    if expiry is not None:
+        return _commit_and_return(db, expiry)
 
+    # Behavioural signals for this request. Each returns whether it fired,
+    # so a clean request stays a pure read plus the trail-state update.
+    fired = _detect_impossible_travel(db, session, context)
+    fired |= _detect_device_change(db, session, context)
+    fired |= _detect_volume_anomaly(db, session, context)
+
+    score = effective_score(session, context.requested_at)
     verdict: PolicyVerdict | None = None
-    if session.risk_score >= settings.RISK_TERMINATE_THRESHOLD:
+    if score >= settings.RISK_TERMINATE_THRESHOLD:
         verdict = _terminate(
-            db,
-            session,
-            context,
-            f"risk score {session.risk_score} crossed terminate threshold",
+            db, session, context, f"risk score {score} crossed terminate threshold"
         )
-    elif session.risk_score >= settings.RISK_CHALLENGE_THRESHOLD:
+    elif score >= settings.RISK_CHALLENGE_THRESHOLD:
         session.status = SessionStatus.CHALLENGE_REQUIRED.value
         _audit_session_event(
             db,
             session,
             context,
             "session_challenged",
-            {"why": f"risk score {session.risk_score} crossed challenge threshold"},
+            {"why": f"risk score {score} crossed challenge threshold"},
         )
         verdict = PolicyVerdict(
             decision=Decision.CHALLENGE,
             rule="session_risk",
-            reason=f"Risk score {session.risk_score} requires step-up",
+            reason=f"Risk score {score} requires step-up",
         )
 
     # Update the trail state AFTER the detectors compared against it.
@@ -302,8 +420,21 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     if context.device_fingerprint:
         session.device_fingerprint = context.device_fingerprint
     session.last_seen_at = context.requested_at
-    db.flush()
 
+    if fired or verdict is not None:
+        # A score bump or a status change must outlive the rejection it
+        # causes; anything less makes repeated probing free.
+        return _commit_and_return(db, verdict)
+
+    db.flush()
+    return None
+
+
+def _commit_and_return(
+    db: Session, verdict: PolicyVerdict | None
+) -> PolicyVerdict | None:
+    """Persist risk evidence durably, then hand back the verdict."""
+    db.commit()
     return verdict
 
 
@@ -327,7 +458,9 @@ def note_privilege_escalation(request: Request, db: Session) -> None:
         return
 
     session.escalation_count += 1
-    session.risk_score += settings.RISK_SCORE_PRIVILEGE_ESCALATION
+    _add_risk(
+        session, settings.RISK_SCORE_PRIVILEGE_ESCALATION, context.requested_at
+    )
     _audit_session_event(
         db,
         session,

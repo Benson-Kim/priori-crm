@@ -18,7 +18,7 @@ Drives the real app through the gate wired in ``app/main.py`` and pins:
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -31,7 +31,7 @@ from app.common.security import create_access_token, hash_password
 from app.constants.enums import UserRole
 from app.lib.config import settings
 from app.modules.auth.models import User
-from tests.conftest import TestingSessionLocal
+from tests.conftest import TestingSessionLocal, auth_headers
 
 _NIL = uuid.UUID(int=0)
 
@@ -50,16 +50,27 @@ def _seed_user(db, email: str, role: UserRole) -> User:
     return user
 
 
-def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
+def _auth(user: User, *, stepped_up: bool = True, stepped_up_at=None) -> dict:
+    """Bearer headers for ``user`` (stepped-up like a real login by default)."""
+    return auth_headers(user, stepped_up=stepped_up, stepped_up_at=stepped_up_at)
 
 
-def _freeze_local_hour(monkeypatch, hour: int) -> None:
-    """Freeze the gate's clock so the tenant-local hour is ``hour``."""
+def _frozen_instant(hour: int) -> datetime:
+    """The UTC instant whose tenant-local hour is ``hour``."""
     tz = ZoneInfo(settings.REPORTING_TIMEZONE)
-    local = datetime(2026, 8, 14, hour, 30, tzinfo=tz)
-    frozen = local.astimezone(UTC)
+    return datetime(2026, 8, 14, hour, 30, tzinfo=tz).astimezone(UTC)
+
+
+def _freeze_local_hour(monkeypatch, hour: int) -> datetime:
+    """Freeze the gate's clock so the tenant-local hour is ``hour``.
+
+    Returns the frozen instant so a test can mint a `sua` claim consistent
+    with it — a token stamped at real wall-clock time is not meaningfully
+    fresh or stale relative to a frozen request.
+    """
+    frozen = _frozen_instant(hour)
     monkeypatch.setattr("app.common.authz.context._now", lambda: frozen)
+    return frozen
 
 
 @pytest.fixture
@@ -92,8 +103,11 @@ class TestSameRoleDifferentContext:
         day = client.get("/api/v1/platform/owners", headers=_auth(operator))
         assert day.status_code == 200
 
+        # Night, on a session whose last OTP is long past: challenged.
         _freeze_local_hour(monkeypatch, 23)
-        night = client.get("/api/v1/platform/owners", headers=_auth(operator))
+        night = client.get(
+            "/api/v1/platform/owners", headers=_auth(operator, stepped_up=False)
+        )
         assert night.status_code == 401
         body = night.json()
         assert body["error_code"] == "STEP_UP_REQUIRED"
@@ -112,7 +126,9 @@ class TestSameRoleDifferentContext:
 
         # Night: the gate challenges BEFORE validation ever runs.
         _freeze_local_hour(monkeypatch, 23)
-        night = client.post("/api/v1/invoices", json={}, headers=_auth(admin))
+        night = client.post(
+            "/api/v1/invoices", json={}, headers=_auth(admin, stepped_up=False)
+        )
         assert night.status_code == 401
         assert night.json()["error_code"] == "STEP_UP_REQUIRED"
 
@@ -121,7 +137,9 @@ class TestSameRoleDifferentContext:
     ):
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         _freeze_local_hour(monkeypatch, 23)
-        resp = client.get("/api/v1/invoices", headers=_auth(admin))
+        resp = client.get(
+            "/api/v1/invoices", headers=_auth(admin, stepped_up=False)
+        )
         assert resp.status_code == 200
 
     def test_denylisted_ip_denied_even_with_valid_admin_token(
@@ -168,8 +186,97 @@ class TestSameRoleDifferentContext:
         assert resp.status_code == 200
 
 
+class TestChallengesAreSatisfiable:
+    """A CHALLENGE must be answerable, or it is a lockout wearing a badge.
+
+    The off-hours rule reads the wall clock and the path — inputs a new
+    token pair cannot change. Without the `sua` step-up claim its 401
+    repeats for the whole window however many times the user authenticates,
+    and the only reason CI stayed green was that the suite disabled the
+    window outright rather than fixing it.
+    """
+
+    def test_fresh_step_up_clears_the_off_hours_challenge(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        operator = _seed_user(db, "op@mail.com", UserRole.PLATFORM_OPERATOR)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+
+        blocked = client.get(
+            "/api/v1/platform/owners", headers=_auth(operator, stepped_up=False)
+        )
+        assert blocked.status_code == 401
+        assert blocked.json()["error_code"] == "STEP_UP_REQUIRED"
+
+        # Completing login → OTP stamps `sua`. THE SAME request now passes:
+        # same hour, same user, same endpoint.
+        cleared = client.get(
+            "/api/v1/platform/owners",
+            headers=_auth(operator, stepped_up_at=frozen),
+        )
+        assert cleared.status_code == 200
+
+    def test_step_up_expires_and_challenges_again(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """Clearance is a lease, not a key: it lapses and the guard returns."""
+        operator = _seed_user(db, "op@mail.com", UserRole.PLATFORM_OPERATOR)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+        stale = frozen - timedelta(minutes=settings.ABAC_STEP_UP_TTL_MINUTES + 1)
+
+        resp = client.get(
+            "/api/v1/platform/owners", headers=_auth(operator, stepped_up_at=stale)
+        )
+        assert resp.status_code == 401
+        assert resp.json()["error_code"] == "STEP_UP_REQUIRED"
+
+    def test_future_dated_step_up_is_not_honoured(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """Clock skew or a forged-but-signed claim earns nothing (fail closed)."""
+        operator = _seed_user(db, "op@mail.com", UserRole.PLATFORM_OPERATOR)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+
+        resp = client.get(
+            "/api/v1/platform/owners",
+            headers=_auth(operator, stepped_up_at=frozen + timedelta(hours=6)),
+        )
+        assert resp.status_code == 401
+
+    def test_step_up_does_not_widen_access(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """`sua` answers the CONTEXT objection only — RBAC is untouched.
+
+        A tenant admin holding a perfectly fresh OTP still cannot reach the
+        platform surface: ABAC only ever restricts, so satisfying one of its
+        rules must never hand out what RBAC withholds (ADR-0011).
+        """
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+
+        resp = client.get(
+            "/api/v1/platform/owners", headers=_auth(admin, stepped_up_at=frozen)
+        )
+        assert resp.status_code == 403
+
+    def test_step_up_does_not_clear_a_denylisted_ip(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """A DENY is not a challenge: no amount of OTP makes a bad IP good."""
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+        monkeypatch.setattr(settings, "ABAC_IP_DENYLIST", "testclient")
+
+        resp = client.get(
+            "/api/v1/customers", headers=_auth(admin, stepped_up_at=frozen)
+        )
+        assert resp.status_code == 403
+
+
 class TestDecisionAuditTrail:
-    def test_allow_decisions_are_audited_with_actor(self, client, db):
+    def test_allow_decisions_are_audited_with_actor(self, client, db, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_AUDIT_ALLOW_DECISIONS", True)
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         resp = client.get("/api/v1/customers", headers=_auth(admin))
         assert resp.status_code == 200
@@ -182,6 +289,21 @@ class TestDecisionAuditTrail:
         assert payload["sensitivity"] == "internal"
         assert payload["method"] == "GET"
         assert payload["principal"] == "user"
+
+    def test_allow_decisions_are_not_audited_by_default(self, client, db):
+        """The per-request ALLOW row is opt-in.
+
+        Auditing every allow adds an INSERT to every business request for
+        rows with little evidentiary value. Non-allow decisions are always
+        recorded regardless (the two tests below).
+        """
+        assert settings.ABAC_AUDIT_ALLOW_DECISIONS is False
+        admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
+        before = len(_decision_rows(db, "policy_allow"))
+
+        assert client.get("/api/v1/customers", headers=_auth(admin)).status_code == 200
+
+        assert len(_decision_rows(db, "policy_allow")) == before
 
     def test_challenge_decision_survives_its_own_rejection(
         self, client, db, off_hours_window, monkeypatch

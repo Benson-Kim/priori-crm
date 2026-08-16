@@ -133,6 +133,15 @@ class UserSession(Base):
     ``challenge_required`` (step-up via the existing login → OTP flow) or
     ``terminated`` (dead forever). A non-active session is never cleared
     in place — re-authentication mints a NEW session row.
+
+    ``risk_score`` decays from ``risk_updated_at`` at ``RISK_DECAY_PER_HOUR``
+    so accumulated benign noise cannot eventually challenge a legitimate
+    long-lived session; the decay is computed on read and settled into the
+    column only when a detector fires, so a quiet session costs no writes.
+    The volume-window counter deliberately lives in the shared
+    ``RateLimitStore``, not here: a column would be rolled back by any
+    failing request, letting an attacker reset their window by probing
+    endpoints that error.
     """
 
     __tablename__ = "user_sessions"
@@ -167,6 +176,11 @@ class UserSession(Base):
     risk_score: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
+    risk_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When risk_score was last raised; decay accrues from here",
+    )
     device_fingerprint: Mapped[str | None] = mapped_column(
         String(160),
         nullable=True,
@@ -178,14 +192,6 @@ class UserSession(Base):
     last_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
-    )
-    window_started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Start of the current data-access volume window",
-    )
-    window_request_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
     )
     escalation_count: Mapped[int] = mapped_column(
         Integer,

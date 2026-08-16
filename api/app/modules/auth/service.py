@@ -209,8 +209,18 @@ class AuthService:
         # tokens. This is also how a step-up challenge is satisfied: the
         # challenged session stays challenged forever; re-authenticating
         # yields a new, cleanly-scored session.
+        # `sua` ("stepped-up-at") records that this instant is backed by a
+        # completed OTP. The static ABAC rules (off-hours, unknown-geo) read
+        # it so their CHALLENGE is answerable: without it those rules depend
+        # only on the wall clock and the path, which no amount of
+        # re-authenticating can change, turning every 401 into a lockout for
+        # the whole window. It rides in BOTH tokens so a rotation can carry
+        # it forward unchanged.
         session = self._create_session(user)
-        claims = {"sid": str(session.id)}
+        claims = {
+            "sid": str(session.id),
+            "sua": int(datetime.now(UTC).timestamp()),
+        }
 
         access_token = create_access_token(subject=str(user.id), extra=claims)
         refresh_token, _jti, _exp = create_refresh_token(
@@ -298,6 +308,12 @@ class AuthService:
         # user's whole refresh-token family so any outstanding refresh token
         # (including an attacker's) is rejected. The user signs in afresh.
         self._revoke_token_family(str(user.id))
+        # The fence only reaches REFRESH tokens. An attacker's already-issued
+        # ACCESS token stays valid for up to JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        # after the victim rotates their password — the window the reset
+        # exists to close. Terminating the session rows shuts it now, because
+        # the zero-trust gate re-checks session status on every request (#67).
+        self._terminate_user_sessions(user.id, "password_reset")
 
         logger.info("Password reset completed for user %s", user.email)
 
@@ -373,8 +389,24 @@ class AuthService:
             )
             raise UnauthorizedException("Refresh token has been revoked.")
 
-        access_token = create_access_token(subject=str(user.id))
-        new_refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
+        # Carry the session claims across the rotation UNCHANGED (#67).
+        #
+        # `sid`: without this the rotated pair carries no session at all, so
+        # continuous risk scoring silently stops applying to a session after
+        # its first refresh — the feature would expire with the original
+        # access token.
+        #
+        # `sua`: copied, never re-stamped. Re-stamping would let anyone
+        # holding a stolen refresh token launder an indefinite step-up
+        # without ever proving an OTP, which is precisely what the claim
+        # exists to prove. For the same reason the step-up rules cannot lean
+        # on `iat`, which rotation resets by design.
+        claims = {k: payload[k] for k in ("sid", "sua") if payload.get(k) is not None}
+
+        access_token = create_access_token(subject=str(user.id), extra=claims)
+        new_refresh_token, _jti, _exp = create_refresh_token(
+            subject=str(user.id), extra=claims
+        )
 
         return access_token, new_refresh_token
 

@@ -24,10 +24,15 @@ Signal sources are deliberately pluggable-but-simple:
 - **Time** — the request instant converted to the organisation's
   ``REPORTING_TIMEZONE`` so "middle of the night" means the tenant's
   night, not UTC's.
+- **Step-up freshness** — the signed ``sua`` claim recording when the
+  caller last completed an OTP. This is what makes a contextual CHALLENGE
+  *satisfiable*: rules over wall-clock time alone cannot be cleared by
+  re-authenticating, because a new token pair does not move the clock.
 """
 
 import hashlib
 import ipaddress
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -81,11 +86,33 @@ class AccessContext:
     method: str
     path: str
     sensitivity: SensitivityLevel
+    stepped_up_at: datetime | None = None
 
     @property
     def is_write(self) -> bool:
         """Whether the request mutates state."""
         return self.method.upper() in _WRITE_METHODS
+
+    def stepped_up_within(self, minutes: int) -> bool:
+        """Whether a fresh OTP step-up backs this request.
+
+        Reads the signed ``sua`` ("stepped-up-at") claim that ``verify_otp``
+        stamps on both tokens, so a contextual CHALLENGE is *satisfiable*:
+        completing the login → OTP round trip changes an input the rules
+        actually read. Without it, a rule over wall-clock time alone can
+        never be cleared by re-authenticating, and its 401 is a lockout
+        wearing a challenge's clothing.
+
+        A missing claim (tokens minted before this existed) reads as "not
+        stepped up" — fail closed. Those sessions are challenged once and
+        heal on the next OTP.
+        """
+        if self.stepped_up_at is None:
+            return False
+        age = (self.requested_at - self.stepped_up_at).total_seconds()
+        # A future-dated claim means a clock skew or a forged-but-signed
+        # token; neither earns clearance.
+        return 0 <= age <= minutes * 60
 
 
 @lru_cache(maxsize=8)
@@ -158,13 +185,31 @@ def _resolve_geo(request: Request) -> GeoPoint | None:
     return GeoPoint(country=country.upper() if country else None, lat=lat, lon=lon)
 
 
+#: Version numbers inside a User-Agent, e.g. "Chrome/127.0.6533.89".
+_UA_VERSION = re.compile(r"/\d+(?:\.\d+)*")
+
+
+def _stable_user_agent(user_agent: str) -> str:
+    """Strip patch versions from a User-Agent, keeping the major.
+
+    Browsers auto-update constantly. Hashing the raw UA makes every silent
+    update look like a brand-new device (+RISK_SCORE_DEVICE_CHANGE) for a
+    user who did nothing — the single most common false positive in this
+    detector. Keeping the major version preserves the signal that actually
+    matters (a different browser, engine or OS entirely) while ignoring the
+    churn that does not.
+    """
+    return _UA_VERSION.sub(lambda m: "/" + m.group(0)[1:].split(".")[0], user_agent)
+
+
 def _device_fingerprint(request: Request) -> str | None:
     """Client-supplied fingerprint, else one derived from stable headers.
 
-    The derived form hashes User-Agent + Accept-Language: coarse, but it
-    changes when the presenting device/browser changes, which is the signal
-    session risk scoring needs. Prefixes distinguish provenance so a
-    client-supplied value is never confused with a derived one.
+    The derived form hashes a version-stabilized User-Agent plus the primary
+    Accept-Language tag: coarse, but it changes when the presenting device
+    or browser genuinely changes, which is the signal session risk scoring
+    needs. Prefixes distinguish provenance so a client-supplied value is
+    never confused with a derived one.
     """
     if settings.ABAC_TRUST_CONTEXT_HEADERS is True:
         supplied = request.headers.get("X-Device-Fingerprint")
@@ -174,7 +219,11 @@ def _device_fingerprint(request: Request) -> str | None:
     accept_language = request.headers.get("Accept-Language", "")
     if not user_agent and not accept_language:
         return None
-    digest = hashlib.sha256(f"{user_agent}\n{accept_language}".encode()).hexdigest()
+    # Only the primary language tag: browsers reorder and re-weight the
+    # q-value list as the user browses, which is not a device change.
+    primary_language = accept_language.split(",")[0].split(";")[0].strip().lower()
+    material = f"{_stable_user_agent(user_agent)}\n{primary_language}"
+    digest = hashlib.sha256(material.encode()).hexdigest()
     return f"derived:{digest[:32]}"
 
 
@@ -212,11 +261,26 @@ def _parse_uuid(value: str | None) -> uuid.UUID | None:
         return None
 
 
+def _parse_stepped_up_at(value: object) -> datetime | None:
+    """Read the ``sua`` claim (unix seconds) as a UTC instant.
+
+    The claim rides inside the signature-verified payload, so it cannot be
+    forged; a malformed value is simply treated as absent (fail closed).
+    """
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=UTC)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
 def build_access_context(request: Request) -> AccessContext:
     """Assemble the per-request :class:`AccessContext`."""
     token = _decode_token_leniently(request)
     user_id = _parse_uuid(token.get("sub")) if token else None
     session_id = _parse_uuid(token.get("sid")) if token else None
+    stepped_up_at = _parse_stepped_up_at(token.get("sua")) if token else None
 
     principal: PrincipalType
     if user_id is not None:
@@ -245,4 +309,5 @@ def build_access_context(request: Request) -> AccessContext:
         method=request.method,
         path=request.url.path,
         sensitivity=classify_path(request.url.path),
+        stepped_up_at=stepped_up_at,
     )
