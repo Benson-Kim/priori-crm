@@ -13,22 +13,6 @@ and the public URL stays /api/v1/... exactly as in production. Leaving the
 production value of /api/v1 here yields a 404 on every route.
 
 See docs/operations/deployment.md §4.1 for the tested matrix.
-
-Fork safety is the other thing that matters, and it is why `application` is a
-function instead of a module-level `ASGIMiddleware(...)`. a2wsgi's
-ASGIMiddleware starts a background thread running an asyncio event loop *in
-its constructor*. Passenger's default "smart" spawning imports this module
-once in a preloader process and then fork()s the worker processes from it —
-and threads do not survive fork. A module-level middleware therefore leaves
-every forked worker holding an event loop that no thread is running: each
-request enqueues onto that dead loop and blocks forever in an untimed
-threading wait. Externally that is a request that never sends a byte —
-`curl: (28) Operation timed out ... 0 bytes received` on every attempt, never
-a 404 — while the same module works perfectly when imported and served in a
-single process (which is exactly how it was verified in deployment.md §4.1).
-Building the middleware lazily, keyed on the current PID, means each worker
-constructs its own middleware — and with it a live event-loop thread — after
-the fork, in the process that will actually serve requests.
 """
 
 import os
@@ -44,20 +28,37 @@ from a2wsgi import ASGIMiddleware
 
 from app.main import app as asgi_app
 
-# Importing app.main at preload time is safe (it creates no threads and opens
-# no connections) and keeps smart spawning's copy-on-write memory sharing.
-# Only the ASGIMiddleware construction must be deferred to post-fork.
-_lock = threading.Lock()
-_wsgi_app = None
-_wsgi_app_pid = None
+# ASGIMiddleware.__init__ calls asyncio.new_event_loop() and immediately starts a
+# daemon thread running loop.run_forever(). Building it at import time — the
+# obvious `application = ASGIMiddleware(asgi_app)` — hangs every request on this
+# host, because the LiteSpeed runner (lswsgi) imports this module and then forks
+# its workers. An event loop created before that fork is unusable in the child:
+# the selector and self-pipe are shared with the parent, so the child's
+# call_soon_threadsafe never wakes the child's own loop.
+#
+# The symptom is not a crash. The request thread blocks forever on a future that
+# will never resolve, LiteSpeed gives up at its connection timeout, and the
+# caller sees a 500 after ~120s with nothing in the log but the process being
+# reaped. Confirmed with faulthandler against a live worker:
+#
+#   Thread (loop):    selectors.select -> run_forever          [idle]
+#   Current thread:   futures/_base.py:451 result()
+#                     a2wsgi/asgi.py:214 execute_in_loop
+#                     a2wsgi/asgi.py:225 __call__              [waiting]
+#
+# Building it on first use pins the loop and its thread to the process that will
+# actually serve the request. The pid check re-builds after a fork rather than
+# inheriting a broken loop; the lock keeps two threads in one worker from racing.
+_build_lock = threading.Lock()
+_state: dict = {"pid": None, "app": None}
 
 
 def application(environ, start_response):
-    """WSGI entrypoint. Builds the ASGI bridge lazily, once per process."""
-    global _wsgi_app, _wsgi_app_pid
-    if _wsgi_app is None or _wsgi_app_pid != os.getpid():
-        with _lock:
-            if _wsgi_app is None or _wsgi_app_pid != os.getpid():
-                _wsgi_app = ASGIMiddleware(asgi_app)
-                _wsgi_app_pid = os.getpid()
-    return _wsgi_app(environ, start_response)
+    """WSGI entrypoint; builds the ASGI bridge per process, after any fork."""
+    pid = os.getpid()
+    if _state["pid"] != pid:
+        with _build_lock:
+            if _state["pid"] != pid:
+                _state["app"] = ASGIMiddleware(asgi_app)
+                _state["pid"] = pid
+    return _state["app"](environ, start_response)
