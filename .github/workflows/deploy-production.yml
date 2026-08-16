@@ -28,11 +28,12 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
-# Called workflows only receive what the caller grants — see §3.1.
+# Called workflows only receive what the caller grants — see §3.1. security.yml
+# needs nothing beyond contents: read now that CodeQL is gone (unavailable on
+# this plan); actions: read is for download-artifact.
 permissions:
   contents: read
   actions: read
-  security-events: write
 
 jobs:
   guard:
