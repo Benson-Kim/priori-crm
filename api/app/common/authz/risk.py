@@ -161,14 +161,22 @@ def effective_score(
     when a detector actually fires (see :func:`_add_risk`).
     """
     raw = session.risk_score or 0
+    # Session-start soft evidence never decays (H10): a session that
+    # BEGAN on an unknown device in an unknown country does not stop
+    # having begun there, and decaying it let an attacker pace anomalies
+    # — wait out the decay, trigger the next signal from a clean score —
+    # accumulating below the challenge threshold forever. Decay forgives
+    # transient noise only; the floor dies with the session (a step-up
+    # mints a fresh session whose absorbed context carries no floor).
+    floor = max(session.risk_floor or 0, 0)
     updated_at = _aware(session.risk_updated_at)
     if raw <= 0 or updated_at is None or settings.RISK_DECAY_PER_HOUR <= 0:
-        return max(raw, 0)
+        return max(raw, floor, 0)
     elapsed_hours = (now - updated_at).total_seconds() / 3600.0
     if elapsed_hours <= 0:
-        return raw
+        return max(raw, floor)
     shed = int(settings.RISK_DECAY_PER_HOUR * elapsed_hours)
-    return max(raw - shed, 0)
+    return max(raw - shed, floor, 0)
 
 
 def _add_risk(
@@ -321,6 +329,13 @@ def _evaluate_session_start_softs(
     signals = baselines.evaluate_session_start_signals(baseline, context)
     for signal in signals:
         _add_risk(session, signal.points, context.requested_at)
+        # Session-start deviations are facts about the session, not
+        # transient noise: they anchor a non-decaying floor under the
+        # score (H10), so pacing later anomalies against the decay clock
+        # cannot launder them. The config validator keeps the maximum
+        # floor below the terminate threshold, and the M1 clamp still
+        # guarantees soft evidence alone never terminates.
+        session.risk_floor = (session.risk_floor or 0) + signal.points
         _audit_session_event(
             db,
             session,

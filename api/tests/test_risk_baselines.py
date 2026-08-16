@@ -384,6 +384,62 @@ class TestSoftSignalFalsePositives:
         assert not _soft_events(db, "new_country")
 
 
+class TestSessionStartSoftsDoNotDecay:
+    """#67 review H10: decay-paced evasion of the session-start signals.
+
+    Decay exists to forgive TRANSIENT noise. Session-start deviations are
+    not transient — a session that began on an unknown device in an
+    unknown country does not stop having begun there — so they anchor a
+    non-decaying floor for the session's lifetime. Without it, an
+    attacker paces anomalies so each decays before the next lands and
+    accumulates below the challenge threshold forever.
+    """
+
+    def test_paced_anomaly_after_decay_window_still_challenges(
+        self, client, db, trusted_ctx, monkeypatch
+    ):
+        from datetime import timedelta
+
+        from app.common.authz.risk import effective_score
+
+        monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 2)
+        user = _seed_user(db, "pacer@mail.com")
+        _seed_baseline(
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+        session, headers = _craft_session(db, user)
+        hijack = {**headers, **NEW_DEVICE, **US_GEO}
+
+        # Session start from a new device + new country: 25+25 = 50 —
+        # allowed and logged (below the 60 challenge threshold).
+        assert client.get("/api/v1/customers", headers=hijack).status_code == 200
+        db.refresh(session)
+        assert session.risk_floor == (
+            settings.RISK_SCORE_NEW_DEVICE + settings.RISK_SCORE_NEW_COUNTRY
+        )
+
+        # The attacker idles 6 hours: pure decay would shed all 50 points.
+        session.risk_updated_at = datetime.now(UTC) - timedelta(hours=6)
+        db.commit()
+        assert effective_score(session, datetime.now(UTC)) == session.risk_floor, (
+            "session-start soft evidence must not decay within the session"
+        )
+
+        # The next anomaly (mild volume, +30) lands on 50, not on 0:
+        # 80 >= 60 challenges despite the pacing.
+        statuses = [
+            client.get("/api/v1/customers", headers=hijack).status_code
+            for _ in range(4)
+        ]
+        assert 401 in statuses
+        db.refresh(session)
+        assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
+
+
 class TestUnusualHour:
     def test_unusual_hour_alone_only_logs(self, client, db, trusted_ctx):
         user = _seed_user(db, "latework@mail.com")

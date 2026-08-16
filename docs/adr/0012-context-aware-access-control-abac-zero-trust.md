@@ -124,6 +124,20 @@ after the initial OTP.
    `SESSION_IDLE_TIMEOUT_MINUTES`, each with its own audited reason so an
    expiry never reads as a risk kill.
 
+   **Decay forgives transient noise only; session-start evidence never
+   decays.** The session-start soft signals (new device / new country /
+   unusual hour) are facts about the session, not noise — a session that
+   began on an unknown device in an unknown country does not stop having
+   begun there. Their sum anchors a non-decaying `risk_floor` for the
+   session's lifetime, so an attacker cannot pace anomalies against the
+   decay clock (wait out the session-start batch, then land the next
+   signal on a clean score) and accumulate below the challenge threshold
+   forever. The floor dies with the session: a passed step-up mints a
+   fresh session whose context was absorbed, so a legitimate user's next
+   session carries no floor. Startup validation keeps the maximum
+   possible floor below the terminate threshold, and the soft-clamp rule
+   still guarantees soft evidence alone can never terminate.
+
 8. **Risk evidence is durable, split by what is exploitable.** Score
    increments and status transitions commit explicitly — the 4xx they
    cause would otherwise roll back the evidence for it, making repeated

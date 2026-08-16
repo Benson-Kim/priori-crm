@@ -182,6 +182,13 @@ class UserSession(Base):
         nullable=True,
         comment="When risk_score was last raised; decay accrues from here",
     )
+    risk_floor: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+        comment="Non-decaying score floor from session-start soft signals (H10)",
+    )
     device_fingerprint: Mapped[str | None] = mapped_column(
         String(160),
         nullable=True,
