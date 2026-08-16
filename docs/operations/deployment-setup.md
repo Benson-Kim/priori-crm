@@ -248,22 +248,34 @@ defaults below silently writes config into a directory nothing reads:
 - the **virtualenv path**, e.g. `/home/priori/virtualenv/apps/priori-api/3.12`
   → `deploy/staging_release.sh` expects exactly this shape
 
-Also create the docroot directory if it does not exist: cPanel → **Domains** →
-confirm `staging.crm.priori.co.ke` points at `~/staging.crm.priori.co.ke`.
+**Read the real document root — do not assume it matches the domain name.** cPanel →
+**Domains** → *Manage* `staging.crm.priori.co.ke` → **Document Root**. On this account
+it is:
 
-**Creating the app also creates `~/staging.crm.priori.co.ke/api/`** — a directory in
-the *docroot* holding an `.htaccess` with the `PassengerAppRoot` directives. That
-directory **is** the mount; delete it and the API 404s no matter how healthy the app
-is. The deploy workflow excludes it (along with `.well-known/`, which AutoSSL needs)
-from the SPA's `rsync --delete`, so deploys leave it alone — but do not clean it up
-by hand either.
+```
+/home/priori/crm-staging/web
+```
 
-**Verify the mount exists before deploying:**
+That is what `STAGING_DOCROOT` must be set to in §1.5. MochaHost provisions a
+directory that does not mirror the hostname, so a guessed path would deploy the SPA
+somewhere nothing serves — the deploy would go green and the site would stay a 404.
+
+**Creating the app also creates `<docroot>/api/`** — a directory holding an
+`.htaccess` with the `PassengerAppRoot` directives. That directory **is** the mount;
+delete it and the API 404s no matter how healthy the app is. The deploy workflow
+excludes it (along with `.well-known/`, which AutoSSL needs) from the SPA's
+`rsync --delete`, so deploys leave it alone — but do not clean it up by hand either.
+
+**Verify both the document root and the mount before deploying:**
 
 ```bash
 ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
-  'ls -la ~/staging.crm.priori.co.ke/api/ && cat ~/staging.crm.priori.co.ke/api/.htaccess'
+  'ls -la ~/crm-staging/web/ && echo "--- mount ---" && cat ~/crm-staging/web/api/.htaccess'
 ```
+
+The `.htaccess` should contain `PassengerAppRoot /home/priori/apps/priori-api`. If
+`api/` is missing, the Application URL in the table above was not set to the `/api`
+path — fix it in Setup Python App before continuing.
 
 **Verify** — cPanel → **SSL/TLS Status**: `staging.crm.priori.co.ke` shows an AutoSSL
 certificate. The deploy's smoke test is an HTTPS call and will fail without one.
@@ -352,7 +364,7 @@ gh secret set STAGING_SSH_KEY      < ~/.ssh/priori-staging-deploy
 gh secret set STAGING_KNOWN_HOSTS --body "$(ssh-keyscan -H staging.crm.priori.co.ke 2>/dev/null)"
 gh secret set STAGING_SSH_USER    --body "priori"
 gh secret set STAGING_SSH_HOST    --body "staging.crm.priori.co.ke"
-gh secret set STAGING_DOCROOT     --body "/home/priori/staging.crm.priori.co.ke"
+gh secret set STAGING_DOCROOT     --body "/home/priori/crm-staging/web"
 gh secret set STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
 ```
 
@@ -404,7 +416,7 @@ Then open <https://staging.crm.priori.co.ke> and log in.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `/api/v1/health` → 404, SPA works | `API_V1_PREFIX` wrong | must be `/v1` in the staging `.env` (§1.4), then restart: `touch ~/apps/priori-api/tmp/restart.txt` |
-| `/api/v1/health` returns **HTML** | `.htaccess` missing or the `!^/api` guard lost | re-run the deploy; check `~/staging.crm.priori.co.ke/.htaccess` exists |
+| `/api/v1/health` returns **HTML** | `.htaccess` missing or the `!^/api` guard lost | re-run the deploy; check `~/crm-staging/web/.htaccess` exists |
 | Deploy fails at `Configure SSH` | secret missing/malformed | `gh secret list`; re-set `STAGING_SSH_KEY` from the **private** key file |
 | `alembic upgrade head` fails on `gen_random_uuid()` | extensions missing | back to §1.1 |
 | `pip install` OOM / killed | shared-host memory cap | the SPA is built in CI already; if Python deps are the problem, ask support to raise the limit |
