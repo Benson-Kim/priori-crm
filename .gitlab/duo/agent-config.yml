@@ -17,6 +17,18 @@ setup_script:
   - apt-get update -qq || true
   - 'apt-get install -y -qq shellcheck || pip install --quiet shellcheck-py || echo "WARNING - shellcheck could not be installed"'
   - shellcheck --version || true
+  # gh CLI, so sessions can watch GitHub Actions runs on the deploy
+  # mirror (benson-priori/priori-crm). Auth: flow jobs do NOT receive
+  # custom CI/CD variables (see execution-variables docs), so sessions
+  # read credentials at runtime from the private project snippet named
+  # 'duo-agent-credentials' (dotenv format: GH_TOKEN=..., optionally
+  # GITLAB_MERGE_TOKEN=...) using the composite identity's read_api
+  # scope, e.g.:
+  #   glab api "projects/$CI_PROJECT_ID/snippets" | <find id by title>
+  #   glab api "projects/$CI_PROJECT_ID/snippets/<id>/raw"
+  # then: export GH_TOKEN=... ; gh auth status confirms.
+  - 'apt-get install -y -qq gh || echo "WARNING - gh CLI could not be installed"'
+  - gh --version || true
 
 network_policy:
   include_recommended_allowed: true
@@ -31,3 +43,14 @@ network_policy:
     # ruff, shellcheck-py etc. for local verification
     - pypi.org
     - files.pythonhosted.org
+    # GitHub, so sessions can watch Actions runs on the deploy mirror
+    # benson-priori/priori-crm (REST API + gh CLI + log downloads)
+    - github.com
+    - api.github.com
+    - uploads.github.com
+    - objects.githubusercontent.com
+    - results-receiver.actions.githubusercontent.com
+    # Staging host, so sessions can verify the public health endpoint
+    # (HTTPS only - the sandbox proxy does not carry SSH; host-side
+    # triage runs inside the GitHub workflow via deploy/staging_diagnose.sh)
+    - staging.crm.priori.co.ke
