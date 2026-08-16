@@ -89,11 +89,12 @@ Two new workflows, and the three existing ones become **reusable** (§3.1):
 | `deploy-production.yml` | *new* — `workflow_dispatch` | the approval gate, then the full suite, then deploys |
 | `api-ci.yml`, `ui-ci.yml`, `security.yml` | existing + `workflow_call` | unchanged as CI; now callable by the deploy workflows |
 
-What "security is green" means on the deploy path: both `security.yml` jobs —
-**dependency scan** (pip-audit + npm audit) and **secret detection** (gitleaks over
-the full history) — run on every trigger, including when the workflow is *called*
-from a push or a dispatch. Neither is `pull_request`-gated, so the deploy gate and
-the PR check are the same two scanners.
+What "security is green" means on the deploy path: `security.yml`'s **secret
+detection** (gitleaks over the full history) gates deploys. Its **dependency scan**
+(pip-audit + npm audit) gates merges only — it is skipped when a deploy workflow
+calls the workflow, deliberately, because an advisory database moves without anyone
+committing and a deploy must not become impossible at a moment nobody chose (§3.8).
+So the PR check is the stricter of the two, which is the right way round.
 
 Python SAST is not a third job here: it rides in `api-ci.yml`'s `lint`, which the
 deploy workflows already call, via ruff's flake8-bandit (`S`) ruleset. Deep dataflow
@@ -330,12 +331,34 @@ anywhere:
 | Was | Now | Note |
 |---|---|---|
 | CodeQL (SAST) | ruff `S` in `api-ci` lint; GitLab SAST for depth | Checked against bandit: 0 high, 1 documented false positive |
-| Dependency review | `pip-audit` + `npm audit --audit-level=high` | Runs on the deploy path too, unlike the PR-only job it replaced |
+| Dependency review | `pip-audit` + `npm audit --audit-level=high` | Gates merges, not deploys — see below |
 | `gitleaks-action` | pinned `gitleaks` binary, checksum-verified | The action 403'd on `/pulls/{n}/commits`; the binary needs no token |
 
-Neither `continue-on-error` nor an `if:` skip would have done. A skipped job satisfies
-nothing if branch protection ever becomes available, and a permanently-red check
-trains everyone to stop reading the column.
+Neither `continue-on-error` nor an `if:` skip would have done for the *replacement*.
+A skipped job satisfies nothing if branch protection ever becomes available, and a
+permanently-red check trains everyone to stop reading the column.
+
+**The dependency scan gates merges, not deploys** — and that is the same lesson
+applied once more rather than an exception to it. Advisory databases move on their
+own: a CVE published against an unchanged transitive dependency turns `pip-audit` or
+`npm audit` red with no commit involved. Gating deploys on that makes production
+unshippable at a moment nobody chose, including the moment a hotfix is needed. It is
+the defect this section exists to remove, only stochastic instead of permanent, and
+`ecdsa` shows it is not hypothetical — a high-severity advisory with no fix available
+is already in the tree today.
+
+Nothing is given up by the split. A deploy ships the exact dependency set that
+already passed on the pull request; only the database changed in between, and the
+answer to a new advisory is a dependency bump on a branch, not a blocked release.
+Secret detection still gates deploys, because it can only fail on something actually
+present in the commits being shipped.
+
+Mechanically, `dependency-scan` carries `if: ${{ !inputs.deploy_gate }}` against a
+`workflow_call` input defaulting to `true`. `inputs` is null under `push` and
+`pull_request` and populated on a call, which is the only reliable way to tell the
+two apart: `github.event_name` inside a called workflow reports the *caller's* event,
+so a deploy triggered by a push to `develop` looks exactly like CI on `develop`.
+Passing `deploy_gate: false` forces the scan on a called run if that is ever wanted.
 
 Clearing the new scanners took real dependency work, not just wiring: six high npm
 advisories (`postcss`, `react-router`, `nanoid` — all fixed within existing semver

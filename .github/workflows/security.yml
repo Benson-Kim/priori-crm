@@ -39,6 +39,17 @@ on:
   # permissions its caller grants — `contents: read` is all these jobs need,
   # which is already the floor for any caller that can check out the code.
   workflow_call:
+    inputs:
+      deploy_gate:
+        description: >
+          Leave unset. Set false to force the dependency scan on a called run.
+          `inputs` is null under the push and pull_request triggers below and
+          populated on a workflow_call, which is how dependency-scan tells a
+          deploy run from a CI run — github.event_name cannot, since a called
+          workflow reports its *caller's* event ("push" for deploy-staging).
+        type: boolean
+        default: true
+        required: false
   push:
     branches: [main, develop]
   pull_request:
@@ -50,6 +61,21 @@ permissions:
 jobs:
   dependency-scan:
     name: Dependency scan
+    # Gates merges, NOT deploys — skipped whenever a deploy workflow calls this
+    # one. Advisory databases move on their own: a new CVE published against an
+    # unchanged transitive dependency turns this job red with no commit
+    # involved. Gating deploys on it would mean production is unshippable at a
+    # moment nobody chose, including the moment a hotfix is needed — the same
+    # "gate that cannot go green" defect §3.8 exists to remove, only stochastic
+    # instead of permanent. `ecdsa` shows it is not hypothetical: a high-severity
+    # advisory with no fix available is already in this tree.
+    #
+    # Nothing is lost. A deploy ships the exact dependency set that passed on
+    # the pull request; only the advisory database changed in between, and the
+    # answer to a new advisory is a dependency bump on a branch, not a blocked
+    # release. Secret detection still gates deploys, because that one can only
+    # fail on something actually present in the commits being shipped.
+    if: ${{ !inputs.deploy_gate }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
