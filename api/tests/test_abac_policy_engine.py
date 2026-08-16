@@ -71,10 +71,15 @@ class TestSensitivityClassification:
     @pytest.mark.parametrize(
         ("path", "expected"),
         [
-            # Probes: exempt from evaluation entirely.
+            # Probes: exempt from evaluation entirely — but only the exact
+            # probe paths. /health/detailed exposes DB/pool internals and
+            # is as sensitive as the platform surface (review F6); an
+            # unknown future /health sub-route defaults to INTERNAL.
             ("/api/v1/health", SensitivityLevel.PUBLIC),
-            ("/api/v1/health/detailed", SensitivityLevel.PUBLIC),
+            ("/api/v1/health/detailed", SensitivityLevel.RESTRICTED),
+            ("/api/v1/health/some-future-probe", SensitivityLevel.INTERNAL),
             ("/api/v1/ping", SensitivityLevel.PUBLIC),
+            ("/api/v1/ping/extra", SensitivityLevel.INTERNAL),
             # Financial documents.
             ("/api/v1/invoices", SensitivityLevel.CONFIDENTIAL),
             ("/api/v1/invoices/123", SensitivityLevel.CONFIDENTIAL),

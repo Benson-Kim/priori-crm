@@ -63,13 +63,30 @@ _RESTRICTED_SEGMENTS: tuple[str, ...] = (
     "/mark-paid",
 )
 
+#: Exact-path rules evaluated BEFORE the prefix table. PUBLIC probes match
+#: exactly, never by prefix: a "/health" prefix rule classified everything
+#: beneath it — including the internal-secret-gated ``/health/detailed``,
+#: which returns DB/pool internals — as PUBLIC, exempting it from policy
+#: evaluation (IP/geo DENY rules) and decision auditing entirely (#67
+#: review F6). Anything new under /health now defaults to INTERNAL, so an
+#: added sub-route is policy-covered from its first request.
+_EXACT_RULES: dict[str, SensitivityLevel] = {
+    # Probes — exempt from evaluation (see module docstring).
+    "/health": SensitivityLevel.PUBLIC,
+    "/ping": SensitivityLevel.PUBLIC,
+    # Infrastructure internals (database connectivity, pool statistics):
+    # as sensitive as the platform administration surface.
+    # verify_internal_secret still owns authentication; ABAC DENY rules
+    # and decision auditing apply on top, and machine callers presenting
+    # the verified secret are exempt from OTP-challenge rules (H1).
+    "/health/detailed": SensitivityLevel.RESTRICTED,
+}
+
 #: Ordered (prefix, level) rules, matched against the path with the API
 #: prefix stripped. First match wins; more specific prefixes must come
-#: before shorter ones.
+#: before shorter ones. No PUBLIC entry belongs here — a PUBLIC prefix
+#: would exempt every sub-path from evaluation (see _EXACT_RULES).
 _PREFIX_RULES: tuple[tuple[str, SensitivityLevel], ...] = (
-    # Probes — exempt from evaluation (see module docstring).
-    ("/health", SensitivityLevel.PUBLIC),
-    ("/ping", SensitivityLevel.PUBLIC),
     # Owner + platform administration (ADR-0011) and the audit trail.
     ("/owner", SensitivityLevel.RESTRICTED),
     ("/platform", SensitivityLevel.RESTRICTED),
@@ -98,6 +115,10 @@ def classify_path(path: str) -> SensitivityLevel:
     covered from its first request.
     """
     relative = _strip_api_prefix(path)
+
+    exact = _EXACT_RULES.get(relative)
+    if exact is not None:
+        return exact
 
     for prefix, level in _PREFIX_RULES:
         if relative == prefix or relative.startswith(prefix + "/"):
