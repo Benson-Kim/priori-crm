@@ -40,13 +40,17 @@ def create_access_token(subject: str, extra: dict | None = None) -> str:
     )
 
 
-def create_refresh_token(subject: str) -> tuple[str, str, datetime]:
+def create_refresh_token(
+    subject: str, extra: dict | None = None
+) -> tuple[str, str, datetime]:
     """Create a JWT refresh token.
 
     Returns ``(token, jti, expires_at)``. The ``jti`` (unique token id) lets
     the auth service revoke this exact token via the denylist, and
     ``expires_at`` lets the caller size the denylist entry's TTL to the token's
-    remaining lifetime so revoked ids expire themselves.
+    remaining lifetime so revoked ids expire themselves. ``extra`` carries
+    additional claims (e.g. the ``sid`` session id, issue #67) so rotation
+    can keep a session's identity across token pairs.
     """
     expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     jti = str(uuid.uuid4())
@@ -57,6 +61,8 @@ def create_refresh_token(subject: str) -> tuple[str, str, datetime]:
         "type": "refresh",
         "jti": jti,
     }
+    if extra:
+        payload.update(extra)
     token = jwt.encode(
         payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )

@@ -43,7 +43,9 @@ def _seed_user(db, email: str, role: UserRole) -> User:
 
 
 def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
+    from tests.conftest import auth_headers
+
+    return auth_headers(user)
 
 
 def _seed_owner(db) -> uuid.UUID:

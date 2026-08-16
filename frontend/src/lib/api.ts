@@ -3,7 +3,15 @@
  *
  * Every request carries the bearer access token. On a 401 the client attempts
  * a single token refresh via /auth/refresh and retries the original request;
- * if the refresh fails the tokens are cleared and the user is sent to login
+ * if the refresh fails the tokens are cleared and the user is sent to login.
+ *
+ * One 401 is NOT a stale access token: `STEP_UP_REQUIRED` (issue #67) means
+ * the access-control policy wants a fresh OTP for this particular action —
+ * sensitive work in the middle of the night, or a session whose risk score
+ * crossed a threshold. Rotating tokens cannot satisfy that, so the client
+ * must route to the login → OTP flow instead of refreshing. Treating it as
+ * an ordinary 401 burns a refresh rotation per request and leaves the user
+ * staring at "please sign in again" while signing in again changes nothing.
  */
 
 import {
@@ -147,6 +155,23 @@ function redirectToLogin(): void {
 }
 
 /**
+ * Whether a 401 is a policy step-up challenge rather than an expired token.
+ *
+ * Reads a CLONE of the response: the body is a one-shot stream and the
+ * caller still needs it to render the API's explanation.
+ */
+async function isStepUpRequired(response: Response): Promise<boolean> {
+  try {
+    const body = await response.clone().json();
+    return body?.error_code === "STEP_UP_REQUIRED";
+  } catch {
+    // Non-JSON or already-consumed body: fall back to the ordinary 401 path.
+    return false;
+  }
+}
+
+
+/**
  * Perform a fetch with bearer auth and a one-time 401 -> refresh -> retry.
  */
 async function authedFetch(
@@ -164,12 +189,24 @@ async function authedFetch(
         headers: withAuthHeaders(init.headers),
       });
 
-      if (response.status === 401 && allowRetry) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) {
-          return authedFetch(url, init, false);
+      if (response.status === 401) {
+        // A step-up challenge is answered by a fresh OTP, never by a token
+        // rotation — go straight to the login flow (which already carries
+        // the intended destination through to the OTP step via router
+        // state, so the user lands back where they were) and keep the
+        // response body so the caller can explain why.
+        if (await isStepUpRequired(response)) {
+          redirectToLogin();
+          return response;
         }
-        redirectToLogin();
+
+        if (allowRetry) {
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            return authedFetch(url, init, false);
+          }
+          redirectToLogin();
+        }
       }
 
       return response;

@@ -142,8 +142,17 @@ def get_db(request: Request) -> Generator[Session, None, None]:
 
     The session is published on ``request.state.db`` so the route class can
     find it.
+
+    Zero trust (#67): the session is tagged request-scoped so the DB-layer
+    guard (``app.common.authz.db_guard``) refuses ORM access unless the
+    zero-trust gate stored an ALLOW verdict for this request.
     """
+    # Local import: db_guard depends on config/exceptions only, but keeping
+    # the import here avoids widening this module's import-time surface.
+    from app.common.authz.db_guard import mark_request_scoped
+
     db = SessionLocal()
+    mark_request_scoped(db)
     request.state.db = db
     try:
         yield db
