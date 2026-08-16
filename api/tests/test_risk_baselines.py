@@ -869,13 +869,24 @@ class TestBaselineLearningUnits:
         the attempted insert (savepoint) and re-fetch the winner's row.
         The lost race is simulated by blinding the initial lookup while a
         'concurrent' row already exists.
+
+        The savepoint is the point: a full-session rollback would expire
+        every object the caller's request had already loaded (the gate's
+        session row, the current user), turning a harmless lost race into
+        DetachedInstanceError/expiry surprises mid-request. So the loser
+        path must leave pre-loaded objects live and the transaction usable.
         """
+        from sqlalchemy import inspect as sa_inspect
         from sqlalchemy.orm import Session as SaSession
 
         user = _seed_user(db, "racer@mail.com")
         # The concurrent request already inserted (and committed) the row.
-        _seed_baseline(db, user)
-        db.expunge_all()  # forget it locally so db.get would re-query
+        concurrent_row = _seed_baseline(db, user)
+        # Forget the ROW locally so the recovery db.get truly re-queries;
+        # `user` stays attached — it plays the caller's pre-loaded object.
+        db.expunge(concurrent_row)
+        user_id = user.id
+        user_email = user.email  # load now: commit expired the attributes
 
         calls = {"n": 0}
         original_get = SaSession.get
@@ -888,8 +899,14 @@ class TestBaselineLearningUnits:
             return original_get(self, entity, ident, **kw)
 
         monkeypatch.setattr(SaSession, "get", blinded_first_get)
-        baseline = baselines.get_or_create_baseline(db, user.id)
+        baseline = baselines.get_or_create_baseline(db, user_id)
         assert baseline is not None
-        assert baseline.user_id == user.id
+        assert baseline.user_id == user_id
+        # Pre-loaded objects survive the lost race: still attached, not
+        # expired by any full-session rollback (the H14 defect shape).
+        state = sa_inspect(user)
+        assert state.session is db
+        assert not state.expired
+        assert user.email == user_email
         # And the surrounding transaction is still usable (no 500 shape).
         db.flush()
