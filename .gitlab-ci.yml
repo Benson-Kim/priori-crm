@@ -112,12 +112,10 @@ api:lint:
     # TEMP (#67, revert before merge): print the formatter's own output as
     # base64 so it can be applied verbatim — no local ruff in the work
     # environment and artifact download is blocked by token scope.
-    - ruff format .
-    - git -C "$CI_PROJECT_DIR" diff > /tmp/format.diff || true
+    - ruff format --diff . > /tmp/format.diff || true
     - echo "BEGIN-FORMAT-DIFF-B64"
     - base64 /tmp/format.diff
     - echo "END-FORMAT-DIFF-B64"
-    - git -C "$CI_PROJECT_DIR" checkout -- .
     - ruff format --check .
 
 api:test:
