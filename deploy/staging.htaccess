@@ -1,14 +1,17 @@
 # SPA fallback for the MochaHost (LiteSpeed) staging docroot.
 #
-# Deployed to ~/staging.crm.priori.co.ke/.htaccess by deploy-staging.yml.
-# See docs/operations/deployment.md §4.2.
+# Deployed to <STAGING_DOCROOT>/.htaccess (/home/priori/crm-staging/web on
+# this account — read it from cPanel → Domains → Document Root, setup §1.2)
+# by deploy-staging.yml. See docs/operations/deployment.md §4.2.
 
 RewriteEngine On
 
 # The API is a Passenger-mounted Python app at /api. Bail out before the SPA
 # fallback below, which would otherwise answer API calls with index.html —
 # the failure looks like "the API returns HTML", which is a confusing hour.
-RewriteCond %{REQUEST_URI} ^/api
+# Anchored with (/|$): a bare ^/api would also match SPA routes like
+# /apixyz and hand them to LiteSpeed to 404 instead of the fallback.
+RewriteCond %{REQUEST_URI} ^/api(/|$)
 RewriteRule ^ - [L]
 
 # Real files and directories (hashed JS/CSS bundles, assets) serve as-is.
