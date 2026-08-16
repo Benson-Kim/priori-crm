@@ -18,10 +18,16 @@ from app.modules.vendors.models import Vendor  # noqa: F401
 
 config = context.config
 # alembic.ini is parsed by configparser with BasicInterpolation, where `%` starts a
-# substitution. A percent-encoded character in the password — `%40` for `@`, `%23`
-# for `#`, anything urlencode produces — then blows up with "invalid interpolation
-# syntax" before a single migration runs. Doubling the sign is configparser's own
-# escape and leaves URLs without one untouched.
+# substitution. Do not go looking for the `%` in .env — it is not there. DATABASE_URL
+# is a pydantic PostgresDsn, and str() on it percent-encodes special characters in
+# the password, so a file holding a literal `<` produces `%3C` here. Measured on the
+# staging host: the raw .env value is 81 chars with zero `%`; str(settings.DATABASE_URL)
+# is 85 with two, at positions 32 and 45 — and configparser raised "invalid
+# interpolation syntax ... at position 32" before a single migration ran.
+#
+# Doubling the sign is configparser's own escape. Both readers below interpolate on
+# the way out (get_main_option offline, get_section online), so SQLAlchemy still
+# receives the original URL; verified byte-identical against the real staging value.
 config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL).replace("%", "%%"))
 
 if config.config_file_name is not None:
