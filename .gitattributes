@@ -1,0 +1,7 @@
+# Files in deploy/ are piped to `bash -s` on Linux hosts (cPanel, the droplet)
+# by the deploy workflows, and .htaccess is read by LiteSpeed. They must keep LF
+# endings no matter what the committer's core.autocrlf is set to — a CRLF here
+# surfaces remotely as `bash: $'\r': command not found`, which is a confusing
+# way to lose an hour.
+deploy/*.sh text eol=lf
+deploy/staging.htaccess text eol=lf

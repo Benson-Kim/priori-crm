@@ -5,6 +5,13 @@ name: Security
 # equivalents (CodeQL, dependency-review, gitleaks).
 
 on:
+  # Called by the deploy workflows. NOTE: a called workflow only receives the
+  # permissions its caller grants, so both deploy workflows must declare
+  # `security-events: write` or the CodeQL upload below fails. The
+  # `dependency-review` job is pull_request-only and therefore SKIPS when called
+  # from a push/dispatch — the deploy gate is CodeQL + gitleaks.
+  # See docs/operations/deployment.md §2 and §3.1.
+  workflow_call:
   push:
     branches: [main, develop]
   pull_request:
