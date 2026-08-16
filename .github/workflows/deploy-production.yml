@@ -45,6 +45,7 @@ jobs:
           CONFIRM: ${{ inputs.confirm }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
         run: |
           [ "$CONFIRM" = "deploy" ] || {
             echo "confirm must be exactly \"deploy\" (got: \"$CONFIRM\")"
@@ -63,7 +64,7 @@ jobs:
             echo "- **commit:** \`$SHA\`"
             echo "- **subject:** $(git log -1 --pretty=%s "$SHA")"
             echo "- **author:** $(git log -1 --pretty='%an' "$SHA")"
-            echo "- **triggered by:** @${{ github.actor }}"
+            echo "- **triggered by:** @$ACTOR"
           } >> "$GITHUB_STEP_SUMMARY"
 
   api-ci:
@@ -162,8 +163,9 @@ jobs:
         if: always()
         env:
           SHA: ${{ github.sha }}
+          JOB_STATUS: ${{ job.status }}
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
+          if [ "$JOB_STATUS" = "success" ]; then
             echo "Production is running \`$SHA\`." >> "$GITHUB_STEP_SUMMARY"
           else
             {
