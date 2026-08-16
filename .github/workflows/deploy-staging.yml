@@ -18,6 +18,12 @@ name: Deploy staging
 on:
   push:
     branches: [develop] # deliberately NO paths: filter — see §3.1
+  # Re-deploy the current develop without inventing a commit. Needed because a
+  # failed deploy job is often not retryable, and the only other way to retrigger
+  # is a push to develop — which, with GitLab mirroring, means a whole merge for
+  # what may be a corrected secret. Safe to expose: it redeploys whatever develop
+  # already is, and the full CI suite still gates it.
+  workflow_dispatch:
 
 concurrency:
   # Never two staging deploys at once. Note GitHub queues only ONE run: with
@@ -50,6 +56,10 @@ jobs:
 
   deploy:
     needs: [api-ci, ui-ci, security]
+    # Staging tracks develop and nothing else. Irrelevant on push (the trigger
+    # already restricts the branch), load-bearing on workflow_dispatch, which can
+    # be started from any ref — CI still runs, the deploy simply does not.
+    if: github.ref_name == 'develop'
     runs-on: ubuntu-latest
     environment:
       name: staging
