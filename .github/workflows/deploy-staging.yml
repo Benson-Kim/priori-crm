@@ -91,6 +91,34 @@ jobs:
           npm run build
           test -f dist/index.html
 
+      - name: Validate deploy target configuration
+        # rsync --delete with an empty or relative destination is destructive:
+        # unset STAGING_DOCROOT would make the SPA destination "$SSH_TARGET:/"
+        # and --delete would then try to erase from the account root (same for
+        # STAGING_APP_DIR on the API step). Fail loudly before anything ships.
+        # The paths are also spliced (single-quoted) into remote commands, so
+        # only a conservative character set is accepted.
+        env:
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          DOCROOT: ${{ secrets.STAGING_DOCROOT }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          fail=0
+          test -n "$SSH_USER" || { echo "STAGING_SSH_USER is not set"; fail=1; }
+          test -n "$SSH_HOST" || { echo "STAGING_SSH_HOST is not set"; fail=1; }
+          for pair in "STAGING_DOCROOT=$DOCROOT" "STAGING_APP_DIR=$APP_DIR"; do
+            name="${pair%%=*}"; value="${pair#*=}"
+            case "$value" in
+              /*) : ;;
+              *) echo "$name must be a nonempty absolute path (got: \"$value\")"; fail=1 ;;
+            esac
+            case "$value" in
+              *[!A-Za-z0-9/._-]*) echo "$name contains characters outside [A-Za-z0-9/._-]"; fail=1 ;;
+            esac
+          done
+          exit "$fail"
+
       - name: Configure SSH
         # Secrets go through env:, never string-interpolated into the script
         # body — interpolation would splice their contents into the shell.
@@ -109,11 +137,60 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      # Step order is deliberate: API first, SPA cutover last. The SPA rsync
+      # is the only user-visible change, so it must not happen until the API
+      # upload, dependency install, migration and Passenger restart have all
+      # succeeded — otherwise a failed API deploy leaves staging serving a new
+      # frontend against the old API.
+      - name: Ship API
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          # Excluded from --delete, and why each one matters:
+          #   .env       host-managed; holds the staging secrets and
+          #              API_V1_PREFIX=/v1, and CI never sees it
+          #   uploads/   user data
+          #   tmp/       Passenger's restart directory (cPanel scaffold) —
+          #              excluded so a deploy cannot race a restart marker
+          #   public/    cPanel scaffold, part of the standard Passenger app
+          #              layout. Not ours to remove, and its absence can stop
+          #              the app being served.
+          #   deploy/    shipped by the next rsync from the repo's deploy/
+          #              directory (not from api/), so --delete must not
+          #              remove it on the following run.
+          # passenger_wsgi.py is deliberately NOT excluded: cPanel generates a
+          # stub there and ours must replace it (it is the a2wsgi shim).
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude 'uploads/' \
+            --exclude 'tmp/' \
+            --exclude 'public/' \
+            --exclude 'deploy/' \
+            --exclude '__pycache__/' \
+            --exclude '.venv/' \
+            --exclude 'tests/' \
+            api/ "$SSH_TARGET:$APP_DIR/"
+          # The pg_trgm catch-up script must exist on the host at the path the
+          # runbook tells the operator to run it from (deployment-setup.md
+          # §1.1: ~/apps/priori-api/deploy/enable_trgm_indexes.sql).
+          rsync -az deploy/enable_trgm_indexes.sql "$SSH_TARGET:$APP_DIR/deploy/"
+
+      - name: Install, migrate, restart
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          ssh "$SSH_TARGET" "APP_DIR='$APP_DIR' bash -s" < deploy/staging_release.sh
+
       - name: Ship SPA
         env:
           SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
           DOCROOT: ${{ secrets.STAGING_DOCROOT }}
         run: |
+          # Runs only after the API steps above succeeded — see the ordering
+          # note on "Ship API".
+          #
           # --delete keeps removed build assets from lingering and being served
           # alongside the new ones. Everything --delete would otherwise destroy
           # in this docroot has to be excluded explicitly, because none of it
@@ -137,39 +214,6 @@ jobs:
             --exclude 'cgi-bin/' \
             frontend/dist/ "$SSH_TARGET:$DOCROOT/"
           rsync -az deploy/staging.htaccess "$SSH_TARGET:$DOCROOT/.htaccess"
-
-      - name: Ship API
-        env:
-          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
-          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
-        run: |
-          # Excluded from --delete, and why each one matters:
-          #   .env       host-managed; holds the staging secrets and
-          #              API_V1_PREFIX=/v1, and CI never sees it
-          #   uploads/   user data
-          #   tmp/       Passenger's restart directory (cPanel scaffold) —
-          #              excluded so a deploy cannot race a restart marker
-          #   public/    cPanel scaffold, part of the standard Passenger app
-          #              layout. Not ours to remove, and its absence can stop
-          #              the app being served.
-          # passenger_wsgi.py is deliberately NOT excluded: cPanel generates a
-          # stub there and ours must replace it (it is the a2wsgi shim).
-          rsync -az --delete \
-            --exclude '.env' \
-            --exclude 'uploads/' \
-            --exclude 'tmp/' \
-            --exclude 'public/' \
-            --exclude '__pycache__/' \
-            --exclude '.venv/' \
-            --exclude 'tests/' \
-            api/ "$SSH_TARGET:$APP_DIR/"
-
-      - name: Install, migrate, restart
-        env:
-          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
-          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
-        run: |
-          ssh "$SSH_TARGET" "APP_DIR='$APP_DIR' bash -s" < deploy/staging_release.sh
 
       - name: Smoke test
         # Passenger restarts lazily on the next request, so the first call can
