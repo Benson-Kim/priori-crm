@@ -802,7 +802,11 @@ Three things verified in `api/app/lib/config.py`, so nobody has to re-derive the
 
 ---
 
-## 7. Prerequisites — before writing any workflow YAML
+## 7. Prerequisites — infrastructure, none of it in this repo
+
+> **Step-by-step commands for everything below are in
+> [`deployment-setup.md`](./deployment-setup.md).** This section is the checklist;
+> that document is the runbook.
 
 - [ ] **Verify `pg_trgm` + `pgcrypto` on MochaHost Postgres** (§4.5) — can invalidate §4
 - [ ] **Disconnect the three Vercel projects** and confirm Render is disconnected (§3.4)
