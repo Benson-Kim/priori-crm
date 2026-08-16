@@ -21,6 +21,24 @@ rather than continuing — each step builds on the last.
 Throughout, `gh` is the GitHub CLI, already authenticated as `Benson-Kim`. Every
 secret can be set from your terminal — no clicking through Settings.
 
+**This repo has three git remotes** (`origin` and `priori` on GitHub, plus `gitlab`),
+so `gh` refuses to guess which one you mean:
+
+```
+multiple remotes detected. please specify which repo to use by providing the -R, --repo argument
+```
+
+Every `gh` command below therefore passes `-R Benson-Kim/priori-crm` explicitly. That
+is deliberate: with three remotes and GitLab in the mix, a command that silently
+picked the wrong repo would write your production secrets somewhere unintended. If
+you would rather not type it each time, set the default once —
+
+```bash
+gh repo set-default Benson-Kim/priori-crm
+```
+
+— and the `-R` flags become redundant but harmless.
+
 ---
 
 ## Part 0 — Clear the blockers first
@@ -382,12 +400,12 @@ ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
 From the repo directory:
 
 ```bash
-gh secret set STAGING_SSH_KEY      < ~/.ssh/priori-staging-deploy
-gh secret set STAGING_KNOWN_HOSTS --body "$(ssh-keyscan -H staging.crm.priori.co.ke 2>/dev/null)"
-gh secret set STAGING_SSH_USER    --body "priori"
-gh secret set STAGING_SSH_HOST    --body "staging.crm.priori.co.ke"
-gh secret set STAGING_DOCROOT     --body "/home/priori/crm-staging/web"
-gh secret set STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
+gh secret set -R Benson-Kim/priori-crm STAGING_SSH_KEY      < ~/.ssh/priori-staging-deploy
+gh secret set -R Benson-Kim/priori-crm STAGING_KNOWN_HOSTS --body "$(ssh-keyscan -H staging.crm.priori.co.ke 2>/dev/null)"
+gh secret set -R Benson-Kim/priori-crm STAGING_SSH_USER    --body "priori"
+gh secret set -R Benson-Kim/priori-crm STAGING_SSH_HOST    --body "staging.crm.priori.co.ke"
+gh secret set -R Benson-Kim/priori-crm STAGING_DOCROOT     --body "/home/priori/crm-staging/web"
+gh secret set -R Benson-Kim/priori-crm STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
 ```
 
 Use absolute paths, not `~` — rsync targets do not expand it reliably.
@@ -395,14 +413,14 @@ Use absolute paths, not `~` — rsync targets do not expand it reliably.
 Also, for the scheduled internal jobs (staging skips quietly until both are set):
 
 ```bash
-gh secret set STAGING_API_BASE_URL        --body "https://staging.crm.priori.co.ke"
-gh secret set STAGING_INTERNAL_API_SECRET --body "<the same INTERNAL_API_SECRET from 1.4>"
+gh secret set -R Benson-Kim/priori-crm STAGING_API_BASE_URL        --body "https://staging.crm.priori.co.ke"
+gh secret set -R Benson-Kim/priori-crm STAGING_INTERNAL_API_SECRET --body "<the same INTERNAL_API_SECRET from 1.4>"
 ```
 
 **Verify**
 
 ```bash
-gh secret list | grep STAGING
+gh secret list -R Benson-Kim/priori-crm | grep STAGING
 ```
 
 ### 1.6 First deploy
@@ -410,7 +428,7 @@ gh secret list | grep STAGING
 Merge to `develop` (or push any commit to it). Then watch:
 
 ```bash
-gh run watch
+gh run watch -R Benson-Kim/priori-crm
 ```
 
 The run is: `api-ci`, `ui-ci`, `security` in parallel → `deploy`.
@@ -681,10 +699,10 @@ fail **after** all CI has already passed, which is the most expensive place to f
 problem.
 
 ```bash
-gh secret list | grep PROD_SSH_KEY   # must print NOTHING before you continue
+gh secret list -R Benson-Kim/priori-crm | grep PROD_SSH_KEY   # must print NOTHING before you continue
 
-gh workflow run deploy-production.yml --ref main -f confirm=deploy
-gh run watch
+gh workflow run -R Benson-Kim/priori-crm deploy-production.yml --ref main -f confirm=deploy
+gh run watch -R Benson-Kim/priori-crm
 ```
 
 Expected: `guard` → CI green → `Download OpenAPI schema` **succeeds** → `Configure
@@ -698,21 +716,21 @@ deploy — tell me if you see it.
 From here on, running `deploy-production.yml` deploys for real.
 
 ```bash
-gh secret set PROD_SSH_KEY      < ~/.ssh/priori-prod-deploy
-gh secret set PROD_KNOWN_HOSTS --body "$(ssh-keyscan -H accounting.priori.co.ke 2>/dev/null)"
-gh secret set PROD_SSH_USER    --body "deploy"
-gh secret set PROD_SSH_HOST    --body "accounting.priori.co.ke"
+gh secret set -R Benson-Kim/priori-crm PROD_SSH_KEY      < ~/.ssh/priori-prod-deploy
+gh secret set -R Benson-Kim/priori-crm PROD_KNOWN_HOSTS --body "$(ssh-keyscan -H accounting.priori.co.ke 2>/dev/null)"
+gh secret set -R Benson-Kim/priori-crm PROD_SSH_USER    --body "deploy"
+gh secret set -R Benson-Kim/priori-crm PROD_SSH_HOST    --body "accounting.priori.co.ke"
 
 # Scheduled internal jobs (production fails loudly if these are unset — that is the alert)
-gh secret set API_BASE_URL        --body "https://accounting.priori.co.ke"
-gh secret set INTERNAL_API_SECRET --body "<the INTERNAL_API_SECRET from /srv/priori/shared/.env>"
+gh secret set -R Benson-Kim/priori-crm API_BASE_URL        --body "https://accounting.priori.co.ke"
+gh secret set -R Benson-Kim/priori-crm INTERNAL_API_SECRET --body "<the INTERNAL_API_SECRET from /srv/priori/shared/.env>"
 ```
 
 ### 2.7 First real production deploy
 
 ```bash
-gh workflow run deploy-production.yml --ref main -f confirm=deploy
-gh run watch
+gh workflow run -R Benson-Kim/priori-crm deploy-production.yml --ref main -f confirm=deploy
+gh run watch -R Benson-Kim/priori-crm
 ```
 
 The run summary records the exact commit, its subject, and who triggered it. On the
@@ -732,7 +750,7 @@ ssh deploy@accounting.priori.co.ke 'readlink -f /srv/priori/current; ls /srv/pri
 Do not let the first rollback be during an incident.
 
 ```bash
-gh workflow run rollback-production.yml --ref main \
+gh workflow run -R Benson-Kim/priori-crm rollback-production.yml --ref main \
   -f sha=$(ssh deploy@accounting.priori.co.ke 'ls /srv/priori/releases | head -1')
 ```
 
