@@ -204,11 +204,25 @@ class TestRefreshTokenReuse:
         db.flush()
         return user
 
+    def _session_token(self, db, user) -> str:
+        """A refresh token carrying a real session sid (#67 review F7):
+        sessionless legacy refresh tokens are refused outright now."""
+        from app.constants.enums import SessionStatus
+        from app.modules.auth.models import UserSession
+
+        session = UserSession(user_id=user.id, status=SessionStatus.ACTIVE.value)
+        db.add(session)
+        db.flush()
+        token, _jti, _exp = create_refresh_token(
+            str(user.id), extra={"sid": str(session.id)}
+        )
+        return token
+
     def test_reuse_revokes_descendant_family(self, db):
         user = self._user(db)
         service = AuthService(db)
 
-        token1, _jti, _exp = create_refresh_token(str(user.id))
+        token1 = self._session_token(db, user)
 
         # Legitimate rotation: token1 is spent, token2 is live.
         _access, token2 = service.refresh_access_token(token1)

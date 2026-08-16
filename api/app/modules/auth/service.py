@@ -400,19 +400,30 @@ class AuthService:
         # session cannot be rotated back to life — the caller must re-run
         # the full login → OTP flow, which mints a fresh session.
         sid = payload.get("sid")
-        session = self._get_session(sid)
-        if sid is not None and session is None:
+        if sid is None:
+            # Legacy pre-session refresh token (#67 review F7). Rotating it
+            # would mint another sessionless pair with a fresh FULL refresh
+            # lifetime, indefinitely: an immortal chain that
+            # assess_session_risk always skips — unscored, unexpirable,
+            # unterminatable. Zero trust forbids trust that cannot be
+            # re-evaluated, so the rotation is refused and the caller
+            # re-runs login → OTP once, minting a tracked, scorable
+            # session. The legacy ACCESS token keeps working for its
+            # remaining minutes (graceful for in-flight requests); only
+            # the refresh path forces the one-time re-auth.
             raise UnauthorizedException("Refresh token has been revoked.")
-        if session is not None:
-            if session.status == SessionStatus.TERMINATED.value:
-                raise UnauthorizedException("Refresh token has been revoked.")
-            if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
-                raise StepUpRequiredException(
-                    detail=(
-                        "Additional verification is required. Please sign in "
-                        "again to receive a verification code."
-                    )
+        session = self._get_session(sid)
+        if session is None:
+            raise UnauthorizedException("Refresh token has been revoked.")
+        if session.status == SessionStatus.TERMINATED.value:
+            raise UnauthorizedException("Refresh token has been revoked.")
+        if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
+            raise StepUpRequiredException(
+                detail=(
+                    "Additional verification is required. Please sign in "
+                    "again to receive a verification code."
                 )
+            )
 
         # Rotate: atomically spend the presented token BEFORE minting the
         # new pair. revoke_if_new is a single revoke-and-report operation,

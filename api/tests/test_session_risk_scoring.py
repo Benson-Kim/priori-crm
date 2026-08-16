@@ -29,7 +29,11 @@ import pytest
 from jose import jwt
 
 from app.common.audit import AuditEvent
-from app.common.security import create_access_token, hash_password
+from app.common.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+)
 from app.constants.enums import SessionStatus, UserRole
 from app.lib.config import settings
 from app.modules.auth.models import User, UserSession
@@ -658,6 +662,24 @@ class TestTokenEdgeCases:
         token = create_access_token(subject=str(user.id))
         resp = client.get("/api/v1/customers", headers=_bearer(token))
         assert resp.status_code == 200
+
+    def test_legacy_refresh_token_without_sid_is_refused(self, client, db):
+        """#67 review F7: a sessionless refresh chain must not be immortal.
+
+        A pre-deployment refresh token carries no sid; rotating it minted
+        another sessionless pair with a fresh full lifetime, forever —
+        and assess_session_risk skipped every one of them. The rotation
+        is refused instead: one full re-login mints a tracked session.
+        (The legacy ACCESS token keeps working for its remaining minutes
+        — pinned by test_legacy_token_without_sid_still_works above.)
+        """
+        user = _seed_user(db, "legacyrefresh@mail.com")
+        legacy_refresh, _, _ = create_refresh_token(subject=str(user.id))
+
+        resp = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": legacy_refresh}
+        )
+        assert resp.status_code == 401
 
     def test_unknown_session_id_is_refused(self, client, db):
         user = _seed_user(db, "phantom@mail.com")
