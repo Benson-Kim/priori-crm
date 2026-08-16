@@ -70,6 +70,43 @@ after the initial OTP.
    travel, unusual data-access volume and privilege-escalation detection;
    crossing thresholds triggers automatic step-up or session termination.
 
+   **The model is graduated and evidence-weighted** (third tranche),
+   anchored on per-user behavioural baselines (`user_behavior_baselines`:
+   known devices, known countries, typical active hours, typical
+   per-window volume per sensitivity class):
+
+   - **SOFT signals** — new device (25), new country (25), unusual hour
+     (10), mild volume deviation (30) — score *deviation from the user's
+     own baseline*, once per session, and only when there is history to
+     deviate from. Individually each stays below the challenge threshold
+     (allow + log); their maximum single-request sum (90) sits below the
+     terminate threshold (100) **by construction**, so soft evidence
+     alone — a new place, a new laptop, night work, one busy minute — can
+     at worst force a step-up, never a termination.
+   - **HARD signals escalate directly**: impossible travel (70 — an
+     immediate challenge; termination only with corroboration, because
+     carrier-NAT geolocation jitter is a real false-positive source),
+     exfiltration-scale reads (100 — 5x the global volume ceiling in one
+     window terminates outright), repeated privilege-escalation 403s,
+     repeated failed step-ups (exhausting the OTP budget terminates the
+     challenged sessions it was trying to launder), and token/session
+     identity anomalies (terminate).
+   - **Absorption**: a passed OTP step-up folds the verifying request's
+     context (device, country, hour) into the user's baseline —
+     `verify_otp` proves inbox control from that context, so the same new
+     device/place never re-fires. Devices and countries enter the
+     baseline **only** through this path; an attacker without the inbox
+     can never launder their context in. Hour and volume statistics learn
+     continuously from scored requests — they suppress false positives
+     rather than grant trust, so poisoning them buys nothing.
+   - **Fail-safe degradation**: an empty baseline, a missing geo signal
+     or an unconfigured enrichment source yields *no signal*, never a
+     penalty. Nothing is denied or terminated solely because enrichment
+     data is unavailable.
+   - The mild-volume ceiling adapts per sensitivity class to the learned
+     typical volume (EWMA, clamped between `RISK_VOLUME_MIN_CEILING` and
+     the global maximum) once enough active windows are observed.
+
 7. **Risk scores decay; sessions expire.** Points shed at
    `RISK_DECAY_PER_HOUR` from the last anomaly. An undecayed score is a
    ratchet: benign noise (a browser auto-update +25, one busy minute +30,
@@ -109,6 +146,14 @@ after the initial OTP.
 - `api/app/common/authz/enforcement.py` — the gate: evaluate, publish the
   verdict, audit the decision, reject non-allow. PUBLIC probes (health,
   ping) bypass evaluation entirely.
+- `api/app/common/authz/risk.py` — continuous session risk scoring: the
+  graduated detectors, score decay, session lifetime checks, and the
+  durability split (evidence commits explicitly; trail state rides the
+  request transaction; the volume window lives in the shared
+  `RateLimitStore`).
+- `api/app/common/authz/baselines.py` — per-user behavioural baselines:
+  step-up absorption, session-start soft signals, continuous hour/volume
+  learning, adaptive per-class volume ceilings.
 - `api/app/common/authz/db_guard.py` — the DB-layer guard and the narrow
   authz-internal bypass used to persist decision evidence.
 - `api/app/main.py` — `FastAPI(dependencies=[Depends(zero_trust_gate)])`
@@ -116,7 +161,10 @@ after the initial OTP.
 - Settings: `ABAC_ENABLED`, `ABAC_TRUST_CONTEXT_HEADERS`,
   `ABAC_IP_DENYLIST`, `ABAC_GEO_BLOCKLIST`, `ABAC_OFF_HOURS_START/END`
   (start == end disables; default 22 → 6 local), and
-  `ABAC_AUDIT_ALLOW_DECISIONS`.
+  `ABAC_AUDIT_ALLOW_DECISIONS`; the `RISK_*` and `SESSION_*` families
+  configure every signal weight, threshold, ceiling and learning rate
+  (rationale for each default lives in `api/.env.example` and
+  `api/app/lib/config.py`).
 
 ## Business logic & rules
 - Same role + same permission can yield different outcomes in different
@@ -142,12 +190,13 @@ after the initial OTP.
   configuration (no outbound geo-IP lookups by design).
 
 ## Improvements
-1. Session risk scoring tranche (#67 part 2): per-session behavioural
-   score, impossible travel, volume anomalies, privilege-escalation
-   detection, automatic step-up / termination.
-2. Owner-configurable policy rules (per-tenant off-hours window and
+1. Owner-configurable policy rules (per-tenant off-hours window and
    sensitivity overrides).
-3. Hash-chaining for `audit_events` (#31's end state).
+2. Hash-chaining for `audit_events` (#31's end state).
+3. Baseline decay for devices/countries not seen in months (currently
+   oldest-evicted only at the cap).
+4. An ops surface to list/terminate a user's sessions and inspect
+   baselines (the data model already supports it).
 
 ## Resilience & <1s response rules
 - The gate does zero network I/O and zero DB reads on the request path;
