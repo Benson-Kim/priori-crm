@@ -1,0 +1,231 @@
+name: Deploy staging
+
+# Automatic staging deploy: every push/merge to develop runs the full CI suite
+# and, if it is green, ships to https://staging.crm.priori.co.ke.
+#
+# Design notes live in docs/operations/deployment.md. The two that most affect
+# how this file reads:
+#
+#  §3.1 The CI workflows are *called*, not observed. api-ci.yml and ui-ci.yml
+#       carry `paths:` filters, so a frontend-only push never runs api-ci
+#       standalone — a deploy that waited on those workflows would either ship
+#       untested code or block every partial change. Calling them runs the full
+#       suite against the exact commit being deployed.
+#  §3.2 VITE_API_BASE_URL is inlined at build time. Unset, the bundle calls
+#       "undefined/api/v1/" and every request 404s at runtime with a green
+#       build, so the build step asserts it.
+
+on:
+  push:
+    branches: [develop] # deliberately NO paths: filter — see §3.1
+
+concurrency:
+  # Never two staging deploys at once. Note GitHub queues only ONE run: with
+  # three rapid merges, A deploys, B waits and C evicts B — B reports as
+  # cancelled, not failed. Harmless here (C is newer and contains B), but do
+  # not read a cancelled run as "the deploy broke". See §4.6.
+  group: deploy-staging
+  cancel-in-progress: false
+
+# A called workflow only receives what its caller grants. security.yml's CodeQL
+# job needs security-events: write, and download-artifact needs actions: read;
+# without this block both fail whenever the repo default token is read-only.
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  api-ci:
+    uses: ./.github/workflows/api-ci.yml
+    secrets: inherit
+
+  ui-ci:
+    uses: ./.github/workflows/ui-ci.yml
+    secrets: inherit
+
+  security:
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+  deploy:
+    needs: [api-ci, ui-ci, security]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.crm.priori.co.ke
+    env:
+      # Public by definition — it ships inside the bundle. Never a secret.
+      # Staging is same-origin like production: the SPA and the Passenger-mounted
+      # API share one hostname, so no CORS is involved (§4.1).
+      VITE_API_BASE_URL: https://staging.crm.priori.co.ke
+      STAGING_HEALTH_URL: https://staging.crm.priori.co.ke/api/v1/health
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # Contract exported from THIS commit by ui-ci, not the copy committed in
+      # the repo, which can lag the code (§3.5).
+      - name: Download OpenAPI schema
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-schema
+          path: ${{ github.workspace }}/frontend
+
+      - name: Build SPA
+        working-directory: frontend
+        env:
+          VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/frontend/openapi.json
+        run: |
+          test -n "$VITE_API_BASE_URL" || {
+            echo "VITE_API_BASE_URL is empty — the bundle would call undefined/api/v1/"
+            exit 1
+          }
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      - name: Validate deploy target configuration
+        # rsync --delete with an empty or relative destination is destructive:
+        # unset STAGING_DOCROOT would make the SPA destination "$SSH_TARGET:/"
+        # and --delete would then try to erase from the account root (same for
+        # STAGING_APP_DIR on the API step). Fail loudly before anything ships.
+        # The paths are also spliced (single-quoted) into remote commands, so
+        # only a conservative character set is accepted.
+        env:
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          DOCROOT: ${{ secrets.STAGING_DOCROOT }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          fail=0
+          test -n "$SSH_USER" || { echo "STAGING_SSH_USER is not set"; fail=1; }
+          test -n "$SSH_HOST" || { echo "STAGING_SSH_HOST is not set"; fail=1; }
+          for pair in "STAGING_DOCROOT=$DOCROOT" "STAGING_APP_DIR=$APP_DIR"; do
+            name="${pair%%=*}"; value="${pair#*=}"
+            case "$value" in
+              /*) : ;;
+              *) echo "$name must be a nonempty absolute path (got: \"$value\")"; fail=1 ;;
+            esac
+            case "$value" in
+              *[!A-Za-z0-9/._-]*) echo "$name contains characters outside [A-Za-z0-9/._-]"; fail=1 ;;
+            esac
+          done
+          exit "$fail"
+
+      - name: Configure SSH
+        # Secrets go through env:, never string-interpolated into the script
+        # body — interpolation would splice their contents into the shell.
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" || { echo "STAGING_SSH_KEY is not set"; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo "STAGING_KNOWN_HOSTS is not set"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host keys (ssh-keyscan -H staging.crm.priori.co.ke). Without
+          # this, StrictHostKeyChecking=no would be the only thing making the
+          # job work, and that accepts whatever host answers.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      # Step order is deliberate: API first, SPA cutover last. The SPA rsync
+      # is the only user-visible change, so it must not happen until the API
+      # upload, dependency install, migration and Passenger restart have all
+      # succeeded — otherwise a failed API deploy leaves staging serving a new
+      # frontend against the old API.
+      - name: Ship API
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          # Excluded from --delete, and why each one matters:
+          #   .env       host-managed; holds the staging secrets and
+          #              API_V1_PREFIX=/v1, and CI never sees it
+          #   uploads/   user data
+          #   tmp/       Passenger's restart directory (cPanel scaffold) —
+          #              excluded so a deploy cannot race a restart marker
+          #   public/    cPanel scaffold, part of the standard Passenger app
+          #              layout. Not ours to remove, and its absence can stop
+          #              the app being served.
+          #   deploy/    shipped by the next rsync from the repo's deploy/
+          #              directory (not from api/), so --delete must not
+          #              remove it on the following run.
+          # passenger_wsgi.py is deliberately NOT excluded: cPanel generates a
+          # stub there and ours must replace it (it is the a2wsgi shim).
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude 'uploads/' \
+            --exclude 'tmp/' \
+            --exclude 'public/' \
+            --exclude 'deploy/' \
+            --exclude '__pycache__/' \
+            --exclude '.venv/' \
+            --exclude 'tests/' \
+            api/ "$SSH_TARGET:$APP_DIR/"
+          # The pg_trgm catch-up script must exist on the host at the path the
+          # runbook tells the operator to run it from (deployment-setup.md
+          # §1.1: ~/apps/priori-api/deploy/enable_trgm_indexes.sql).
+          rsync -az deploy/enable_trgm_indexes.sql "$SSH_TARGET:$APP_DIR/deploy/"
+
+      - name: Install, migrate, restart
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          APP_DIR: ${{ secrets.STAGING_APP_DIR }}
+        run: |
+          ssh "$SSH_TARGET" "APP_DIR='$APP_DIR' bash -s" < deploy/staging_release.sh
+
+      - name: Ship SPA
+        env:
+          SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
+          DOCROOT: ${{ secrets.STAGING_DOCROOT }}
+        run: |
+          # Runs only after the API steps above succeeded — see the ordering
+          # note on "Ship API".
+          #
+          # --delete keeps removed build assets from lingering and being served
+          # alongside the new ones. Everything --delete would otherwise destroy
+          # in this docroot has to be excluded explicitly, because none of it
+          # comes from frontend/dist/:
+          #
+          #   api/         cPanel creates this for the Passenger mount (the
+          #                Application URL is <domain>/api). It holds the
+          #                .htaccess with PassengerAppRoot. Deleting it takes
+          #                the entire API down — this is NOT the SPA's /api
+          #                rewrite, it is the mount itself.
+          #   .well-known/ AutoSSL's domain-validation path. Deleting it breaks
+          #                certificate renewal, silently, weeks later.
+          #   cgi-bin/     standard cPanel docroot directory.
+          #   .htaccess    shipped on the next line; without the exclude it
+          #                would be deleted and re-added, and in that window
+          #                the SPA fallback is gone.
+          rsync -az --delete \
+            --exclude '.htaccess' \
+            --exclude 'api/' \
+            --exclude '.well-known/' \
+            --exclude 'cgi-bin/' \
+            frontend/dist/ "$SSH_TARGET:$DOCROOT/"
+          rsync -az deploy/staging.htaccess "$SSH_TARGET:$DOCROOT/.htaccess"
+
+      - name: Smoke test
+        # Passenger restarts lazily on the next request, so the first call can
+        # be slow or briefly fail while the app boots.
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "$STAGING_HEALTH_URL" | grep -q '"status":"healthy"'; then
+              echo "staging is healthy after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "staging health check never passed at $STAGING_HEALTH_URL"
+          echo "If this 404s, check API_V1_PREFIX=/v1 in the staging .env (§4.1)."
+          exit 1
