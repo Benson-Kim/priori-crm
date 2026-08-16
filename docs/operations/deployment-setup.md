@@ -3,13 +3,12 @@
 Step-by-step for bringing the pipeline in [`deployment.md`](./deployment.md) online.
 That document explains *why*; this one is what you type.
 
-**Order matters.** Part 0 first — one item there can invalidate the staging design,
-and another causes competing deploys if skipped. Then staging (nothing is live, so
-mistakes are cheap). Production last, and **read §2.0 before typing anything on the
-droplet — accounting.priori.co.ke is serving real users right now.**
+Work through it in order: Part 0, then staging (nothing is live there, so mistakes are
+cheap), then production. `accounting.priori.co.ke` is serving real users, so §2.0 has
+you record the current state before changing anything.
 
-Every step ends with a **Verify** block. If what you see does not match, stop there
-rather than continuing — each step builds on the last.
+Most steps end with a **Verify** block showing the expected output. They build on each
+other, so a mismatch is worth resolving before moving on.
 
 | Part | What | Roughly |
 |---|---|---|
@@ -43,30 +42,16 @@ gh repo set-default Benson-Kim/priori-crm
 
 ## Part 0 — Clear the blockers first
 
-### 0.1 Disconnect the Vercel projects  ⚠️ do this before merging the branch
+### 0.1 Disconnect Vercel and Render — ✅ done 2026-08-16
 
-Three Vercel projects are still attached to this repository:
+Three Vercel projects (`priori-crm`, `priori-crm-ou38`, `priori-crm-zluj`) and Render
+were attached to this repository and would have deployed on the same pushes as the new
+pipeline. Both are now disconnected.
 
-```console
-$ gh api repos/Benson-Kim/priori-crm/environments --jq '.environments[].name'
-Preview
-Preview – priori-crm
-Preview – priori-crm-ou38
-Preview – priori-crm-zluj
-Production
-...
-```
-
-Each will auto-deploy on the same pushes the new pipeline responds to. In the Vercel
-dashboard, for **each** of `priori-crm`, `priori-crm-ou38`, `priori-crm-zluj`:
-Settings → Git → **Disconnect**. Delete the projects outright if they are dead.
-
-Do the same for Render if a service there is still linked to this repo.
-
-**Verify** — after disconnecting, the Vercel-owned environments stop being updated.
-The old entries may linger; what matters is that a push to `develop` no longer starts
-a Vercel build. Confirm on the first staging deploy (§1.6) that the only run is
-`Deploy staging`.
+Kept here as the check to repeat if competing deploys ever reappear: on a staging
+deploy, `Deploy staging` should be the only run that starts. The Vercel-created
+environment names may linger in `gh api repos/Benson-Kim/priori-crm/environments` —
+that is cosmetic; what matters is that no build starts.
 
 ### 0.2 Decide on GitHub Pro
 
@@ -89,45 +74,22 @@ second pair of eyes.
   switch `deploy-production.yml` from `workflow_dispatch` to `push` on `main` — it is
   about four lines.
 
-### 0.3 Keep GitLab and GitHub in sync — or auto-deploy silently does nothing
+### 0.3 Merge the branch
 
-This is the one piece of plumbing the pipeline cannot supply itself, and it is easy to
-miss because nothing errors when it is absent.
-
-**Work happens on GitLab; deploys run on GitHub.** `deploy-staging.yml` triggers on a
-push to `develop` **on GitHub**. Merge an MR on GitLab and GitHub's `develop` does not
-move, so no deploy runs — no failure, no red run, just silence. Staging quietly serves
-the previous release while GitLab shows the merge as done.
-
-**Fix: a GitLab push mirror.** GitLab → Settings → Repository → *Mirroring
-repositories*:
-
-| Field | Value |
-|---|---|
-| Git repository URL | `https://<github-user>@github.com/Benson-Kim/priori-crm.git` |
-| Mirror direction | **Push** |
-| Password | a GitHub personal access token with `repo` scope |
-
-Every merge on GitLab then propagates to GitHub within a minute or two and the deploy
-fires on its own.
-
-> ⚠️ **Pick one direction and stay with it.** A push mirror makes GitLab authoritative
-> for the mirrored branches and force-updates GitHub to match. If you also merge pull
-> requests *on GitHub*, the next mirror run can overwrite those commits. Either merge
-> on GitLab and let the mirror carry it (recommended — it matches how the team already
-> works), or merge on GitHub and push to GitLab yourself. Do not do both.
-
-**Without the mirror**, this is the manual step after every GitLab merge:
+The work is on `duo/chore/deployment-pipeline`, branched from `develop` and pushed to
+GitHub as PR #45. Merge it there — GitHub is where deploys run, so a merge to `develop`
+is what starts `deploy-staging.yml`.
 
 ```bash
-git checkout develop && git pull gitlab develop && git push origin develop
+gh pr merge -R Benson-Kim/priori-crm 45 --merge
+gh run watch -R Benson-Kim/priori-crm
 ```
 
-### 0.4 Merge the branch
+Push `develop` to GitLab whenever convenient to keep the two remotes level:
 
-The work is on `duo/chore/deployment-pipeline`, branched from `develop`, and is
-already pushed to GitHub as PR #45. **Do not merge until 0.1 and 0.3 are done** — the
-moment it lands on GitHub's `develop`, `deploy-staging.yml` starts firing.
+```bash
+git push gitlab develop
+```
 
 ---
 
@@ -797,18 +759,9 @@ columns nullable, backfill, and drop the old column a release later.
 
 ## Part 3 — Day to day
 
-**Normal flow.** Merge to `develop` on GitLab → the mirror pushes it to GitHub (§0.3)
-→ staging updates itself. When you want that in production, merge `develop` → `main`,
-let it mirror, then run `deploy-production.yml` and type `deploy`.
-
-**If a merge produces no staging deploy, check the mirror first.** That is the failure
-mode with no error message: GitLab shows the merge, GitHub never saw it, and staging
-keeps serving the old release.
-
-```bash
-git fetch origin gitlab
-git rev-parse origin/develop gitlab/develop   # two identical SHAs, or the mirror is behind
-```
+**Normal flow.** Merge to `develop` on GitHub → staging updates itself. When you want
+that in production, merge `develop` → `main`, then run `deploy-production.yml` and
+type `deploy`.
 
 **Watch for:**
 
