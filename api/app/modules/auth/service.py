@@ -152,8 +152,18 @@ class AuthService:
 
     # Verify OTP (Step 2)
 
-    def verify_otp(self, email: str, code: str) -> tuple[str, str, User]:
-        """Verify OTP and return (access_token, refresh_token, user)."""
+    def verify_otp(
+        self, email: str, code: str, context=None
+    ) -> tuple[str, str, User]:
+        """Verify OTP and return (access_token, refresh_token, user).
+
+        ``context`` is the zero-trust gate's per-request ``AccessContext``
+        (#67), threaded through by the router: success absorbs it into the
+        user's behavioural baseline (a passed step-up folds the triggering
+        soft signals in, so the same new device/place never re-challenges);
+        exhausting the attempt budget terminates the user's challenged
+        sessions (repeated failed step-ups are a HARD signal).
+        """
         self._enforce_attempt_throttle(email)
 
         user = self._get_user_by_email(email)
@@ -191,6 +201,19 @@ class AuthService:
             otp.attempt_count += 1
             if otp.attempt_count >= settings.AUTH_MAX_OTP_ATTEMPTS:
                 otp.is_used = True
+                # Repeated failed step-ups are a HARD signal (#67): whoever
+                # is burning the OTP budget cannot read the inbox — the
+                # challenged sessions they are trying to launder die now
+                # and only a full, successful re-auth restores access. A
+                # legitimate user's challenged session was already unusable
+                # (only re-auth clears it), so this locks out no one.
+                # Committed with the attempt counter below, durably past
+                # the 401 this raise causes.
+                self._terminate_user_sessions(
+                    user.id,
+                    "failed_step_up",
+                    statuses=(SessionStatus.CHALLENGE_REQUIRED.value,),
+                )
             self._db.commit()
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
@@ -221,6 +244,16 @@ class AuthService:
             "sid": str(session.id),
             "sua": int(datetime.now(UTC).timestamp()),
         }
+
+        # Baseline absorption (#67): a completed OTP proves inbox control
+        # from THIS device, at THIS place, at THIS hour — fold the context
+        # into the user's behavioural baseline so the same new device/place
+        # never re-fires as a soft signal (no repeated challenges for a
+        # context the user has already verified). Rides this request's
+        # transaction, atomic with the session mint.
+        from app.common.authz.baselines import absorb_context
+
+        absorb_context(self._db, user.id, context)
 
         access_token = create_access_token(subject=str(user.id), extra=claims)
         refresh_token, _jti, _exp = create_refresh_token(
@@ -528,16 +561,23 @@ class AuthService:
             return None
         return self._db.get(UserSession, session_id)
 
-    def _terminate_user_sessions(self, user_id, reason: str) -> None:
-        """Terminate every non-terminated session for a user, audited (#67)."""
-        sessions = (
-            self._db.query(UserSession)
-            .filter(
-                UserSession.user_id == user_id,
-                UserSession.status != SessionStatus.TERMINATED.value,
-            )
-            .all()
+    def _terminate_user_sessions(
+        self, user_id, reason: str, statuses: tuple[str, ...] | None = None
+    ) -> None:
+        """Terminate a user's sessions, audited (#67).
+
+        By default every non-terminated session dies (password reset).
+        ``statuses`` narrows the sweep — the failed-step-up path kills only
+        CHALLENGE_REQUIRED sessions, so an attacker burning the OTP budget
+        cannot use it to knock out the victim's healthy active sessions.
+        """
+        query = self._db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.status != SessionStatus.TERMINATED.value,
         )
+        if statuses is not None:
+            query = query.filter(UserSession.status.in_(statuses))
+        sessions = query.all()
         for session in sessions:
             session.status = SessionStatus.TERMINATED.value
             session.termination_reason = reason

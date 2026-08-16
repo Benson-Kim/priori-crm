@@ -1,17 +1,40 @@
 """Continuous session risk scoring (#67, capability 3).
 
 A per-session behavioural score, re-evaluated on EVERY request by the
-zero-trust gate — trust is "right now", not "since login". Signals:
+zero-trust gate — trust is "right now", not "since login". Signals are
+graduated by evidence weight (issue #67):
 
-- **Impossible travel** — consecutive requests whose geolocations imply a
-  speed above ``RISK_IMPOSSIBLE_TRAVEL_KMH``.
+SOFT (low weight; escalate only in combination; by construction their
+maximum single-request sum stays below the terminate threshold, so soft
+evidence alone can challenge but never hard-lock a legitimate user):
+
+- **New device / new country / unusual hour** — the session's first
+  scored request deviates from the user's own behavioural baseline
+  (``baselines.py``); each fires only when there is history to deviate
+  from. A passed OTP step-up absorbs the context into the baseline, so a
+  genuine user is challenged for the same new device/place at most once.
 - **Device change** — the presented device fingerprint differs from the
   session's last one.
-- **Unusual data-access volume** — more than ``RISK_VOLUME_MAX_REQUESTS``
-  requests inside a rolling ``RISK_VOLUME_WINDOW_SECONDS`` window.
+- **Mild volume deviation** — more requests inside a rolling
+  ``RISK_VOLUME_WINDOW_SECONDS`` window than this user typically makes
+  for this sensitivity class (adaptive ceiling, global default).
+
+HARD (escalate directly):
+
+- **Impossible travel** — consecutive requests whose geolocations imply a
+  speed above ``RISK_IMPOSSIBLE_TRAVEL_KMH`` (weight 70: an immediate
+  step-up; termination only with corroboration, because carrier-NAT
+  geolocation jitter is a real false-positive source).
+- **Exfiltration-scale reads** — ``RISK_VOLUME_EXFIL_MULTIPLIER`` times
+  the global volume ceiling in one window (weight 100: terminates).
 - **Privilege-escalation attempts** — RBAC rejections (``require_role`` /
   ``require_privileged`` 403s) recorded via
   :func:`note_privilege_escalation`.
+- **Repeated failed step-ups** — exhausting the OTP attempt budget
+  terminates the user's challenged sessions
+  (``AuthService.verify_otp``).
+- **Token/session identity anomalies** — unknown or mismatched ``sid``
+  terminates outright.
 
 Crossing ``RISK_CHALLENGE_THRESHOLD`` flips the session to
 ``challenge_required`` (the client re-runs the existing login → OTP flow;
@@ -57,6 +80,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.common.audit import record_audit_event
+from app.common.authz import baselines
 from app.common.authz.context import AccessContext
 from app.common.authz.engine import Decision, PolicyVerdict
 from app.common.rate_limit_store import RateLimitStore, build_rate_limit_store
@@ -252,39 +276,113 @@ def _detect_device_change(
     return True
 
 
+def _evaluate_session_start_softs(
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+    baseline,
+) -> bool:
+    """SOFT baseline-deviation signals, once per session (issue #67).
+
+    Evaluated on the session's FIRST scored request only
+    (``last_seen_at is None`` — later requests are covered by the
+    mid-session detectors), against the user's own behavioural baseline:
+    unknown device, unknown country, unusual hour. Each fires only when
+    there is history to deviate from, carries a low weight, and escalates
+    only in combination — by design the full set stays below the terminate
+    threshold, so soft evidence alone can challenge but never hard-lock a
+    legitimate user in a new place, on a new device, at night.
+
+    Sessions minted by ``verify_otp`` had their context absorbed into the
+    baseline at mint time (the step-up WAS passed), so these fire mainly
+    for hijacked tokens presented from somewhere the user has never been.
+    """
+    if session.last_seen_at is not None:
+        return False
+
+    signals = baselines.evaluate_session_start_signals(baseline, context)
+    for signal in signals:
+        _add_risk(session, signal.points, context.requested_at)
+        _audit_session_event(
+            db,
+            session,
+            context,
+            f"soft_signal_{signal.name}",
+            {"points": signal.points, **signal.detail},
+        )
+    return bool(signals)
+
+
 def _detect_volume_anomaly(
     db: Session,
     session: "UserSession",  # noqa: F821
     context: AccessContext,
+    baseline,
 ) -> bool:
-    """Request volume inside the rolling window exceeds the ceiling.
+    """Request volume inside the rolling window exceeds a ceiling.
 
-    Counted in the shared store, keyed on the session. A second single-slot
-    key latches the bump so a sustained burst raises the score once per
-    window at the crossing, rather than once per excess request.
+    Two ceilings, matching the signal taxonomy (#67):
+
+    - **Mild deviation (SOFT)** — per sensitivity class, adaptive to the
+      user's learned typical volume for that class
+      (``baselines.volume_ceiling``); low weight, corroborates but never
+      challenges alone.
+    - **Exfiltration scale (HARD)** — an absolute, class-independent
+      ceiling at ``RISK_VOLUME_EXFIL_MULTIPLIER`` times the global limit;
+      no legitimate workflow reads at that rate, so it terminates
+      directly.
+
+    Counted in the shared store, keyed on the session (and class for the
+    mild signal). Single-slot ``fired`` keys latch each bump so a
+    sustained burst raises the score once per window at the crossing,
+    rather than once per excess request.
     """
     store = _volume_store()
     window = settings.RISK_VOLUME_WINDOW_SECONDS
     sid = str(session.id)
+    cls = context.sensitivity.value
+    fired = False
 
-    if store.hit(f"risk:vol:{sid}", settings.RISK_VOLUME_MAX_REQUESTS, window).allowed:
-        return False
-    if not store.hit(f"risk:vol:fired:{sid}", 1, window).allowed:
-        # Already scored this window's crossing.
-        return False
+    mild_ceiling = baselines.volume_ceiling(baseline, cls)
+    if not store.hit(f"risk:vol:{sid}:{cls}", mild_ceiling, window).allowed:
+        if store.hit(f"risk:vol:fired:{sid}:{cls}", 1, window).allowed:
+            _add_risk(
+                session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at
+            )
+            _audit_session_event(
+                db,
+                session,
+                context,
+                "volume_anomaly",
+                {
+                    "window_seconds": window,
+                    "max_requests": mild_ceiling,
+                    "sensitivity_class": cls,
+                },
+            )
+            fired = True
 
-    _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
-    _audit_session_event(
-        db,
-        session,
-        context,
-        "volume_anomaly",
-        {
-            "window_seconds": window,
-            "max_requests": settings.RISK_VOLUME_MAX_REQUESTS,
-        },
+    exfil_ceiling = (
+        settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
     )
-    return True
+    if not store.hit(f"risk:volx:{sid}", exfil_ceiling, window).allowed:
+        if store.hit(f"risk:volx:fired:{sid}", 1, window).allowed:
+            _add_risk(
+                session, settings.RISK_SCORE_EXFILTRATION, context.requested_at
+            )
+            _audit_session_event(
+                db,
+                session,
+                context,
+                "exfiltration_volume",
+                {
+                    "window_seconds": window,
+                    "max_requests": exfil_ceiling,
+                },
+            )
+            fired = True
+
+    return fired
 
 
 def _terminate(
@@ -382,11 +480,19 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     if expiry is not None:
         return _commit_and_return(db, expiry)
 
+    baseline = baselines.get_or_create_baseline(db, session.user_id)
+
     # Behavioural signals for this request. Each returns whether it fired,
     # so a clean request stays a pure read plus the trail-state update.
-    fired = _detect_impossible_travel(db, session, context)
+    fired = _evaluate_session_start_softs(db, session, context, baseline)
+    fired |= _detect_impossible_travel(db, session, context)
     fired |= _detect_device_change(db, session, context)
-    fired |= _detect_volume_anomaly(db, session, context)
+    fired |= _detect_volume_anomaly(db, session, context, baseline)
+
+    # Continuous learning (typical hours, typical per-class volume) rides
+    # the request transaction: losing an increment to a rollback only
+    # under-counts, which is safe for statistics that SUPPRESS anomalies.
+    baselines.learn_request(baseline, context)
 
     score = effective_score(session, context.requested_at)
     verdict: PolicyVerdict | None = None
