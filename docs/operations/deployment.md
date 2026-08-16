@@ -9,10 +9,11 @@ reaches **accounting.priori.co.ke** behind an approval gate.
 > are done `deploy-staging.yml` will fail at the SSH step. §3 explains the defects
 > and platform limits the implementation works around.
 >
-> **Pipeline host: GitHub Actions.** Day-to-day work and merge requests happen on
-> GitLab, but GitHub is the authoritative remote and runs the deploys. Both remotes
-> are currently byte-identical on `develop` and `main`. `.gitlab-ci.yml` keeps
-> gating merges on the GitLab side and is not modified by this design.
+> **Pipeline host: GitHub Actions. Source of truth: GitLab.** GitLab push-mirrors to
+> GitHub and force-updates `develop` and `main`, so GitHub is a replica that runs the
+> deploys. **Merge on GitLab** — the mirror then pushes to GitHub, which is what
+> triggers the deploy. `.gitlab-ci.yml` keeps gating merges on the GitLab side and is
+> not modified by this design.
 >
 > Environment facts were probed live on **2026-08-16**; probe commands are shown so
 > they can be re-run when they go stale.
