@@ -544,11 +544,33 @@ ASGI-only:
 from a2wsgi import ASGIMiddleware
 from app.main import app as asgi_app
 
-application = ASGIMiddleware(asgi_app)
+# Abridged — the real file builds the middleware lazily, per process (below).
+def application(environ, start_response):
+    return _middleware_for_this_pid()(environ, start_response)
 ```
 
 This adds **`a2wsgi` to `api/requirements.txt`**, a runtime dependency that exists
 solely for the staging host; production never imports it.
+
+**The middleware must be constructed *after* Passenger forks, not at import.**
+`ASGIMiddleware.__init__` starts a background thread running an asyncio event
+loop. Passenger's default "smart" spawning imports `passenger_wsgi.py` once in
+a preloader and then `fork()`s workers from it — and threads do not survive
+fork. A module-level `application = ASGIMiddleware(asgi_app)` therefore leaves
+every worker enqueueing requests onto an event loop no thread is running, and
+each request blocks forever in an untimed threading wait. Externally: every
+request times out with 0 bytes received (`curl: (28)`), never a 404 — while the
+identical module answers 200 when imported and served in one process, which is
+exactly how §4.1's verification ran. This is why the first real staging deploy
+passed every step and then failed the smoke test on 30 straight timeouts. The
+real `passenger_wsgi.py` builds the middleware lazily, keyed on `os.getpid()`,
+so each forked worker gets its own live event-loop thread; its docstring
+carries the full explanation. `deploy/staging_release.sh` additionally
+pre-flights `python -c "import passenger_wsgi"` (a traceback at deploy time
+instead of a silent hang) and warms up + health-checks the app **from the
+host** after touching the restart marker, so an app that cannot boot fails the
+release step — with diagnostics — before the SPA cutover and before the
+runner-side smoke test.
 
 **SPA fallback `.htaccess`** in the docroot. The `!^/api` guard is essential — without
 it the fallback swallows API requests and serves them `index.html`:
