@@ -190,11 +190,11 @@ export const API_URL = API_BASE_URL + "/api/v1/";
 
 ### 3.3 The approval gate is not available as a GitHub feature on this repo
 
-`Benson-Kim/priori-crm` is **private**, on a plan without the paid protection
+`benson-priori/priori-crm` is **private**, on a plan without the paid protection
 features. Verified:
 
 ```console
-$ gh api repos/Benson-Kim/priori-crm/branches/main/protection
+$ gh api repos/benson-priori/priori-crm/branches/main/protection
 Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)
 ```
 
@@ -227,7 +227,7 @@ four lines. Worth pricing before building around the limitation permanently.
 The repo's environment list is Vercel's:
 
 ```console
-$ gh api repos/Benson-Kim/priori-crm/environments --jq '.environments[].name'
+$ gh api repos/benson-priori/priori-crm/environments --jq '.environments[].name'
 Preview
 Preview – priori-crm
 Preview – priori-crm-ou38
