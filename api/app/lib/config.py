@@ -51,8 +51,15 @@ class Settings(BaseSettings):
     )
     CORS_ORIGIN_REGEX: str | None = r"^https://priori-crm-ou38.*\.vercel\.app$"
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    # X-Device-Fingerprint must be preflight-approved: browser clients send
+    # it cross-origin when ABAC_TRUST_CONTEXT_HEADERS is enabled, and
+    # without it here the preflight fails and the client silently falls
+    # back to the coarse server-derived fingerprint (#67 review F3). The
+    # X-Geo-* headers deliberately stay out: they are stamped by the
+    # edge/CDN on the way in, never sent by browser JavaScript.
     CORS_ALLOW_HEADERS: str = (
-        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
+        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret,"
+        "X-Device-Fingerprint"
     )
 
     # Context-aware access control (ABAC + zero trust, issue #67).
