@@ -16,6 +16,7 @@ not enforced" rather than locking every refresh out.
 import logging
 import threading
 import time
+from functools import lru_cache
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,11 @@ _KEY_PREFIX = "revoked_jti"
 
 
 _FENCE_PREFIX = "token_fence"
+
+#: Key prefix for terminated sessions: every live ACCESS token carrying
+#: this ``sid`` is refused on the access-token validation path (#67
+#: review F5).
+_SESSION_PREFIX = "dead_sid"
 
 
 class TokenDenylist(Protocol):
@@ -250,3 +256,46 @@ def build_token_denylist(backend: str, redis_url: str) -> TokenDenylist:
     if backend == "redis":
         return RedisTokenDenylist(redis_url)
     return InMemoryTokenDenylist()
+
+
+@lru_cache(maxsize=1)
+def shared_token_denylist() -> TokenDenylist:
+    """The process-wide denylist singleton (TOKEN_DENYLIST_BACKEND).
+
+    One instance for refresh-token revocation (auth service), family
+    fences AND terminated-session access revocation, so all three views
+    agree within a process — and across workers on the Redis backend.
+    """
+    from app.lib.config import settings
+
+    return build_token_denylist(
+        backend=settings.TOKEN_DENYLIST_BACKEND,
+        redis_url=settings.REDIS_URL,
+    )
+
+
+def revoke_session_access(session_id) -> None:
+    """Deny every live ACCESS token of a terminated session (#67 review F5).
+
+    Refresh-token revocation alone leaves already-issued access tokens
+    valid until natural expiry — up to JWT_ACCESS_TOKEN_EXPIRE_MINUTES of
+    post-compromise access. Keying the denylist by ``sid`` kills them all
+    at once: no new access token can carry this sid either, because a
+    terminated session refuses refresh before minting. The TTL is the
+    access-token lifetime plus a skew margin, after which every such
+    token is expired anyway and the entry cleans itself up.
+
+    Called from every place a session terminates (risk terminate, session
+    expiry, refresh-reuse detection, logout, password reset, failed
+    step-ups). Idempotent and fail-safe: revoking is best-effort on a
+    backend outage (consistent with the denylist's fail-open posture).
+    """
+    from app.lib.config import settings
+
+    ttl = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60 + 60
+    shared_token_denylist().revoke(f"{_SESSION_PREFIX}:{session_id}", ttl)
+
+
+def is_session_access_revoked(session_id) -> bool:
+    """Whether a session's access tokens have been revoked via its sid."""
+    return shared_token_denylist().is_revoked(f"{_SESSION_PREFIX}:{session_id}")

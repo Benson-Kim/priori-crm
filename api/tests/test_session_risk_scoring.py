@@ -575,6 +575,64 @@ class TestRefreshAndLogout:
         assert resp.status_code == 401
         assert resp.json()["error_code"] == "STEP_UP_REQUIRED"
 
+    def test_refresh_reuse_terminates_the_session_and_kills_access_tokens(
+        self, client, db, monkeypatch
+    ):
+        """#67 review F5: reuse fences the family AND kills the session.
+
+        Fencing alone left the session row ACTIVE, so already-issued
+        access tokens for the compromised session kept working until
+        natural expiry. Reuse now terminates the sid's session and pushes
+        it onto the shared denylist, which the access-token validation
+        path itself checks — proven below with the gate's own session
+        re-check disabled.
+        """
+        _seed_user(db, "stolen@mail.com")
+        access, refresh = _login_session(client, "stolen@mail.com")
+
+        # Legitimate rotation spends the presented refresh token.
+        rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+        assert rotated.status_code == 200
+        new_access = rotated.json()["access_token"]
+        new_refresh = rotated.json()["refresh_token"]
+
+        # A second presenter of the SPENT token is theft evidence.
+        reused = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+        assert reused.status_code == 401
+
+        session = db.get(UserSession, _sid(access))
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+        assert session.termination_reason == "refresh_token_reuse"
+
+        # The descendant refresh token dies with the terminated session.
+        descendant = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": new_refresh}
+        )
+        assert descendant.status_code == 401
+
+        # Both access tokens carry the terminated sid and die IMMEDIATELY
+        # on the token-validation path — even with ABAC (and its session
+        # re-check) switched off entirely.
+        monkeypatch.setattr(settings, "ABAC_ENABLED", False)
+        for token in (access, new_access):
+            dead = client.get("/api/v1/customers", headers=_bearer(token))
+            assert dead.status_code == 401
+
+    def test_logout_kills_access_tokens_on_the_validation_path(
+        self, client, db, monkeypatch
+    ):
+        """The sid denylist holds even where the gate does not run (F5)."""
+        _seed_user(db, "walker@mail.com")
+        access, refresh = _login_session(client, "walker@mail.com")
+        assert client.post(
+            "/api/v1/auth/logout", json={"refresh_token": refresh}
+        ).status_code == 200
+
+        monkeypatch.setattr(settings, "ABAC_ENABLED", False)
+        dead = client.get("/api/v1/customers", headers=_bearer(access))
+        assert dead.status_code == 401
+
     def test_logout_terminates_the_session_and_kills_access_tokens(self, client, db):
         _seed_user(db, "leaver@mail.com")
         access, refresh = _login_session(client, "leaver@mail.com")

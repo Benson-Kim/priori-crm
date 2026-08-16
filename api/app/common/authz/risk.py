@@ -400,8 +400,14 @@ def _terminate(
     context: AccessContext,
     reason: str,
 ) -> PolicyVerdict:
+    from app.common.token_denylist import revoke_session_access
+
     session.status = SessionStatus.TERMINATED.value
     session.termination_reason = reason
+    # Push the sid onto the shared denylist so the session's live access
+    # tokens die on the token-validation path itself, everywhere — not
+    # only where the gate re-checks session status (#67 review F5).
+    revoke_session_access(session.id)
     _audit_session_event(db, session, context, "session_terminated", {"why": reason})
     logger.warning(
         "Session terminated by risk policy",

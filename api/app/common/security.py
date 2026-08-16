@@ -83,9 +83,24 @@ def decode_access_token(
         )
         if payload.get("type") != "access":
             raise UnauthorizedException("Invalid token type.")
-        return payload
     except JWTError as e:
         raise UnauthorizedException("Invalid or expired token.") from e
+
+    # Terminated-session revocation (#67 review F5): when a session dies
+    # (risk terminate, refresh-reuse detection, logout, password reset),
+    # its sid is pushed onto the shared denylist so already-issued access
+    # tokens die IMMEDIATELY — not at natural expiry. This runs on the
+    # access-token validation path itself, so it holds even where the
+    # zero-trust gate's per-request session re-check does not (e.g.
+    # ABAC_ENABLED=false). Legacy tokens without a sid have no session to
+    # have terminated.
+    sid = payload.get("sid")
+    if sid is not None:
+        from app.common.token_denylist import is_session_access_revoked
+
+        if is_session_access_revoked(str(sid)):
+            raise UnauthorizedException("Session terminated.")
+    return payload
 
 
 def decode_refresh_token(token: str) -> dict:

@@ -24,7 +24,10 @@ from app.common.security import (
     hash_password,
     verify_password,
 )
-from app.common.token_denylist import TokenDenylist, build_token_denylist
+from app.common.token_denylist import (
+    revoke_session_access,
+    shared_token_denylist,
+)
 from app.constants.enums import SessionStatus
 from app.lib.config import settings
 from app.lib.email import email_service
@@ -65,19 +68,14 @@ def _auth_throttle_store() -> RateLimitStore:
     )
 
 
-@lru_cache(maxsize=1)
-def _refresh_token_denylist() -> TokenDenylist:
-    """Shared denylist store for revoked refresh tokens.
-
-    Mirrors the throttle store: a pluggable backend (in-memory for dev /
-    single-worker, Redis for a shared multi-instance denylist) built from the
-    TOKEN_DENYLIST_BACKEND / REDIS_URL settings. Cached so all AuthService
-    instances within a process share one denylist.
-    """
-    return build_token_denylist(
-        backend=settings.TOKEN_DENYLIST_BACKEND,
-        redis_url=settings.REDIS_URL,
-    )
+# Shared denylist store for revoked refresh tokens, family fences and
+# terminated-session access revocation. One process-wide singleton
+# (``token_denylist.shared_token_denylist``) so the sid entries written on
+# session termination are the SAME entries ``decode_access_token`` reads —
+# two instances of the in-memory backend would never see each other's
+# revocations (#67 review F5). The alias keeps this module's historical
+# name (tests clear its lru_cache between runs).
+_refresh_token_denylist = shared_token_denylist
 
 
 class AuthService:
@@ -374,7 +372,12 @@ class AuthService:
             # presenting a token that has already been spent. Fence the whole
             # family so the attacker's descendant chain dies too; the
             # legitimate user re-authenticates and mints a post-fence token.
+            # The compromised SESSION dies with it (#67 review F5): the
+            # fence only reaches refresh tokens, so without this the
+            # already-issued access tokens carrying this sid kept working
+            # until natural expiry.
             self._revoke_token_family(user_id)
+            self._terminate_session_for_reuse(payload)
             logger.warning(
                 "Refresh-token reuse detected; revoked token family",
                 extra={"user_id": str(user_id)},
@@ -420,6 +423,7 @@ class AuthService:
         # family-fence + 401 path and no second descendant chain is minted.
         if not self._revoke_refresh_payload(payload):
             self._revoke_token_family(user_id)
+            self._terminate_session_for_reuse(payload)
             logger.warning(
                 "Concurrent refresh-token reuse detected; revoked token family",
                 extra={"user_id": str(user_id)},
@@ -478,6 +482,9 @@ class AuthService:
                 after={"why": "logout"},
             )
             self._db.flush()
+            # The still-live access token dies with the session, on the
+            # token-validation path itself (#67 review F5).
+            revoke_session_access(session.id)
 
     # Maintenance
 
@@ -565,6 +572,34 @@ class AuthService:
             return None
         return self._db.get(UserSession, session_id)
 
+    def _terminate_session_for_reuse(self, payload: dict) -> None:
+        """Kill the session named by a REUSED refresh token, durably (#67 F5).
+
+        Refresh-token reuse means the session is compromised: the thief
+        and the victim each held a copy. Fencing the refresh family alone
+        left the session row ACTIVE, so already-issued access tokens
+        carrying its ``sid`` stayed valid until natural expiry. The
+        termination COMMITS explicitly — the 401 raised right after this
+        would roll the evidence back — and the sid goes onto the shared
+        denylist so live access tokens die on their next request.
+        """
+        session = self._get_session(payload.get("sid"))
+        if session is None:
+            return
+        if session.status != SessionStatus.TERMINATED.value:
+            session.status = SessionStatus.TERMINATED.value
+            session.termination_reason = "refresh_token_reuse"
+            record_audit_event(
+                self._db,
+                actor_id=session.user_id,
+                entity_type="session",
+                entity_id=session.id,
+                action="session_terminated",
+                after={"why": "refresh_token_reuse"},
+            )
+            self._db.commit()
+        revoke_session_access(session.id)
+
     def _terminate_user_sessions(
         self, user_id, reason: str, statuses: tuple[str, ...] | None = None
     ) -> None:
@@ -593,6 +628,10 @@ class AuthService:
                 action="session_terminated",
                 after={"why": reason},
             )
+            # Kill the session's live ACCESS tokens too (#67 review F5).
+            # Best-effort and fail-safe: if this request later rolls back,
+            # the worst case is access tokens dying early.
+            revoke_session_access(session.id)
         if sessions:
             self._db.flush()
 
