@@ -4,6 +4,16 @@ Revision ID: 7d2461c6487d
 Revises: 0001_initial
 Create Date: 2026-05-14 12:14:04.991967
 
+NOTE — amended after this revision was already applied in production/CI
+(deployment-pipeline MR, 2026-08): the pg_trgm CREATE EXTENSION and the
+ix_customers_search index were wrapped in an availability guard so hosts
+without postgresql-contrib (e.g. the MochaHost staging server) can migrate.
+Editing an applied migration is normally forbidden; it is safe here because
+databases that already ran the original version are unaffected — the guard
+only changes behaviour where pg_trgm is unavailable, the schema Alembic
+recorded for existing databases is unchanged, and the guarded paths are
+idempotent. Hosts that skipped the index catch up later via
+deploy/enable_trgm_indexes.sql.
 """
 
 from typing import Sequence, Union

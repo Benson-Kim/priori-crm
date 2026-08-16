@@ -9,6 +9,16 @@ btree index, so each search was a full table scan. Trigram (pg_trgm) GIN
 indexes make substring ILIKE index-assisted. These are PostgreSQL-only
 constructs; the extension and indexes are created defensively with IF NOT
 EXISTS so re-runs and partially-applied environments are safe.
+
+NOTE — amended after this revision was already applied in production/CI
+(deployment-pipeline MR, 2026-08): upgrade() now skips cleanly when pg_trgm
+is not installable (no postgresql-contrib, e.g. the MochaHost staging
+server) instead of aborting the migration chain. Editing an applied
+migration is normally forbidden; it is safe here because databases that
+already ran the original version are unaffected — the guard only changes
+behaviour where pg_trgm is unavailable, and every statement is IF NOT
+EXISTS-idempotent. Hosts that skipped the indexes catch up later via
+deploy/enable_trgm_indexes.sql.
 """
 
 import logging
