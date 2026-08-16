@@ -136,9 +136,14 @@ The `/api` mount is what makes staging same-origin like production. It is also w
 staging runs `API_V1_PREFIX=/v1` (step 1.4) — Passenger strips the mount prefix before
 the app sees the path. Getting this pair wrong 404s every route.
 
-Note the virtualenv path cPanel prints, e.g.
-`/home/<cpaneluser>/virtualenv/apps/priori-api/3.12`. The release script expects
-exactly this shape.
+**Record the two paths cPanel prints when the app is created** — the later steps use
+both, and if cPanel placed the app somewhere other than what you typed, following the
+defaults below silently writes config into a directory nothing reads:
+
+- the **application root**, e.g. `/home/<cpaneluser>/apps/priori-api` → used in §1.4
+  and as `STAGING_APP_DIR` in §1.5
+- the **virtualenv path**, e.g. `/home/<cpaneluser>/virtualenv/apps/priori-api/3.12`
+  → `deploy/staging_release.sh` expects exactly this shape
 
 Also create the docroot directory if it does not exist: cPanel → **Domains** →
 confirm `staging.crm.priori.co.ke` points at `~/staging.crm.priori.co.ke`.
@@ -169,9 +174,18 @@ ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke whoami
 
 This file is host-managed: it is excluded from rsync and CI never sees it.
 
+Write it into the **application root you recorded in §1.2** — the path below assumes
+cPanel used `~/apps/priori-api`. Confirm first, because the command would otherwise
+happily create a new directory that nothing reads:
+
 ```bash
 ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke \
-  'mkdir -p ~/apps/priori-api && cat > ~/apps/priori-api/.env' <<'ENV'
+  'ls -d ~/apps/priori-api && ls ~/apps/priori-api'
+```
+
+```bash
+ssh -i ~/.ssh/priori-staging-deploy <cpaneluser>@staging.crm.priori.co.ke \
+  'cat > ~/apps/priori-api/.env' <<'ENV'
 APP_NAME=Business Central
 ENVIRONMENT=staging
 DEBUG=false
@@ -398,11 +412,14 @@ mv <current-app-dir>/uploads /srv/priori/shared/uploads 2>/dev/null || mkdir -p 
 chown -R deploy:deploy /srv/priori/shared/uploads
 
 # 4. Seed a first release from what is running RIGHT NOW. This becomes your
-#    rollback target — without it the first deploy has nothing to fall back to.
+#    rollback target — without it the first deploy has nothing to fall back to,
+#    so check the verify block below before moving on.
+#    rsync, not cp -a: if the live app is a git checkout, cp would copy .git
+#    into every release and /srv/priori/releases would balloon.
 BASE=/srv/priori/releases/pre-pipeline-$(date +%Y%m%d)
-mkdir -p $BASE/api $BASE/frontend
-cp -a <current-app-dir>/. $BASE/api/
-cp -a <current-spa-docroot>/. $BASE/frontend/dist/
+mkdir -p $BASE/api $BASE/frontend/dist
+rsync -a --exclude '.git' --exclude '__pycache__' <current-app-dir>/ $BASE/api/
+rsync -a <current-spa-docroot>/ $BASE/frontend/dist/
 ln -sfn /srv/priori/shared/.env    $BASE/api/.env
 ln -sfn /srv/priori/shared/uploads $BASE/api/uploads
 
@@ -427,8 +444,11 @@ ls /srv/priori/current/frontend/dist/index.html
 
 ### 2.4 Point systemd and nginx at `current`
 
-Reconcile this with the real unit from §2.0 — keep your existing `ExecStart` flags,
-change only the paths:
+**Reconcile this with the real unit from §2.0 — the values below are illustrative,
+not prescriptive.** In particular, copy the **bind address and port** from your
+recorded `ExecStart`. nginx's `proxy_pass` points at whatever the API listens on
+today; if you paste `--port 8000` and the live service uses something else, the API
+502s the moment you restart. Same for `--workers`.
 
 ```bash
 systemctl edit --full priori-api      # or create /etc/systemd/system/priori-api.service
@@ -443,7 +463,7 @@ After=network.target
 User=deploy
 Group=deploy
 WorkingDirectory=/srv/priori/current/api
-EnvironmentFile=/srv/priori/shared/.env
+# Deliberately NO EnvironmentFile= — see the note below.
 ExecStart=/srv/priori/current/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
 Restart=always
 RestartSec=5
@@ -454,6 +474,23 @@ WantedBy=multi-user.target
 
 systemd resolves `WorkingDirectory` at start, so a restart after the symlink swap
 picks up the new release with no further edits — that is what makes deploys work.
+
+**Why there is no `EnvironmentFile=`.** The app loads its own config:
+`api/app/lib/config.py:108` sets `env_file=".env"`, resolved relative to the working
+directory — and §2.3 symlinked `/srv/priori/shared/.env` to
+`/srv/priori/current/api/.env`. So config loading stays exactly as it is today.
+
+Adding `EnvironmentFile=` would *also* work, but systemd's parser is stricter than
+python-dotenv's: no `export`, no shell quoting, and **no inline comments after a
+value** — a line like `BATCH_SIZE=1000  # cap` becomes the literal string
+`1000  # cap`. That fails quietly, with a subtly wrong value rather than an error.
+Not worth the risk when the app already reads the file correctly.
+
+If you do use `EnvironmentFile=` anyway, verify what systemd actually parsed:
+
+```bash
+systemctl show priori-api --property=Environment | tr ' ' '\n' | grep -E 'ENVIRONMENT|API_V1_PREFIX'
+```
 
 nginx: change the SPA root to the symlink, leave the `/api` proxy as it is.
 
@@ -486,7 +523,35 @@ Open the site and log in. **If anything is wrong, revert:** point nginx's `root`
 at the old docroot, restore the old unit, `systemctl restart priori-api`. Nothing has
 been deleted — the original directories are untouched.
 
-### 2.5 Set the production secrets
+### 2.5 The free verification run — **while `PROD_SSH_KEY` is still unset**
+
+> ⚠️ **Order matters here.** This run is safe *only because the SSH secrets do not
+> exist yet* — that is what makes it stop short of touching the droplet. Once §2.6 is
+> done, this exact command performs a **real production deploy**. Do this step first.
+
+It costs one run and proves the three things that cannot be checked locally:
+`secrets: inherit` gives gitleaks a usable token; CodeQL can upload under the
+caller's permissions; and — the important one — `download-artifact` resolves an
+artifact produced by a *called* workflow. That last step is the only one that would
+fail **after** all CI has already passed, which is the most expensive place to find a
+problem.
+
+```bash
+gh secret list | grep PROD_SSH_KEY   # must print NOTHING before you continue
+
+gh workflow run deploy-production.yml --ref main -f confirm=deploy
+gh run watch
+```
+
+Expected: `guard` → CI green → `Download OpenAPI schema` **succeeds** → `Configure
+SSH` fails with `PROD_SSH_KEY is not set`. That failure is the pass condition.
+
+A failure at the *download* step instead means something needs fixing before any real
+deploy — tell me if you see it.
+
+### 2.6 Set the production secrets
+
+From here on, running `deploy-production.yml` deploys for real.
 
 ```bash
 gh secret set PROD_SSH_KEY      < ~/.ssh/priori-prod-deploy
@@ -498,25 +563,6 @@ gh secret set PROD_SSH_HOST    --body "accounting.priori.co.ke"
 gh secret set API_BASE_URL        --body "https://accounting.priori.co.ke"
 gh secret set INTERNAL_API_SECRET --body "<the INTERNAL_API_SECRET from /srv/priori/shared/.env>"
 ```
-
-### 2.6 The free verification run — do this before the real one
-
-Before setting anything host-related, or right now, run the production workflow once
-and let it fail at SSH. It costs one run and proves three things that cannot be
-checked locally: that `secrets: inherit` gives gitleaks a usable token, that CodeQL
-can upload under the caller's permissions, and — the important one — that
-`download-artifact` resolves an artifact produced by a *called* workflow. That last
-step is the only one that would fail **after** all CI has passed.
-
-```bash
-gh workflow run deploy-production.yml --ref main -f confirm=deploy
-gh run watch
-```
-
-Expected: `guard` → CI green → `Download OpenAPI schema` **succeeds** → `Configure
-SSH` fails with `PROD_SSH_KEY is not set` (or the deploy proceeds, if 2.5 is done).
-A failure at the download step means something needs fixing before a real deploy —
-tell me if you see it.
 
 ### 2.7 First real production deploy
 
