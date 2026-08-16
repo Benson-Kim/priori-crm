@@ -814,8 +814,8 @@ secrets live on the servers and CI never sees them.**
 | `STAGING_SSH_KEY`, `PROD_SSH_KEY` | GitHub Actions secrets | Dedicated deploy keypair, not a personal key |
 | `STAGING_KNOWN_HOSTS`, `PROD_KNOWN_HOSTS` | GitHub Actions secrets | From `ssh-keyscan -H <host>`. Pin them — otherwise `StrictHostKeyChecking=no` is the only thing making the job work, and that accepts any host that answers |
 | `STAGING_SSH_USER/HOST`, `PROD_SSH_USER/HOST` | GitHub Actions secrets | Not really secret, but keeps hosts out of the YAML |
-| `STAGING_DOCROOT` | GitHub Actions secrets | SPA target, e.g. `~/staging.crm.priori.co.ke` |
-| `STAGING_APP_DIR` | GitHub Actions secrets | cPanel Python App root, e.g. `~/apps/priori-api` |
+| `STAGING_DOCROOT` | GitHub Actions secrets | SPA target, e.g. `/home/priori/crm-staging/web`. **Absolute path required** — the workflow refuses `~` or relative values before arming `rsync --delete` |
+| `STAGING_APP_DIR` | GitHub Actions secrets | cPanel Python App root, e.g. `/home/priori/apps/priori-api`. Same absolute-path rule |
 | `API_BASE_URL`, `INTERNAL_API_SECRET` | GitHub Actions secrets | Production internal jobs. **Missing values fail the run** — that is the alert |
 | `STAGING_API_BASE_URL`, `STAGING_INTERNAL_API_SECRET` | GitHub Actions secrets | Staging internal jobs. While unset the staging matrix leg **skips with a notice** instead of failing, so the every-5-minutes schedule is not red before staging exists |
 | `JWT_SECRET_KEY`, `DATABASE_URL`, `AWS_*`, `SES_SENDER_EMAIL` | **server-side `.env` only** | `0600`. Never a CI secret — CI has no reason to hold them |
@@ -918,4 +918,6 @@ Then merge to `develop` and watch the first staging deploy.
 **Production will not deploy until the droplet is restructured.** Phase 4 shipped
 `deploy/production_release.sh`, but it hard-fails unless `/srv/priori/{releases,
 current,shared,backups}` exists with `shared/.env` in place — that migration of the
+current hand-deployed install is a §7 item, not something the repo can do.
+.env` in place — that migration of the
 current hand-deployed install is a §7 item, not something the repo can do.

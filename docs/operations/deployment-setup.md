@@ -406,7 +406,9 @@ gh secret set -R Benson-Kim/priori-crm STAGING_DOCROOT     --body "/home/priori/
 gh secret set -R Benson-Kim/priori-crm STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
 ```
 
-Use absolute paths, not `~` — rsync targets do not expand it reliably.
+Use absolute paths, not `~` — rsync targets do not expand it reliably, and the
+deploy workflow now refuses non-absolute values outright before arming
+`rsync --delete`.
 
 Also, for the scheduled internal jobs (staging skips quietly until both are set):
 
