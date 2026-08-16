@@ -137,9 +137,7 @@ class TestSameRoleDifferentContext:
     ):
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         _freeze_local_hour(monkeypatch, 23)
-        resp = client.get(
-            "/api/v1/invoices", headers=_auth(admin, stepped_up=False)
-        )
+        resp = client.get("/api/v1/invoices", headers=_auth(admin, stepped_up=False))
         assert resp.status_code == 200
 
     def test_denylisted_ip_denied_even_with_valid_admin_token(

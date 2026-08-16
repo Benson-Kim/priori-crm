@@ -253,7 +253,10 @@ class TestSoftSignalFalsePositives:
     def test_new_device_and_country_still_allows(self, client, db, trusted_ctx):
         user = _seed_user(db, "traveller@mail.com")
         _seed_baseline(
-            db, user, devices=("client:known-laptop",), countries=("KE",),
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
             hours=_all_hours(),
         )
 
@@ -313,7 +316,10 @@ class TestSoftSignalFalsePositives:
         """No geo signal must never fire the new-country soft signal."""
         user = _seed_user(db, "nogeo@mail.com")
         _seed_baseline(
-            db, user, devices=("client:known-laptop",), countries=("KE",),
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
             hours=_all_hours(),
         )
 
@@ -515,9 +521,7 @@ class TestFailedStepUps:
         # signal about the CHALLENGED context, not a denial-of-service lever.
         assert healthy.status == SessionStatus.ACTIVE.value
 
-    def test_wrong_code_below_budget_terminates_nothing(
-        self, client, db, monkeypatch
-    ):
+    def test_wrong_code_below_budget_terminates_nothing(self, client, db, monkeypatch):
         monkeypatch.setattr(settings, "AUTH_MAX_OTP_ATTEMPTS", 3)
         user = _seed_user(db, "typo@mail.com")
         challenged = UserSession(

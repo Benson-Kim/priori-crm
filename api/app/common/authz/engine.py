@@ -109,9 +109,7 @@ def _parse_geo_blocklist(raw: str) -> frozenset[str]:
     every request, and a settings change (tests monkeypatch it) invalidates
     the entry naturally.
     """
-    return frozenset(
-        code.strip().upper() for code in raw.split(",") if code.strip()
-    )
+    return frozenset(code.strip().upper() for code in raw.split(",") if code.strip())
 
 
 def _rule_geo_blocklist(context: AccessContext) -> PolicyVerdict | None:

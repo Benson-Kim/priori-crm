@@ -109,13 +109,6 @@ api:lint:
     - pip install -r requirements.txt
   script:
     - ruff check .
-    # TEMP (#67, revert before merge): print the formatter's own output as
-    # base64 so it can be applied verbatim — no local ruff in the work
-    # environment and artifact download is blocked by token scope.
-    - ruff format --diff . > /tmp/format.diff || true
-    - echo "BEGIN-FORMAT-DIFF-B64"
-    - base64 /tmp/format.diff
-    - echo "END-FORMAT-DIFF-B64"
     - ruff format --check .
 
 api:test:
