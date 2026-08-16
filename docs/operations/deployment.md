@@ -433,7 +433,18 @@ It currently targets one environment. To cover staging as well, either add a mat
 over the two base URLs, or add a second workflow with staging's secrets. cPanel Cron
 Jobs are the fallback if the schedule should not depend on GitHub.
 
-### 4.5 Top staging risk — Postgres extensions
+### 4.5 Postgres extensions — resolved, not a blocker
+
+> **Settled 2026-08-16 against the real host.** Neither extension is installable
+> there (`postgresql-contrib` is absent, PostgreSQL 13.23), and neither blocks the
+> deploy. `pgcrypto` is never created by a migration and is unnecessary —
+> `gen_random_uuid()` is core from PG 13 and nothing calls a pgcrypto-only function.
+> `pg_trgm` is now guarded on `pg_available_extensions` in both migrations that use
+> it, so the chain migrates through and only the trigram search indexes are skipped;
+> `deploy/enable_trgm_indexes.sql` adds them later if contrib ever lands. CI and the
+> production droplet install the extension and are unaffected.
+>
+> The original assessment, kept because it is why the check comes first:
 
 The schema depends on **`pg_trgm`** (trigram indexes) and **`pgcrypto`**
 (`gen_random_uuid()` defaults); both CI configs create them explicitly before tests.

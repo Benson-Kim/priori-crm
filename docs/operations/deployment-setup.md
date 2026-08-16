@@ -174,15 +174,50 @@ PGPASSWORD='<password>' psql -h localhost -U priori_staging -d priori_staging \
 > you nothing about permissions. If you must use phpPgAdmin, untick **Paginate
 > results** on the SQL page first, then run one statement at a time.
 
-If you get `ERROR: permission denied to create extension`, open a MochaHost support
-ticket:
+**Outcome on this host (checked 2026-08-16): neither extension is installable, and
+that is fine — the deploy proceeds anyway.**
 
-> Please install the `pg_trgm` and `pgcrypto` extensions on my PostgreSQL database
-> `priori_staging`, or grant my database user rights to create them. They are required
-> by the application schema (trigram indexes and `gen_random_uuid()` defaults).
+```
+ERROR: could not open extension control file
+       "/usr/share/pgsql/extension/pg_trgm.control": No such file or directory
+```
 
-This is normally granted. If it is refused, tell me and we will move staging's
-database to a managed Postgres instead.
+Read that error carefully, because it is *not* a permission problem: the
+`postgresql-contrib` package is absent from the server entirely, so the extensions
+are not merely un-installed but unavailable. Only the host can change that.
+
+Neither blocks staging:
+
+- **`pgcrypto` is not needed at all.** No migration creates it; it was only ever
+  wanted for `gen_random_uuid()`, which has been **core PostgreSQL since 13** — this
+  server is 13.23. Nothing in the schema calls a pgcrypto-only function
+  (`crypt`/`digest`/`hmac`/`pgp_*`).
+- **`pg_trgm` is needed by two migrations, which now skip it cleanly.** Both are
+  guarded on `pg_available_extensions`, so a host without contrib migrates through
+  instead of aborting on the trigram indexes. Hosts that *do* have it — CI and the
+  production droplet — behave exactly as before.
+
+The cost is honest and small: staging searches with `ILIKE '%term%'` run as
+sequential scans instead of index-assisted lookups. Results are identical; large
+lists are slower. Production keeps its indexes.
+
+**Optional — ask the host to install contrib anyway.** Worth doing so staging matches
+production, but nothing waits on it:
+
+> My PostgreSQL database `priori_crm_staging_db` is missing the `postgresql-contrib`
+> package — `CREATE EXTENSION pg_trgm` fails with "could not open extension control
+> file /usr/share/pgsql/extension/pg_trgm.control", and `pg_trgm` does not appear in
+> `pg_available_extensions`. Please install the contrib package matching the server's
+> PostgreSQL version (13.23) so `pg_trgm` can be enabled.
+
+If they install it later, the guarded migrations will **not** re-run — Alembic has
+already recorded them. Close the gap with the catch-up script, which is idempotent
+and safe to run even if contrib is still missing:
+
+```bash
+psql -h localhost -U priori_crm_staging -d priori_crm_staging_db \
+  -f ~/apps/priori-api/deploy/enable_trgm_indexes.sql
+```
 
 ### 1.2 Create the Python app
 

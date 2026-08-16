@@ -11,10 +11,13 @@ constructs; the extension and indexes are created defensively with IF NOT
 EXISTS so re-runs and partially-applied environments are safe.
 """
 
+import logging
 from typing import Sequence, Union
 
 from alembic import op
 
+
+logger = logging.getLogger("alembic.runtime.migration")
 
 # revision identifiers, used by Alembic.
 revision: str = "d4e5f6a7b8c9"
@@ -45,11 +48,45 @@ _TRGM_INDEXES: list[tuple[str, str, str]] = [
 ]
 
 
+def trgm_available(bind) -> bool:
+    """True when pg_trgm is installed or installable on this server.
+
+    Shared/managed PostgreSQL hosts routinely ship without the contrib package,
+    and then pg_trgm is not merely un-installed but absent from
+    pg_available_extensions. An unguarded CREATE EXTENSION aborts the migration
+    with:
+
+        could not open extension control file
+        ".../pg_trgm.control": No such file or directory
+
+    Observed on the MochaHost cPanel staging host (PostgreSQL 13.23). Checking
+    availability keeps hosts that DO ship contrib on the identical code path.
+    """
+    return bool(
+        bind.exec_driver_sql(
+            "SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_trgm')"
+        ).scalar()
+    )
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     # Trigram indexes are a PostgreSQL feature; skip cleanly on other backends
     # (e.g. the SQLite fallback used for pure-logic unit tests).
     if bind.dialect.name != "postgresql":
+        return
+
+    if not trgm_available(bind):
+        # These indexes are a pure performance optimisation — ILIKE '%term%'
+        # still returns correct results without them, just via a sequential
+        # scan. Skipping keeps the environment deployable; failing here would
+        # block the whole migration chain over an index.
+        logger.warning(
+            "pg_trgm is not available on this server; skipping %d trigram search "
+            "indexes. Search will use sequential scans. To add them later, install "
+            "the postgresql-contrib package and run deploy/enable_trgm_indexes.sql.",
+            len(_TRGM_INDEXES),
+        )
         return
 
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
