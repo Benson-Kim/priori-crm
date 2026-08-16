@@ -418,13 +418,27 @@ gh secret set -R benson-priori/priori-crm STAGING_SSH_KEY      < ~/.ssh/priori-s
 gh secret set -R benson-priori/priori-crm STAGING_KNOWN_HOSTS --body "$(ssh-keyscan -H staging.crm.priori.co.ke 2>/dev/null)"
 gh secret set -R benson-priori/priori-crm STAGING_SSH_USER    --body "priori"
 gh secret set -R benson-priori/priori-crm STAGING_SSH_HOST    --body "staging.crm.priori.co.ke"
-gh secret set -R benson-priori/priori-crm STAGING_DOCROOT     --body "/home/priori/crm-staging/web"
-gh secret set -R benson-priori/priori-crm STAGING_APP_DIR     --body "/home/priori/apps/priori-api"
+MSYS_NO_PATHCONV=1 gh secret set -R benson-priori/priori-crm STAGING_DOCROOT --body "/home/priori/crm-staging/web"
+MSYS_NO_PATHCONV=1 gh secret set -R benson-priori/priori-crm STAGING_APP_DIR --body "/home/priori/apps/priori-api"
 ```
 
 Use absolute paths, not `~` — rsync targets do not expand it reliably, and the
 deploy workflow now refuses non-absolute values outright before arming
 `rsync --delete`.
+
+**The `MSYS_NO_PATHCONV=1` on the last two is required on Windows, not decoration.**
+Git Bash rewrites any argument that looks like a Unix path before a native `.exe`
+sees it, so `gh` receives — and stores — this:
+
+```
+$ python -c "import sys; print(repr(sys.argv[1]))" "/home/priori/crm-staging/web"
+'C:/Program Files/Git/home/priori/crm-staging/web'
+```
+
+The secret is then neither absolute nor within the allowed character set, and the
+deploy fails validation with a value it prints as `***`, giving no hint that the
+path was mangled on the way in. Only these two need it: `STAGING_SSH_KEY` arrives on
+stdin and the rest do not begin with `/`.
 
 Also, for the scheduled internal jobs (staging skips quietly until both are set):
 
