@@ -213,15 +213,24 @@ def _detect_impossible_travel(
     session: "UserSession",  # noqa: F821
     context: AccessContext,
 ) -> bool:
-    """Speed between the last and current geolocation above the plausible cap."""
+    """Speed between the last and current geolocation above the plausible cap.
+
+    Elapsed time is anchored on ``last_geo_at`` — when the stored
+    coordinates were CAPTURED — not on ``last_seen_at``, which every
+    request (geolocated or not) updates. With intermittent geo coverage
+    the latter underestimates the elapsed time and so overestimates the
+    speed: a user who genuinely travelled while sending non-geolocated
+    requests would read as teleporting. No anchor (pre-anchor rows, or a
+    first-ever fix) means no signal — fail-safe.
+    """
     geo = context.geo
-    last_seen = _aware(session.last_seen_at)
+    last_geo_at = _aware(session.last_geo_at)
     if (
         geo is None
         or not geo.has_coordinates
         or session.last_lat is None
         or session.last_lon is None
-        or last_seen is None
+        or last_geo_at is None
     ):
         return False
 
@@ -229,7 +238,7 @@ def _detect_impossible_travel(
     if distance_km < _MIN_TRAVEL_DISTANCE_KM:
         return False
     elapsed_hours = max(
-        (context.requested_at - last_seen).total_seconds() / 3600.0,
+        (context.requested_at - last_geo_at).total_seconds() / 3600.0,
         _MIN_ELAPSED_HOURS,
     )
     speed_kmh = distance_km / elapsed_hours
@@ -546,6 +555,7 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
         if context.geo.has_coordinates:
             session.last_lat = context.geo.lat
             session.last_lon = context.geo.lon
+            session.last_geo_at = context.requested_at
     if context.device_fingerprint:
         session.device_fingerprint = context.device_fingerprint
     session.last_seen_at = context.requested_at

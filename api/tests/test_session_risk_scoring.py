@@ -152,6 +152,39 @@ class TestImpossibleTravel:
         assert second.status_code == 200
         assert db.get(UserSession, _sid(access)).risk_score == 0
 
+    def test_stale_geo_fix_uses_its_own_anchor_not_last_seen(
+        self, client, db, trusted_geo
+    ):
+        """Non-geo requests between two fixes must not inflate the speed.
+
+        Elapsed time anchors on when the stored coordinates were CAPTURED
+        (``last_geo_at``), not on ``last_seen_at`` — which every request
+        updates, so a fresh non-geolocated request would otherwise make a
+        genuine 14-hour flight read as teleportation (+70, instant
+        challenge) purely because geo coverage was intermittent.
+        """
+        _seed_user(db, "flyer@mail.com")
+        access, _ = _login_session(client, "flyer@mail.com")
+
+        first = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
+        assert first.status_code == 200
+
+        # The user flies for ~14h; a non-geolocated request kept
+        # last_seen_at fresh while the Nairobi fix aged.
+        session = db.get(UserSession, _sid(access))
+        session.last_geo_at = datetime.now(UTC) - timedelta(hours=14)
+        db.commit()
+
+        # New York is ~11,740 km away: 14h implies ~840 km/h — an
+        # airliner, not teleportation.
+        second = client.get(
+            "/api/v1/customers", headers={**_bearer(access), **NEW_YORK}
+        )
+        assert second.status_code == 200
+        db.refresh(session)
+        assert session.risk_score == 0
+        assert not _session_events(db, "impossible_travel")
+
     def test_terminate_threshold_kills_the_session(
         self, client, db, trusted_geo, monkeypatch
     ):

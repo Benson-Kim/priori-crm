@@ -191,6 +191,11 @@ class UserSession(Base):
     last_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     last_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_geo_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When last_lat/last_lon were captured (impossible-travel anchor)",
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
