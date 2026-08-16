@@ -11,8 +11,11 @@ on:
   # workflow instead runs the full suite on the exact commit being deployed.
   # See docs/operations/deployment.md §3.1.
   workflow_call:
+  # `develop` is deliberately absent: deploy-staging.yml calls this workflow on
+  # every push there, so listing it here ran the whole suite twice per merge for
+  # nothing. Pull requests into develop are unaffected (see below). §3.7.
   push:
-    branches: [main, develop]
+    branches: [main]
     paths: ["api/**", ".github/workflows/api-ci.yml"]
   pull_request:
     branches: [main, develop]

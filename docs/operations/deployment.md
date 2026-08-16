@@ -278,28 +278,27 @@ a failed deploy. On the droplet, run the migration as its own step, **after** a
 
 ---
 
-### 3.7 Known cost: CI runs twice on every push to `develop`
+### 3.7 CI used to run twice on every push to `develop` — fixed
 
-`api-ci.yml`, `ui-ci.yml` and `security.yml` still carry their own
-`push: branches: [main, develop]` triggers, and `deploy-staging.yml` *also* calls all
-three. So every merge to `develop` runs the full suite twice — once standalone, once
-inside the deploy run. On a private repository those are billed minutes.
+`api-ci.yml`, `ui-ci.yml` and `security.yml` each carried
+`push: branches: [main, develop]` while `deploy-staging.yml` *also* calls all three,
+so every merge to `develop` ran the full suite twice — once standalone, once inside
+the deploy run. On a private repository those are billed minutes, and Actions billing
+is what stopped the first deploy that got past the security gate.
 
-This was left as-is deliberately: removing triggers is a behaviour change beyond
-wiring up deploys, and the standalone runs are the safety net if the deploy workflow
-is ever disabled. The one-line fix, if the duplication is not worth paying for:
+`develop` is now dropped from the three `push:` triggers:
 
 ```yaml
 # api-ci.yml, ui-ci.yml, security.yml
 on:
   push:
-    branches: [main]      # was [main, develop] — deploy-staging.yml now covers develop
+    branches: [main]      # deploy-staging.yml covers develop
 ```
 
-Nothing is lost by that change: pull requests into `develop` still run the full suite
-via the untouched `pull_request:` triggers, and every push to `develop` runs it via
-`deploy-staging.yml`. Make it a deliberate decision either way rather than discovering
-it on an invoice.
+Nothing is lost. Pull requests into `develop` still run the full suite via the
+untouched `pull_request:` triggers, and every push to `develop` runs it via
+`deploy-staging.yml` — against the exact commit being deployed, which is the stronger
+signal of the two.
 
 ### 3.8 CodeQL and dependency review need Advanced Security — the deploy gate could never go green
 
