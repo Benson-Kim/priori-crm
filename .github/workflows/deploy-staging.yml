@@ -27,13 +27,13 @@ concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
-# A called workflow only receives what its caller grants. security.yml's CodeQL
-# job needs security-events: write, and download-artifact needs actions: read;
-# without this block both fail whenever the repo default token is read-only.
+# A called workflow only receives what its caller grants, and download-artifact
+# needs actions: read — without this block it fails whenever the repo default
+# token is read-only. security.yml asks for nothing beyond contents: read since
+# it dropped CodeQL, which is unavailable on this plan (see that file's header).
 permissions:
   contents: read
   actions: read
-  security-events: write
 
 jobs:
   api-ci:
