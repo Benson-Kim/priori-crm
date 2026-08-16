@@ -1,0 +1,36 @@
+# Fingerprints gitleaks should not re-report. Format: <commit>:<path>:<rule>:<line>
+#
+# The secret-detection job in .github/workflows/security.yml scans the FULL git
+# history (`gitleaks git`), which is the point — a secret committed and later
+# deleted is still exposed to anyone who clones. That also means every finding
+# ever recorded stays findable, so genuinely-benign historical matches have to be
+# retired by fingerprint rather than by editing the past.
+#
+# Everything below was reviewed on 2026-08-16 against the first successful scan
+# of this repository. Nothing here is a live credential. Each pair of entries is
+# the same change recorded twice, under both the GitLab and the GitHub author —
+# see CLAUDE.md on the commit-authorship rewrite.
+#
+# Add an entry ONLY after confirming the match is not a real secret. For new code
+# prefer an inline `# gitleaks:allow` comment, which reviewers see in the diff.
+
+# Throwaway JWT signing keys for the CI test database — literal
+# "ci-test-secret-key-at-least-32-characters-long". Never valid anywhere; the
+# current occurrences already carry inline `# gitleaks:allow` markers.
+78c854105bcfa3dbc2e6d6c7fb2a3065ad20fe0d:.github/workflows/api-ci.yml:generic-api-key:69
+7877cdccd7fe0019b963b8e88f07dae41e5d7e0d:.github/workflows/api-ci.yml:generic-api-key:69
+b0062141df61a3ac11de598903d17c02d1c171d7:.github/workflows/api-ci.yml:generic-api-key:56
+42a4ad5a57e5543f7ae0d6e0641275720b6f7fbf:.github/workflows/api-ci.yml:generic-api-key:56
+85c7f6f861c54667bd89ff0fe9e476306f3f9078:.gitlab-ci.yml:generic-api-key:136
+a5c9566c02844769ed5b68f711496c0e9909c4c5:.gitlab-ci.yml:generic-api-key:136
+
+# Test fixtures, not credentials: `_PREVIOUS_KEY` / `_OLDEST_KEY` are hard-coded
+# opaque pagination cursors a test asserts against, and `ACCESS_MARKER` is a
+# sentinel string a network test looks for in a mocked response. All three live
+# in files under tests/ or __tests__/ that predate the api/ + frontend/ layout.
+cee58f33dc54f8595d2d8ca3b01d7d5373586deb:backend/tests/test_opaque_cursors.py:generic-api-key:205
+cee58f33dc54f8595d2d8ca3b01d7d5373586deb:backend/tests/test_opaque_cursors.py:generic-api-key:206
+bbd3a2a077eaa019988f16fbba58cee482799675:backend/tests/test_opaque_cursors.py:generic-api-key:205
+bbd3a2a077eaa019988f16fbba58cee482799675:backend/tests/test_opaque_cursors.py:generic-api-key:206
+e13ed14e6fd077e15f0031886e835f174de3b965:web/src/modules/users/__tests__/users-api.network.test.ts:generic-api-key:131
+1bb3a4afcd3289d836771ae50b307abd75f20485:web/src/modules/users/__tests__/users-api.network.test.ts:generic-api-key:97

@@ -1,68 +1,111 @@
 name: Security
 
-# Mirrors the GitLab security stage in .gitlab-ci.yml: SAST,
-# dependency scanning, and secret detection. Uses the GitHub-native
-# equivalents (CodeQL, dependency-review, gitleaks).
+# Mirrors the GitLab security stage in .gitlab-ci.yml: dependency scanning and
+# secret detection, using tools that actually run on this repository's plan.
+#
+# WHY NOT CodeQL / dependency-review-action
+# -----------------------------------------
+# Both require GitHub Advanced Security, which is not offered for a private
+# repository on the free plan. Every run failed at the entitlement wall:
+#
+#   CodeQL             "Code scanning is not enabled for this repository.
+#                       Please enable code scanning in the repository settings."
+#   Dependency review  "Dependency review is not supported on this repository.
+#                       Please ensure that Dependency graph is enabled along
+#                       with GitHub Advanced Security"
+#
+# That was not cosmetic. Both deploy workflows gate on this one
+# (`needs: [api-ci, ui-ci, security]`), so a permanently-failing job here made
+# every staging and production deploy unreachable — the pipeline could pass
+# review and still never ship. Keeping the repository private is a deliberate
+# choice (the ops runbooks name hosts, users and paths, and the risk-scoring
+# thresholds in ADR-0012 are only useful while an attacker cannot read them),
+# so these two jobs were replaced rather than repaired.
+#
+# WHERE SAST LIVES NOW
+# --------------------
+#   * Python — ruff's flake8-bandit (`S`) ruleset, enforced by the `lint` job in
+#     api-ci.yml, which the deploy workflows already gate on. Verified against
+#     bandit itself on 2026-08-16: 0 high, 1 medium, and that medium is a
+#     documented false positive on static DDL.
+#   * Both languages — the GitLab mirror runs Security/SAST.gitlab-ci.yml on
+#     every MR, and most work lands there first. That remains the deep
+#     dataflow analysis; nothing here duplicates it.
+#
+# See docs/operations/deployment.md §2 and §3.1.
 
 on:
-  # Called by the deploy workflows. NOTE: a called workflow only receives the
-  # permissions its caller grants, so both deploy workflows must declare
-  # `security-events: write` or the CodeQL upload below fails. The
-  # `dependency-review` job is pull_request-only and therefore SKIPS when called
-  # from a push/dispatch — the deploy gate is CodeQL + gitleaks.
-  # See docs/operations/deployment.md §2 and §3.1.
+  # Called by the deploy workflows. A called workflow only receives the
+  # permissions its caller grants — `contents: read` is all these jobs need,
+  # which is already the floor for any caller that can check out the code.
   workflow_call:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
 jobs:
-  codeql:
-    name: CodeQL (SAST)
+  dependency-scan:
+    name: Dependency scan
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, javascript-typescript]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - uses: actions/setup-python@v5
         with:
-          languages: ${{ matrix.language }}
+          python-version: "3.12"
 
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
+      # PYSEC-2026-1325 is the Minerva timing side-channel in `ecdsa`, pulled in
+      # transitively by python-jose. There is no fixed release, and it cannot be
+      # reached here: JWT_ALGORITHM is HS256 (HMAC, symmetric) and no EC key is
+      # ever signed with — see api/app/lib/config.py and api/requirements.txt.
+      # Drop this flag the day anything moves to ES256.
+      - name: pip-audit (Python)
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit==2.10.1
+          pip-audit -r api/requirements.txt --ignore-vuln PYSEC-2026-1325
+
+      - uses: actions/setup-node@v4
         with:
-          category: "/language:${{ matrix.language }}"
+          node-version: "20"
 
-  dependency-review:
-    name: Dependency review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Dependency review
-        uses: actions/dependency-review-action@v4
+      # Reads package-lock.json and queries the registry; no install needed.
+      # `high` matches the severity the GitLab dependency analyzer gates on.
+      - name: npm audit (frontend)
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
   secret-detection:
     name: Secret detection
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
+      # Full history: a secret that was committed and later deleted is still
+      # exposed to anyone who clones, so scanning only the tip would miss it.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # The released binary, not gitleaks-action. The action calls
+      # GET /repos/{owner}/{repo}/pulls/{n}/commits, which returned
+      # "403 Resource not accessible by integration" on every run because this
+      # workflow grants only `contents: read` — and granting `pull-requests:
+      # read` would still leave the action's org-licensing check in the path.
+      # The binary needs no token and no license.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      # Benign historical matches are retired by fingerprint in
+      # .gitleaksignore, with the reasoning for each recorded there.
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gitleaks git . --redact --no-banner --exit-code 1
