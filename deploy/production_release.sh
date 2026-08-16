@@ -139,6 +139,7 @@ pg_dump -Fc "$PG_URL" > "$BACKUP" || {
 # that changes. Dump filenames contain no whitespace by construction, so the
 # ls|tail|xargs pipeline is safe. `|| true`: pruning is best-effort and must
 # not fail the deploy under pipefail.
+# shellcheck disable=SC2012 # info: ls-vs-find; names are pre-$SHA[-timestamp].dump, no whitespace/control chars, and find has no portable -t sort
 ls -1t "$ROOT/backups"/*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f -- || true
 
 # --- migrate -----------------------------------------------------------------
@@ -158,6 +159,7 @@ cd "$REL/api"
 # after the symlink swap but before the rollback — which would leave
 # production pointed at a release that never came up.
 cutover() {
+  # shellcheck disable=SC2015 # info: A&&B||C is intended — the || handler must fire when ANY cutover command fails; not if-then-else here
   ln -sfn "$REL" "$ROOT/current" &&
     sudo /usr/bin/systemctl restart "$SERVICE" &&
     sudo /usr/bin/systemctl reload nginx || {
