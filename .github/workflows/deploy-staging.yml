@@ -114,14 +114,28 @@ jobs:
           SSH_TARGET: ${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}
           DOCROOT: ${{ secrets.STAGING_DOCROOT }}
         run: |
-          # --delete so assets removed from the build do not linger and get
-          # served alongside the new ones.
+          # --delete keeps removed build assets from lingering and being served
+          # alongside the new ones. Everything --delete would otherwise destroy
+          # in this docroot has to be excluded explicitly, because none of it
+          # comes from frontend/dist/:
           #
-          # --exclude '.htaccess' is load-bearing: .htaccess is not part of
-          # frontend/dist/, so without the exclude --delete would remove it and
-          # the next line would put it back. In that window the SPA fallback is
-          # gone and every /api request is answered with index.html.
-          rsync -az --delete --exclude '.htaccess' frontend/dist/ "$SSH_TARGET:$DOCROOT/"
+          #   api/         cPanel creates this for the Passenger mount (the
+          #                Application URL is <domain>/api). It holds the
+          #                .htaccess with PassengerAppRoot. Deleting it takes
+          #                the entire API down — this is NOT the SPA's /api
+          #                rewrite, it is the mount itself.
+          #   .well-known/ AutoSSL's domain-validation path. Deleting it breaks
+          #                certificate renewal, silently, weeks later.
+          #   cgi-bin/     standard cPanel docroot directory.
+          #   .htaccess    shipped on the next line; without the exclude it
+          #                would be deleted and re-added, and in that window
+          #                the SPA fallback is gone.
+          rsync -az --delete \
+            --exclude '.htaccess' \
+            --exclude 'api/' \
+            --exclude '.well-known/' \
+            --exclude 'cgi-bin/' \
+            frontend/dist/ "$SSH_TARGET:$DOCROOT/"
           rsync -az deploy/staging.htaccess "$SSH_TARGET:$DOCROOT/.htaccess"
 
       - name: Ship API
@@ -130,10 +144,13 @@ jobs:
           APP_DIR: ${{ secrets.STAGING_APP_DIR }}
         run: |
           # .env is host-managed (it holds the staging secrets and
-          # API_V1_PREFIX=/v1) and uploads/ is user data — both must survive.
+          # API_V1_PREFIX=/v1) and uploads/ is user data — both must survive
+          # --delete. tmp/ is Passenger's restart directory, recreated by the
+          # release script but excluded so a deploy never races a restart.
           rsync -az --delete \
             --exclude '.env' \
             --exclude 'uploads/' \
+            --exclude 'tmp/' \
             --exclude '__pycache__/' \
             --exclude '.venv/' \
             --exclude 'tests/' \

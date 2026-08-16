@@ -126,17 +126,17 @@ in this guide.
 > (production) is entirely independent — do that instead**; it is the live site and
 > the higher-value half.
 
-### 1.1 Create the database — and prove the extensions work  ⚠️ the real blocker
+### 1.1 Create the database
 
-The schema needs `pg_trgm` (trigram indexes) and `pgcrypto` (`gen_random_uuid()`
-defaults). `CREATE EXTENSION` normally needs superuser, which shared-hosting Postgres
-roles usually are not. **If this fails, stop — the whole full-stack staging design in
-§4 of the runbook has to change**, and there is no point doing steps 1.2 onward.
+> **Already investigated — this is no longer a blocker.** Neither extension is
+> installable on this host and neither is needed; the migrations were changed to
+> handle it. Create the database, run the check to confirm the state, and move on.
+> The full reasoning is below the check.
 
 In cPanel → **PostgreSQL Databases**, create:
 
-- database `priori_staging`
-- user `priori_staging` with a generated password
+- database `priori_crm_staging_db`
+- user `priori_crm_staging` with a generated password
 - add the user to the database with **ALL PRIVILEGES**
 
 Then run the extension check **over SSH, not in phpPgAdmin**:
@@ -145,21 +145,25 @@ Then run the extension check **over SSH, not in phpPgAdmin**:
 ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke
 command -v psql || echo "no psql — use the phpPgAdmin fallback below"
 
-PGPASSWORD='<password>' psql -h localhost -U priori_staging -d priori_staging \
+PGPASSWORD='<password>' psql -h localhost -U priori_crm_staging -d priori_crm_staging_db \
   -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' \
   -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto;' \
   -c "SELECT extname FROM pg_extension WHERE extname IN ('pg_trgm','pgcrypto');"
 ```
 
-**Verify** — the last statement must list **both** extensions:
+**Expected on this host** — two "could not open extension control file" errors and
+zero rows. That is the known-good outcome, not a failure:
 
 ```
-  extname
------------
- pg_trgm
- pgcrypto
-(2 rows)
+ERROR:  could not open extension control file ".../pg_trgm.control": No such file
+ERROR:  could not open extension control file ".../pgcrypto.control": No such file
+ extname
+---------
+(0 rows)
 ```
+
+If instead it lists both extensions, you are on a host with contrib installed —
+also fine, and you get the trigram indexes for free.
 
 > **Why not phpPgAdmin?** Its SQL window wraps every statement in
 > `SELECT COUNT(*) AS total FROM (<your sql>) AS sub` to paginate results, which is
@@ -247,6 +251,20 @@ defaults below silently writes config into a directory nothing reads:
 Also create the docroot directory if it does not exist: cPanel → **Domains** →
 confirm `staging.crm.priori.co.ke` points at `~/staging.crm.priori.co.ke`.
 
+**Creating the app also creates `~/staging.crm.priori.co.ke/api/`** — a directory in
+the *docroot* holding an `.htaccess` with the `PassengerAppRoot` directives. That
+directory **is** the mount; delete it and the API 404s no matter how healthy the app
+is. The deploy workflow excludes it (along with `.well-known/`, which AutoSSL needs)
+from the SPA's `rsync --delete`, so deploys leave it alone — but do not clean it up
+by hand either.
+
+**Verify the mount exists before deploying:**
+
+```bash
+ssh -i ~/.ssh/priori-staging-deploy priori@staging.crm.priori.co.ke \
+  'ls -la ~/staging.crm.priori.co.ke/api/ && cat ~/staging.crm.priori.co.ke/api/.htaccess'
+```
+
 **Verify** — cPanel → **SSL/TLS Status**: `staging.crm.priori.co.ke` shows an AutoSSL
 certificate. The deploy's smoke test is an HTTPS call and will fail without one.
 
@@ -287,7 +305,7 @@ DEBUG=false
 # every route. See deployment.md §4.1.
 API_V1_PREFIX=/v1
 
-DATABASE_URL=postgresql://priori_staging:<password>@localhost:5432/priori_staging
+DATABASE_URL=postgresql://priori_crm_staging:<password>@localhost:5432/priori_crm_staging_db
 
 # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 JWT_SECRET_KEY=<paste a fresh 32+ char secret>
