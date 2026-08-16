@@ -109,7 +109,17 @@ api:lint:
     - pip install -r requirements.txt
   script:
     - ruff check .
+    # TEMP (#67, revert before merge): artifact the formatter's own output
+    # so it can be applied verbatim — no local ruff in the work environment.
+    - ruff format .
+    - git -C "$CI_PROJECT_DIR" diff > "$CI_PROJECT_DIR/format.diff" || true
+    - git -C "$CI_PROJECT_DIR" checkout -- .
     - ruff format --check .
+  artifacts:
+    when: always
+    paths:
+      - format.diff
+    expire_in: 1 day
 
 api:test:
   stage: test
