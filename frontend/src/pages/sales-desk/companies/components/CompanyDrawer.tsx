@@ -81,7 +81,7 @@ function DealCard({ deal }: Readonly<{ deal: CompanyDealSummary }>) {
                     closeReason={deal.close_reason}
                 />
             </div>
-            <p className="pt-1 text-[11px] text-sd-muted">
+            <p className="pt-1 text-dense-sm text-sd-muted">
                 {deal.status === "open"
                     ? `${deal.stage_label} · ${deal.age_days}d in pipeline`
                     : `${deal.stage_label} · ${deal.age_days}d total`}
@@ -147,8 +147,8 @@ export function CompanyDrawer({
             onClose={onClose}
             header={
                 <>
-                    <h2 className="text-[13px] font-semibold text-sd-ink">{company.name}</h2>
-                    <p className="pt-0.5 text-[11px] text-sd-muted">
+                    <h2 className="text-dense-md font-semibold text-sd-ink">{company.name}</h2>
+                    <p className="pt-0.5 text-dense-sm text-sd-muted">
                         {company.industry} · registered {formatDate(company.registered_on)}
                     </p>
                     <p className="flex items-center gap-2 pt-2">
@@ -223,11 +223,11 @@ export function CompanyDrawer({
 
                 <div className="flex items-center justify-between gap-2 pt-3">
                     <span className="flex items-center gap-2">
-                        <span className="font-mono text-[13px] font-bold text-sd-ink">
+                        <span className="font-mono text-dense-md font-bold text-sd-ink">
                             {profile.code}
                         </span>
                         {profile.is_default && (
-                            <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-[10px] font-semibold text-sd-brand">
+                            <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-dense-xs font-semibold text-sd-brand">
                                 Default
                             </span>
                         )}
@@ -279,7 +279,7 @@ export function CompanyDrawer({
                     </div>
                 </div>
 
-                <p className="pt-2 text-[11px] text-sd-muted" role="note">
+                <p className="pt-2 text-dense-sm text-sd-muted" role="note">
                     Editing a profile marks it out of sync until you push it again.
                 </p>
 
@@ -308,7 +308,7 @@ export function CompanyDrawer({
             <DrawerSection label="Deals">
                 <div className="flex flex-col gap-2">
                     {deals.length === 0 ? (
-                        <p className="text-[11px] text-sd-muted">
+                        <p className="text-dense-sm text-sd-muted">
                             No deals raised against this company yet.
                         </p>
                     ) : (

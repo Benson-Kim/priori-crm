@@ -222,7 +222,7 @@ export function PurchaseOrderPaymentModal({
                         type="button"
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2 w-full border-dashed h-28 text-[20px]"
+                        className="flex items-center gap-2 w-full border-dashed h-28 text-xl"
                     >
                         <Plus size={20} /> Upload document
                     </Button>

@@ -266,7 +266,7 @@ export function ExpenseEditor({
 
             {/* Metadata */}
             <div className="flex flex-col gap-2 items-end">
-              <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+              <h2 className="text-2xl font-black text-priori-purple tracking-wider mb-1 uppercase">
                 EXPENSE
               </h2>
               {/* Reference */}
@@ -361,7 +361,7 @@ export function ExpenseEditor({
 
         {/* Line Items */}
         <div className="p-6 flex flex-col gap-6">
-          <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+          <h3 className="text-xl leading-7 font-bold text-gray-800">
             Item Details
           </h3>
           {errors.lineItems && (
@@ -406,7 +406,7 @@ export function ExpenseEditor({
               <Divider />
 
               {/* Total Due */}
-              <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+              <div className="flex justify-between items-center font-bold text-base text-gray-900">
                 <span>Total Due</span>
                 <span>
                   {formatCurrency(totals.totalDue, currency ?? "Ksh")}
@@ -420,7 +420,7 @@ export function ExpenseEditor({
         <div className="p-6">
           <label
             htmlFor="notes-input"
-            className="block text-[16px] font-bold text-gray-800 mb-3"
+            className="block text-base font-bold text-gray-800 mb-3"
           >
             Notes
           </label>
@@ -431,7 +431,7 @@ export function ExpenseEditor({
             placeholder="Add notes here"
             rows={2}
             disabled={restrictedMode}
-            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
+            className="w-full p-4 border border-gray-300 rounded-xl text-base outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50 h-full min-h-30"
           />
         </div>
       </div>
@@ -462,7 +462,7 @@ export function ExpenseEditor({
                       <PaperclipIcon size={24} className="text-gray-700" />
                       <div className="min-w-0">
                         <p
-                          className="text-gray-800 text-[16px] truncate"
+                          className="text-gray-800 text-base truncate"
                           title={file.name}
                         >
                           {file.name}
@@ -479,7 +479,7 @@ export function ExpenseEditor({
                       className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-gray-600 hover:text-priori-purple hover:bg-transparent"
                     >
                       <X size={24} />{" "}
-                      <span className="text-[16px] text-gray-800">Delete</span>
+                      <span className="text-base text-gray-800">Delete</span>
                     </Button>
                   </div>
                 ))}

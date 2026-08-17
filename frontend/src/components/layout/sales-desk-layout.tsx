@@ -63,7 +63,7 @@ function SalesDeskHeader({
                      * and the badges can never disagree.
                      */}
                     {notificationCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-sd-brand text-[10px] font-bold text-white">
+                        <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-sd-brand text-dense-xs font-bold text-white">
                             {notificationCount}
                         </span>
                     )}

@@ -74,7 +74,7 @@ export function RepFilterCards({
                             </p>
                             <p
                                 className={cn(
-                                    "truncate text-[11px]",
+                                    "truncate text-dense-sm",
                                     isSelected ? "text-white/70" : "text-sd-muted"
                                 )}
                             >
@@ -87,7 +87,7 @@ export function RepFilterCards({
                             </p>
                         </div>
                         {rep.cold_deal_count > 0 && (
-                            <span className="shrink-0 rounded bg-sd-aging-bg px-1.5 py-0.5 text-[11px] font-semibold text-sd-aging">
+                            <span className="shrink-0 rounded bg-sd-aging-bg px-1.5 py-0.5 text-dense-sm font-semibold text-sd-aging">
                                 {rep.cold_deal_count} cold
                             </span>
                         )}
@@ -123,7 +123,7 @@ export function RepFilterCards({
                     </p>
                     <p
                         className={cn(
-                            "truncate text-[11px]",
+                            "truncate text-dense-sm",
                             selectedOwnerId === null ? "text-white/70" : "text-sd-muted"
                         )}
                     >

@@ -72,10 +72,10 @@ export default function ForgotPasswordPage() {
           </div>
 
           <div className="text-center">
-            <h1 className="text-[24px] font-bold text-cocoa mb-2">
+            <h1 className="text-2xl font-bold text-cocoa mb-2">
               {submitted ? "Check your email" : "Forgot your password?"}
             </h1>
-            <p className="text-gray-700 text-[20px]">
+            <p className="text-gray-700 text-xl">
               {submitted
                 ? "If an account exists for that email, a password reset link is on its way."
                 : "Enter your email and we'll send you a link to reset it."}
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
 
         {submitted ? (
           <div className="flex flex-col gap-8">
-            <p className="text-gray-700 text-[16px] leading-6 text-center">
+            <p className="text-gray-700 text-base leading-6 text-center">
               The link expires shortly for your security. Didn&apos;t get it?
               Check your spam folder, or try again.
             </p>
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
                 asChild
                 variant="primary"
                 size="lg"
-                className="w-full text-[18px] font-bold"
+                className="w-full text-lg font-bold"
               >
                 <Link to="/login">Back to sign in</Link>
               </Button>
@@ -104,7 +104,7 @@ export default function ForgotPasswordPage() {
                   setSubmitted(false);
                   setEmail("");
                 }}
-                className="flex items-center justify-center gap-2 text-[16px] text-priori-purple hover:underline cursor-pointer"
+                className="flex items-center justify-center gap-2 text-base text-priori-purple hover:underline cursor-pointer"
               >
                 <ArrowLeft className="size-4" />
                 Try another email
@@ -114,7 +114,7 @@ export default function ForgotPasswordPage() {
         ) : (
           <form className="space-y-8" onSubmit={handleSubmit} noValidate>
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-cocoa py-1 font-bold text-[18px] leading-7">Email Address</Label>
+              <Label htmlFor="email" className="text-cocoa py-1 font-bold text-lg leading-7">Email Address</Label>
               <Input
                 id="email"
                 name="email"
@@ -138,14 +138,14 @@ export default function ForgotPasswordPage() {
               variant="primary"
               size="lg"
               loading={submitting}
-              className="w-full text-[18px] font-bold"
+              className="w-full text-lg font-bold"
             >
               Send reset link
             </Button>
 
             <Link
               to="/login"
-              className="flex items-center justify-center gap-2 text-[16px] text-priori-purple hover:underline"
+              className="flex items-center justify-center gap-2 text-base text-priori-purple hover:underline"
             >
               <ArrowLeft className="size-4" />
               Back to sign in

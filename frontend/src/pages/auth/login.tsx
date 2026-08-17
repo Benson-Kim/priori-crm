@@ -96,8 +96,8 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center">
-            <h1 className="text-[24px] font-bold text-cocoa mb-2">Welcome back</h1>
-            <p className="text-gray-700 text-[20px]">
+            <h1 className="text-2xl font-bold text-cocoa mb-2">Welcome back</h1>
+            <p className="text-gray-700 text-xl">
               Sign in to manage invoicing instantly
             </p>
           </div>
@@ -105,7 +105,7 @@ export default function LoginPage() {
 
         <form className="space-y-8" onSubmit={handleSubmit} noValidate>
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-cocoa py-1 font-bold text-[18px] leading-7">Email Address</Label>
+            <Label htmlFor="email" className="text-cocoa py-1 font-bold text-lg leading-7">Email Address</Label>
             <Input
               id="email"
               name="email"
@@ -119,7 +119,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-cocoa py-1 font-bold text-[18px] leading-7">Password</Label>
+            <Label htmlFor="password" className="text-cocoa py-1 font-bold text-lg leading-7">Password</Label>
             <Input
               id="password"
               name="password"
@@ -163,11 +163,11 @@ export default function LoginPage() {
                 onChange={(e) => setRememberMeLocal(e.target.checked)}
                 className="h-6 w-6 border border-gray-500 accent-priori-purple cursor-pointer"
               />
-              <Label htmlFor="remember_me" className="text-gray-700 text-[16px] leading-6">Remember me</Label>
+              <Label htmlFor="remember_me" className="text-gray-700 text-base leading-6">Remember me</Label>
             </div>
             <Link
               to="/forgot-password"
-              className="text-[16px] text-priori-purple hover:underline"
+              className="text-base text-priori-purple hover:underline"
             >
               Forgot Password?
             </Link>
@@ -177,7 +177,7 @@ export default function LoginPage() {
             variant="primary"
             size="lg"
             loading={submitting}
-            className="w-full text-[18px] font-bold"
+            className="w-full text-lg font-bold"
           >
             Continue
           </Button>
