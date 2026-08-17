@@ -36,18 +36,30 @@ customers do** (see the synthetic monitoring section below).
 - Any `dead > 0` fails the scheduled job immediately (alert). See
   `email-outbox-dlq.md`.
 
-### 4. Data durability — **RPO ≤ 24 h, RTO ≤ 4 h**
-- **RPO** (max data loss): bounded by the nightly `pg_dump` + uploads archive
-  (`deploy/db_backup.sh` on the droplet, copied offsite). Anything written
-  after the last nightly backup is at risk; the pre-deploy dump narrows the
-  window only on deploy days.
+### 4. Data durability — **RPO ≤ 5 min (WAL archiving), RTO ≤ 4 h**
+- **RPO** (max data loss) — primary tier: **≤ 5 minutes**, bounded by
+  continuous WAL archiving (pgBackRest `archive-push`, `archive_timeout=60`
+  — see ADR-0013) plus weekly full / daily differential physical backups.
+- **RPO** — fallback tier: ≤ 24 h via the nightly `pg_dump` + uploads
+  archive (`deploy/db_backup.sh`, copied offsite). This tier is kept
+  deliberately: it is the independent recovery path if the physical chain is
+  unusable (page corruption carried forward, lost repo-cipher passphrase),
+  and it is version-portable. Uploads additionally get an hourly offsite
+  mirror (`deploy/uploads_sync.sh`), bounding document loss at ~1 h.
 - **RTO**: ≤ 4 hours from total droplet loss to serving again, following the
-  runbook.
-- **SLI**: the monthly `scheduled:db-restore-verify` run
-  (`.gitlab/ci/scheduled-jobs.yml`) restores the newest offsite dump into a
-  scratch Postgres and verifies the migration stamp, key table counts, and
-  that the newest `audit_events` row is inside the RPO window. A red run is
-  the alert.
+  runbook; rehearsed by a quarterly timed DR drill.
+- **SLIs**:
+  - the daily `scheduled:backup-freshness` run (dead-man's switch) fails red
+    if the newest archived WAL segment (> 60 min), physical backup
+    (full > 8 d / diff > 2 d), nightly dump (> 26 h), uploads archive
+    (> 26 h), or hourly-sync heartbeat (> 120 min) is stale;
+  - the monthly `scheduled:db-restore-verify` run restores the newest
+    offsite dump into a scratch Postgres and verifies the migration stamp,
+    key table counts, `audit_events` freshness, referential spot-checks, and
+    index validity. Its `RPO_HOURS=26` deliberately reflects the **nightly
+    tier's** cadence (24 h + scheduling slack), not the 5-minute WAL RPO —
+    WAL freshness is the daily job's 60-minute check. A red run is the
+    alert, in both cases.
 - Procedures and infrastructure checklist:
   [`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md).
 

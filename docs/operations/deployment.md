@@ -922,9 +922,13 @@ the failed deploy. Two consequences, both real work:
   human decision — not something the pipeline should automate.
 
 > The pre-deploy dump is **deploy insurance only** — it runs only when a deploy
-> runs and lives on the same droplet as the database. Nightly DR backups with
-> an offsite copy, the monthly automated restore test, and the step-by-step
-> restore procedures are in
+> runs and lives on the same droplet as the database. The real DR posture is
+> layered: continuous WAL archiving with pgBackRest (PITR, RPO ≤ 5 min —
+> ADR-0013), the nightly offsite `pg_dump` as the independent logical tier, an
+> hourly offsite uploads mirror, a daily backup-freshness dead-man's switch and
+> the monthly automated restore test in CI, and step-by-step restore
+> procedures (PITR walkthrough, droplet-loss rebuild, quarterly timed drill) —
+> all in
 > [`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md).
 
 A deliberate rollback (as opposed to the automatic health-check one) is its own
