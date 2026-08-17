@@ -73,10 +73,10 @@ export function SalesDeskSidebar({
                     className="h-8 w-8 shrink-0"
                 />
                 <div className="min-w-0 leading-tight">
-                    <p className="truncate text-[13px] font-bold text-gray-900">
+                    <p className="truncate text-dense-md font-bold text-gray-900">
                         Business Central
                     </p>
-                    <p className="truncate text-[10px] text-gray-600">Sales Desk</p>
+                    <p className="truncate text-dense-xs text-gray-600">Sales Desk</p>
                 </div>
             </Link>
 
@@ -126,13 +126,13 @@ export function SalesDeskSidebar({
                                 <p className="truncate text-xs font-semibold text-gray-900">
                                     {fullName}
                                 </p>
-                                <p className="truncate text-[10px] text-gray-600 capitalize">
+                                <p className="truncate text-dense-xs text-gray-600 capitalize">
                                     {role}
                                 </p>
                             </div>
                         </div>
                     )}
-                    <p className="px-1 text-[10px] leading-relaxed text-gray-600">
+                    <p className="px-1 text-dense-xs leading-relaxed text-gray-600">
                         &copy; 2026 Business Central &middot; All Rights Reserved
                         <br />
                         Version: 1.0.188-288

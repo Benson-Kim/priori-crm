@@ -27,7 +27,7 @@ export function DeskPanel({ title, children, className, bleed = false }: Readonl
         >
             <h2
                 className={cn(
-                    "text-[13px] font-semibold text-sd-ink",
+                    "text-dense-md font-semibold text-sd-ink",
                     bleed && "border-b border-sd-border px-5 py-4"
                 )}
             >

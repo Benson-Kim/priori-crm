@@ -346,7 +346,7 @@ export function DocumentEditor({
         {/* Top Section */}
         <div className="p-6 flex justify-between">
           <DocumentOwnerHeader editable={!restrictedMode} />
-          <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+          <h2 className="text-2xl font-black text-priori-purple tracking-wider mb-1 uppercase">
             {label}
           </h2>
         </div>
@@ -475,7 +475,7 @@ export function DocumentEditor({
 
         {/* Line Items */}
         <div className="p-6 flex flex-col gap-6">
-          <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+          <h3 className="text-xl leading-7 font-bold text-gray-800">
             Item Details
           </h3>
           {errors.lineItems && (
@@ -516,7 +516,7 @@ export function DocumentEditor({
         <div className="px-8 py-6">
           <label
             htmlFor="notes-input"
-            className="block text-[16px] font-bold text-gray-800 mb-3"
+            className="block text-base font-bold text-gray-800 mb-3"
           >
             Notes
           </label>
@@ -527,7 +527,7 @@ export function DocumentEditor({
             placeholder="Add notes here"
             rows={2}
             disabled={restrictedMode}
-            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
+            className="w-full p-4 border border-gray-300 rounded-xl text-base outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
           />
         </div>
 

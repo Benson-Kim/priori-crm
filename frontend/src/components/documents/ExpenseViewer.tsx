@@ -56,7 +56,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
           <div className="flex flex-col gap-1 min-w-0">
             <p className="text-sm text-gray-500 mb-1 whitespace-nowrap">To</p>
 
-            <p className="text-[16px] font-bold text-gray-800 truncate">
+            <p className="text-base font-bold text-gray-800 truncate">
               {data.vendor?.vendor_name ?? data.vendorId}
             </p>
 
@@ -81,7 +81,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
 
           {/* RIGHT — Metadata */}
           <div className="flex flex-col gap-6 min-w-0 self-end">
-            <h2 className="text-[22px] font-black text-priori-purple tracking-wider uppercase">
+            <h2 className="text-2xl font-black text-priori-purple tracking-wider uppercase">
               Expense
             </h2>
 
@@ -112,12 +112,12 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
 
       {/* Line Items */}
       <div className="p-6 flex flex-col gap-6">
-        <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+        <h3 className="text-xl leading-7 font-bold text-gray-800">
           Item Details
         </h3>
 
         <div className="pb-4">
-          <table className="w-full text-[16px] min-w-200">
+          <table className="w-full text-base min-w-200">
             <thead>
               <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-7 rounded-t-lg">
                 <th className="text-left px-3 font-bold leading-8 col-span-4">
@@ -186,7 +186,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
             <Divider />
 
             {/* Total Due */}
-            <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+            <div className="flex justify-between items-center font-bold text-base text-gray-900">
               <span>Total Due</span>
               <span>
                 {formatCurrency(data.totalDue, data.currency ?? "Ksh")}
@@ -197,7 +197,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
             {(data.amountPaid ?? 0) > 0 && (
               <>
                 <Divider />
-                <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+                <div className="flex justify-between items-center font-bold text-base text-gray-900">
                   <span>Amount Paid</span>
                   <span>
                     {formatCurrency(
@@ -206,7 +206,7 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
                     )}
                   </span>
                 </div>
-                <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+                <div className="flex justify-between items-center font-bold text-base text-gray-900">
                   <span>Balance Due</span>
                   <span>
                     {formatCurrency(
@@ -222,8 +222,8 @@ export function ExpenseViewer({ data }: Readonly<ExpenseViewerProps>) {
       </div>
 
       <div className="p-8 pt-6">
-        <p className="text-[16px] font-bold text-gray-800 mb-3">Notes</p>
-        <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
+        <p className="text-base font-bold text-gray-800 mb-3">Notes</p>
+        <div className="w-full px-3 py-4 text-base text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
           {data.notes ?? "No notes added."}
         </div>
       </div>
@@ -240,11 +240,11 @@ function MetaField({
 }) {
   return (
     <>
-      <span className="text-[16px] font-bold text-gray-800 whitespace-nowrap">
+      <span className="text-base font-bold text-gray-800 whitespace-nowrap">
         {label}
       </span>
 
-      <span className="text-[16px] text-gray-800 min-w-0 truncate">
+      <span className="text-base text-gray-800 min-w-0 truncate">
         {children}
       </span>
     </>

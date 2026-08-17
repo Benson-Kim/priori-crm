@@ -42,7 +42,12 @@ export function Chip({ tone, children, className }: Readonly<ChipProps>) {
     return (
         <span
             className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap",
+                /*
+                 * 13px, not `text-xs`. Chips are desk-only and sit inside
+                 * table rows, which the design sets at 13px throughout; 12px
+                 * was also off the desk's 10/11/13 dense scale entirely.
+                 */
+                "inline-flex items-center rounded-full px-2.5 py-0.5 text-dense-md font-semibold whitespace-nowrap",
                 TONE_STYLES[tone],
                 className
             )}

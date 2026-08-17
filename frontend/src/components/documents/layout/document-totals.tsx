@@ -129,7 +129,7 @@ export function DocumentTotalsPanel({
                 <Divider />
 
                 {/* Total Due */}
-                <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+                <div className="flex justify-between items-center font-bold text-base text-gray-900">
                     <span>Total Due</span>
                     <span>{formatCurrency(totals.totalDue, currency ?? "KES")}</span>
                 </div>
@@ -138,11 +138,11 @@ export function DocumentTotalsPanel({
                 {(amountPaid ?? 0) > 0 && (
                     <>
                         <Divider />
-                        <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+                        <div className="flex justify-between items-center font-bold text-base text-gray-900">
                             <span>Amount Paid</span>
                             <span>{formatCurrency(amountPaid ?? 0, currency ?? "KES")}</span>
                         </div>
-                        <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+                        <div className="flex justify-between items-center font-bold text-base text-gray-900">
                             <span>Balance Due</span>
                             <span>{formatCurrency(balanceDue ?? 0, currency ?? "KES")}</span>
                         </div>
