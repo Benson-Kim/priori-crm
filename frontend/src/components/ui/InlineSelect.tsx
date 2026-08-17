@@ -12,7 +12,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -56,6 +56,14 @@ interface InlineSelectProps {
    * is the type-ahead a native <select> used to give for free.
    */
   searchable?: boolean;
+  /**
+   * Offer an "add new" action at the top of the panel, for pickers whose
+   * record may not exist yet. Mirrors the selector modals, where creating and
+   * searching live together rather than the create sitting outside the field.
+   */
+  onAddNew?: () => void;
+  /** Label for that action, e.g. "Add New Company". */
+  addNewLabel?: string;
 }
 
 /** Lists at or above this length get a filter box unless told otherwise. */
@@ -102,6 +110,8 @@ export function InlineSelect({
   "aria-describedby": ariaDescribedBy,
   onClose,
   searchable,
+  onAddNew,
+  addNewLabel,
 }: InlineSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -308,6 +318,33 @@ export function InlineSelect({
             )}
             style={{ top: coords.top, left: coords.left, width: coords.width }}
           >
+            {/*
+             * "Add new" sits at the top of the panel, full width, above the
+             * filter — the placement `CustomerSelector` and `VendorSelector`
+             * already use, so creating a record reads the same wherever a
+             * record is picked. Closing first keeps the panel from hanging
+             * over whatever the action opens.
+             */}
+            {onAddNew && (
+              <div className="p-2 pb-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    onAddNew();
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2",
+                    "border border-priori-purple text-priori-purple bg-white",
+                    "font-medium transition-colors hover:bg-priori-purple hover:text-white",
+                    isDesk ? "text-dense-md" : "text-sm"
+                  )}
+                >
+                  <Plus size={16} /> {addNewLabel ?? "Add new"}
+                </button>
+              </div>
+            )}
+
             {showSearch && (
               // Sticky so the filter stays reachable while the list scrolls.
               <div className="sticky top-0 bg-white p-2 border-b border-gray-100">
@@ -360,7 +397,7 @@ export function InlineSelect({
                 }}
                 className={cn(
                   "flex items-center w-full text-left transition-colors",
-                  isDesk ? "px-3 py-2.5 text-[13px]" : "px-4 py-2.5 text-sm",
+                  isDesk ? "px-3 py-2.5 text-dense-md" : "px-4 py-2.5 text-sm",
                   opt.disabled
                     ? "text-gray-400 cursor-not-allowed"
                     : opt.value === value
