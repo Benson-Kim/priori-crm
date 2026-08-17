@@ -1,16 +1,47 @@
 import type { MetricChange } from "@/components/ui/MetricCard";
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
 import { DEFAULT_CURRENCY } from "./constants";
+
+/**
+ * tailwind-merge, taught about the dense type scale.
+ *
+ * `--text-dense-*` (index.css) generates `text-dense-md` and friends, but
+ * tailwind-merge only knows Tailwind's stock scale. An unrecognised `text-*`
+ * is assumed to be a *colour*, so merging `text-white` with `text-dense-md`
+ * dropped the colour and left buttons drawing their inherited ink on a brand
+ * fill. Registering the three sizes puts them in the font-size group, where
+ * they override each other and leave colours alone.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["dense-xs", "dense-sm", "dense-md"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * The shared field treatment: hover, and active/focus.
+ *
+ * This sat on a blue `focus:ring-2` that never fired — it is applied to the
+ * wrapper around a field, and a wrapper is not itself focusable, so `focus:`
+ * never matched and the only thing users saw was the base-layer ring on the
+ * inner element. Text fields therefore lit up differently from selects, which
+ * carry their own purple treatment.
+ *
+ * `focus-within` is the mechanism a wrapper needs, and it also matches when
+ * the element itself is focused, so a focusable trigger (the calendar) can
+ * share it. The colours are `InlineSelect`'s, which is the control the rest of
+ * the app is being matched to.
+ */
 export const focusInput = [
-  "focus:ring-2",
-  "focus:ring-blue-200 focus:dark:ring-blue-700/30",
-  "focus:border-blue-500 focus:dark:border-blue-700",
+  "hover:border-priori-purple/50",
+  "focus-within:border-priori-purple focus-within:ring-1 focus-within:ring-priori-purple",
 ];
 
 export const focusRing = [
@@ -218,6 +249,25 @@ export function formatKenyanPhoneInput(value: string) {
   const part3 = digits.slice(6, 9);
 
   return [part1, part2, part3].filter(Boolean).join(" ");
+};
+
+/**
+ * The nine local digits of a Kenyan number, from any shape a record holds it
+ * in (`+254712345678`, `0712345678`, `712 345 678`). This is the shape
+ * `KenyanPhoneInput` speaks in.
+ */
+export function toLocalKenyanDigits(value: string) {
+  return getKenyanPhoneDigits(value);
+};
+
+/**
+ * The `+254…` form, for the modules that store a phone number that way
+ * (vendors, desk companies). Empty in, empty out, so an untouched blank field
+ * is not turned into a bare country code.
+ */
+export function toInternationalKenyanPhone(localDigits: string) {
+  const digits = getKenyanPhoneDigits(localDigits);
+  return digits ? `+254${digits}` : "";
 };
 
 export function getKenyanPhoneGhostText(value: string) {
