@@ -200,3 +200,157 @@ scheduled:db-restore-verify:
     - echo "Newest offsite dump: $LATEST"
     - rclone copyto "bk:${BACKUP_S3_BUCKET}/db/${LATEST}" ./latest.dump
     - bash deploy/db_restore_verify.sh ./latest.dump
+
+# Daily backup freshness — the dead-man's switch. A backup pipeline that
+# silently stops must be discovered within hours, not at restore time. This
+# job lists the offsite bucket with the same READ-ONLY credentials as
+# scheduled:db-restore-verify and fails red (the alert) if ANY tier is stale:
+#
+#   1. newest archived WAL segment       older than WAL_MAX_AGE_MIN (60 min)
+#   2. newest pgBackRest FULL backup     older than 8 days (weekly cadence + slack)
+#   3. newest pgBackRest full/diff       older than 2 days (daily diff cadence + slack)
+#   4. newest nightly-*.dump             older than 26 h
+#   5. newest uploads-*.tar.gz           older than 26 h
+#   6. uploads-sync heartbeat            older than UPLOADS_SYNC_MAX_AGE_MIN (120 min)
+#
+# Each check is reported independently, then a summary table, then a single
+# pass/fail — same shape as deploy/db_restore_verify.sh. Ages come from
+# object mtimes (checks 1, 4–6) and from pgBackRest's backup-label
+# timestamps (checks 2–3; labels are UTC and lexically sortable).
+#
+# Schedule (CI/CD > Schedules): SCHEDULED_TASK=backup-freshness  cron: 0 7 * * *
+# on develop, pipeline-failure notifications on. Reuses the four BACKUP_S3_*
+# variables from scheduled:db-restore-verify — no new credentials.
+#
+# Bring-up: set CHECK_PGBACKREST=0 (and CHECK_UPLOADS_SYNC=0) on the schedule
+# until the pgBackRest stanza / hourly sync are live, then remove the
+# overrides — a permanently red schedule trains everyone to ignore it. See
+# docs/runbooks/database-backup-restore.md, "Bring-up checklist".
+scheduled:backup-freshness:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "backup-freshness"'
+  image: alpine:3.20   # rclone + jq + GNU date added in before_script
+  variables:
+    WAL_MAX_AGE_MIN: "60"                # (1) RPO tier: WAL must land offsite continuously
+    PGBACKREST_FULL_MAX_AGE_DAYS: "8"    # (2) weekly full + 1 day slack
+    PGBACKREST_BACKUP_MAX_AGE_DAYS: "2"  # (3) daily diff (the Sunday full also satisfies this)
+    DUMP_MAX_AGE_HOURS: "26"             # (4) nightly pg_dump + scheduling slack
+    UPLOADS_TAR_MAX_AGE_HOURS: "26"      # (5) nightly uploads archive
+    UPLOADS_SYNC_MAX_AGE_MIN: "120"      # (6) hourly rclone sync + 1 missed run of slack
+    PGBACKREST_STANZA: "priori"
+    PGBACKREST_REPO_PATH: "pgbackrest"   # must match repo1-path in pgbackrest.conf
+    CHECK_PGBACKREST: "1"                # set "0" on the schedule until the stanza is live
+    CHECK_UPLOADS_SYNC: "1"              # set "0" on the schedule until the hourly sync is live
+  before_script:
+    - test -n "${BACKUP_S3_ENDPOINT:-}" || { echo "BACKUP_S3_ENDPOINT must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_BUCKET:-}" || { echo "BACKUP_S3_BUCKET must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_ACCESS_KEY_ID:-}" || { echo "BACKUP_S3_ACCESS_KEY_ID must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_SECRET_ACCESS_KEY:-}" || { echo "BACKUP_S3_SECRET_ACCESS_KEY must be set as a CI/CD variable." >&2; exit 1; }
+    # coreutils supplies GNU date (RFC3339 parsing); busybox date cannot.
+    - apk add --no-cache rclone jq coreutils
+  script:
+    # rclone configured via environment only — no config file, no argv creds.
+    - export RCLONE_CONFIG_BK_TYPE=s3
+    - export RCLONE_CONFIG_BK_PROVIDER=Other
+    - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
+    - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
+    - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    - |
+      now="$(date -u +%s)"
+      fail=0
+      SUMMARY=""
+
+      note() { SUMMARY="${SUMMARY}$(printf '%-36s %s' "$1" "$2")
+      "; }
+
+      # Epoch of the newest object under bucket/<path>, empty if none exist.
+      newest_epoch() {
+        ts="$(rclone lsjson -R --files-only "bk:${BACKUP_S3_BUCKET}/$1" 2>/dev/null | jq -r '[.[].ModTime] | max // empty')"
+        [ -n "$ts" ] && date -u -d "$ts" +%s
+      }
+
+      # Check that the newest object under a prefix is younger than a budget.
+      check_age() {
+        name="$1"; path="$2"; budget_min="$3"
+        e="$(newest_epoch "$path" || true)"
+        if [ -z "$e" ]; then
+          echo "FAIL: ${name} — nothing found under ${BACKUP_S3_BUCKET}/${path}" >&2
+          note "$name" "FAIL (nothing found)"
+          fail=1
+          return 0
+        fi
+        age_min=$(( (now - e) / 60 ))
+        if [ "$age_min" -gt "$budget_min" ]; then
+          echo "FAIL: ${name} — newest is ${age_min} min old (budget ${budget_min} min)" >&2
+          note "$name" "FAIL (${age_min}m > ${budget_min}m)"
+          fail=1
+        else
+          echo "OK: ${name} — newest is ${age_min} min old (budget ${budget_min} min)"
+          note "$name" "PASS (${age_min}m <= ${budget_min}m)"
+        fi
+      }
+
+      # Newest pgBackRest backup label matching a pattern. Labels look like
+      # 20260810-003000F (full) / ..._20260811-003000D (diff); the LAST
+      # timestamp in the directory name is the backup's start time (UTC).
+      newest_label() {
+        rclone lsf --dirs-only "bk:${BACKUP_S3_BUCKET}/${PGBACKREST_REPO_PATH}/backup/${PGBACKREST_STANZA}/" 2>/dev/null \
+          | grep -E "$1" | sed -E 's|.*_||; s|[FDI]/$||' | sort | tail -n 1
+      }
+
+      check_label_age() {
+        name="$1"; pattern="$2"; budget_min="$3"
+        lbl="$(newest_label "$pattern" || true)"
+        if [ -z "$lbl" ]; then
+          echo "FAIL: ${name} — no backup found in ${PGBACKREST_REPO_PATH}/backup/${PGBACKREST_STANZA}/" >&2
+          note "$name" "FAIL (nothing found)"
+          fail=1
+          return 0
+        fi
+        e="$(date -u -d "$(printf '%s' "$lbl" | sed -E 's/^(....)(..)(..)-(..)(..)(..)$/\1-\2-\3 \4:\5:\6/') UTC" +%s || true)"
+        if [ -z "$e" ]; then
+          echo "FAIL: ${name} — could not parse backup label '${lbl}'" >&2
+          note "$name" "FAIL (unparseable label)"
+          fail=1
+          return 0
+        fi
+        age_min=$(( (now - e) / 60 ))
+        if [ "$age_min" -gt "$budget_min" ]; then
+          echo "FAIL: ${name} — newest (${lbl}) is ${age_min} min old (budget ${budget_min} min)" >&2
+          note "$name" "FAIL (${age_min}m > ${budget_min}m)"
+          fail=1
+        else
+          echo "OK: ${name} — newest (${lbl}) is ${age_min} min old (budget ${budget_min} min)"
+          note "$name" "PASS (${age_min}m <= ${budget_min}m)"
+        fi
+      }
+
+      if [ "$CHECK_PGBACKREST" = "1" ]; then
+        check_age "WAL archive" "${PGBACKREST_REPO_PATH}/archive/${PGBACKREST_STANZA}" "$WAL_MAX_AGE_MIN"
+        check_label_age "pgBackRest full backup" '^[0-9]{8}-[0-9]{6}F/$' $(( PGBACKREST_FULL_MAX_AGE_DAYS * 1440 ))
+        check_label_age "pgBackRest full/diff backup" '^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?/$' $(( PGBACKREST_BACKUP_MAX_AGE_DAYS * 1440 ))
+      else
+        echo "NOTICE: CHECK_PGBACKREST=0 — pgBackRest checks skipped (bring-up only; remove once the stanza is live)"
+        note "pgBackRest checks" "SKIPPED (CHECK_PGBACKREST=0)"
+      fi
+
+      check_age "nightly pg_dump" "db" $(( DUMP_MAX_AGE_HOURS * 60 ))
+      check_age "nightly uploads archive" "uploads" $(( UPLOADS_TAR_MAX_AGE_HOURS * 60 ))
+
+      if [ "$CHECK_UPLOADS_SYNC" = "1" ]; then
+        check_age "uploads-sync heartbeat" "heartbeats" "$UPLOADS_SYNC_MAX_AGE_MIN"
+      else
+        echo "NOTICE: CHECK_UPLOADS_SYNC=0 — uploads-sync heartbeat check skipped (bring-up only)"
+        note "uploads-sync heartbeat" "SKIPPED (CHECK_UPLOADS_SYNC=0)"
+      fi
+
+      echo ""
+      echo "==== backup freshness summary ===================="
+      printf '%s' "$SUMMARY"
+      echo "==================================================="
+      if [ "$fail" -ne 0 ]; then
+        echo "BACKUP FRESHNESS CHECK FAILED — a backup tier is stale or missing." >&2
+        exit 1
+      fi
+      echo "BACKUP FRESHNESS CHECK PASSED"
