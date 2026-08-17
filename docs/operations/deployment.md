@@ -921,6 +921,12 @@ the failed deploy. Two consequences, both real work:
 - **The `pg_dump` is the true undo.** Restoring it is a deliberate, data-loss-bearing
   human decision — not something the pipeline should automate.
 
+> The pre-deploy dump is **deploy insurance only** — it runs only when a deploy
+> runs and lives on the same droplet as the database. Nightly DR backups with
+> an offsite copy, the monthly automated restore test, and the step-by-step
+> restore procedures are in
+> [`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md).
+
 A deliberate rollback (as opposed to the automatic health-check one) is its own
 manual workflow; it only repoints the symlink to a release already on disk:
 

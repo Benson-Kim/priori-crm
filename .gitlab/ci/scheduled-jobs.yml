@@ -141,3 +141,62 @@ scheduled:synthetic-critical-path:
       if [ -n "$FRONTEND_BASE_URL" ]; then
         probe "${FRONTEND_BASE_URL%/}/" ""
       fi
+
+# Monthly backup restore test: fetch the newest nightly dump from the offsite
+# bucket (read-only credentials), restore it into a throwaway Postgres service
+# container, and verify it — migration stamp present, key tables non-empty,
+# newest audit_events row inside the RPO window (see deploy/db_restore_verify.sh
+# and docs/runbooks/database-backup-restore.md). A red run is the alert, same
+# convention as the synthetic monitoring. Production credentials are never
+# involved: the job sees only a read-only bucket key and a scratch database
+# that exists solely for this pipeline.
+#
+# Schedule (CI/CD > Schedules): SCHEDULED_TASK=restore-verify  cron: 0 3 1 * *
+#
+# Required CI/CD variables (masked, not in repo):
+#   - BACKUP_S3_ENDPOINT           e.g. https://fra1.digitaloceanspaces.com
+#   - BACKUP_S3_BUCKET             e.g. priori-crm-backups
+#   - BACKUP_S3_ACCESS_KEY_ID      READ-ONLY key scoped to the backup bucket
+#   - BACKUP_S3_SECRET_ACCESS_KEY  its secret
+scheduled:db-restore-verify:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "restore-verify"'
+  image: postgres:16-alpine   # pg_restore + psql; rclone added in before_script
+  services:
+    - name: postgres:16-alpine
+      alias: scratch-postgres
+  variables:
+    # The base job never checks out the repo; this one needs
+    # deploy/db_restore_verify.sh from the tree.
+    GIT_STRATEGY: fetch
+    # Scratch service credentials — disposable and pipeline-local, not secrets.
+    POSTGRES_DB: restore_verify
+    POSTGRES_USER: verify
+    POSTGRES_PASSWORD: scratch-only
+    # Password deliberately NOT in the URL (argv is visible in ps) — psql
+    # reads PGPASSWORD from the environment instead.
+    SCRATCH_DB_URL: postgresql://verify@scratch-postgres:5432/restore_verify
+    PGPASSWORD: scratch-only
+    RPO_HOURS: "26"
+  before_script:
+    - test -n "${BACKUP_S3_ENDPOINT:-}" || { echo "BACKUP_S3_ENDPOINT must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_BUCKET:-}" || { echo "BACKUP_S3_BUCKET must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_ACCESS_KEY_ID:-}" || { echo "BACKUP_S3_ACCESS_KEY_ID must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_SECRET_ACCESS_KEY:-}" || { echo "BACKUP_S3_SECRET_ACCESS_KEY must be set as a CI/CD variable." >&2; exit 1; }
+    - apk add --no-cache rclone
+  script:
+    # rclone is configured via environment only — no config file on disk and
+    # no credentials on argv.
+    - export RCLONE_CONFIG_BK_TYPE=s3
+    - export RCLONE_CONFIG_BK_PROVIDER=Other
+    - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
+    - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
+    - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    # Dump names embed a fixed-width UTC timestamp, so lexical sort order is
+    # chronological order and `sort | tail -1` is the newest dump.
+    - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | sort | tail -n 1)"
+    - test -n "$LATEST" || { echo "No dumps found in ${BACKUP_S3_BUCKET}/db/ — is the nightly backup running?" >&2; exit 1; }
+    - echo "Newest offsite dump: $LATEST"
+    - rclone copyto "bk:${BACKUP_S3_BUCKET}/db/${LATEST}" ./latest.dump
+    - bash deploy/db_restore_verify.sh ./latest.dump
