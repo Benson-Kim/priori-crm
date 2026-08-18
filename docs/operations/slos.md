@@ -41,7 +41,8 @@ customers do** (see the synthetic monitoring section below).
   continuous WAL archiving (pgBackRest `archive-push`, `archive_timeout=60`
   — see ADR-0013) plus weekly full / daily differential physical backups.
 - **RPO** — fallback tier: ≤ 24 h via the nightly `pg_dump` + uploads
-  archive (`deploy/db_backup.sh`, copied offsite). This tier is kept
+  archive (`deploy/db_backup.sh`, age-encrypted client-side with its own
+  escrowed key, copied offsite). This tier is kept
   deliberately: it is the independent recovery path if the physical chain is
   unusable (page corruption carried forward, lost repo-cipher passphrase),
   and it is version-portable. Uploads additionally get an hourly offsite

@@ -21,7 +21,7 @@ MR !74, `docs/operations/deployment.md` §5.3, `docs/operations/slos.md` (SLO 4)
 | Made by | `archive_command` (continuous) + cron full/diff backups | `deploy/db_backup.sh` (cron, nightly) | `deploy/production_release.sh` (during a production deploy) |
 | When | WAL: continuously, ≤ 60 s idle lag. Full: weekly. Diff: daily | every night, `15 1 * * *` UTC | only when a deploy runs |
 | Contains | exact physical cluster + every WAL segment → restore to **any second** in the retention window | database snapshot (also: `shared/uploads` tar) | database only |
-| Lives | Spaces bucket, `pgbackrest/` prefix, **AES-256-CBC encrypted client-side** | droplet `backups/` + bucket `db/`, `uploads/` | `/srv/priori/backups/pre-<sha>.dump`, droplet only |
+| Lives | Spaces bucket, `pgbackrest/` prefix, **AES-256-CBC encrypted client-side** (pgBackRest cipher passphrase) | droplet `backups/` + bucket `db/`, `uploads/`, **age-encrypted client-side** (own key, separate escrow) | `/srv/priori/backups/pre-<sha>.dump`, droplet only |
 | Purpose | primary recovery: droplet loss, corruption, accidental deletion — with minutes of loss | independent fallback path; version-portable restores; source for surgical row extraction | undo for a bad migration right after a deploy |
 | Tested | daily `pgbackrest check` + hourly CI WAL-freshness + daily CI freshness + quarterly drill | **monthly**, by `scheduled:db-restore-verify` + daily CI freshness | never automatically |
 
@@ -30,8 +30,10 @@ backup faithfully copies whatever is on disk, including silently corrupted
 pages, and it is only readable by the same major version with the same
 cipher passphrase. The logical dump reads rows through the SQL layer (it
 cannot carry page corruption forward), restores into any newer PostgreSQL,
-and does not depend on the pgBackRest passphrase. The two tiers fail
-differently — that is the point.
+and does not depend on the pgBackRest passphrase — it is encrypted with its
+**own** age key (`deploy/db_backup.sh`), escrowed separately, so the two
+tiers never share a single point of loss. The two tiers fail differently —
+that is the point.
 
 ### Uploads: two tiers
 
@@ -44,6 +46,7 @@ get the same treatment:
 | Exposure | ≤ ~1 hour | ≤ 24 hours |
 | Purpose | freshness — droplet loss costs at most an hour of documents | point-in-time archive |
 | Deletion safety | deletions propagate — **bucket versioning is required** so any deleted/overwritten file is recoverable as a prior version; `--max-delete` refuses mass deletions | tars are immutable snapshots |
+| Encryption | **plaintext in the bucket — accepted risk** (see anti-tamper section): per-file `rclone sync` needs stable names/mtimes for delta sync and versioning; client-side encryption here means an `rclone crypt` remote, filed as follow-up | age-encrypted client-side, same key as the nightly dumps |
 
 Retention: newest 14 nightly dumps / 7 uploads tars locally (script
 defaults); bucket lifecycle expires `db/` and `uploads/` objects after 35
@@ -122,8 +125,8 @@ mean no alert):
    - newest archived WAL segment older than 60 min (`WAL_MAX_AGE_MIN`);
    - newest pgBackRest **full** older than 8 days;
    - newest pgBackRest full/**diff** older than 2 days;
-   - newest `nightly-*.dump` older than 26 h;
-   - newest `uploads-*.tar.gz` older than 26 h;
+   - newest `nightly-*.dump.age` older than 26 h;
+   - newest `uploads-*.tar.gz.age` older than 26 h;
    - uploads-sync heartbeat (`heartbeats/uploads-sync`, touched only after a
      successful hourly sync) older than 120 min.
 
@@ -150,9 +153,11 @@ mean no alert):
 
 2. **`scheduled:db-restore-verify`** (monthly, cron `0 3 1 * *`,
    `SCHEDULED_TASK=restore-verify`) — proves the logical tier actually
-   restores. Downloads the newest offsite dump (read-only key), restores
-   into a throwaway Postgres service, and fails unless **all** of:
-   1. `pg_restore --exit-on-error` completes;
+   restores. Downloads the newest offsite dump (read-only key), decrypts it
+   (age identity from the masked `BACKUP_AGE_IDENTITY` variable — proving
+   the escrowed key actually opens the artifacts), restores into a
+   throwaway Postgres service, and fails unless **all** of:
+   1. age decryption succeeds and `pg_restore --exit-on-error` completes;
    2. `alembic_version` carries a migration stamp;
    3. key tables (`users`, `customers`, `invoices`, `payments`,
       `audit_events`) are non-empty;
@@ -220,6 +225,32 @@ is irreversible for the recovery window.
       manager + droplet 0600 config (see Tier 1 above). Losing it makes every
       physical backup unreadable; leaking it only matters together with
       bucket read access. Two locations minimum, zero copies anywhere else.
+- [ ] **Tier 2 is age-encrypted client-side with its own, separately
+      escrowed key.** `deploy/db_backup.sh` pipes the nightly dump and the
+      uploads tar through `age` before anything leaves the droplet — bucket
+      ACLs are not what stands between the full ledger + PII and disclosure.
+      Key material:
+
+      | Piece | Where |
+      |---|---|
+      | age **public** recipient(s) | droplet `/etc/priori/backup-age-recipients.txt` (not secret) |
+      | age **private** identity | password manager (canonical) + masked CI variable `BACKUP_AGE_IDENTITY` (needed by the monthly restore test) — nowhere else, never on the droplet |
+
+      This key is deliberately **not** the pgBackRest passphrase: the tiers
+      must not share a single point of loss. **Accepted residual risks**,
+      recorded deliberately:
+      1. the monthly `scheduled:db-restore-verify` job must decrypt what it
+         verifies, so a **full** CI-variable compromise (bucket read key
+         **and** `BACKUP_AGE_IDENTITY` together) still discloses dump
+         contents. That is a strictly smaller exposure than before (a bucket
+         key alone — leaked, logged, or exposed by a bucket-policy mistake —
+         now yields ciphertext), and it is the price of an automatically
+         tested restore path. Rotate both on any suspicion.
+      2. the hourly `uploads-sync/` mirror is **plaintext in the bucket**:
+         per-file `rclone sync` relies on stable names/mtimes for delta
+         syncs and object versioning. Encrypting it client-side means an
+         `rclone crypt` remote (breaks direct object recovery and version
+         inspection) — filed as a follow-up, not silently ignored.
 - [ ] **`audit_events` is append-only** (docs/database.md §4) and every
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
@@ -232,8 +263,8 @@ is irreversible for the recovery window.
 | Accidental deletion / bad bulk update at a known time | Tier 1: PITR to T−1 min on a **scratch** cluster + surgical reinsert (scenario 0) | keeps everyone else's writes; a full restore would discard them |
 | Physical/page corruption detected | Tier 1: full backup from **before** the corruption + PITR stopping just before it | physical restore is exact; if corruption predates all retained fulls, fall back to the newest clean nightly dump — logical dumps read rows and cannot carry page corruption |
 | Droplet loss | Tier 1: latest full + diff + replay of **all** archived WAL (scenario 1) | minutes of loss instead of 24 h; Tier 2 is the fallback path in the same scenario |
-| pgBackRest repo unusable (lost passphrase, poisoned repo) | Tier 2: newest `nightly-*.dump` | the independent tier — this is why it exists |
-| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning); else the nightly `uploads-*.tar.gz` | versioning keeps every generation for 14 days after deletion |
+| pgBackRest repo unusable (lost passphrase, poisoned repo) | Tier 2: newest `nightly-*.dump.age` (decrypt with the age identity from the password manager) | the independent tier — this is why it exists |
+| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning); else the nightly `uploads-*.tar.gz.age` (decrypt with the age identity first) | versioning keeps every generation for 14 days after deletion |
 | Bucket tampered with using the droplet's key | object versions, restored with the **admin key** from a clean machine | droplet key cannot purge versions |
 
 All restores are deliberate, data-loss-bearing human decisions — never
@@ -314,7 +345,13 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    `PGPASSFILE`, never argv:
    ```bash
    rclone lsf spaces:priori-crm-backups/db/ | grep '^nightly-' | sort | tail -1
-   rclone copy spaces:priori-crm-backups/db/nightly-<utc>.dump /srv/priori/backups/
+   rclone copy spaces:priori-crm-backups/db/nightly-<utc>.dump.age /srv/priori/backups/
+   # Decrypt with the Tier-2 age identity from the password manager, via a
+   # 0600 file — never type the key into a command line (argv/shell history):
+   (umask 077 && touch /tmp/age-identity.txt) && ${EDITOR:-nano} /tmp/age-identity.txt  # paste the identity, save
+   age -d -i /tmp/age-identity.txt /srv/priori/backups/nightly-<utc>.dump.age \
+     > /srv/priori/backups/nightly-<utc>.dump
+   rm -f /tmp/age-identity.txt
    createdb priori_crm
    pg_restore --no-owner --no-privileges --exit-on-error -d "$PG_URL" \
      /srv/priori/backups/nightly-<utc>.dump
@@ -323,7 +360,8 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    ```bash
    rclone sync spaces:priori-crm-backups/uploads-sync /srv/priori/shared/uploads
    chmod 700 /srv/priori/shared/uploads
-   # fallback: tar -xzf the newest uploads-<utc>.tar.gz from uploads/
+   # fallback: fetch the newest uploads-<utc>.tar.gz.age from uploads/,
+   # age -d -i <identity> it (as in step 4), then tar -xzf the result
    ```
 6. Deploy the current `main` via *Deploy production* (`workflow_dispatch`).
    The release script's `alembic upgrade head` brings the restored schema to
@@ -386,7 +424,8 @@ Checklist (record every timestamp in the ops log):
 - [ ] **Cipher-passphrase retrieval from escrow — by someone other than the
       person who set it up, timed.** An engineer who is **not** the author
       of the backup configuration retrieves the pgBackRest repo-cipher
-      passphrase (and the bucket key, Variant A) from the password manager
+      passphrase (and the bucket key, Variant A; and the Tier-2 age identity
+      whenever the drill exercises the logical fallback) from the password manager
       **without help from the author**, and the retrieval timestamp
       (T_escrow) is recorded separately in the ops log. If only the author
       can find or access the escrow, the escrow has failed — the RTO number
@@ -438,8 +477,12 @@ later steps verify earlier ones.
        (per-bucket), CI **read-only** (per-bucket), admin **full-access**
        stored only in the password manager. Generate the repo-cipher
        passphrase (`openssl rand -base64 48`) and store it in the password
-       manager **before** it ever touches the droplet.
-3. [ ] **Droplet packages**: `apt-get install pgbackrest rclone
+       manager **before** it ever touches the droplet. Generate the Tier-2
+       age keypair (`age-keygen`) on a trusted machine: store the **private
+       identity** in the password manager (it later also becomes the
+       `BACKUP_AGE_IDENTITY` CI variable, step 9); only the **public
+       recipient** line goes to the droplet (step 8).
+3. [ ] **Droplet packages**: `apt-get install pgbackrest rclone age
        postgresql-client`; `install -d -o postgres -g postgres -m 750
        /var/log/pgbackrest`. Configure the deploy user's rclone remote
        (`rclone config`, name `spaces`) with the droplet key.
@@ -465,6 +508,12 @@ later steps verify earlier ones.
        install -D -m 0700 deploy/db_backup.sh    /srv/priori/bin/db_backup.sh
        install -D -m 0700 deploy/uploads_sync.sh /srv/priori/bin/uploads_sync.sh
        ```
+       Install the age **public** recipient (from step 2; public — not a
+       secret, but root-owned so cron can't be silently re-pointed):
+       ```bash
+       sudo install -D -m 0644 -o root -g root \
+         <recipient-file> /etc/priori/backup-age-recipients.txt
+       ```
        Deploy user's crontab:
        ```cron
        # nightly DB dump + uploads tar (after the 00:15 UTC nightly transitions)
@@ -476,6 +525,9 @@ later steps verify earlier ones.
 9. [ ] **CI variables** (masked, Settings > CI/CD > Variables):
        - the four `BACKUP_S3_*` variables using the **read-only** key from
          step 2;
+       - `BACKUP_AGE_IDENTITY` — the Tier-2 age **private identity** from
+         step 2 (the monthly restore test must decrypt what it verifies;
+         accepted residual risk recorded in the anti-tamper section);
        - `ALERT_WEBHOOK_URL` — incoming-webhook URL of the **shared** alerts
          channel (Slack/Mattermost/Google Chat `{"text": ...}` payload).
          `scheduled:notify-failure` POSTs every scheduled-pipeline failure

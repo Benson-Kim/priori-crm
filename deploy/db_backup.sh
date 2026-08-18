@@ -9,17 +9,28 @@
 # droplet as the database it protects.
 #
 # What this script does, in order, failing loudly at each step:
-#   1. pg_dump -Fc of the production database -> backups/nightly-<UTC>.dump
-#   2. tar.gz of shared/uploads               -> backups/uploads-<UTC>.tar.gz
+#   1. pg_dump -Fc | age -> backups/nightly-<UTC>.dump.age
+#   2. tar.gz | age of shared/uploads -> backups/uploads-<UTC>.tar.gz.age
 #   3. prune local copies (newest DB_RETAIN / UPLOADS_RETAIN kept)
 #   4. copy both artifacts offsite via rclone (RCLONE_REMOTE) — droplet loss
 #      must never take the only backups with it.
+#
+# Client-side encryption (age, asymmetric): dumps and tars hold the full
+# financial ledger + PII, and bucket ACLs alone must not be what stands
+# between them and disclosure (a leaked bucket key or a bucket-policy
+# mistake would otherwise expose plaintext). The droplet holds ONLY the age
+# PUBLIC recipient(s) in AGE_RECIPIENTS_FILE; the PRIVATE identity that
+# decrypts is escrowed off-droplet (password manager, canonical) and — for
+# the monthly CI restore test — in the masked BACKUP_AGE_IDENTITY variable.
+# This key is deliberately SEPARATE from the pgBackRest repo-cipher
+# passphrase: the two tiers must not share a single point of loss.
 #
 # Secret handling follows deploy/production_release.sh exactly: DATABASE_URL
 # is parsed out of shared/.env with python-dotenv (the file is dotenv syntax,
 # never source it), the password goes into a throwaway 0600 PGPASSFILE (never
 # argv — argv is visible in `ps` to every local account), and everything is
-# written under umask 077.
+# written under umask 077. The age recipients file contains only public
+# keys — nothing secret ever appears on argv or in this script's output.
 
 set -euo pipefail
 
@@ -34,6 +45,9 @@ UPLOADS_RETAIN="${UPLOADS_RETAIN:-7}" # newest N uploads archives kept locally
 # rclone destination, e.g. "spaces:priori-crm-backups". Offsite retention is
 # the bucket's lifecycle policy, not this script (see the runbook).
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+# age PUBLIC recipient(s), one per line (from `age-keygen`; the matching
+# private identity lives in the password manager, never on the droplet).
+AGE_RECIPIENTS_FILE="${AGE_RECIPIENTS_FILE:-/etc/priori/backup-age-recipients.txt}"
 # Set to 1 ONLY while offsite storage is being provisioned. A backup that
 # exists only on the droplet does not survive the droplet.
 ALLOW_LOCAL_ONLY="${ALLOW_LOCAL_ONLY:-0}"
@@ -50,6 +64,14 @@ if [ -z "$RCLONE_REMOTE" ] && [ "$ALLOW_LOCAL_ONLY" != "1" ]; then
 fi
 if [ -n "$RCLONE_REMOTE" ] && ! command -v rclone >/dev/null; then
   log "FATAL: RCLONE_REMOTE is set but rclone is not installed"
+  exit 1
+fi
+command -v age >/dev/null || { log "FATAL: age not found — install age (backups are client-side encrypted)"; exit 1; }
+if [ ! -s "$AGE_RECIPIENTS_FILE" ]; then
+  log "FATAL: $AGE_RECIPIENTS_FILE is missing or empty. Backups MUST be"
+  log "       client-side encrypted — install the age PUBLIC recipient(s)"
+  log "       there (bring-up checklist; the private identity stays in the"
+  log "       password manager, never on the droplet)."
   exit 1
 fi
 
@@ -101,14 +123,16 @@ PY
 STAMP="$(date -u '+%Y%m%d%H%M%S')"
 
 # --- 1. database dump ----------------------------------------------------------
-DB_DUMP="$BACKUP_DIR/nightly-$STAMP.dump"
-log "Dumping database to $DB_DUMP"
-# Remove the partial file if pg_dump fails: a truncated dump that restores
-# cleanly up to the truncation point is worse than no dump at all.
-pg_dump -Fc "$PG_URL" > "$DB_DUMP" || {
+DB_DUMP="$BACKUP_DIR/nightly-$STAMP.dump.age"
+log "Dumping database (encrypted) to $DB_DUMP"
+# Remove the partial file if any pipe stage fails: a truncated dump that
+# restores cleanly up to the truncation point is worse than no dump at all.
+# pipefail makes a pg_dump failure fail the whole pipeline even though age
+# is the last stage.
+pg_dump -Fc "$PG_URL" | age -e -R "$AGE_RECIPIENTS_FILE" > "$DB_DUMP" || {
   rc=$?
   rm -f "$DB_DUMP"
-  log "FATAL: pg_dump failed (exit $rc) — partial dump removed"
+  log "FATAL: pg_dump | age failed (exit $rc) — partial dump removed"
   exit "$rc"
 }
 
@@ -117,12 +141,13 @@ pg_dump -Fc "$PG_URL" > "$DB_DUMP" || {
 # unrecoverable as the database if the droplet is lost.
 UPLOADS_TAR=""
 if [ -d "$UPLOADS_DIR" ]; then
-  UPLOADS_TAR="$BACKUP_DIR/uploads-$STAMP.tar.gz"
-  log "Archiving uploads to $UPLOADS_TAR"
-  tar -czf "$UPLOADS_TAR" -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")" || {
+  UPLOADS_TAR="$BACKUP_DIR/uploads-$STAMP.tar.gz.age"
+  log "Archiving uploads (encrypted) to $UPLOADS_TAR"
+  tar -cz -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")" \
+    | age -e -R "$AGE_RECIPIENTS_FILE" > "$UPLOADS_TAR" || {
     rc=$?
     rm -f "$UPLOADS_TAR"
-    log "FATAL: uploads tar failed (exit $rc) — partial archive removed"
+    log "FATAL: uploads tar | age failed (exit $rc) — partial archive removed"
     exit "$rc"
   }
 else
@@ -130,13 +155,14 @@ else
 fi
 
 # --- 3. local retention ----------------------------------------------------------
-# Filenames are nightly-<UTC>.dump / uploads-<UTC>.tar.gz by construction — no
-# whitespace or control characters — so the ls|tail|xargs pipelines are safe.
+# Filenames are nightly-<UTC>.dump.age / uploads-<UTC>.tar.gz.age by
+# construction — no whitespace or control characters — so the ls|tail|xargs
+# pipelines are safe.
 # Pruning is best-effort and must not fail the backup under pipefail.
 # shellcheck disable=SC2012 # info: ls-vs-find; fixed-format names, and find has no portable -t sort
-ls -1t "$BACKUP_DIR"/nightly-*.dump 2>/dev/null | tail -n +"$((DB_RETAIN + 1))" | xargs -r rm -f -- || true
+ls -1t "$BACKUP_DIR"/nightly-*.dump.age 2>/dev/null | tail -n +"$((DB_RETAIN + 1))" | xargs -r rm -f -- || true
 # shellcheck disable=SC2012 # info: same reasoning as above
-ls -1t "$BACKUP_DIR"/uploads-*.tar.gz 2>/dev/null | tail -n +"$((UPLOADS_RETAIN + 1))" | xargs -r rm -f -- || true
+ls -1t "$BACKUP_DIR"/uploads-*.tar.gz.age 2>/dev/null | tail -n +"$((UPLOADS_RETAIN + 1))" | xargs -r rm -f -- || true
 
 # --- 4. offsite copy ----------------------------------------------------------
 if [ -n "$RCLONE_REMOTE" ]; then

@@ -18,7 +18,7 @@
 #
 # Usage:
 #   SCRATCH_DB_URL='postgresql://user@host:5432/db' PGPASSWORD='...' \
-#     db_restore_verify.sh <dump-file>
+#     db_restore_verify.sh <dump-file | dump-file.age>
 #
 # Environment:
 #   SCRATCH_DB_URL        (required) a DISPOSABLE, EMPTY Postgres database.
@@ -26,6 +26,11 @@
 #                         the full schema and data into it. Keep the password
 #                         out of the URL (argv is visible in `ps`); pass it
 #                         via PGPASSWORD or PGPASSFILE instead.
+#   AGE_IDENTITY_FILE     required when <dump-file> ends in .age (nightly
+#                         dumps are uploaded age-encrypted by
+#                         deploy/db_backup.sh): path to a 0600 file holding
+#                         the age private identity. A path, never the key —
+#                         nothing secret may appear on argv.
 #   RPO_HOURS             freshness budget for the newest audit_events row
 #                         (default 26: nightly cadence plus scheduling slack).
 #   REQUIRED_NONEMPTY     space-separated tables that must have > 0 rows.
@@ -51,6 +56,29 @@ note_result() { SUMMARY="${SUMMARY}$(printf '%-46s %s' "$1" "$2")"$'\n'; }
 command -v pg_restore >/dev/null || { log "FATAL: pg_restore not found"; exit 1; }
 command -v psql >/dev/null || { log "FATAL: psql not found"; exit 1; }
 [ -s "$DUMP_FILE" ] || { log "FATAL: $DUMP_FILE is missing or empty"; exit 1; }
+
+# --- optional client-side decryption (age) -------------------------------------
+# Nightly dumps are uploaded age-encrypted (deploy/db_backup.sh). When handed
+# a *.age file, decrypt it into a throwaway 0600 temp file first (mktemp
+# creates 0600; removed on exit). The identity arrives as a file path via
+# AGE_IDENTITY_FILE, never as a value on argv.
+DECRYPTED=""
+trap '[ -z "$DECRYPTED" ] || rm -f "$DECRYPTED"' EXIT
+case "$DUMP_FILE" in
+  *.age)
+    : "${AGE_IDENTITY_FILE:?AGE_IDENTITY_FILE must point at the age private identity (0600 file) to decrypt an .age dump}"
+    command -v age >/dev/null || { log "FATAL: age not found — needed to decrypt $DUMP_FILE"; exit 1; }
+    [ -s "$AGE_IDENTITY_FILE" ] || { log "FATAL: $AGE_IDENTITY_FILE is missing or empty"; exit 1; }
+    DECRYPTED="$(mktemp)"
+    log "Decrypting $DUMP_FILE"
+    age -d -i "$AGE_IDENTITY_FILE" "$DUMP_FILE" > "$DECRYPTED" || {
+      log "FATAL: age decryption failed — wrong identity or corrupted artifact"
+      exit 1
+    }
+    [ -s "$DECRYPTED" ] || { log "FATAL: decrypted dump is empty"; exit 1; }
+    DUMP_FILE="$DECRYPTED"
+    ;;
+esac
 
 # Refuse to restore into a database that already has tables — a mixed-up URL
 # must fail HERE, before pg_restore writes anything. Checked across ALL
