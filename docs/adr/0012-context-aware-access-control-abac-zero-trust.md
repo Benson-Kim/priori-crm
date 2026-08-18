@@ -103,8 +103,15 @@ after the initial OTP.
      force a step-up, never a termination, whatever it accumulates to
      across requests.
    - **HARD signals escalate directly**: impossible travel (70 — an
-     immediate challenge; termination only with corroboration, because
-     carrier-NAT geolocation jitter is a real false-positive source),
+     immediate challenge; HARD only when
+     `RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION="terminate"`. The **default is
+     `"challenge"`**: this deployment's market is mobile-heavy East
+     Africa, where carrier-CGNAT exit-node hopping makes IP geolocation
+     jump cities between requests, so a single hop still scores and still
+     forces a step-up but can never corroborate a termination — otherwise
+     the non-decaying session-start floor of a "new laptop, new place"
+     user (50) plus one geolocation hop (70) would hard-lock exactly the
+     user the soft-clamp exists to protect),
      exfiltration-scale reads (100 — 5x the global volume ceiling in one
      window terminates outright), repeated privilege-escalation 403s,
      repeated failed step-ups (exhausting the OTP budget terminates the

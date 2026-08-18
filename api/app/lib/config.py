@@ -120,6 +120,18 @@ class Settings(BaseSettings):
     # requests above this many km/h is an anomaly (900 ≈ airliner cruise).
     RISK_IMPOSSIBLE_TRAVEL_KMH: int = Field(default=900, ge=100, le=10000)
     RISK_SCORE_IMPOSSIBLE_TRAVEL: int = Field(default=70, ge=0, le=10000)
+    # Ceiling on what an impossible-travel firing may cause (#67 line
+    # review §3). This deployment's market is mobile-heavy East Africa,
+    # where carrier CGNAT exit-node hopping makes IP geolocation jump
+    # cities between requests and geo-IP databases are weakest — a single
+    # "impossible" hop is too weak an evidence base for a hard lockout.
+    # "challenge" (default): the signal still scores and alone still
+    #   forces a step-up, but it does NOT count as HARD evidence, so it
+    #   can never corroborate a termination (the soft-clamp applies).
+    # "terminate": the previous behaviour — impossible travel is HARD and
+    #   a crossing batch containing it terminates — for deployments whose
+    #   geo signal is trustworthy end-to-end.
+    RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION: Literal["challenge", "terminate"] = "challenge"
     RISK_SCORE_DEVICE_CHANGE: int = Field(default=25, ge=0, le=10000)
     RISK_SCORE_VOLUME_ANOMALY: int = Field(default=30, ge=0, le=10000)
     RISK_SCORE_PRIVILEGE_ESCALATION: int = Field(default=25, ge=0, le=10000)

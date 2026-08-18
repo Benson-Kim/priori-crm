@@ -411,6 +411,111 @@ class TestSoftSignalFalsePositives:
         assert challenged
         assert challenged[-1].after.get("soft_clamp") is True
 
+    def test_soft_floor_plus_impossible_travel_challenges_at_defaults(
+        self, client, db, trusted_ctx
+    ):
+        """#67 line review §3: THE most likely real-world FP lockout shape.
+
+        At DEFAULT thresholds: a session that began on a new device in a
+        new country carries a non-decaying floor of 50 (H10); ONE
+        impossible-travel firing later (+70 → 120 ≥ terminate 100) must
+        NOT terminate under the default mobile-heavy profile
+        (RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION="challenge") — the "hard"
+        evidence in that composition is carrier-CGNAT geolocation, this
+        market's weakest signal. The user steps up; nothing is killed.
+        """
+        assert settings.RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION == "challenge", (
+            "this regression pins the DEFAULT policy"
+        )
+        assert settings.RISK_TERMINATE_THRESHOLD == 100
+        assert settings.RISK_CHALLENGE_THRESHOLD == 60
+
+        user = _seed_user(db, "relocated@mail.com")
+        _seed_baseline(
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+
+        session, headers = _craft_session(db, user)
+        # Session start: new device + new country (US) = 50 — allowed,
+        # logged, floored.
+        first = client.get(
+            "/api/v1/customers", headers={**headers, **NEW_DEVICE, **US_GEO}
+        )
+        assert first.status_code == 200
+        db.refresh(session)
+        assert session.risk_floor == (
+            settings.RISK_SCORE_NEW_DEVICE + settings.RISK_SCORE_NEW_COUNTRY
+        )
+
+        # A carrier exit-node hop: the geolocation jumps continents within
+        # the same evaluation instant → impossible travel fires (+70).
+        # 50 + 70 = 120 crosses terminate — and must clamp to a challenge.
+        second = client.get(
+            "/api/v1/customers", headers={**headers, **NEW_DEVICE, **KE_GEO}
+        )
+        assert second.status_code == 401
+        assert second.json()["error_code"] == "STEP_UP_REQUIRED", (
+            "impossible travel under the default profile must cap at a "
+            "step-up, never terminate"
+        )
+        db.refresh(session)
+        assert session.status == SessionStatus.CHALLENGE_REQUIRED.value
+        assert session.status != SessionStatus.TERMINATED.value
+        assert session.risk_score >= settings.RISK_TERMINATE_THRESHOLD
+
+        events = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "session",
+                AuditEvent.action == "impossible_travel",
+            )
+            .all()
+        )
+        assert events, "the firing itself is still scored and audited"
+        assert not (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "session",
+                AuditEvent.action == "session_terminated",
+            )
+            .all()
+        )
+
+    def test_travel_terminate_policy_is_available_behind_config(
+        self, client, db, trusted_ctx, monkeypatch
+    ):
+        """The previous behaviour stays available: with
+        RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION="terminate" the same composition
+        (floor 50 + travel 70 = 120 ≥ 100, hard evidence in the crossing
+        batch) terminates the session."""
+        monkeypatch.setattr(settings, "RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION", "terminate")
+
+        user = _seed_user(db, "strict@mail.com")
+        _seed_baseline(
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+
+        session, headers = _craft_session(db, user)
+        first = client.get(
+            "/api/v1/customers", headers={**headers, **NEW_DEVICE, **US_GEO}
+        )
+        assert first.status_code == 200
+
+        second = client.get(
+            "/api/v1/customers", headers={**headers, **NEW_DEVICE, **KE_GEO}
+        )
+        assert second.status_code == 401
+        db.refresh(session)
+        assert session.status == SessionStatus.TERMINATED.value
+
     def test_empty_baseline_fires_nothing(self, client, db, trusted_ctx):
         """No history = nothing to deviate from = no penalty (fail-safe)."""
         user = _seed_user(db, "firstday@mail.com")

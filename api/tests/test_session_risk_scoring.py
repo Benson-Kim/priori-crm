@@ -198,6 +198,11 @@ class TestImpossibleTravel:
     def test_terminate_threshold_kills_the_session(
         self, client, db, trusted_geo, monkeypatch
     ):
+        # Legacy policy pinned explicitly (#67 line review §3): with the
+        # default RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION="challenge", travel is
+        # capped at a step-up — this test exercises the terminate
+        # machinery, so it opts into the "terminate" policy.
+        monkeypatch.setattr(settings, "RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION", "terminate")
         monkeypatch.setattr(settings, "RISK_TERMINATE_THRESHOLD", 50)
         _seed_user(db, "victim@mail.com")
         access, _ = _login_session(client, "victim@mail.com")

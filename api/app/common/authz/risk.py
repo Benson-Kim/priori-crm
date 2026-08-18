@@ -24,8 +24,11 @@ HARD (escalate directly):
 
 - **Impossible travel** — consecutive requests whose geolocations imply a
   speed above ``RISK_IMPOSSIBLE_TRAVEL_KMH`` (weight 70: an immediate
-  step-up; termination only with corroboration, because carrier-NAT
-  geolocation jitter is a real false-positive source).
+  step-up). HARD only when ``RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION`` is
+  ``"terminate"``; the default ``"challenge"`` caps it at a step-up —
+  in a mobile-heavy CGNAT market carrier exit-node hopping makes IP
+  geolocation jump cities between requests, so a single hop must never
+  corroborate a termination (#67 line review §3).
 - **Exfiltration-scale reads** — ``RISK_VOLUME_EXFIL_MULTIPLIER`` times
   the global volume ceiling in one window (weight 100: terminates).
 - **Privilege-escalation attempts** — RBAC rejections (``require_role`` /
@@ -630,7 +633,17 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     # SOFT and HARD evidence are tracked apart: only a batch carrying HARD
     # evidence (impossible travel, exfiltration-scale reads) may terminate.
     soft_fired = _evaluate_session_start_softs(db, session, context, baseline)
-    hard_fired = _detect_impossible_travel(db, session, context)
+    travel_fired = _detect_impossible_travel(db, session, context)
+    # Whether impossible travel counts as HARD evidence is policy, not
+    # taxonomy (#67 line review §3): under the default mobile-heavy
+    # profile (RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION="challenge") a firing
+    # still scores — and at weight 70 alone still forces a step-up — but
+    # is capped at CHALLENGE: carrier-CGNAT geolocation jitter must never
+    # corroborate a termination. "terminate" restores the previous
+    # behaviour for deployments with a trustworthy end-to-end geo signal.
+    travel_is_hard = settings.RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION == "terminate"
+    hard_fired = travel_fired and travel_is_hard
+    soft_fired |= travel_fired and not travel_is_hard
     soft_fired |= _detect_device_change(db, session, context)
     volume_soft, volume_hard = _detect_volume_anomaly(db, session, context, baseline)
     soft_fired |= volume_soft
