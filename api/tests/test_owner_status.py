@@ -194,10 +194,7 @@ class TestQaFinding09:
         assert resp.status_code == 200
 
         db.expire_all()
-        roles = {
-            u.email: u.role
-            for u in db.query(User).order_by(User.email).all()
-        }
+        roles = {u.email: u.role for u in db.query(User).order_by(User.email).all()}
         assert roles == {
             "admin@mail.com": "admin",
             "member@mail.com": "member",
