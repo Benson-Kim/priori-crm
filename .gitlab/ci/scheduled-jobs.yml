@@ -197,7 +197,8 @@ scheduled:db-restore-verify:
     # chronological order and `sort | tail -1` is the newest dump.
     - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | sort | tail -n 1)"
     - test -n "$LATEST" || { echo "No dumps found in ${BACKUP_S3_BUCKET}/db/ — is the nightly backup running?" >&2; exit 1; }
-    - echo "Newest offsite dump: $LATEST"
+    # Quoted: an unquoted ': ' would turn this list item into a YAML mapping.
+    - 'echo "Newest offsite dump: $LATEST"'
     - rclone copyto "bk:${BACKUP_S3_BUCKET}/db/${LATEST}" ./latest.dump
     - bash deploy/db_restore_verify.sh ./latest.dump
 
