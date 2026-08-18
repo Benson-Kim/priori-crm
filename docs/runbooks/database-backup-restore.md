@@ -271,6 +271,39 @@ is irreversible for the recovery window.
 - [ ] **`audit_events` is append-only** (docs/database.md §4) and every
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
+- [ ] **Logical tier is plaintext — a deliberate, accepted decision** (also
+      recorded in ADR-0013). The nightly `pg_dump`, the uploads tars, and
+      the hourly `uploads-sync/` mirror are stored **unencrypted** in the
+      bucket, while the pgBackRest repo is AES-256-CBC client-side. This is
+      the confidentiality weak point of the design, and it is accepted
+      rather than closed, for these reasons:
+      - **Tier 2's whole value is independence.** Encrypting the dump with
+        the pgBackRest passphrase couples both tiers to one secret —
+        defeating the fallback whose reason to exist is "the passphrase is
+        lost / the physical repo is poisoned". A *second* passphrase avoids
+        that but creates a second single-point-of-total-loss on the exact
+        tier that must survive key loss, plus a second escrow discipline to
+        keep perfect forever.
+      - **Encrypting the dump would not close the class of exposure.** The
+        hourly mirror is necessarily object-per-object plaintext (client-side
+        encrypting it means an rclone `crypt` remote and its own key escrow),
+        so proof-of-payment documents remain plaintext regardless; a bucket
+        key leak exposes them either way.
+      - **CI trust would not shrink.** `scheduled:db-restore-verify` must see
+        the plaintext dump to restore it; with encryption, the decryption
+        passphrase becomes a masked CI variable — the secret would then live
+        in **three** places (password manager, droplet, GitLab CI), breaking
+        the two-locations escrow rule, while a CI compromise exposes exactly
+        as much as today.
+      - **Residual risk, stated plainly:** a leaked bucket-read-capable key
+        (droplet RW or CI RO) exposes the full ledger plaintext.
+        Compensating controls: the bucket is **private**; keys are
+        per-bucket, least-privilege, three-way separated (table above); the
+        admin key never touches droplet or CI. Confidentiality of this tier
+        is carried by key management, not encryption at rest — rotate the
+        bucket keys immediately on any suspicion of leak.
+      Revisit if the threat model changes (e.g. regulatory requirement for
+      encryption at rest beyond the provider's, or bucket access widens).
 
 ## Which backup do I restore from? — decision table
 

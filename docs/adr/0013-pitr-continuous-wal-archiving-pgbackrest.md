@@ -48,6 +48,16 @@ logical tier**, not deleted:
 - it is what the monthly CI restore test and surgical row-extraction
   procedures already exercise.
 
+The logical tier (nightly dump, uploads tars, hourly mirror) is deliberately
+stored **unencrypted** in the private, versioned, least-privilege bucket —
+unlike the cipher-protected pgBackRest repo. Encrypting it would either
+couple it to the pgBackRest passphrase (destroying the independence that is
+its reason to exist) or add a second single-point-of-total-loss passphrase
+and put that secret into CI as a third escrow location; the hourly uploads
+mirror would stay plaintext regardless. Accepted residual risk: a leaked
+bucket-read key exposes ledger plaintext — full rationale and compensating
+controls in the runbook's anti-tamper section.
+
 Why pgBackRest over the alternatives:
 
 | | pgBackRest | WAL-G | barman |
