@@ -779,8 +779,8 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     # The baseline read is optimistic too: None (never learned) simply
     # means the global ceilings apply and no soft signal can fire.
     baseline = db.get(UserBaseline, session.user_id)
-    volume_soft, volume_hard, volume_soft_detail, volume_hard_detail = (
-        _observe_volume(session, context, baseline)
+    volume_soft, volume_hard, volume_soft_detail, volume_hard_detail = _observe_volume(
+        session, context, baseline
     )
 
     anything_fires = (

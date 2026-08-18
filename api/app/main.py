@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
                     },
                 )
                 audit_db.commit()
-        except Exception as exc:  # noqa: BLE001 — best-effort trail
+        except Exception as exc:  # best-effort trail must never block boot
             logger.error(
                 "Could not write the ABAC kill-switch audit event",
                 exc_info=exc,
