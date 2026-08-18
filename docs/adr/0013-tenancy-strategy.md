@@ -151,8 +151,24 @@ tables).** Small/medium.
 
 **Phase T3 — schema wave 2: documents + numbering.** Large; the riskiest
 phase, sequenced behind T2 on purpose.
-- Tables: `invoices`, `quotes`, `purchase_orders`, `expenses` (+ their
-  owner-snapshot references stay content-addressed and shared).
+- Tables: `invoices`, `quotes`, `purchase_orders`, `expenses`.
+- **`owner_profile_snapshots` become tenant-attributable (decided:
+  per-tenant hash scope).** They cannot stay content-addressed-and-shared
+  across tenants: a snapshot IS tenant PII (name, address, email, phone,
+  tax PIN, logo key), so offboarding/deletion and the tenant export
+  (T5, runbook stages 2–4) must be able to find and remove *this
+  tenant's* rows, and RLS (T6) needs a tenant key on the row. Mechanism:
+  add `owner_profile_id` (expand → backfill to the singleton → NOT NULL)
+  and change the unique constraint from global `content_hash` to
+  composite `(owner_profile_id, content_hash)`; `snapshot_current()`
+  scopes its lookup by the owner. Dedup tradeoff, accepted: dedup
+  narrows from global to per-tenant, so two tenants with byte-identical
+  headers store two rows — in practice never, since the hashed fields
+  are the tenant's own identity, which is exactly why sharing them was
+  wrong. The rejected alternative (a snapshot↔owner mapping table
+  keeping rows shared) preserves global dedup but makes deletion
+  reference-counted and RLS join-dependent — policies cannot join
+  (see T4) — for no real saving.
 - Same expand → backfill → contract discipline.
 - **Uniqueness goes composite**: `invoice_number`/`invoice_reference`,
   `quote_number`, `po_number`, `expense_number` unique become
