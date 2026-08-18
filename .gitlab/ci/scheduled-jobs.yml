@@ -266,15 +266,24 @@ scheduled:backup-freshness:
       "; }
 
       # Epoch of the newest object under bucket/<path>, empty if none exist.
+      # Optional $2 = rclone --max-age (e.g. "3d") to bound the recursive
+      # listing. The WAL archive holds one object per 16 MB segment and grows
+      # with retention, so an unbounded `lsjson -R` over it gets slower and
+      # more expensive every week. Bounding is safe for a freshness check:
+      # it only cares whether ANYTHING younger than the budget exists —
+      # objects older than the window can never turn a FAIL into a PASS, and
+      # "no object within the window" is exactly the failure being tested.
       newest_epoch() {
-        ts="$(rclone lsjson -R --files-only "bk:${BACKUP_S3_BUCKET}/$1" 2>/dev/null | jq -r '[.[].ModTime] | max // empty')"
+        max_age="${2:-}"
+        ts="$(rclone lsjson -R --files-only ${max_age:+--max-age "$max_age"} "bk:${BACKUP_S3_BUCKET}/$1" 2>/dev/null | jq -r '[.[].ModTime] | max // empty')"
         [ -n "$ts" ] && date -u -d "$ts" +%s
       }
 
       # Check that the newest object under a prefix is younger than a budget.
+      # Optional $4 is passed through to newest_epoch as --max-age.
       check_age() {
         name="$1"; path="$2"; budget_min="$3"
-        e="$(newest_epoch "$path" || true)"
+        e="$(newest_epoch "$path" "${4:-}" || true)"
         if [ -z "$e" ]; then
           echo "FAIL: ${name} — nothing found under ${BACKUP_S3_BUCKET}/${path}" >&2
           note "$name" "FAIL (nothing found)"
@@ -328,7 +337,11 @@ scheduled:backup-freshness:
       }
 
       if [ "$CHECK_PGBACKREST" = "1" ]; then
-        check_age "WAL archive" "${PGBACKREST_REPO_PATH}/archive/${PGBACKREST_STANZA}" "$WAL_MAX_AGE_MIN"
+        # --max-age 3d: budget is 60 min, so a 3-day window is generous slack
+        # while keeping the listing bounded as the archive grows (see
+        # newest_epoch). If nothing is younger than 3 days the check fails as
+        # "nothing found" — which is correct: the archive is >3 days stale.
+        check_age "WAL archive" "${PGBACKREST_REPO_PATH}/archive/${PGBACKREST_STANZA}" "$WAL_MAX_AGE_MIN" "3d"
         check_label_age "pgBackRest full backup" '^[0-9]{8}-[0-9]{6}F/$' $(( PGBACKREST_FULL_MAX_AGE_DAYS * 1440 ))
         check_label_age "pgBackRest full/diff backup" '^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?/$' $(( PGBACKREST_BACKUP_MAX_AGE_DAYS * 1440 ))
       else
