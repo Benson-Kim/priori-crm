@@ -15,10 +15,13 @@ must keep working even when every toggleable module is disabled.
 """
 
 import uuid
+from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.common.dependencies import OwnerServiceDep, require_role
+from app.common.pagination import PaginatedResponse, PaginationParams
 from app.common.routing import CommitOnSuccessRoute
 from app.constants.enums import ModuleKey, UserRole
 from app.modules.owner.schemas import (
@@ -26,6 +29,7 @@ from app.modules.owner.schemas import (
     ModuleSettingState,
     ModuleSettingUpdate,
     OwnerStatusUpdate,
+    PlatformAuditEvent,
     PlatformOwnersResponse,
     PlatformOwnerSummary,
 )
@@ -50,6 +54,74 @@ router = APIRouter(
 def list_owners(service: OwnerServiceDep) -> PlatformOwnersResponse:
     """Return every owner profile for the operator console."""
     return PlatformOwnersResponse(owners=service.owner_profiles())
+
+
+@router.get(
+    "/audit",
+    response_model=PaginatedResponse[PlatformAuditEvent],
+    summary="Operator audit trail (platform operator only)",
+    description=(
+        "Paginated, filterable view over the audit_events rows written by "
+        "the owner service: entitlement grants/revocations "
+        "(entity_type 'owner_module_setting') and tenant lifecycle changes "
+        "(entity_type 'owner_profile'). Newest first. Read-only evidence — "
+        "rows are never updated or deleted."
+    ),
+    responses={403: {"description": "Caller is not a platform operator"}},
+)
+def list_platform_audit(
+    service: OwnerServiceDep,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
+    owner_id: Annotated[
+        uuid.UUID | None,
+        Query(
+            alias="ownerId",
+            description=(
+                "Only events attributable to this owner (lifecycle events "
+                "directly; entitlement events via the setting row's owner FK)"
+            ),
+        ),
+    ] = None,
+    action: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Exact action filter, e.g. module_enabled, module_disabled, "
+                "owner_suspended, owner_reactivated"
+            ),
+        ),
+    ] = None,
+    actor_id: Annotated[
+        uuid.UUID | None,
+        Query(alias="actorId", description="Only events by this acting user"),
+    ] = None,
+    date_from: Annotated[
+        datetime | None,
+        Query(alias="dateFrom", description="Only events at/after this instant"),
+    ] = None,
+    date_to: Annotated[
+        datetime | None,
+        Query(alias="dateTo", description="Only events at/before this instant"),
+    ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
+) -> PaginatedResponse[PlatformAuditEvent]:
+    """Paginated, filterable operator audit trail."""
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
+    return service.platform_audit_events(
+        params,
+        owner_id=owner_id,
+        action=action,
+        actor_id=actor_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get(

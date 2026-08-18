@@ -310,6 +310,27 @@ class PlatformOwnerSummary(BaseModel):
     model_config = {"populate_by_name": True, "from_attributes": True}
 
 
+class PlatformAuditEvent(BaseModel):
+    """One audited platform-operator action (GET /platform/audit).
+
+    A read-only projection of an ``audit_events`` row for the entity types
+    the owner service writes: ``owner_module_setting`` (entitlement
+    grants/revocations) and ``owner_profile`` (lifecycle status changes).
+    The trail is evidence, not state — rows are never updated or deleted.
+    """
+
+    id: uuid.UUID
+    actor_id: uuid.UUID | None = Field(None, alias="actorId")
+    entity_type: str = Field(alias="entityType")
+    entity_id: uuid.UUID = Field(alias="entityId")
+    action: str
+    before: dict | None = None
+    after: dict | None = None
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+
 class OwnerStatusUpdate(BaseModel):
     """PATCH /platform/owners/{owner_id}/status body (ADR-0013 Phase A).
 

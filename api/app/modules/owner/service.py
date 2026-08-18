@@ -62,6 +62,17 @@ _SNAPSHOT_FIELDS = (
 
 _LOGO_DIRECTORY = "owner/logo"
 
+#: The audit_events.entity_type values written by this service — the exact
+#: scope of the operator audit read surface (GET /platform/audit):
+#: "owner_module_setting" from set_module_enabled_for_owner (asserted in
+#: tests/test_module_entitlements.py::TestAudit) and "owner_profile" from
+#: set_owner_status. Extend this tuple whenever the service audits a new
+#: entity type, or the platform surface silently stops showing it.
+PLATFORM_AUDIT_ENTITY_TYPES: tuple[str, ...] = (
+    "owner_module_setting",
+    "owner_profile",
+)
+
 
 @dataclass(frozen=True)
 class LogoDownload:
@@ -289,6 +300,80 @@ class OwnerService:
                 OwnerModuleSetting.enabled.is_(False),
             )
             .count()
+        )
+
+    # Platform audit read surface (ADR-0013 Phase A)
+
+    def platform_audit_events(
+        self,
+        params,
+        *,
+        owner_id: uuid.UUID | None = None,
+        action: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        date_from=None,
+        date_to=None,
+    ):
+        """Paginated, filterable operator audit trail (GET /platform/audit).
+
+        Reads the existing ``audit_events`` rows for exactly the entity
+        types this service writes — ``owner_module_setting``
+        (``set_module_enabled_for_owner``) and ``owner_profile``
+        (``set_owner_status``); see :data:`PLATFORM_AUDIT_ENTITY_TYPES`.
+
+        ``audit_events`` carries no tenant column yet (readiness audit #8,
+        Phase T5), so the ``owner_id`` filter resolves through the entity:
+        ``owner_profile`` events carry the owner id as their ``entity_id``
+        directly, while ``owner_module_setting`` events resolve via the
+        setting row's ``owner_profile_id`` FK (rows are upserted, never
+        deleted, so the join cannot orphan an event). Phase T5 replaces
+        this with a real ``owner_profile_id`` column filter.
+        """
+        from sqlalchemy import and_, or_, select
+
+        from app.common.audit import AuditEvent
+        from app.common.pagination import PaginatedResponse
+        from app.modules.owner.schemas import PlatformAuditEvent
+
+        query = self._db.query(AuditEvent).filter(
+            AuditEvent.entity_type.in_(PLATFORM_AUDIT_ENTITY_TYPES)
+        )
+        if owner_id is not None:
+            setting_ids = select(OwnerModuleSetting.id).where(
+                OwnerModuleSetting.owner_profile_id == owner_id
+            )
+            query = query.filter(
+                or_(
+                    and_(
+                        AuditEvent.entity_type == "owner_profile",
+                        AuditEvent.entity_id == owner_id,
+                    ),
+                    and_(
+                        AuditEvent.entity_type == "owner_module_setting",
+                        AuditEvent.entity_id.in_(setting_ids),
+                    ),
+                )
+            )
+        if action is not None:
+            query = query.filter(AuditEvent.action == action)
+        if actor_id is not None:
+            query = query.filter(AuditEvent.actor_id == actor_id)
+        if date_from is not None:
+            query = query.filter(AuditEvent.created_at >= date_from)
+        if date_to is not None:
+            query = query.filter(AuditEvent.created_at <= date_to)
+
+        total = query.count() if params.with_total else None
+        rows = (
+            query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            .offset(params.offset)
+            .limit(params.fetch_limit)
+            .all()
+        )
+        return PaginatedResponse.create_from_window(
+            [PlatformAuditEvent.model_validate(row) for row in rows],
+            params,
+            total,
         )
 
     def module_settings_for_owner(
