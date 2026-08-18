@@ -15,7 +15,12 @@ Decisions:
                Every rule that can return CHALLENGE MUST also honour the
                ``sua`` step-up claim, or the challenge is unanswerable and
                the 401 becomes a lockout: a new token pair changes neither
-               the wall clock nor the requested path.
+               the wall clock nor the requested path. For the same reason
+               CHALLENGE rules apply only to authenticated ``user``
+               principals: a machine has no inbox, and an anonymous caller
+               has no account to step up — authentication owns the 401 for
+               missing credentials (get_current_user still runs and still
+               refuses).
 - DENY       — contextual refusal (e.g. denylisted IP); surfaced as 403.
 - TERMINATE  — the session is dead (risk threshold crossed); surfaced as
                401 and the session can never be used again.
@@ -144,19 +149,33 @@ def _rule_off_hours(context: AccessContext) -> PolicyVerdict | None:
     """
     if not is_off_hours(context.local_hour):
         return None
-    if context.principal == "service":
-        # A machine-to-machine caller (X-Internal-Secret) has no inbox, so
-        # an OTP challenge is unanswerable — for it, CHALLENGE is a
-        # permanent lockout, and the nightly scheduled jobs (cron 02:00,
-        # inside the default 22→6 window) hit CONFIDENTIAL-write internal
-        # endpoints every night. Its trust model is the constant-time
-        # secret comparison (verify_internal_secret still runs and still
-        # refuses a wrong secret) plus the process boundary. This cannot
-        # be abused to dodge a step-up: an authenticated user stays
-        # principal "user" whatever headers they add (user_id wins in
-        # build_access_context), and without a bearer token the RBAC
-        # gates refuse business routes regardless. DENY rules (IP
-        # reputation, geo blocklist) still apply to service callers.
+    if context.principal != "user":
+        # A CHALLENGE is only coherent for a principal who can ANSWER it —
+        # an authenticated user with an inbox to receive the OTP.
+        #
+        # - "service": a machine-to-machine caller (X-Internal-Secret) has
+        #   no inbox, so an OTP challenge is unanswerable — for it,
+        #   CHALLENGE is a permanent lockout, and the nightly scheduled
+        #   jobs (cron 02:00, inside the default 22→6 window) hit
+        #   CONFIDENTIAL-write internal endpoints every night. Its trust
+        #   model is the constant-time secret comparison
+        #   (verify_internal_secret still runs and still refuses a wrong
+        #   secret) plus the process boundary.
+        # - "anonymous": no valid bearer token means there is no account to
+        #   step UP — authentication owns the 401 for missing credentials
+        #   (ADR-0012), and every RESTRICTED / CONFIDENTIAL route sits
+        #   behind get_current_user / verify_internal_secret, which still
+        #   run and still refuse. Challenging "anonymous" answered a
+        #   request auth was about to refuse anyway with a step-up it
+        #   could never satisfy, and made the response depend on the wall
+        #   clock (STEP_UP_REQUIRED at night, plain 401 by day) for the
+        #   same unauthenticated request.
+        #
+        # This cannot be abused to dodge a step-up: an authenticated user
+        # stays principal "user" whatever headers they add (user_id wins
+        # in build_access_context), and a forged token never plants an
+        # identity (the signature is verified). DENY rules (IP reputation,
+        # geo blocklist) still apply to every principal.
         return None
     if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
         return None
@@ -187,11 +206,14 @@ def _rule_unknown_geo_restricted_write(
     """
     if settings.ABAC_TRUST_CONTEXT_HEADERS is not True:
         return None
-    if context.principal == "service":
-        # Same reasoning as the off-hours rule: a machine cannot answer an
-        # OTP challenge, and a scheduler's server-to-server call never
-        # passes the geo-stamping edge anyway. verify_internal_secret owns
-        # its trust; DENY rules still apply.
+    if context.principal != "user":
+        # Same reasoning as the off-hours rule: only an authenticated user
+        # can answer an OTP challenge. A machine ("service") has no inbox,
+        # and a scheduler's server-to-server call never passes the
+        # geo-stamping edge anyway; an anonymous caller has no account to
+        # step up and is refused by authentication itself (which owns the
+        # 401 for missing credentials). verify_internal_secret /
+        # get_current_user own their trust; DENY rules still apply.
         return None
     if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
         # Same reasoning as the off-hours rule: a fresh OTP is the answer to

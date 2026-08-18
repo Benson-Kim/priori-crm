@@ -181,6 +181,12 @@ class TestSameRoleDifferentContext:
         exemption from the off-hours / unknown-geo challenge rules. The
         principal is granted only when the header value matches
         INTERNAL_API_SECRET in constant time.
+
+        A wrong secret classifies the caller as ANONYMOUS — and an
+        anonymous caller is never step-up-challenged (it has no account to
+        step up); it is refused by verify_internal_secret itself, which
+        owns authentication for this surface. The refusal must not be a
+        STEP_UP_REQUIRED: that would invite an unanswerable OTP round trip.
         """
         monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "real-secret-value")
         _freeze_local_hour(monkeypatch, 2)
@@ -190,16 +196,16 @@ class TestSameRoleDifferentContext:
             headers={"X-Internal-Secret": "garbage"},
         )
         assert spoof.status_code == 401
-        assert spoof.json()["error_code"] == "STEP_UP_REQUIRED"
+        assert spoof.json()["error_code"] != "STEP_UP_REQUIRED"
 
-        # With no secret configured at all, presence earns nothing either.
+        # With no secret configured at all, presence earns nothing either:
+        # the endpoint fails closed (403 — internal surface not enabled).
         monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "")
         unconfigured = client.post(
             "/api/v1/invoices/internal/transition-overdue",
             headers={"X-Internal-Secret": "anything"},
         )
-        assert unconfigured.status_code == 401
-        assert unconfigured.json()["error_code"] == "STEP_UP_REQUIRED"
+        assert unconfigured.status_code == 403
 
     def test_denylisted_ip_denied_even_with_valid_admin_token(
         self, client, db, monkeypatch
@@ -331,6 +337,101 @@ class TestChallengesAreSatisfiable:
             "/api/v1/customers", headers=_auth(admin, stepped_up_at=frozen)
         )
         assert resp.status_code == 403
+
+
+class TestNightClockRegression:
+    """Pipeline 2767217667: the suite went red ONLY when CI ran at night.
+
+    Two business tests installed their HTTP actor via
+    ``app.dependency_overrides[get_current_user]`` — a pattern that sends
+    no bearer token, so the gate classified the caller as "anonymous" and
+    the off-hours rule challenged it whenever the job happened to run
+    inside the 22h → 6h tenant-local window. Two defects, both pinned here
+    under an explicitly frozen NIGHT clock:
+
+    1. Semantics: an unauthenticated request can never satisfy an OTP
+       step-up — challenging "anonymous" was a lockout, not a step-up.
+       Authentication owns the 401 for missing credentials (ADR-0012);
+       the CHALLENGE rules apply only to authenticated ``user`` principals.
+    2. Determinism: the gate's evaluation clock is pinned suite-wide
+       (conftest ``pinned_abac_clock``), so no test's outcome depends on
+       the wall-clock hour CI happens to run at.
+    """
+
+    def test_night_stale_user_challenged_fresh_step_up_allowed(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """At night, the SAME endpoint challenges a stale session and
+        clears one holding a fresh step-up (an ALLOW verdict)."""
+        operator = _seed_user(db, "op@mail.com", UserRole.PLATFORM_OPERATOR)
+        frozen = _freeze_local_hour(monkeypatch, 23)
+
+        challenged = client.get(
+            "/api/v1/platform/owners", headers=_auth(operator, stepped_up=False)
+        )
+        assert challenged.status_code == 401
+        assert challenged.json()["error_code"] == "STEP_UP_REQUIRED"
+
+        allowed = client.get(
+            "/api/v1/platform/owners", headers=_auth(operator, stepped_up_at=frozen)
+        )
+        assert allowed.status_code == 200
+
+    def test_night_anonymous_gets_auth_401_not_a_step_up(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """No credentials at night: refused by AUTHENTICATION, not ABAC.
+
+        A step-up challenge asks the caller to prove control of an inbox —
+        an anonymous request identifies no account, so the only coherent
+        answer is the ordinary missing-credentials 401. It must also be the
+        SAME answer day and night, or the response contract flips with the
+        clock.
+        """
+        _freeze_local_hour(monkeypatch, 23)
+
+        night = client.get("/api/v1/owner")  # RESTRICTED, no credentials
+        assert night.status_code == 401
+        assert night.json()["error_code"] != "STEP_UP_REQUIRED"
+        assert not _decision_rows(db, "policy_challenge"), (
+            "no challenge decision may be recorded for an anonymous caller"
+        )
+
+        _freeze_local_hour(monkeypatch, 11)
+        day = client.get("/api/v1/owner")
+        assert (day.status_code, day.json()["error_code"]) == (
+            night.status_code,
+            night.json()["error_code"],
+        ), "the anonymous refusal must not depend on the wall clock"
+
+    def test_night_dependency_override_actor_reaches_the_endpoint(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """The exact shape that failed in CI: an overridden actor, at night.
+
+        ``dependency_overrides[get_current_user]`` installs the identity
+        WITHOUT a bearer token, so the gate sees "anonymous". The override
+        resolves the user after the gate allows, exactly like the two
+        tests that failed (test_sales_pricing_settings_read,
+        test_owner_endpoint_exposes_resolved_template_and_validates).
+        """
+        from types import SimpleNamespace
+
+        from app.common.dependencies import get_current_user
+        from app.main import app
+
+        identity = SimpleNamespace(id=uuid.uuid4(), role=UserRole.ADMIN)
+        app.dependency_overrides[get_current_user] = lambda: identity
+        try:
+            _freeze_local_hour(monkeypatch, 23)
+            night = client.get("/api/v1/owner/settings/sales-pricing")
+            assert night.status_code == 200
+
+            _freeze_local_hour(monkeypatch, 11)
+            day = client.get("/api/v1/owner/settings/sales-pricing")
+            assert day.status_code == 200
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
 
 
 class TestDecisionAuditTrail:

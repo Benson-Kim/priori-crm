@@ -65,6 +65,22 @@ after the initial OTP.
    emails, and the security property is identical at any TTL because an
    attacker holding a stolen token has no inbox and so can never mint the
    claim at all.
+
+   For the same reason, **CHALLENGE rules apply only to authenticated
+   `user` principals**. A challenge is only coherent for a caller who can
+   answer it: a machine-to-machine caller ("service", verified
+   `X-Internal-Secret`) has no inbox, and an anonymous caller identifies
+   no account to step up — authentication owns its refusal
+   (`get_current_user` / `verify_internal_secret` still run and still
+   reject). Challenging "anonymous" was doubly wrong: the 401
+   `STEP_UP_REQUIRED` invited an OTP round trip that could never satisfy
+   the rule, and it made the response contract for the same
+   unauthenticated request flip with the tenant-local wall clock
+   (step-up at night, plain 401 by day). Nothing widens: every
+   RESTRICTED / CONFIDENTIAL surface sits behind an authentication gate,
+   a stolen-but-valid token still classifies as `user` (and is
+   challenged), and DENY rules (IP reputation, geo blocklist) apply to
+   every principal.
 6. **Continuous session risk scoring** (second tranche of #67): a
    per-session behavioural score persisted per request, with impossible
    travel, unusual data-access volume and privilege-escalation detection;

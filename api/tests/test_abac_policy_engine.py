@@ -274,3 +274,57 @@ class TestServicePrincipal:
         )
         assert verdict.decision is Decision.DENY
         assert verdict.rule == "ip_reputation"
+
+
+class TestAnonymousPrincipal:
+    """An anonymous caller can never answer an OTP challenge either.
+
+    A step-up asks the caller to prove control of the ACCOUNT's inbox — an
+    unauthenticated request identifies no account, so a CHALLENGE against
+    "anonymous" is a lockout wearing a badge, exactly like the service
+    case. The engine stays silent and authentication owns the refusal
+    (``get_current_user`` / ``verify_internal_secret`` still run and still
+    401/403 the request). This is also what made the suite wall-clock
+    dependent (pipeline 2767217667): actors installed via
+    ``dependency_overrides[get_current_user]`` send no bearer token, so at
+    night the off-hours rule challenged them as "anonymous". DENY rules
+    still apply to anonymous callers.
+    """
+
+    def test_anonymous_not_challenged_off_hours(self, off_hours_window):
+        verdict = evaluate(
+            _context(
+                method="GET",
+                path="/api/v1/platform/owners",
+                local_hour=23,
+                principal="anonymous",
+            )
+        )
+        # Engine-level ALLOW means "no contextual objection" only:
+        # authentication still refuses the request downstream.
+        assert verdict.decision is Decision.ALLOW
+
+    def test_anonymous_not_challenged_for_unknown_geo(self, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_TRUST_CONTEXT_HEADERS", True)
+        verdict = evaluate(
+            _context(
+                method="POST",
+                path="/api/v1/invoices/1/payments",
+                geo=None,
+                principal="anonymous",
+            )
+        )
+        assert verdict.decision is Decision.ALLOW
+
+    def test_anonymous_still_denied_by_ip_reputation(self, off_hours_window):
+        verdict = evaluate(
+            _context(ip_denylisted=True, local_hour=23, principal="anonymous")
+        )
+        assert verdict.decision is Decision.DENY
+        assert verdict.rule == "ip_reputation"
+
+    def test_anonymous_still_denied_by_geo_blocklist(self, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_GEO_BLOCKLIST", "KP")
+        verdict = evaluate(_context(geo=GeoPoint(country="KP"), principal="anonymous"))
+        assert verdict.decision is Decision.DENY
+        assert verdict.rule == "geo_blocklist"
