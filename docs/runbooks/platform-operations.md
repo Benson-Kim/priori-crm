@@ -64,12 +64,20 @@ Semantics (enforced in code, this MR):
   promote operators).
 - Both directions are audited (`owner_suspended` / `owner_reactivated`)
   with actor and before/after state.
-- Known limitation (single-tenant today): scheduled document transitions
-  (overdue/expired) are internal-secret endpoints and continue to run
-  during suspension. Per-tenant scheduler skip lands with ADR-0013
-  Phase T5. **Verify before relying on this**: whether overdue/expiry
-  transitions enqueue tenant email is to be confirmed in code review of
-  this MR.
+- Scheduled document transitions during suspension — **verified in code
+  (this MR)**: the overdue/expiry transitions
+  (`InvoiceService.bulk_transition_overdue`,
+  `ExpenseService.bulk_transition_overdue`,
+  `QuoteService.bulk_transition_expired`) are pure bulk status UPDATEs
+  and **enqueue no tenant email**. Their internal-secret endpoints live
+  on the non-essential invoices/expenses/quotes routers, so while the
+  deployment's (only) owner is suspended the module gate denies them
+  with the same 403 — the scheduler run is a no-op for that window and
+  its pipeline will report the 403; treat that as expected during a
+  suspension, not an incident. The outbox drain and OTP purge live on
+  ungated infrastructure routes and keep running. Per-tenant scheduler
+  skip at N>1 lands with ADR-0013 Phase T5
+  (pinned by `api/tests/test_owner_suspension.py`).
 
 Use suspension for: non-payment, suspected compromise of the tenant's
 accounts, or as the first step of offboarding.

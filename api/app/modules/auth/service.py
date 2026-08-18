@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import (
     BadRequestException,
+    ForbiddenException,
     RateLimitException,
     UnauthorizedException,
 )
@@ -194,12 +195,19 @@ class AuthService:
         # Both writes flush within the request-scoped transaction; the commit
         # is owned by CommitOnSuccessRoute (app/common/routing.py), which
         # commits before the response is sent; get_db()'s teardown commit
-        # is a safety net only.
+        # Tenant lifecycle gate (ADR-0013 Phase A): after the credential
+        # check (a suspended org must not become an account-enumeration
+        # oracle for unauthenticated callers) and before any token exists.
+        # Raising rolls the request back, so the OTP is not burnt: it stays
+        # valid within its window should the org be reactivated.
+        self._ensure_owner_not_suspended(user)
+
         otp.is_used = True
         self._db.flush()
 
         self._invalidate_pending_otps(user.id, exclude_id=otp.id)
 
+        access_token = create_access_token(subject=str(user.id))
         access_token = create_access_token(subject=str(user.id))
         refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
 
@@ -325,6 +333,13 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedException("Invalid or inactive user.")
 
+        # Tenant lifecycle gate (ADR-0013 Phase A): a suspended org cannot
+        # extend an existing session. Checked BEFORE the rotation spends the
+        # presented token, so reactivation within the refresh window lets
+        # the same token succeed rather than punishing the tenant with a
+        # forced re-login.
+        self._ensure_owner_not_suspended(user)
+
         # Rotate: atomically spend the presented token BEFORE minting the
         # new pair. revoke_if_new is a single revoke-and-report operation,
         # so exactly one concurrent presenter of a given jti can win this
@@ -405,6 +420,46 @@ class AuthService:
         return deleted + reset_deleted
 
     # Private Helpers
+
+    def _ensure_owner_not_suspended(self, user: User) -> None:
+        """Reject token issuance while the organisation is suspended.
+
+        ADR-0013 Phase A: applied at BOTH minting points — verify-otp
+        (login step 2) and refresh — so a suspended tenant can neither
+        sign in nor extend an existing session. Deliberately a clear 403
+        (not the generic 401): the caller has already proven their
+        credentials, and suspension is org state the tenant is entitled
+        to see, not a credential secret.
+
+        Platform operators are exempt: the operator must stay able to
+        sign in to reactivate the org (their authority axis is disjoint
+        from tenant state, ADR-0011). Never touches ``users`` rows —
+        suspension is org state, not a role or account mutation (QA
+        finding 09).
+
+        Reads the singleton owner row today; Phase T1 re-points this at
+        the owner resolved from the user's org membership (readiness
+        audit #3/#15). A missing profile row means no org state exists
+        yet, i.e. active.
+        """
+        from app.constants.enums import OwnerStatus, UserRole
+        from app.modules.owner.models import SINGLETON_PROFILE_ID, OwnerProfile
+
+        if UserRole(user.role) is UserRole.PLATFORM_OPERATOR:
+            return
+
+        status = (
+            self._db.query(OwnerProfile.status)
+            .filter(OwnerProfile.id == SINGLETON_PROFILE_ID)
+            .scalar()
+        )
+        if status == OwnerStatus.SUSPENDED:
+            raise ForbiddenException(
+                detail=(
+                    "This organisation's account is suspended. Contact the "
+                    "platform operator."
+                )
+            )
 
     @staticmethod
     def _revoke_token_family(user_id: str | None) -> None:

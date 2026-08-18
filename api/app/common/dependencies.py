@@ -93,13 +93,40 @@ def require_module(module_key: ModuleKey):
     also host internal-secret scheduler endpoints, and module availability
     is org state, not a per-user permission. Essential modules are never
     gated (defense in depth — their routers should not attach this at all).
+
+    Tenant lifecycle (ADR-0013 Phase A): a SUSPENDED owner is denied every
+    non-essential module outright, before the override lookup. Essential
+    modules (auth, owner, health, dashboard) carry no gate and keep serving
+    existing sessions. The hot path stays two indexed reads: the owner
+    status (PK read) and the override row (unique-composite read). Both
+    reads resolve the singleton today; Phase T1 re-points them at the
+    resolved owner (readiness audit #2/#15).
     """
 
     def _check(db: DbSession) -> None:
         if module_key in ESSENTIAL_MODULES:
             return
 
-        from app.modules.owner.models import SINGLETON_PROFILE_ID, OwnerModuleSetting
+        from app.constants.enums import OwnerStatus
+        from app.modules.owner.models import (
+            SINGLETON_PROFILE_ID,
+            OwnerModuleSetting,
+            OwnerProfile,
+        )
+
+        status = (
+            db.query(OwnerProfile.status)
+            .filter(OwnerProfile.id == SINGLETON_PROFILE_ID)
+            .scalar()
+        )
+        if status == OwnerStatus.SUSPENDED:
+            raise ForbiddenException(
+                detail=(
+                    "This organisation's account is suspended. Contact the "
+                    "platform operator."
+                ),
+                required_permission="owner:active",
+            )
 
         row = (
             db.query(OwnerModuleSetting.enabled)
