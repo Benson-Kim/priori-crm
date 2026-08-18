@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.common.pagination import PaginationMetadata
 from app.common.validators import (
     empty_str_to_none,
     normalize_phone,
@@ -343,9 +344,17 @@ class OwnerStatusUpdate(BaseModel):
 
 
 class PlatformOwnersResponse(BaseModel):
-    """Every owner profile (GET /platform/owners)."""
+    """Owner profiles page (GET /platform/owners).
+
+    Backward-compatible hardening (ADR-0013 Phase A): the original
+    identity-only ``owners`` list keeps its shape (each entry gains the
+    additive ``status`` and ``disabledModuleCount`` fields) and the
+    response gains optional pagination ``metadata`` — a client unaware of
+    pagination still receives every owner on the (large) default page.
+    """
 
     owners: list[PlatformOwnerSummary]
+    metadata: PaginationMetadata | None = None
 
 
 class OwnerInfo(BaseModel):

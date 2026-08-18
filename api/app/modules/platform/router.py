@@ -43,17 +43,35 @@ router = APIRouter(
 @router.get(
     "/owners",
     response_model=PlatformOwnersResponse,
-    summary="List every owner profile (platform operator only)",
+    summary="List owner profiles (platform operator only)",
     description=(
-        "Identity-only listing (id + display name) of the owner profiles "
-        "whose module entitlements the platform operator administers. The "
-        "operator role carries no access to tenant business data."
+        "Paginated, name-searchable listing of the owner profiles the "
+        "platform operator administers, with a per-owner summary "
+        "(lifecycle status + disabled-module count). The operator role "
+        "carries no access to tenant business data. Backward-compatible: "
+        "with no parameters the (large) default page returns every owner."
     ),
     responses={403: {"description": "Caller is not a platform operator"}},
 )
-def list_owners(service: OwnerServiceDep) -> PlatformOwnersResponse:
-    """Return every owner profile for the operator console."""
-    return PlatformOwnersResponse(owners=service.owner_profiles())
+def list_owners(
+    service: OwnerServiceDep,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+    search: Annotated[
+        str | None,
+        Query(description="Case-insensitive substring match on the display name"),
+    ] = None,
+    with_total: Annotated[
+        bool,
+        Query(
+            alias="withTotal",
+            description="Include total/total_pages (runs a COUNT(*); off by default)",
+        ),
+    ] = False,
+) -> PlatformOwnersResponse:
+    """Paginated, searchable owner listing for the operator console."""
+    params = PaginationParams(page=page, per_page=per_page, with_total=with_total)
+    return service.platform_owner_summaries(params, search=search)
 
 
 @router.get(

@@ -243,6 +243,69 @@ class OwnerService:
         """Every owner profile, for the platform-operator listing (ADR-0011)."""
         return self._db.query(OwnerProfile).order_by(OwnerProfile.full_name).all()
 
+    def platform_owner_summaries(self, params, *, search: str | None = None):
+        """Paginated, searchable owner listing with per-owner summary.
+
+        GET /platform/owners hardening (ADR-0013 Phase A): stable
+        name-ordered pagination, LIKE-safe name search (shared
+        ``build_search_clause`` helper) and a per-owner entitlement
+        summary (lifecycle ``status`` + ``disabled_module_count``,
+        bulk-counted in one grouped query per page — never N+1).
+        Additive: the ``owners`` key and its per-item fields are a
+        superset of the original identity-only response.
+        """
+        from sqlalchemy import func
+
+        from app.common.pagination import PaginatedResponse
+        from app.common.search import build_search_clause
+        from app.modules.owner.schemas import (
+            PlatformOwnersResponse,
+            PlatformOwnerSummary,
+        )
+
+        query = self._db.query(OwnerProfile)
+        clause = build_search_clause(search or "", OwnerProfile.full_name)
+        if clause is not None:
+            query = query.filter(clause)
+
+        total = query.count() if params.with_total else None
+        rows = (
+            query.order_by(OwnerProfile.full_name, OwnerProfile.id)
+            .offset(params.offset)
+            .limit(params.fetch_limit)
+            .all()
+        )
+
+        page = PaginatedResponse.create_from_window(rows, params, total)
+        page_ids = [row.id for row in page.items]
+        disabled_counts: dict[uuid.UUID, int] = {}
+        if page_ids:
+            disabled_counts = dict(
+                self._db.query(
+                    OwnerModuleSetting.owner_profile_id,
+                    func.count(OwnerModuleSetting.id),
+                )
+                .filter(
+                    OwnerModuleSetting.owner_profile_id.in_(page_ids),
+                    OwnerModuleSetting.enabled.is_(False),
+                )
+                .group_by(OwnerModuleSetting.owner_profile_id)
+                .all()
+            )
+
+        return PlatformOwnersResponse(
+            owners=[
+                PlatformOwnerSummary(
+                    id=row.id,
+                    full_name=row.full_name,
+                    status=row.status,
+                    disabled_module_count=disabled_counts.get(row.id, 0),
+                )
+                for row in page.items
+            ],
+            metadata=page.metadata,
+        )
+
     # Tenant lifecycle (ADR-0013 Phase A)
 
     def set_owner_status(self, owner_profile_id: uuid.UUID, status) -> OwnerProfile:
