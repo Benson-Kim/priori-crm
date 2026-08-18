@@ -49,17 +49,23 @@ customers do** (see the synthetic monitoring section below).
 - **RTO**: ≤ 4 hours from total droplet loss to serving again, following the
   runbook; rehearsed by a quarterly timed DR drill.
 - **SLIs**:
-  - the daily `scheduled:backup-freshness` run (dead-man's switch) fails red
-    if the newest archived WAL segment (> 60 min), physical backup
+  - `scheduled:backup-freshness` (dead-man's switch) fails red if the
+    newest archived WAL segment (> 60 min), physical backup
     (full > 8 d / diff > 2 d), nightly dump (> 26 h), uploads archive
-    (> 26 h), or hourly-sync heartbeat (> 120 min) is stale;
+    (> 26 h), or hourly-sync heartbeat (> 120 min) is stale. The WAL check
+    runs **hourly** (`backup-freshness-wal` schedule), so a stalled WAL
+    archive is detected within **~2 h** (hourly cadence + 60-min budget);
+    the remaining checks run **daily**, so their worst-case detection
+    latency is **~1 day**. The ≤ 5 min RPO is a *design* property that
+    holds while archiving works — what is *monitored* is that a broken
+    archiver cannot stay silent for more than ~2 h;
   - the monthly `scheduled:db-restore-verify` run restores the newest
     offsite dump into a scratch Postgres and verifies the migration stamp,
     key table counts, `audit_events` freshness, referential spot-checks, and
     index validity. Its `RPO_HOURS=26` deliberately reflects the **nightly
     tier's** cadence (24 h + scheduling slack), not the 5-minute WAL RPO —
-    WAL freshness is the daily job's 60-minute check. A red run is the
-    alert, in both cases.
+    WAL freshness is the hourly freshness run's 60-minute check. A red run
+    is the alert, in both cases.
 - Procedures and infrastructure checklist:
   [`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md).
 

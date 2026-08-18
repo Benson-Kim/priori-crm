@@ -202,9 +202,9 @@ scheduled:db-restore-verify:
     - rclone copyto "bk:${BACKUP_S3_BUCKET}/db/${LATEST}" ./latest.dump
     - bash deploy/db_restore_verify.sh ./latest.dump
 
-# Daily backup freshness — the dead-man's switch. A backup pipeline that
-# silently stops must be discovered within hours, not at restore time. This
-# job lists the offsite bucket with the same READ-ONLY credentials as
+# Backup freshness — the dead-man's switch. A backup pipeline that silently
+# stops must be discovered within hours, not at restore time. This job lists
+# the offsite bucket with the same READ-ONLY credentials as
 # scheduled:db-restore-verify and fails red (the alert) if ANY tier is stale:
 #
 #   1. newest archived WAL segment       older than WAL_MAX_AGE_MIN (60 min)
@@ -219,9 +219,19 @@ scheduled:db-restore-verify:
 # object mtimes (checks 1, 4–6) and from pgBackRest's backup-label
 # timestamps (checks 2–3; labels are UTC and lexically sortable).
 #
-# Schedule (CI/CD > Schedules): SCHEDULED_TASK=backup-freshness  cron: 0 7 * * *
-# on develop, pipeline-failure notifications on. Reuses the four BACKUP_S3_*
-# variables from scheduled:db-restore-verify — no new credentials.
+# TWO schedules drive this one job (CI/CD > Schedules, on develop,
+# pipeline-failure notifications on; both reuse the four BACKUP_S3_*
+# variables from scheduled:db-restore-verify — no new credentials):
+#
+#   SCHEDULED_TASK=backup-freshness      cron: 0 7 * * *    (daily, ALL checks)
+#   SCHEDULED_TASK=backup-freshness-wal  cron: 17 * * * *   (hourly, WAL check ONLY)
+#
+# Why the split: the WAL tier carries the RPO ≤ 5 min claim, and its 60-min
+# staleness budget checked once a day means a broken archive-push could stay
+# undetected for ~25 h. The hourly WAL-only run bounds detection of a stalled
+# WAL archive at ~2 h (hourly cadence + 60-min budget) while the heavier
+# full-bucket checks stay daily. The daily run still includes the WAL check,
+# so the daily schedule alone covers every tier if the hourly one is missing.
 #
 # Bring-up: set CHECK_PGBACKREST=0 (and CHECK_UPLOADS_SYNC=0) on the schedule
 # until the pgBackRest stanza / hourly sync are live, then remove the
@@ -230,7 +240,7 @@ scheduled:db-restore-verify:
 scheduled:backup-freshness:
   extends: .scheduled-base
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "backup-freshness"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($SCHEDULED_TASK == "backup-freshness" || $SCHEDULED_TASK == "backup-freshness-wal")'
   image: alpine:3.20   # rclone + jq + GNU date added in before_script
   variables:
     WAL_MAX_AGE_MIN: "60"                # (1) RPO tier: WAL must land offsite continuously
@@ -327,23 +337,36 @@ scheduled:backup-freshness:
         fi
       }
 
+      # Scope: the hourly schedule (SCHEDULED_TASK=backup-freshness-wal) runs
+      # ONLY the WAL check — the one tier whose 60-minute budget a daily
+      # cadence cannot honestly monitor. The daily schedule runs everything.
+      WAL_ONLY=0
+      if [ "${SCHEDULED_TASK:-}" = "backup-freshness-wal" ]; then
+        WAL_ONLY=1
+        echo "Scope: hourly WAL-only run (SCHEDULED_TASK=backup-freshness-wal)"
+      fi
+
       if [ "$CHECK_PGBACKREST" = "1" ]; then
         check_age "WAL archive" "${PGBACKREST_REPO_PATH}/archive/${PGBACKREST_STANZA}" "$WAL_MAX_AGE_MIN"
-        check_label_age "pgBackRest full backup" '^[0-9]{8}-[0-9]{6}F/$' $(( PGBACKREST_FULL_MAX_AGE_DAYS * 1440 ))
-        check_label_age "pgBackRest full/diff backup" '^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?/$' $(( PGBACKREST_BACKUP_MAX_AGE_DAYS * 1440 ))
+        if [ "$WAL_ONLY" = "0" ]; then
+          check_label_age "pgBackRest full backup" '^[0-9]{8}-[0-9]{6}F/$' $(( PGBACKREST_FULL_MAX_AGE_DAYS * 1440 ))
+          check_label_age "pgBackRest full/diff backup" '^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?/$' $(( PGBACKREST_BACKUP_MAX_AGE_DAYS * 1440 ))
+        fi
       else
         echo "NOTICE: CHECK_PGBACKREST=0 — pgBackRest checks skipped (bring-up only; remove once the stanza is live)"
         note "pgBackRest checks" "SKIPPED (CHECK_PGBACKREST=0)"
       fi
 
-      check_age "nightly pg_dump" "db" $(( DUMP_MAX_AGE_HOURS * 60 ))
-      check_age "nightly uploads archive" "uploads" $(( UPLOADS_TAR_MAX_AGE_HOURS * 60 ))
+      if [ "$WAL_ONLY" = "0" ]; then
+        check_age "nightly pg_dump" "db" $(( DUMP_MAX_AGE_HOURS * 60 ))
+        check_age "nightly uploads archive" "uploads" $(( UPLOADS_TAR_MAX_AGE_HOURS * 60 ))
 
-      if [ "$CHECK_UPLOADS_SYNC" = "1" ]; then
-        check_age "uploads-sync heartbeat" "heartbeats" "$UPLOADS_SYNC_MAX_AGE_MIN"
-      else
-        echo "NOTICE: CHECK_UPLOADS_SYNC=0 — uploads-sync heartbeat check skipped (bring-up only)"
-        note "uploads-sync heartbeat" "SKIPPED (CHECK_UPLOADS_SYNC=0)"
+        if [ "$CHECK_UPLOADS_SYNC" = "1" ]; then
+          check_age "uploads-sync heartbeat" "heartbeats" "$UPLOADS_SYNC_MAX_AGE_MIN"
+        else
+          echo "NOTICE: CHECK_UPLOADS_SYNC=0 — uploads-sync heartbeat check skipped (bring-up only)"
+          note "uploads-sync heartbeat" "SKIPPED (CHECK_UPLOADS_SYNC=0)"
+        fi
       fi
 
       echo ""

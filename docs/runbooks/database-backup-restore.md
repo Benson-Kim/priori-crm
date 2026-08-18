@@ -23,7 +23,7 @@ MR !74, `docs/operations/deployment.md` §5.3, `docs/operations/slos.md` (SLO 4)
 | Contains | exact physical cluster + every WAL segment → restore to **any second** in the retention window | database snapshot (also: `shared/uploads` tar) | database only |
 | Lives | Spaces bucket, `pgbackrest/` prefix, **AES-256-CBC encrypted client-side** | droplet `backups/` + bucket `db/`, `uploads/` | `/srv/priori/backups/pre-<sha>.dump`, droplet only |
 | Purpose | primary recovery: droplet loss, corruption, accidental deletion — with minutes of loss | independent fallback path; version-portable restores; source for surgical row extraction | undo for a bad migration right after a deploy |
-| Tested | daily `pgbackrest check` + daily CI freshness + quarterly drill | **monthly**, by `scheduled:db-restore-verify` + daily CI freshness | never automatically |
+| Tested | daily `pgbackrest check` + hourly CI WAL-freshness + daily CI freshness + quarterly drill | **monthly**, by `scheduled:db-restore-verify` + daily CI freshness | never automatically |
 
 **Tier 2 is not redundant with Tier 1 — never decommission it.** A physical
 backup faithfully copies whatever is on disk, including silently corrupted
@@ -77,8 +77,8 @@ un-archived tail of the current segment — normally well under a minute,
 bounded in minutes even under pathological push latency. Target: **≤ 5 min**
 (SLO 4). If the bucket becomes unreachable, PostgreSQL retains WAL in
 `pg_wal` until archiving resumes — no data-loss exposure grows silently, but
-**disk does**: the daily `pgbackrest check` and the CI freshness job turn a
-stalled archive red the same day.
+**disk does**: the hourly CI WAL-freshness check turns a stalled archive red
+within ~2 h; the daily `pgbackrest check` backs it up on-droplet.
 
 **Cron — `postgres` user's crontab** (`sudo -u postgres crontab -e`); the
 00:30 slot finishes before the 01:15 nightly dump:
@@ -109,9 +109,11 @@ config. It must never appear in CI variables, the repo, or on argv.
 Three layers, all alerting through the established channel (a red scheduled
 pipeline pages on-call):
 
-1. **`scheduled:backup-freshness`** (daily, `.gitlab/ci/scheduled-jobs.yml`)
-   — the dead-man's switch. Lists the bucket with **read-only** credentials
-   and fails red if any tier is stale:
+1. **`scheduled:backup-freshness`** (`.gitlab/ci/scheduled-jobs.yml`) — the
+   dead-man's switch, driven by **two** schedules: an **hourly WAL-only**
+   run (`SCHEDULED_TASK=backup-freshness-wal`) and a **daily all-tiers** run
+   (`SCHEDULED_TASK=backup-freshness`). Lists the bucket with **read-only**
+   credentials and fails red if any tier is stale:
    - newest archived WAL segment older than 60 min (`WAL_MAX_AGE_MIN`);
    - newest pgBackRest **full** older than 8 days;
    - newest pgBackRest full/**diff** older than 2 days;
@@ -120,12 +122,26 @@ pipeline pages on-call):
    - uploads-sync heartbeat (`heartbeats/uploads-sync`, touched only after a
      successful hourly sync) older than 120 min.
 
-   Schedule setup (CI/CD > Schedules): `SCHEDULED_TASK=backup-freshness`,
-   cron `0 7 * * *`, on `develop`, pipeline-failure notifications on. It
-   reuses the four `BACKUP_S3_*` variables — no new credentials. During
-   bring-up, set `CHECK_PGBACKREST=0` / `CHECK_UPLOADS_SYNC=0` on the
-   schedule until those tiers are live, then **remove the overrides** — a
-   permanently red schedule trains everyone to ignore it.
+   Schedule setup (CI/CD > Schedules, on `develop`, pipeline-failure
+   notifications on; both reuse the four `BACKUP_S3_*` variables — no new
+   credentials):
+
+   - `SCHEDULED_TASK=backup-freshness`, cron `0 7 * * *` — daily, all six
+     checks;
+   - `SCHEDULED_TASK=backup-freshness-wal`, cron `17 * * * *` — hourly,
+     **WAL check only**. The WAL tier carries the RPO ≤ 5 min claim; checked
+     only daily, a broken `archive-push` could stay silent for ~25 h. The
+     hourly run bounds **detection of a stalled WAL archive at ~2 h**
+     (hourly cadence + 60-min budget). The remaining tiers are nightly/
+     weekly cadences, for which daily checking is proportionate — their
+     worst-case detection latency stays ~1 day.
+
+   During bring-up, set `CHECK_PGBACKREST=0` / `CHECK_UPLOADS_SYNC=0` on the
+   schedules until those tiers are live, then **remove the overrides** — a
+   permanently red schedule trains everyone to ignore it. (With
+   `CHECK_PGBACKREST=0` the hourly WAL-only run has nothing to check and
+   passes trivially — create it with the override anyway so it is not
+   forgotten, and un-skip both schedules together.)
 
 2. **`scheduled:db-restore-verify`** (monthly, cron `0 3 1 * *`,
    `SCHEDULED_TASK=restore-verify`) — proves the logical tier actually
@@ -138,7 +154,7 @@ pipeline pages on-call):
    4. newest `audit_events.created_at` is within `RPO_HOURS` (26) of now —
       26 h is the **nightly-dump cadence plus slack**, deliberately not the
       5-minute WAL RPO: this job verifies Tier 2; Tier 1 freshness is the
-      daily job's 60-minute WAL check;
+      hourly freshness run's 60-minute WAL check;
    5. referential spot-checks pass: every `invoices.customer_id` and
       `payments.invoice_id` resolves, and `amount_paid =
       SUM(payments.amount)` on a 50-invoice sample;
@@ -440,10 +456,15 @@ later steps verify earlier ones.
 10. [ ] **Pipeline schedules** (CI/CD > Schedules, on `develop`,
         pipeline-failure notifications on):
         - `SCHEDULED_TASK=restore-verify`, cron `0 3 1 * *` (monthly);
-        - `SCHEDULED_TASK=backup-freshness`, cron `0 7 * * *` (daily). If
-          created before steps 6–8 are done, set `CHECK_PGBACKREST=0` /
-          `CHECK_UPLOADS_SYNC=0` on the schedule and **remove the overrides
-          once live**.
+        - `SCHEDULED_TASK=backup-freshness`, cron `0 7 * * *` (daily, all
+          tiers);
+        - `SCHEDULED_TASK=backup-freshness-wal`, cron `17 * * * *` (hourly,
+          WAL check only — this is what bounds detection of a stalled WAL
+          archive at ~2 h instead of ~25 h).
+
+        If created before steps 6–8 are done, set `CHECK_PGBACKREST=0` /
+        `CHECK_UPLOADS_SYNC=0` on the schedules and **remove the overrides
+        once live**.
 11. [ ] **First-backup verification**: after one nightly cron cycle, trigger
         the `backup-freshness` schedule manually — every check green, no
         SKIPPED rows remaining.
