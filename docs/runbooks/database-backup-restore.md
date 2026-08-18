@@ -154,11 +154,82 @@ pipeline pages on-call):
    pass/fail (`deploy/db_restore_verify.sh`).
 
 3. **On-droplet**: daily `pgbackrest check` (archiving round-trip), weekly
-   `pgbackrest verify` (repo checksums). Watch `pg_wal` disk usage if the
-   archive ever stalls.
+   `pgbackrest verify` (repo checksums). The daily `check` is what surfaces
+   an archiving failure on-host the same day.
+
+4. **Droplet disk / `pg_wal` size — watch it.** A persistently failing
+   `archive_command` makes PostgreSQL retain WAL **indefinitely** until the
+   disk fills — the failure mode where the backup system takes production
+   down (see §Incident: archive backlog / disk filling). Check during any
+   backup-related alert, and routinely:
+
+   ```bash
+   df -h /var/lib/postgresql                      # droplet disk headroom
+   sudo du -sh /var/lib/postgresql/16/main/pg_wal # normal: a few GB at most; growing = archiving is stalled
+   ```
 
 Production credentials never enter CI: the jobs hold only the read-only
 bucket key, and the scratch database exists only for that pipeline.
+
+## Incident: archive backlog / disk filling (WAL archiving failure)
+
+When `archive_command` fails persistently (bad credentials, unreachable
+endpoint, deleted bucket), PostgreSQL **retains every un-archived WAL
+segment in `pg_wal` indefinitely** and retries forever. Data-loss exposure
+does not grow (the WAL is still on disk), but the disk does — left alone
+this fills the volume and takes production down. This is the one failure
+mode where the backup system itself becomes the outage. Signals: red
+`scheduled:backup-freshness` (WAL check), a failing daily `pgbackrest
+check`, `pg_wal` growth in `du`, `archive_command` errors in the PostgreSQL
+log.
+
+**1. Diagnose**
+
+```bash
+df -h /var/lib/postgresql                        # how much runway is left?
+sudo du -sh /var/lib/postgresql/16/main/pg_wal   # backlog size
+sudo -u postgres pgbackrest --stanza=priori check   # prints the actual archiving error
+# last archived vs current WAL position — the gap is the backlog:
+sudo -u postgres psql -Atc "SELECT last_archived_wal, last_failed_wal, last_failed_time FROM pg_stat_archiver"
+sudo -u postgres psql -Atc "SELECT pg_walfile_name(pg_current_wal_lsn())"
+sudo tail -50 /var/log/postgresql/postgresql-16-main.log   # archive_command stderr lands here
+```
+
+**2. Fix the cause** — almost always one of: rotated/revoked bucket key
+(update `/etc/pgbackrest/pgbackrest.conf`, keep 0600), wrong/changed
+endpoint or bucket name, bucket lifecycle/manual deletion having touched
+`pgbackrest/` (repo corrupted — treat as repo loss, below), or DNS/network
+egress. Re-run `pgbackrest --stanza=priori check` until it passes.
+
+**3. Catch-up expectations** — once archiving works again, PostgreSQL
+drains the backlog automatically, oldest first, one `archive_command` per
+segment. Rough budget: at ~1 s per 16 MB segment push, a 10 GB backlog
+(~640 segments) clears in ~10–15 min; multi-day backlogs can take hours.
+Watch `pg_stat_archiver.last_archived_wal` advance and `pg_wal` shrink. Do
+not restart PostgreSQL to "help" — it does not.
+
+**4. LAST RESORT — only if the disk will fill before the cause can be
+fixed** (no fix available and minutes of runway left):
+
+```bash
+# Temporarily disable archiving so PostgreSQL recycles WAL instead of retaining it:
+sudo -u postgres psql -c "ALTER SYSTEM SET archive_command = '/bin/true'"
+sudo -u postgres psql -c "SELECT pg_reload_conf()"
+```
+
+**This breaks the WAL chain**: every segment recycled while
+`/bin/true` is in place is gone permanently — PITR **cannot cross the gap**,
+and the ≤ 5 min RPO guarantee (SLO 4) does not hold for the gap window; the
+nightly dump is the only recovery bound inside it. Therefore, the moment the
+underlying problem is fixed:
+
+1. restore the real `archive_command` (`ALTER SYSTEM RESET archive_command`
+   + `pg_reload_conf()`), confirm with `pgbackrest check`;
+2. **IMMEDIATELY take a new full backup** — `sudo -u postgres pgbackrest
+   --stanza=priori --type=full backup` — which starts a new, complete chain;
+3. record the PITR gap (start = first recycled segment / when `/bin/true`
+   was set; end = new full backup completed) in the ops log, explicitly
+   noting that point-in-time targets inside that window are unrecoverable.
 
 ## Anti-tamper / ransomware posture
 
