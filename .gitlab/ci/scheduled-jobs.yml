@@ -219,8 +219,12 @@ scheduled:db-restore-verify:
     - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
     - *bucket-readonly-canary
     # Dump names embed a fixed-width UTC timestamp, so lexical sort order is
-    # chronological order and `sort | tail -1` is the newest dump.
-    - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | sort | tail -n 1)"
+    # chronological order and `sort | tail -1` is the newest dump. The grep
+    # pins the expected nightly-* naming: a stray manually-uploaded object
+    # sorting last must never be the file we restore. (`|| true` keeps an
+    # empty listing from failing the pipe — the emptiness check below owns
+    # that error.)
+    - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | { grep '^nightly-' || true; } | sort | tail -n 1)"
     - test -n "$LATEST" || { echo "No dumps found in ${BACKUP_S3_BUCKET}/db/ — is the nightly backup running?" >&2; exit 1; }
     # Quoted: an unquoted ': ' would turn this list item into a YAML mapping.
     - 'echo "Newest offsite dump: $LATEST"'

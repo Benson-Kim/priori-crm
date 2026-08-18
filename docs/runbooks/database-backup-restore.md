@@ -313,7 +313,7 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    to 24 h loss). As the deploy user; `$PG_URL` without the password — use a
    `PGPASSFILE`, never argv:
    ```bash
-   rclone lsf spaces:priori-crm-backups/db/ | sort | tail -1
+   rclone lsf spaces:priori-crm-backups/db/ | grep '^nightly-' | sort | tail -1
    rclone copy spaces:priori-crm-backups/db/nightly-<utc>.dump /srv/priori/backups/
    createdb priori_crm
    pg_restore --no-owner --no-privileges --exit-on-error -d "$PG_URL" \

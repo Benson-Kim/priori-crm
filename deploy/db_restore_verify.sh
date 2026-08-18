@@ -53,10 +53,12 @@ command -v psql >/dev/null || { log "FATAL: psql not found"; exit 1; }
 [ -s "$DUMP_FILE" ] || { log "FATAL: $DUMP_FILE is missing or empty"; exit 1; }
 
 # Refuse to restore into a database that already has tables — a mixed-up URL
-# must fail HERE, before pg_restore writes anything.
-existing="$(q "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")"
+# must fail HERE, before pg_restore writes anything. Checked across ALL
+# non-system schemas, not just public: a database whose tables live in
+# another schema is still somebody's database, not a disposable target.
+existing="$(q "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')")"
 if [ "$existing" != "0" ]; then
-  log "FATAL: target database already has $existing tables in schema public — refusing."
+  log "FATAL: target database already has $existing user tables (outside pg_catalog/information_schema) — refusing."
   log "       SCRATCH_DB_URL must be a fresh, disposable database."
   exit 1
 fi
