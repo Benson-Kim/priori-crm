@@ -81,6 +81,33 @@ workflow:
   stage: security
   rules: *security-rules
 
+# Deploy scripts (deploy/)
+#
+# Shellcheck gate for the bash that runs unattended on the production droplet
+# (release, backup, restore-verify, uploads-sync scripts). Warning+ severity
+# is merge-blocking; info/style findings are handled with justified inline
+# `# shellcheck disable=SCxxxx` comments (the MR !69 convention).
+#
+# This job also guarantees an MR that touches only deploy/** gets a non-empty
+# merge-request pipeline: every other job is path-filtered to api/**,
+# frontend/** or .gitlab-ci.yml, and GitLab records an empty MR pipeline as
+# FAILED (zero jobs) - which is exactly what kept MR !74 red.
+deploy:shellcheck:
+  stage: lint
+  image: koalaman/shellcheck-alpine:stable
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - deploy/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - deploy/**/*
+        - .gitlab-ci.yml
+  script:
+    - shellcheck --version
+    - shellcheck -s bash -x --severity=warning deploy/*.sh
+
 # Backend (api/)
 
 api:lint:
