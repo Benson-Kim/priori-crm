@@ -11,7 +11,7 @@
  * out of the drawer.
  */
 
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -44,6 +44,7 @@ import {
 } from "@/services/salesDeskApi";
 import { Avatar } from "@/components/ui/Avatar";
 import { AgeRibbon } from "@/components/ui/AgeRibbon";
+import { AddDealDialog } from "../components/AddDealDialog";
 import { DealDrawer } from "../components/DealDrawer";
 import { RepFilterCards } from "../components/RepFilterCards";
 import { StagePath } from "@/components/ui/StagePath";
@@ -214,6 +215,30 @@ export default function SalesDeskPipelineWorkspacePage() {
         [refresh]
     );
 
+    const [isAddingDeal, setIsAddingDeal] = useState(false);
+
+    /**
+     * Show a freshly created deal.
+     *
+     * A new deal is open, owned by whoever the dialog named, and has one
+     * record from today — so an owner, activity or search filter left on from
+     * before can easily exclude it, and the rep sees nothing happen. The
+     * filters that can hide it are dropped and the deal is opened in the
+     * drawer, in one navigation, so the write visibly lands.
+     */
+    const revealDeal = useCallback(
+        (dealId: string) => {
+            setSearchParams((params) => {
+                params.delete("owner");
+                params.delete("activity");
+                params.delete("q");
+                params.set("deal", dealId);
+                return params;
+            });
+        },
+        [setSearchParams]
+    );
+
     const columns = useMemo<Column<PipelineDeal>[]>(
         () => [
             {
@@ -226,7 +251,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                         <span className="min-w-0">
                             <span
                                 className={cn(
-                                    "block text-[13px] font-semibold",
+                                    "block text-dense-md font-semibold",
                                     deal.id === selectedDealId
                                         ? "text-sd-brand"
                                         : "text-sd-ink"
@@ -234,7 +259,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                             >
                                 {deal.company_name}
                             </span>
-                            <span className="block text-[11px] text-sd-muted">
+                            <span className="block text-dense-sm text-sd-muted">
                                 {deal.product} · {plural(deal.seats, "seat")} · {deal.billing_currency}
                             </span>
                         </span>
@@ -258,7 +283,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                 header: "Value / yr",
                 className: `${CELL_CLASS} w-[110px]`,
                 render: (deal) => (
-                    <span className="text-[13px] font-bold text-sd-ink">
+                    <span className="text-dense-md font-bold text-sd-ink">
                         {formatDeskMoneyCompact(deal.value, deal.billing_currency)}
                     </span>
                 ),
@@ -285,7 +310,7 @@ export default function SalesDeskPipelineWorkspacePage() {
                         <p className="line-clamp-2 text-xs leading-relaxed text-sd-ink">
                             {deal.latest_record.note}
                         </p>
-                        <p className="pt-1 text-[11px] text-sd-muted">
+                        <p className="pt-1 text-dense-sm text-sd-muted">
                             {deal.latest_record.stage} ·{" "}
                             {formatDate(deal.latest_record.logged_on, "table")}
                         </p>
@@ -305,7 +330,7 @@ export default function SalesDeskPipelineWorkspacePage() {
         <>
             <div className="flex min-w-0 flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-end gap-3">
-                    <span className="text-[13px] font-semibold text-sd-ink">
+                    <span className="text-dense-md font-semibold text-sd-ink">
                         Open pipeline{" "}
                         <span className="text-sd-brand">{openPipelineLabel}</span>
                     </span>
@@ -341,6 +366,14 @@ export default function SalesDeskPipelineWorkspacePage() {
                         }
                     >
                         <Download size={16} /> Export CSV
+                    </Button>
+                    <Button
+                        variant="sd-primary"
+                        size="sd"
+                        className="h-control"
+                        onClick={() => setIsAddingDeal(true)}
+                    >
+                        <Plus size={16} /> Add deal
                     </Button>
                 </div>
 
@@ -420,6 +453,16 @@ export default function SalesDeskPipelineWorkspacePage() {
                 </div>
 
             </div>
+
+            <AddDealDialog
+                isOpen={isAddingDeal}
+                onClose={() => setIsAddingDeal(false)}
+                onCreated={(deal) => {
+                    setIsAddingDeal(false);
+                    refresh();
+                    revealDeal(deal.id);
+                }}
+            />
 
             {/*
              * Gated on the id as well as the record: while a different deal

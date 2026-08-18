@@ -444,19 +444,19 @@ export default function CustomerDetailsPage() {
           {/* Left Column: Customer Info Card */}
           <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
             <div className="flex items-start gap-3 px-4 py-3  border-b border-gray-100">
-              <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
+              <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-sm">
                 {initials}
               </p>
               {/* min-w-0 lets the name wrap instead of forcing the row wider
                   than the card and squashing the avatar into an oval. */}
               <div className="flex-1 min-w-0">
                 <p
-                  className="font-bold text-gray-800 text-[18px] wrap-break-word line-clamp-2"
+                  className="font-bold text-gray-800 text-lg wrap-break-word line-clamp-2"
                   title={displayName}
                 >
                   {displayName}
                 </p>
-                <p className="text-[14px] text-gray-400">
+                <p className="text-sm text-gray-400">
                   Customer Since {customerSinceYear}
                 </p>
               </div>
@@ -465,11 +465,11 @@ export default function CustomerDetailsPage() {
             {/* Contact Information */}
             {details.email && (
               <div className="p-4">
-                <p className="text-gray-500 text-[14px]">Email</p>
+                <p className="text-gray-500 text-sm">Email</p>
                 {/* wrap-break-word keeps a long address inside the card border;
                     the title carries the full value when it clamps. */}
                 <p
-                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                   title={details.email}
                 >
                   {details.email}
@@ -478,9 +478,9 @@ export default function CustomerDetailsPage() {
             )}
             {details.phone && (
               <div className="p-4">
-                <p className="text-gray-500 text-[14px]">Phone</p>
+                <p className="text-gray-500 text-sm">Phone</p>
                 <p
-                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                   title={details.phone}
                 >
                   {details.phone}
@@ -489,9 +489,9 @@ export default function CustomerDetailsPage() {
             )}
             {details.currency && (
               <div className="p-4">
-                <p className="text-gray-500 text-[14px]">Currency</p>
+                <p className="text-gray-500 text-sm">Currency</p>
                 <p
-                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                   title={details.currency}
                 >
                   {details.currency}
@@ -500,9 +500,9 @@ export default function CustomerDetailsPage() {
             )}
             {details.vat_number && (
               <div className="p-4">
-                <p className="text-gray-500 text-[14px]">Tax ID/Pin Number</p>
+                <p className="text-gray-500 text-sm">Tax ID/Pin Number</p>
                 <p
-                  className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                  className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                   title={details.vat_number}
                 >
                   {details.vat_number}
@@ -511,13 +511,13 @@ export default function CustomerDetailsPage() {
             )}
             {details.website && (
               <div className="p-4">
-                <p className="text-gray-500 text-[14px]">Website</p>
+                <p className="text-gray-500 text-sm">Website</p>
                 <a
                   href={details.website}
                   target="_blank"
                   rel="noreferrer"
                   title={details.website}
-                  className="text-priori-purple hover:underline font-bold text-[16px] wrap-break-word line-clamp-2"
+                  className="text-priori-purple hover:underline font-bold text-base wrap-break-word line-clamp-2"
                 >
                   {details.website}
                 </a>
@@ -550,7 +550,7 @@ export default function CustomerDetailsPage() {
 
             {/* Invoice Table */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
-              <h3 className="text-[18px] font-bold text-gray-800">Invoices</h3>
+              <h3 className="text-lg font-bold text-gray-800">Invoices</h3>
               {/* Actions Bar */}
               <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                 <FilterTabs
@@ -611,7 +611,7 @@ export default function CustomerDetailsPage() {
                   {/* Document To */}
                   <div className="flex flex-col gap-1">
                     <p className="text-sm text-gray-500 mb-1">To</p>
-                    <p className="text-[16px] font-bold text-gray-800">
+                    <p className="text-base font-bold text-gray-800">
                       {statement.customer.company_name ||
                         `${statement.customer.first_name} ${statement.customer.last_name}`}
                     </p>
@@ -632,7 +632,7 @@ export default function CustomerDetailsPage() {
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <h2 className="text-[24px] font-black text-priori-purple tracking-wider leading-8 uppercase text-end">
+                    <h2 className="text-2xl font-black text-priori-purple tracking-wider leading-8 uppercase text-end">
                       {label}
                     </h2>
                     <div className="flex flex-col gap-1">
@@ -688,7 +688,7 @@ export default function CustomerDetailsPage() {
 
               {/* Transactions Table */}
               <div className="p-6">
-                <table className="w-full text-[16px] min-w-200 pb-3">
+                <table className="w-full text-base min-w-200 pb-3">
                   <thead>
                     <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-5 rounded-t-lg">
                       <th className="text-left px-3 font-bold leading-8 col-span-2">

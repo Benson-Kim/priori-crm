@@ -45,13 +45,13 @@ function ProspectCard({ prospect }: Readonly<{ prospect: ProspectRow }>) {
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <h2 className="text-[15px] font-bold text-sd-ink">{prospect.company}</h2>
+                    <h2 className="text-sm font-bold text-sd-ink">{prospect.company}</h2>
                     <p className="pt-0.5 text-xs text-sd-muted">{prospect.contact}</p>
                 </div>
                 <DueBadge prospect={prospect} />
             </div>
 
-            <p className="py-4 text-[13px] leading-relaxed text-sd-ink">{prospect.note}</p>
+            <p className="py-4 text-dense-md leading-relaxed text-sd-ink">{prospect.note}</p>
 
             <div className="mt-auto flex items-end justify-between gap-3 border-t border-sd-border pt-3">
                 <span className="flex items-center gap-2">
@@ -60,11 +60,11 @@ function ProspectCard({ prospect }: Readonly<{ prospect: ProspectRow }>) {
                         initials={prospect.owner_initials}
                         color={prospect.owner_color}
                     />
-                    <span className="text-[13px] text-sd-ink">{prospect.owner_name}</span>
+                    <span className="text-dense-md text-sd-ink">{prospect.owner_name}</span>
                 </span>
                 <span className="text-right">
-                    <span className="block text-[11px] text-sd-muted">Est. ARR</span>
-                    <span className="block text-[15px] font-bold text-sd-ink">
+                    <span className="block text-dense-sm text-sd-muted">Est. ARR</span>
+                    <span className="block text-sm font-bold text-sd-ink">
                         {formatDeskMoney(prospect.estimated_arr)}
                     </span>
                 </span>
@@ -93,7 +93,7 @@ function ParkedDealCard({
         <div className="flex flex-col rounded-2xl border border-sd-border bg-sd-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <h2 className="text-[15px] font-bold text-sd-ink">{deal.company}</h2>
+                    <h2 className="text-sm font-bold text-sd-ink">{deal.company}</h2>
                     <p className="pt-0.5 text-xs text-sd-muted">
                         {deal.product} · {plural(deal.seats, "seat")}
                     </p>
@@ -107,7 +107,7 @@ function ParkedDealCard({
                 />
             </div>
 
-            <p className="py-4 text-[13px] leading-relaxed text-sd-ink">{deal.note}</p>
+            <p className="py-4 text-dense-md leading-relaxed text-sd-ink">{deal.note}</p>
 
             <div className="mt-auto flex items-end justify-between gap-3 border-t border-sd-border pt-3">
                 <span className="flex items-center gap-2">
@@ -116,11 +116,11 @@ function ParkedDealCard({
                         initials={deal.owner_initials}
                         color={deal.owner_color}
                     />
-                    <span className="text-[13px] text-sd-ink">{deal.owner_name}</span>
+                    <span className="text-dense-md text-sd-ink">{deal.owner_name}</span>
                 </span>
                 <span className="text-right">
-                    <span className="block text-[11px] text-sd-muted">Value / yr</span>
-                    <span className="block text-[15px] font-bold text-sd-ink">
+                    <span className="block text-dense-sm text-sd-muted">Value / yr</span>
+                    <span className="block text-sm font-bold text-sd-ink">
                         {formatDeskMoney(deal.value, deal.billing_currency)}
                     </span>
                 </span>
@@ -230,7 +230,7 @@ export default function SalesDeskFuturePipelinePage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 {/* A live summary of the list, not the page description. */}
                 <div>
-                    <p className="text-[13px] text-sd-muted">
+                    <p className="text-dense-md text-sd-muted">
                         {summary
                             ? `Nurture list · ${summary.prospect_count} ${
                                   summary.prospect_count === 1 ? "company" : "companies"
@@ -271,7 +271,7 @@ export default function SalesDeskFuturePipelinePage() {
                     {parkedDeals.length > 0 && (
                         <section className="flex flex-col gap-3" aria-label="Parked deals">
                             <div className="flex items-center gap-2">
-                                <h2 className="text-[13px] font-semibold text-sd-ink">
+                                <h2 className="text-dense-md font-semibold text-sd-ink">
                                     Parked deals
                                 </h2>
                                 <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-bold text-sd-brand">
@@ -298,12 +298,12 @@ export default function SalesDeskFuturePipelinePage() {
 
                     <section className="flex flex-col gap-3" aria-label="Nurture prospects">
                         {parkedDeals.length > 0 && (
-                            <h2 className="text-[13px] font-semibold text-sd-ink">
+                            <h2 className="text-dense-md font-semibold text-sd-ink">
                                 Nurture prospects
                             </h2>
                         )}
                         {prospects.length === 0 ? (
-                            <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-[13px] text-sd-muted">
+                            <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-dense-md text-sd-muted">
                                 No prospects planned.
                             </p>
                         ) : (

@@ -139,15 +139,15 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
      */
     <div className="relative z-50 -translate-x-1/2 -translate-y-[calc(100%+14px)]">
       <div className="flex min-w-36 flex-col items-center justify-center rounded-3xl bg-[#f8f9fb] px-6 py-4 shadow-[0_8px_24px_rgba(16,24,40,0.12)]">
-        <p className="text-[17px] font-medium text-gray-600">{fullLabel}</p>
+        <p className="text-lg font-medium text-gray-600">{fullLabel}</p>
         <p
-          className="mt-2 text-[20px] font-bold leading-7"
+          className="mt-2 text-xl font-bold leading-7"
           style={{ color: CASHFLOW_COLORS.income }}
         >
           {money(payload[0].value)}
         </p>
         <p
-          className="text-[20px] font-bold leading-7"
+          className="text-xl font-bold leading-7"
           style={{ color: CASHFLOW_COLORS.expense }}
         >
           {money(payload[1]?.value ?? 0)}
@@ -478,7 +478,7 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
   return (
     <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
+        <h3 className="font-bold py-3 leading-6 text-xl text-gray-800">Top Sales</h3>
         <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
       </div>
 
@@ -653,11 +653,17 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
   return (
     <div className="bg-white gap-4 px-4 py-6 flex flex-col rounded-2xl border border-gray-200 overflow-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pr-3">
-        <h3 className="font-bold p-3 leading-7.5 text-[20px] text-gray-800">
+        <h3 className="font-bold p-3 leading-7.5 text-xl text-gray-800">
           Last Transactions
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+          {/*
+           * Both controls are `p-2` over the same 24px line box, so they are
+           * the same height by construction. The picker was the only one on
+           * the dashboard left on its own `p-3` default, which is what made
+           * it stand a notch taller than the button beside it.
+           */}
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
           <Button variant="outline" className="p-2">View all</Button>
         </div>
       </div>

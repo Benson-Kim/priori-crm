@@ -276,12 +276,16 @@ export default function VendorsPage() {
                             onSearchChange={setSearch}
                             className="w-full sm:w-70"
                         />
+                        {/*
+                         * Adding goes to the full page, as it does for
+                         * customers. Editing still opens the dialog, so a row
+                         * can be corrected without leaving the register.
+                         */}
                         <Button
                             variant="primary"
-                            onClick={() => {
-                                setEditVendorId(null);
-                                setIsModalOpen(true);
-                            }}>
+                            className="h-control"
+                            onClick={() => navigate("/vendors/add")}
+                        >
                             <Plus size={16} /> Add Vendor
                         </Button>
                     </div>

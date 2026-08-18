@@ -82,7 +82,7 @@ export function StagePath({
             {showCaption && (
                 <p
                     className={cn(
-                        "text-[11px] font-medium",
+                        "text-dense-sm font-medium",
                         progress.status === "open" && "text-sd-muted",
                         progress.status === "won" && "text-sd-success",
                         progress.status === "lost" && "text-sd-danger"

@@ -78,7 +78,7 @@ export function ChecklistRow({
                 </span>
                 <span
                     className={cn(
-                        "flex-1 text-[13px]",
+                        "flex-1 text-dense-md",
                         done ? "text-sd-muted line-through" : "text-sd-ink"
                     )}
                 >

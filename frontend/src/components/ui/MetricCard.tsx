@@ -34,7 +34,7 @@ export const MetricCard = ({ label, value, change }: MetricCardProps) => (
      * clamping it to one line only traded the wrap for hidden digits.
      */}
     <div className="flex items-start justify-between gap-3 py-3">
-      <p className="text-gray-500 text-[18px]">{label}</p>
+      <p className="text-gray-500 text-lg">{label}</p>
       <span
         className={`shrink-0 text-sm font-semibold p-2 rounded-lg ${change ? TONE_CLASSES[change.tone] : TONE_CLASSES.neutral
           }`}

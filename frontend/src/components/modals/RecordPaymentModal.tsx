@@ -137,7 +137,7 @@ function PaymentUploader({
                 type="button"
                 variant="outline"
                 onClick={() => inputRef.current?.click()}
-                className="flex items-center gap-2 w-full border-dashed h-20 text-[16px]"
+                className="flex items-center gap-2 w-full border-dashed h-20 text-base"
             >
                 <Plus size={18} /> {title}
             </Button>

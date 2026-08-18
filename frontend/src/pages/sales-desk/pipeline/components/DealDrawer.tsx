@@ -49,8 +49,8 @@ interface DealDrawerProps {
 function StatTile({ value, label }: Readonly<{ value: string; label: string }>) {
     return (
         <div className="rounded-xl border border-sd-border px-3 py-2">
-            <p className="text-[13px] font-bold text-sd-ink">{value}</p>
-            <p className="pt-0.5 text-[11px] leading-tight text-sd-muted">{label}</p>
+            <p className="text-dense-md font-bold text-sd-ink">{value}</p>
+            <p className="pt-0.5 text-dense-sm leading-tight text-sd-muted">{label}</p>
         </div>
     );
 }
@@ -146,13 +146,13 @@ export function DealDrawer({
                         size={36}
                     />
                     <div className="min-w-0">
-                        <h2 className="text-[13px] font-semibold text-sd-ink">
+                        <h2 className="text-dense-md font-semibold text-sd-ink">
                             {deal.company_name}
                         </h2>
-                        <p className="pt-0.5 text-[11px] leading-relaxed text-sd-muted">
+                        <p className="pt-0.5 text-dense-sm leading-relaxed text-sd-muted">
                             {deal.product} · {plural(deal.seats, "seat")}
                         </p>
-                        <p className="text-[11px] text-sd-muted">Owned by {deal.owner_name}</p>
+                        <p className="text-dense-sm text-sd-muted">Owned by {deal.owner_name}</p>
                     </div>
                 </div>
             }
@@ -168,11 +168,11 @@ export function DealDrawer({
                 </div>
 
                 {/* Which profile this will invoice against */}
-                <p className="flex flex-wrap items-center gap-x-1 text-[11px] text-sd-muted">
+                <p className="flex flex-wrap items-center gap-x-1 text-dense-sm text-sd-muted">
                     Billing to{" "}
                     <span className="font-mono font-semibold text-sd-ink">{profile.code}</span> ·{" "}
                     {profile.terms} · {taxTreatmentLabel(profile.tax)} ·
-                    <SyncPill synced={profile.synced} className="text-[11px]" />
+                    <SyncPill synced={profile.synced} className="text-dense-sm" />
                 </p>
             </DrawerSection>
 
@@ -188,7 +188,7 @@ export function DealDrawer({
                                 title={isReached ? undefined : "Not reached yet"}
                                 onClick={() => setPickedStage(stage)}
                                 className={cn(
-                                    "rounded-lg px-1.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors",
+                                    "rounded-lg px-1.5 py-1 text-dense-sm font-medium whitespace-nowrap transition-colors",
                                     stage === activeStage && isReached
                                         ? "bg-sd-ink text-white"
                                         : "bg-sd-neutral-bg text-sd-muted",
@@ -212,7 +212,7 @@ export function DealDrawer({
                         <span className="text-xs font-semibold text-sd-ink">
                             {shownRecord.stage}
                         </span>
-                        <span className="text-[11px] text-sd-muted">
+                        <span className="text-dense-sm text-sd-muted">
                             {formatDate(shownRecord.logged_on, "table")}
                         </span>
                     </div>
@@ -225,7 +225,7 @@ export function DealDrawer({
                 <DrawerSection className="gap-3">
                     <label
                         htmlFor="deal-note"
-                        className="text-[10px] font-bold tracking-[1px] text-sd-muted uppercase"
+                        className="text-dense-xs font-bold tracking-[1px] text-sd-muted uppercase"
                     >
                         Log or move
                     </label>
@@ -244,7 +244,7 @@ export function DealDrawer({
                             <p
                                 id="deal-note-error"
                                 role="alert"
-                                className="text-[11px] text-sd-danger"
+                                className="text-dense-sm text-sd-danger"
                             >
                                 {error}
                             </p>

@@ -62,7 +62,7 @@ export function PurchaseOrderViewer({
 
       <div className="p-6 flex justify-between">
         <DocumentOwnerHeader editable={editableOwner} />
-        <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+        <h2 className="text-2xl font-black text-priori-purple tracking-wider mb-1 uppercase">
           PURCHASE ORDER
         </h2>
       </div>
@@ -73,7 +73,7 @@ export function PurchaseOrderViewer({
           <div className="flex flex-col gap-1 min-w-0">
             <p className="text-sm text-gray-500 mb-1 whitespace-nowrap">To</p>
 
-            <p className="text-[16px] font-bold text-gray-800 truncate">
+            <p className="text-base font-bold text-gray-800 truncate">
               {data.vendor?.vendor_name ?? data.vendorId}
             </p>
 
@@ -123,12 +123,12 @@ export function PurchaseOrderViewer({
 
       {/* Line Items */}
       <div className="p-6 flex flex-col gap-6">
-        <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+        <h3 className="text-xl leading-7 font-bold text-gray-800">
           Item Details
         </h3>
 
         <div className="pb-4">
-          <table className="w-full text-[16px] min-w-200">
+          <table className="w-full text-base min-w-200">
             <thead>
               <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-7 rounded-t-lg">
                 <th className="text-left px-3 font-bold leading-8 col-span-4">
@@ -194,7 +194,7 @@ export function PurchaseOrderViewer({
 
             <Divider />
 
-            <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+            <div className="flex justify-between items-center font-bold text-base text-gray-900">
               <span>Total</span>
               <span>{formatCurrency(data.total, data.currency ?? "Ksh")}</span>
             </div>
@@ -203,17 +203,17 @@ export function PurchaseOrderViewer({
       </div>
 
       <div className="p-8 pt-6">
-        <p className="text-[16px] font-bold text-gray-800 mb-3">Notes</p>
-        <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
+        <p className="text-base font-bold text-gray-800 mb-3">Notes</p>
+        <div className="w-full px-3 py-4 text-base text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
           {data.notes ?? "No notes added."}
         </div>
 
         {data.termsAndConditions && (
           <>
-            <p className="text-[16px] font-bold text-gray-800 mb-3 mt-4">
+            <p className="text-base font-bold text-gray-800 mb-3 mt-4">
               Terms &amp; Conditions
             </p>
-            <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
+            <div className="w-full px-3 py-4 text-base text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
               {data.termsAndConditions}
             </div>
           </>
@@ -236,12 +236,12 @@ function MetaField({
     <>
       <span
         title={tooltip}
-        className={`text-[16px] font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
+        className={`text-base font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
       >
         {label}
       </span>
 
-      <span className="text-[16px] text-gray-800 min-w-0 truncate">
+      <span className="text-base text-gray-800 min-w-0 truncate">
         {children}
       </span>
     </>

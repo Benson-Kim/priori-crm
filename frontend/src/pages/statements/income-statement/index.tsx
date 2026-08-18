@@ -115,10 +115,10 @@ export default function IncomeStatementsPage() {
      const revenueFooter = statement ? (
           <tfoot>
                <tr className="bg-gray-50 border-t-2 border-green-200">
-                    <td colSpan={3} className="p-3 text-[16px] font-bold text-gray-800">
+                    <td colSpan={3} className="p-3 text-base font-bold text-gray-800">
                          Total Revenue
                     </td>
-                    <td className="p-3 text-[16px] font-bold text-success-600 text-right">
+                    <td className="p-3 text-base font-bold text-success-600 text-right">
                          {money(Number(statement.operating_revenue.total))}
                     </td>
                </tr>
@@ -128,10 +128,10 @@ export default function IncomeStatementsPage() {
      const expenseFooter = statement ? (
           <tfoot>
                <tr className="bg-gray-50 border-t-2 border-red-200">
-                    <td colSpan={3} className="p-3 text-[16px] font-bold text-gray-800">
+                    <td colSpan={3} className="p-3 text-base font-bold text-gray-800">
                          Total Expenses
                     </td>
-                    <td className="p-3 text-[16px] font-bold text-error-600 text-right">
+                    <td className="p-3 text-base font-bold text-error-600 text-right">
                          {money(Number(statement.operating_expenses.total))}
                     </td>
                </tr>

@@ -11,20 +11,27 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { InlineSelect } from "@/components/ui/InlineSelect";
 import { Input } from "@/components/ui/Input";
+import { KenyanPhoneInput } from "@/components/ui/KenyanPhoneInput";
 import { Label } from "@/components/ui/Label";
+import { toInternationalKenyanPhone, toLocalKenyanDigits } from "@/lib/utils";
 import {
     BILLING_CURRENCIES,
     INDUSTRIES,
     createCompany,
-    
     type BillingCurrency,
+    type CompanyRow,
 } from "@/services/salesDeskApi";
 import { useSalesReps } from "@/hooks/useSalesReps";
 
 interface NewCompanyDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreated: () => void;
+    /**
+     * Handed the registered company, so a caller that opened this to fill a
+     * field (the deal dialog's company picker) can select it straight away.
+     * Callers that only need to refresh a list can ignore the argument.
+     */
+    onCreated: (company: CompanyRow) => void;
 }
 
 const EMPTY_FORM = {
@@ -70,9 +77,9 @@ export function NewCompanyDialog({
         setError(null);
         try {
             // The service is the authority on what a valid company is.
-            await createCompany(form);
+            const company = await createCompany(form);
             setForm({ ...EMPTY_FORM, ownerId: reps[0]?.id ?? "" });
-            onCreated();
+            onCreated(company);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Could not register that company.");
         } finally {
@@ -164,14 +171,15 @@ export function NewCompanyDialog({
 
                 <div>
                     <Label htmlFor="company-phone">Phone</Label>
-                    <Input
-                        wrapperClassName="h-control"
+                    {/*
+                     * The desk registers Kenyan companies, and the field
+                     * already advertised a `+254` number, so it stores that
+                     * shape and formats as it is typed.
+                     */}
+                    <KenyanPhoneInput
                         id="company-phone"
-                        type="tel"
-                        value={form.phone}
-                        onChange={(event) => set("phone", event.target.value)}
-                        placeholder="+254 720 114 220"
-                        autoComplete="tel"
+                        value={toLocalKenyanDigits(form.phone)}
+                        onChange={(local) => set("phone", toInternationalKenyanPhone(local))}
                     />
                 </div>
 
