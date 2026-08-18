@@ -6,6 +6,7 @@ import secrets
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import BinaryIO
 
@@ -508,6 +509,8 @@ class OwnerService:
             before={"module_key": module_key.value, "enabled": before_enabled},
             after={"module_key": module_key.value, "enabled": enabled},
         )
+        if before_enabled != enabled:
+            self._notify_admins_of_entitlement_change(module_key, enabled)
         logger.info(
             "Module entitlement changed",
             extra={"module_key": module_key.value, "enabled": enabled},
@@ -517,6 +520,65 @@ class OwnerService:
             enabled=enabled,
             essential=module_key.is_essential,
         )
+
+    def _notify_admins_of_entitlement_change(
+        self, module_key: ModuleKey, enabled: bool
+    ) -> None:
+        """Queue an entitlement-change email to every active tenant admin.
+
+        ADR-0005 transactional-outbox pattern: rows are enqueued (flush
+        only) in the SAME transaction as the entitlement write and its
+        audit event, so a rolled-back change never emails anyone and a
+        committed one always has a durable delivery record (retried by the
+        drainer until delivered or dead-lettered). No network I/O happens
+        here — ADR-0011's write-path rule.
+
+        Content deliberately names the actor's ROLE, never the operator's
+        email address: tenant admins learn that the platform made a
+        commercial change, not who the operator is. Recipient scoping is
+        deployment-wide (every active admin) until org membership lands in
+        Phase T1 (readiness audit #3).
+        """
+        from app.common.email_outbox import EmailOutboxService
+        from app.constants.enums import UserRole
+        from app.modules.auth.models import User
+
+        admins = (
+            self._db.query(User)
+            .filter(User.role == UserRole.ADMIN.value, User.is_active.is_(True))
+            .order_by(User.email)
+            .all()
+        )
+        if not admins:
+            logger.info(
+                "Entitlement change has no active tenant admins to notify",
+                extra={"module_key": module_key.value},
+            )
+            return
+
+        actor_role = getattr(self._current_user, "role", None) or "system"
+        module_label = module_key.value.replace("_", " ").capitalize()
+        state_label = "enabled" if enabled else "disabled"
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        subject = f"Module {state_label}: {module_label}"
+        body_text = (
+            f"The '{module_label}' module has been {state_label} for your "
+            f"organisation.\n\n"
+            f"Module: {module_label} ({module_key.value})\n"
+            f"New state: {state_label}\n"
+            f"Changed by: {actor_role.replace('_', ' ')}\n"
+            f"When: {timestamp}\n\n"
+            "This is a commercial entitlement change made by the platform. "
+            "If it is unexpected, contact your platform operator."
+        )
+
+        outbox = EmailOutboxService(self._db)
+        for admin in admins:
+            outbox.enqueue(
+                recipient=admin.email,
+                subject=subject,
+                body_text=body_text,
+            )
 
     # Snapshots (immutable)
 
