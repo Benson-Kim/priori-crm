@@ -255,6 +255,51 @@ is irreversible for the recovery window.
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
 
+## Erasure obligations vs. backups — the policy
+
+Backups are deliberately immutable and versioned (anti-tamper section), and
+Kenya DPA 2019 / GDPR erasure obligations still apply — the tenant
+offboarding procedure in `docs/runbooks/platform-operations.md` (MR !77)
+invokes them explicitly. The two are reconciled the standard, defensible
+way: **erasure is honored on restore, and residual copies in backups are
+strictly time-bounded** by the retention windows below. Erased personal
+data is never re-erased *inside* existing backup artifacts (that would
+defeat their integrity); instead it ages out.
+
+**Erasure-on-restore rule: after ANY restore, re-apply every erasure
+performed since the backup/restore-target time before the restored data
+serves traffic.** A restore from a 3-week-old artifact silently resurrects
+personal data erased 2 weeks ago unless this step runs. Erasures executed
+since any point in time are reconstructable from `audit_events` (append-only;
+deletion/anonymisation actions are audited like every other mutation) and
+from the offboarding log required by the !77 procedure.
+
+Maximum residual persistence of erased data, per artifact:
+
+| Artifact | Erased data can persist for at most |
+|---|---|
+| Nightly dumps (`db/`) + uploads tars (`uploads/`) | **35 days** (bucket lifecycle expiry of current objects) |
+| pgBackRest PITR chain (fulls + diffs + WAL, `pgbackrest/`) | **≈ 2 weeks** (`repo1-retention-full=2` with weekly fulls) |
+| Non-current object versions (bucket-wide, incl. `uploads-sync/`) | **14 days** after deletion/overwrite (lifecycle purge of non-current versions) |
+| Local artifacts on the droplet (`backups/`) | newest 14 dumps / 7 tars ≈ **14 / 7 days** |
+
+So the outer bound is **35 days**: an erasure is fully physical everywhere
+(live database + all backup tiers) at most 35 days after it is performed.
+Communicate that bound when confirming an erasure request; it is compatible
+with both regimes, which permit bounded retention in backup archives when
+erasure on restore is guaranteed and documented — this section is that
+documentation.
+
+**`audit_events` position.** The audit trail is append-only ledger evidence
+(docs/database.md §4) and its `before` snapshots can contain erased personal
+data. Live `audit_events` rows are retained under the platform's
+record-keeping / legal-claims basis — erasure applies to live business rows,
+not to the audit evidence of their lifecycle (including the erasure action
+itself). Audit-trail copies inside backups fall under the same residual
+windows above; on restore, the erasure-on-restore rule re-applies erasures
+to *business* tables while the audit trail — including the original erasure
+events used to re-apply them — is preserved.
+
 ## Which backup do I restore from? — decision table
 
 | Failure mode | Restore from | Why |
@@ -270,7 +315,10 @@ is irreversible for the recovery window.
 All restores are deliberate, data-loss-bearing human decisions — never
 automated. Announce before starting; record what was restored and why in the
 operations log afterwards. Restored scratch instances contain real financial
-data — tear them down when done.
+data — tear them down when done. **Every scenario below ends with the
+erasure-on-restore step** (§Erasure obligations vs. backups): re-apply any
+erasures performed since the backup/target time before the restored data
+serves traffic or leaves the scratch environment.
 
 ## Restore scenarios
 
@@ -313,8 +361,10 @@ sudo -u postgres psql -p 5433 -d priori_crm \
 ```
 
 Cross-check against `audit_events` (append-only; `before` snapshots) to
-confirm the reinserted rows match exactly what the deletion removed. Tear
-down:
+confirm the reinserted rows match exactly what the deletion removed — and
+that **none of them is subject to an erasure performed since** (§Erasure
+obligations vs. backups): a surgical reinsert must not resurrect erased
+personal data any more than a full restore may. Tear down:
 
 ```bash
 sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/scratch stop
@@ -366,11 +416,15 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
 6. Deploy the current `main` via *Deploy production* (`workflow_dispatch`).
    The release script's `alembic upgrade head` brings the restored schema to
    the deployed code's head if the backup predates it.
-7. Point DNS at the new droplet; verify `/api/v1/health`, log in, open a
+7. **Re-apply erasures** performed since the backup/target time (§Erasure
+   obligations vs. backups) — from `audit_events` and the offboarding log —
+   before the restored data serves traffic. A restore must not silently
+   resurrect erased personal data.
+8. Point DNS at the new droplet; verify `/api/v1/health`, log in, open a
    recent invoice, download one uploaded document.
-8. Re-run the Bring-up checklist from step 7 (cron entries) — the rebuilt
-   droplet has none — and confirm the next `scheduled:backup-freshness` run
-   is green end-to-end.
+9. Re-run the Bring-up checklist from step 8 (scripts, age recipient, cron
+   entries) — the rebuilt droplet has none — and confirm the next
+   `scheduled:backup-freshness` run is green end-to-end.
 
 ### 2. Bad migration right after a deploy
 
@@ -389,8 +443,10 @@ schema (expand/contract was violated) do a data restore:
      -d "<PG_URL for priori_crm_restore>" /srv/priori/backups/pre-<sha>.dump
    # point DATABASE_URL in shared/.env at priori_crm_restore
    ```
-4. `sudo systemctl start priori-api`; verify health; rename/clean databases
-   once stable.
+4. **Re-apply erasures** performed since the pre-deploy dump (§Erasure
+   obligations vs. backups) — the window is small (dump → stop) but not
+   guaranteed empty. Then `sudo systemctl start priori-api`; verify health;
+   rename/clean databases once stable.
 5. **Understand what was lost**: every write between the pre-deploy dump and
    the stop is gone. If that window matters, scenario 0's PITR-to-scratch
    can recover the missing minutes surgically — the WAL archive covers them.
@@ -412,7 +468,9 @@ Do not let the first full restore be during an incident. Once a quarter
 between the two variants so both paths stay rehearsed:
 
 - **Variant A (full rebuild):** scenario 1 on a throwaway droplet, through
-  step 7 (app serving, document downloadable).
+  step 8 (app serving, document downloadable; the erasure re-apply of step
+  7 may be simulated in a drill — pick one past erasure from `audit_events`
+  and prove it can be re-applied).
 - **Variant B (PITR surgical):** scenario 0 against a scratch cluster —
   pick an arbitrary target time from yesterday, recover, extract one
   invoice + its payments, verify against `audit_events`.
