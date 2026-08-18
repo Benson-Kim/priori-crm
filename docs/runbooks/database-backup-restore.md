@@ -383,6 +383,16 @@ Checklist (record every timestamp in the ops log):
 
 - [ ] T₀ noted; drill announced (so a red freshness run mid-drill is not
       mistaken for an incident).
+- [ ] **Cipher-passphrase retrieval from escrow — by someone other than the
+      person who set it up, timed.** An engineer who is **not** the author
+      of the backup configuration retrieves the pgBackRest repo-cipher
+      passphrase (and the bucket key, Variant A) from the password manager
+      **without help from the author**, and the retrieval timestamp
+      (T_escrow) is recorded separately in the ops log. If only the author
+      can find or access the escrow, the escrow has failed — the RTO number
+      assumes recovery works when the author is unreachable. Fix the escrow
+      (naming, access grants, documentation) the same day and count the
+      drill as failed.
 - [ ] Restore completed; for Variant A: `/api/v1/health` healthy, login
       works, a recent invoice opens, one uploaded document downloads.
 - [ ] Freshness of restored data measured: `SELECT max(created_at) FROM
