@@ -10,10 +10,13 @@
 #
 # What this script does, in order, failing loudly at each step:
 #   1. pg_dump -Fc of the production database -> backups/nightly/nightly-<UTC>.dump
-#   2. tar.gz of shared/uploads               -> backups/uploads-<UTC>.tar.gz
-#   3. prune local copies (newest DB_RETAIN / UPLOADS_RETAIN kept)
-#   4. copy both artifacts offsite via rclone (RCLONE_REMOTE) — droplet loss
-#      must never take the only backups with it.
+#   2. copy the dump offsite via rclone (RCLONE_REMOTE) IMMEDIATELY — droplet
+#      loss must never take the only backups with it, and a later uploads-tar
+#      failure must never strand a good dump on the droplet.
+#   3. tar.gz of shared/uploads -> backups/uploads-<UTC>.tar.gz + offsite copy.
+#      This is an independent failure domain: a tar/copy failure still exits
+#      nonzero overall (cron/logs show red) but only AFTER the dump is safe.
+#   4. prune local copies (newest DB_RETAIN / UPLOADS_RETAIN kept)
 #
 # Nightly dumps live in backups/nightly/, NOT directly in backups/:
 # deploy/production_release.sh prunes backups/*.dump keeping the newest 14 of
@@ -123,24 +126,66 @@ pg_dump -Fc "$PG_URL" > "$DB_DUMP" || {
   exit "$rc"
 }
 
-# --- 2. uploads archive ----------------------------------------------------------
+# --- 2. database dump offsite — IMMEDIATELY, before anything can fail ----------
+# The dump is the artifact this script exists to protect; it must be safely
+# offsite before the uploads archive gets a chance to fail. (A live upload
+# racing the tar makes GNU tar exit nonzero — that must never strand a
+# perfectly good dump on the droplet until the freshness alert fires.)
+if [ -n "$RCLONE_REMOTE" ]; then
+  log "Copying database dump to $RCLONE_REMOTE"
+  rclone copyto "$DB_DUMP" "$RCLONE_REMOTE/db/$(basename "$DB_DUMP")" || {
+    log "FATAL: offsite copy of the database dump failed"
+    exit 1
+  }
+else
+  log "WARNING: local-only backup (ALLOW_LOCAL_ONLY=1) — this does NOT survive droplet loss"
+fi
+
+# --- 3. uploads archive — an independent failure domain -------------------------
 # STORAGE_BACKEND=local keeps proof-of-payment documents on disk; they are as
 # unrecoverable as the database if the droplet is lost.
+#
+# A failure here must NOT abort the script (the dump is already offsite), but
+# it must still make the overall run exit nonzero so cron/logs show red.
+#
+# GNU tar exit codes: 1 means "some files differ" — the warning class,
+# including 'file changed as we read it' when a live upload races the 01:15
+# run. The archive is still written and every file in it is complete; the
+# racing file is simply as-of-read. Treat 1 as loud-but-archived. Exit codes
+# >= 2 are fatal errors — remove the partial archive and mark the run failed.
 UPLOADS_TAR=""
+UPLOADS_FAILED=0
 if [ -d "$UPLOADS_DIR" ]; then
   UPLOADS_TAR="$BACKUP_DIR/uploads-$STAMP.tar.gz"
   log "Archiving uploads to $UPLOADS_TAR"
-  tar -czf "$UPLOADS_TAR" -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")" || {
-    rc=$?
+  tar_rc=0
+  tar -czf "$UPLOADS_TAR" -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")" || tar_rc=$?
+  if [ "$tar_rc" -eq 1 ]; then
+    log "WARNING: tar exited 1 ('file changed as we read it' class) — a live"
+    log "         upload raced the archive. The archive is complete and kept;"
+    log "         the racing file is captured as-of-read."
+  elif [ "$tar_rc" -ge 2 ]; then
     rm -f "$UPLOADS_TAR"
-    log "FATAL: uploads tar failed (exit $rc) — partial archive removed"
-    exit "$rc"
-  }
+    UPLOADS_TAR=""
+    UPLOADS_FAILED=1
+    log "ERROR: uploads tar failed (exit $tar_rc) — partial archive removed."
+    log "       Continuing: the database dump is already offsite; this run"
+    log "       will still exit nonzero."
+  fi
 else
   log "WARNING: $UPLOADS_DIR does not exist — skipping uploads archive"
 fi
 
-# --- 3. local retention ----------------------------------------------------------
+if [ -n "$UPLOADS_TAR" ] && [ -n "$RCLONE_REMOTE" ]; then
+  log "Copying uploads archive to $RCLONE_REMOTE"
+  rclone copyto "$UPLOADS_TAR" "$RCLONE_REMOTE/uploads/$(basename "$UPLOADS_TAR")" || {
+    UPLOADS_FAILED=1
+    log "ERROR: offsite copy of the uploads archive failed — the complete"
+    log "       local archive is kept; this run will still exit nonzero."
+  }
+fi
+
+# --- 4. local retention ----------------------------------------------------------
 # Filenames are nightly-<UTC>.dump / uploads-<UTC>.tar.gz by construction — no
 # whitespace or control characters — so the ls|tail|xargs pipelines are safe.
 # Pruning is best-effort and must not fail the backup under pipefail.
@@ -149,21 +194,9 @@ ls -1t "$NIGHTLY_DIR"/nightly-*.dump 2>/dev/null | tail -n +"$((DB_RETAIN + 1))"
 # shellcheck disable=SC2012 # info: same reasoning as above
 ls -1t "$BACKUP_DIR"/uploads-*.tar.gz 2>/dev/null | tail -n +"$((UPLOADS_RETAIN + 1))" | xargs -r rm -f -- || true
 
-# --- 4. offsite copy ----------------------------------------------------------
-if [ -n "$RCLONE_REMOTE" ]; then
-  log "Copying to $RCLONE_REMOTE"
-  rclone copyto "$DB_DUMP" "$RCLONE_REMOTE/db/$(basename "$DB_DUMP")" || {
-    log "FATAL: offsite copy of the database dump failed"
-    exit 1
-  }
-  if [ -n "$UPLOADS_TAR" ]; then
-    rclone copyto "$UPLOADS_TAR" "$RCLONE_REMOTE/uploads/$(basename "$UPLOADS_TAR")" || {
-      log "FATAL: offsite copy of the uploads archive failed"
-      exit 1
-    }
-  fi
-else
-  log "WARNING: local-only backup (ALLOW_LOCAL_ONLY=1) — this does NOT survive droplet loss"
+if [ "$UPLOADS_FAILED" -ne 0 ]; then
+  log "BACKUP PARTIAL: database dump completed${RCLONE_REMOTE:+ and copied offsite} ($DB_DUMP),"
+  log "                but the uploads archive tier FAILED — investigate before the next run."
+  exit 1
 fi
-
 log "Backup complete: $DB_DUMP${UPLOADS_TAR:+ + $UPLOADS_TAR}"
