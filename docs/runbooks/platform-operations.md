@@ -135,7 +135,11 @@ value, and export after deletion is impossible.
 - Breach duty: notify the affected tenant(s) without undue delay (DPA
   2019 s. 43: 72 hours to the Commissioner where applicable; GDPR
   Art. 33 mirrors this). The platform audit trail is your evidence of
-  what the operator did and when.
+  what the operator *changed* and when — it is append-only at the
+  database (a `BEFORE UPDATE OR DELETE` trigger raises), but it records
+  **successful writes only**: operator sign-ins, reads (audit/owner
+  listings) and failed/denied attempts are not in the trail. Correlate
+  with API logs where those matter.
 
 ## Entitlement management
 
@@ -190,7 +194,8 @@ Honest status of every control this runbook relies on:
 | Tenant lifecycle audited + reversible | ✅ this MR | — |
 | Suspension: immediate denial on every authenticated route + module denial + login/refresh rejection | ✅ this MR | Per-tenant at N>1 needs owner resolution (T1, #75) |
 | Entitlement-change notifications to tenant admins | ✅ this MR (outbox, same-transaction) | Org-membership recipient scoping (T1) |
-| Operator audit read surface | ✅ this MR (`GET /platform/audit` + console view) | Real `owner_profile_id` column filter (T5) |
+| Operator audit read surface | ✅ this MR (`GET /platform/audit` + console view) | Real `owner_profile_id` column filter (T5, #78) |
+| Audit trail append-only (tamper resistance) | ✅ DB trigger raises on UPDATE/DELETE (this MR); records **successful writes only** — no sign-ins, reads or denied attempts | REVOKE via role split (#80); sign-in/read auditing unplanned |
 | Suspension pauses scheduled transitions for that tenant | ❌ not enforced (schedulers are tenant-global) | T5 |
 | Per-tenant error/metric split | ❌ | T5 |
 | Per-tenant outbox/DLQ attribution | ❌ | T5 |

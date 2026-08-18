@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # "Vendor") can always be resolved when the mapper is first configured.
 # Order is: parent tables first, then children that reference them.
 import app.common.audit
+import app.common.audit_triggers
 import app.common.email_outbox
 import app.common.reference_sequence
 import app.common.reference_triggers

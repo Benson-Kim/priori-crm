@@ -83,7 +83,10 @@ def list_owners(
         "the owner service: entitlement grants/revocations "
         "(entity_type 'owner_module_setting') and tenant lifecycle changes "
         "(entity_type 'owner_profile'). Newest first. Read-only evidence — "
-        "rows are never updated or deleted."
+        "append-only is enforced by a database trigger (BEFORE UPDATE OR "
+        "DELETE raises), not just by application convention. The trail "
+        "records successful writes only: operator sign-ins, reads and "
+        "denied attempts are not audited."
     ),
     responses={403: {"description": "Caller is not a platform operator"}},
 )

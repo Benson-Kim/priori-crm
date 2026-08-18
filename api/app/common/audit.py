@@ -3,8 +3,10 @@
 Every payment, cancellation and hard delete writes an ``audit_events`` row
 IN THE SAME TRANSACTION as the mutation itself (``record_audit_event`` only
 flushes; the caller's commit/rollback governs both), so the trail can never
-disagree with the ledger. Rows are never updated or deleted by application
-code — this table is evidence, not state.
+disagree with the ledger. Rows are never updated or deleted — enforced at
+the database by a BEFORE UPDATE OR DELETE trigger that raises
+(app/common/audit_triggers.py, migration b0c1d2e3f4a5), not just by
+application convention: this table is evidence, not state.
 """
 
 import logging
