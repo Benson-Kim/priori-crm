@@ -191,10 +191,6 @@ class AuthService:
             self._db.commit()
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
-        # Mark OTP as used and invalidate all other unused OTPs for this user.
-        # Both writes flush within the request-scoped transaction; the commit
-        # is owned by CommitOnSuccessRoute (app/common/routing.py), which
-        # commits before the response is sent; get_db()'s teardown commit
         # Tenant lifecycle gate (ADR-0013 Phase A): after the credential
         # check (a suspended org must not become an account-enumeration
         # oracle for unauthenticated callers) and before any token exists.
@@ -202,12 +198,16 @@ class AuthService:
         # valid within its window should the org be reactivated.
         self._ensure_owner_not_suspended(user)
 
+        # Mark OTP as used and invalidate all other unused OTPs for this user.
+        # Both writes flush within the request-scoped transaction; the commit
+        # is owned by CommitOnSuccessRoute (app/common/routing.py), which
+        # commits before the response is sent; get_db()'s teardown commit
+        # is a safety net only.
         otp.is_used = True
         self._db.flush()
 
         self._invalidate_pending_otps(user.id, exclude_id=otp.id)
 
-        access_token = create_access_token(subject=str(user.id))
         access_token = create_access_token(subject=str(user.id))
         refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
 
