@@ -27,6 +27,10 @@ stages:
   - test
   - security
   - scheduled
+  # Runs only when a scheduled job failed: routes the failure to a shared
+  # channel (scheduled:notify-failure) instead of relying on the schedule
+  # owner's e-mail. See .gitlab/ci/scheduled-jobs.yml.
+  - notify
 
 variables:
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"

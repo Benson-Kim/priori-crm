@@ -25,9 +25,15 @@
 #   - API_BASE_URL        e.g. https://priori-crm-api.onrender.com
 #   - INTERNAL_API_SECRET must equal the API's INTERNAL_API_SECRET env var
 #
-# Alerting: any non-2xx response fails the job. Configure pipeline-failure
-# notifications / an integration on these scheduled pipelines so a missed or
-# failing run pages on-call (AC: alert if a job has not run in its window).
+# Alerting: any non-2xx response fails the job, and scheduled:notify-failure
+# (bottom of this file, when: on_failure) then POSTs the failure to the
+# shared channel behind ALERT_WEBHOOK_URL — routing lives in code, not in a
+# per-person notification setting. GitLab's built-in pipeline-failure e-mail
+# goes only to the schedule owner; keep it on as a backstop, but the webhook
+# is the alert of record (AC: alert if a job has not run in its window).
+#   - ALERT_WEBHOOK_URL   masked CI/CD variable: incoming-webhook URL of the
+#                         shared alerts channel (Slack/Mattermost/Google
+#                         Chat compatible {"text": ...} payload).
 
 .scheduled-base:
   stage: scheduled
@@ -378,3 +384,54 @@ scheduled:backup-freshness:
         exit 1
       fi
       echo "BACKUP FRESHNESS CHECK PASSED"
+
+# Failure routing — alerting as code, not as a per-person setting. GitLab's
+# built-in notification for a failed scheduled pipeline is an e-mail to the
+# schedule OWNER only; one person on leave means no alert. This job runs in
+# the `notify` stage with `when: on_failure`, i.e. exactly when any scheduled
+# job above went red, and POSTs the failure to the shared alerts channel.
+#
+# Required CI/CD variable (masked, Settings > CI/CD > Variables):
+#   - ALERT_WEBHOOK_URL   incoming-webhook URL of the shared channel. The
+#                         payload is {"text": "..."} (Slack / Mattermost /
+#                         Google Chat compatible).
+#
+# The webhook URL embeds its own secret token, so it must never hit argv
+# (visible in `ps`) — curl reads it from a 0600 config file instead.
+# If ALERT_WEBHOOK_URL is unset this job fails loudly: an unroutable alert
+# is itself a monitoring failure (the pipeline is already red at this point,
+# so this cannot break a healthy run).
+scheduled:notify-failure:
+  stage: notify
+  image: curlimages/curl:8.11.1
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_failure
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - |
+      if [ -z "${ALERT_WEBHOOK_URL:-}" ]; then
+        echo "ALERT_WEBHOOK_URL is not set — the failed scheduled pipeline was NOT routed to the shared channel." >&2
+        echo "Set it as a masked CI/CD variable (see docs/runbooks/database-backup-restore.md, bring-up checklist)." >&2
+        exit 1
+      fi
+      umask 077
+      cfg="$(mktemp)"
+      payload="$(mktemp)"
+      trap 'rm -f "$cfg" "$payload"' EXIT
+      printf 'url = "%s"\n' "$ALERT_WEBHOOK_URL" > "$cfg"
+      # All interpolated values are CI-provided paths/URLs/task names — no
+      # quotes or backslashes — so building the JSON with printf is safe.
+      printf '{"text":"Scheduled pipeline FAILED: task=%s project=%s pipeline=%s"}' \
+        "${SCHEDULED_TASK:-unknown}" "${CI_PROJECT_PATH}" "${CI_PIPELINE_URL}" > "$payload"
+      code=$(curl -sS -o /dev/null -w "%{http_code}" -K "$cfg" -X POST \
+        -H "Content-Type: application/json" \
+        --data "@$payload" \
+        --max-time 30 --retry 2 --retry-connrefused)
+      echo "webhook HTTP ${code}"
+      if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+        echo "Failure notification could NOT be delivered (HTTP ${code})." >&2
+        exit 1
+      fi
+      echo "Failure routed to the shared alerts channel."

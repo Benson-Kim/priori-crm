@@ -106,8 +106,13 @@ config. It must never appear in CI variables, the repo, or on argv.
 
 ## Monitoring — a failed backup is discovered in hours, not at restore time
 
-Three layers, all alerting through the established channel (a red scheduled
-pipeline pages on-call):
+Three layers. A red scheduled pipeline is the alert, and its routing lives
+in code: `scheduled:notify-failure` (`.gitlab/ci/scheduled-jobs.yml`,
+`when: on_failure`) POSTs every scheduled-pipeline failure to the shared
+alerts channel behind the masked `ALERT_WEBHOOK_URL` CI variable. GitLab's
+built-in failure e-mail goes only to the schedule owner — keep it on as a
+backstop, but it is not the alert of record (one person on leave must not
+mean no alert):
 
 1. **`scheduled:backup-freshness`** (`.gitlab/ci/scheduled-jobs.yml`) — the
    dead-man's switch, driven by **two** schedules: an **hourly WAL-only**
@@ -451,8 +456,14 @@ later steps verify earlier ones.
        5 * * * *  RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1
        ```
        Postgres user's crontab: the four pgBackRest lines from §Tier 1.
-9. [ ] **CI variables**: the four `BACKUP_S3_*` variables (masked, Settings >
-       CI/CD > Variables) using the **read-only** key from step 2.
+9. [ ] **CI variables** (masked, Settings > CI/CD > Variables):
+       - the four `BACKUP_S3_*` variables using the **read-only** key from
+         step 2;
+       - `ALERT_WEBHOOK_URL` — incoming-webhook URL of the **shared** alerts
+         channel (Slack/Mattermost/Google Chat `{"text": ...}` payload).
+         `scheduled:notify-failure` POSTs every scheduled-pipeline failure
+         there; without it, failures reach only the schedule owner's e-mail
+         (and the notify job itself fails loudly to flag the gap).
 10. [ ] **Pipeline schedules** (CI/CD > Schedules, on `develop`,
         pipeline-failure notifications on):
         - `SCHEDULED_TASK=restore-verify`, cron `0 3 1 * *` (monthly);
