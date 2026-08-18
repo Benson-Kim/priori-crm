@@ -477,10 +477,11 @@ export default function PlatformConsolePage() {
               Tenant lifecycle — {selectedOwner.fullName}
             </h2>
             <p className="text-sm text-gray-500">
-              Suspension denies every non-essential module and blocks new
-              tenant sign-ins and session refreshes; essential surfaces stay
-              up and no data is touched. It is reversible at any time and
-              both directions are audited.
+              Suspension takes effect immediately on every signed-in tenant
+              session and blocks new sign-ins and refreshes; no data is
+              touched and nothing is revoked, so reactivation restores
+              access at once. It is reversible at any time and both
+              directions are audited.
             </p>
           </div>
 
@@ -557,7 +558,7 @@ export default function PlatformConsolePage() {
         description={
           pendingStatus
             ? pendingStatus.next === "suspended"
-              ? `Suspend ${pendingStatus.owner.fullName}? Every non-essential module is denied immediately and no tenant user can sign in or refresh a session until reactivation. No data is touched; the change is audited and reversible.`
+              ? `Suspend ${pendingStatus.owner.fullName}? Every signed-in tenant session is denied immediately and no tenant user can sign in or refresh until reactivation. No data is touched; the change is audited and reversible.`
               : `Reactivate ${pendingStatus.owner.fullName}? Module access and tenant sign-ins are restored immediately. The change is audited.`
             : undefined
         }
