@@ -89,6 +89,9 @@ stalled archive red the same day.
 00:30 slot finishes before the 01:15 nightly dump:
 
 ```cron
+# cron's default PATH is minimal (often just /usr/bin:/bin) — set it
+# explicitly so pgbackrest resolves wherever the package installed it.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # weekly full backup — Sunday 00:30 UTC
 30 0 * * 0    pgbackrest --stanza=priori --type=full backup
 # daily differential — Monday–Saturday 00:30 UTC
@@ -540,6 +543,10 @@ later steps verify earlier ones.
        ```
        Deploy user's crontab:
        ```cron
+       # cron's default PATH is minimal and does NOT include /usr/local/bin,
+       # where rclone commonly lives — set it explicitly or the scripts fail
+       # with "rclone is not installed" only under cron.
+       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
        # nightly DB dump + uploads tar (after the 00:15 UTC nightly transitions)
        15 1 * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/db_backup.sh >> /srv/priori/backups/backup.log 2>&1
        # hourly uploads mirror
