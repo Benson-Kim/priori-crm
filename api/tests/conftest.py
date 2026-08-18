@@ -1,6 +1,7 @@
 import os
 from datetime import UTC, datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,6 +39,37 @@ settings.RATE_LIMIT_ENABLED = False
 # independent *because the product is*, not because the rule is off.
 settings.ABAC_OFF_HOURS_START = 22
 settings.ABAC_OFF_HOURS_END = 6
+
+# The instant every request is EVALUATED at, suite-wide: a fixed
+# working-hours moment (11:30 tenant-local — outside the 22h → 6h window).
+#
+# The window above being live is only half of determinism: the gate's
+# evaluation clock itself must be pinned, or the suite exercises different
+# policy branches depending on when CI happens to run — pipeline
+# 2767217667 went red purely because the job ran at 00:10 tenant-local,
+# when requests that carry no `sua` (e.g. tests installing an actor via
+# `dependency_overrides[get_current_user]`, which send no bearer token at
+# all) fell into the window. Tests that WANT another instant (night-time
+# regression tests, risk-decay timelines) monkeypatch the same seam on top
+# of this fixture; anchoring on ABAC_EVALUATION_TIME keeps their
+# timelines coherent with the gate's clock.
+ABAC_EVALUATION_TIME = datetime(
+    2026, 8, 14, 11, 30, tzinfo=ZoneInfo(settings.REPORTING_TIMEZONE)
+).astimezone(UTC)
+
+
+@pytest.fixture(autouse=True)
+def pinned_abac_clock(monkeypatch):
+    """Freeze the ABAC evaluation clock (issue #67) for EVERY test.
+
+    Pins ``app.common.authz.context._now`` — the policy engine's single
+    time-provider seam (every rule and risk detector reads the
+    ``requested_at`` it produces) — so no business assertion can flip with
+    the wall clock. Nothing else is frozen: JWT expiry, DB defaults and
+    reporting dates keep real time.
+    """
+    monkeypatch.setattr("app.common.authz.context._now", lambda: ABAC_EVALUATION_TIME)
+
 
 # Prefer the real PostgreSQL database (provided by the CI service via
 # DATABASE_URL) so Postgres-only constructs - gen_random_uuid(),
@@ -182,10 +214,11 @@ def auth_headers(
     off-hours and unknown-geo challenges exist to catch.
 
     ``stepped_up_at`` pins the claim to an explicit instant. Tests that
-    freeze the gate's clock MUST pass it: otherwise the claim is stamped at
-    real wall-clock time while the request is evaluated at the frozen one,
-    and whether the token reads as fresh depends on which way the two
-    happen to drift — a coin flip, not a test.
+    re-freeze the gate's clock to their OWN instant MUST pass it: otherwise
+    the claim is stamped at the suite default (``ABAC_EVALUATION_TIME``,
+    which every request is evaluated at via ``pinned_abac_clock``) while
+    the request is evaluated at the test's instant, and whether the token
+    reads as fresh depends on the gap between the two.
     """
     from app.common.security import create_access_token
 
@@ -195,7 +228,10 @@ def auth_headers(
     if stepped_up_at is not None:
         claims["sua"] = int(stepped_up_at.timestamp())
     elif stepped_up:
-        claims["sua"] = int(datetime.now(UTC).timestamp())
+        # Stamped at the pinned evaluation instant, not real wall-clock
+        # time, so "freshly stepped up" is a fact about the frozen
+        # timeline every request is evaluated on.
+        claims["sua"] = int(ABAC_EVALUATION_TIME.timestamp())
     return {
         "Authorization": (
             f"Bearer {create_access_token(subject=str(user.id), extra=claims or None)}"

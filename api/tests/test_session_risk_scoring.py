@@ -22,7 +22,7 @@ zero-trust gate. These tests pin:
 """
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -37,6 +37,12 @@ from app.common.security import (
 from app.constants.enums import SessionStatus, UserRole
 from app.lib.config import settings
 from app.modules.auth.models import User, UserSession
+
+# Every request is evaluated at the suite's pinned instant (conftest's
+# `pinned_abac_clock`), so timeline fixtures — "the last anomaly was 9h
+# ago", "the session is 5h old" — anchor on THAT instant, not on the real
+# wall clock the gate no longer reads.
+from tests.conftest import ABAC_EVALUATION_TIME
 
 VALID_PASSWORD = "Str0ng!Pass"
 
@@ -176,7 +182,7 @@ class TestImpossibleTravel:
         # The user flies for ~14h; a non-geolocated request kept
         # last_seen_at fresh while the Nairobi fix aged.
         session = db.get(UserSession, _sid(access))
-        session.last_geo_at = datetime.now(UTC) - timedelta(hours=14)
+        session.last_geo_at = ABAC_EVALUATION_TIME - timedelta(hours=14)
         db.commit()
 
         # New York is ~11,740 km away: 14h implies ~840 km/h — an
@@ -288,7 +294,7 @@ class TestScoreDecay:
 
         # 80 points earned over a working day, last anomaly 9 hours ago.
         session.risk_score = 80
-        session.risk_updated_at = datetime.now(UTC) - timedelta(hours=9)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(hours=9)
         db.commit()
 
         resp = client.get("/api/v1/customers", headers=_bearer(access))
@@ -301,7 +307,7 @@ class TestScoreDecay:
         session = db.get(UserSession, _sid(access))
 
         session.risk_score = 80
-        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=2)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(minutes=2)
         db.commit()
 
         resp = client.get("/api/v1/customers", headers=_bearer(access))
@@ -317,7 +323,7 @@ class TestScoreDecay:
         session.status = SessionStatus.CHALLENGE_REQUIRED.value
         session.risk_score = 80
         # Long enough ago that the SCORE would decay to zero.
-        session.risk_updated_at = datetime.now(UTC) - timedelta(days=3)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(days=3)
         db.commit()
 
         resp = client.get("/api/v1/customers", headers=_bearer(access))
@@ -331,7 +337,7 @@ class TestScoreDecay:
         access, _ = _login_session(client, "auditee@mail.com")
         session = db.get(UserSession, _sid(access))
         session.risk_score = 80
-        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(minutes=1)
         db.commit()
 
         assert (
@@ -350,7 +356,7 @@ class TestSessionLifetime:
         _seed_user(db, "ancient@mail.com")
         access, _ = _login_session(client, "ancient@mail.com")
         session = db.get(UserSession, _sid(access))
-        session.created_at = datetime.now(UTC) - timedelta(hours=5)
+        session.created_at = ABAC_EVALUATION_TIME - timedelta(hours=5)
         db.commit()
 
         assert (
@@ -366,7 +372,7 @@ class TestSessionLifetime:
         _seed_user(db, "afk@mail.com")
         access, _ = _login_session(client, "afk@mail.com")
         session = db.get(UserSession, _sid(access))
-        session.last_seen_at = datetime.now(UTC) - timedelta(hours=4)
+        session.last_seen_at = ABAC_EVALUATION_TIME - timedelta(hours=4)
         db.commit()
 
         assert (
@@ -507,7 +513,7 @@ class TestPrivilegeEscalation:
 
         session = db.get(UserSession, _sid(access))
         session.risk_score = 45  # gate admits (<60); 45 + 60 crosses 100
-        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(minutes=1)
         db.commit()
 
         resp = client.delete(
@@ -530,7 +536,7 @@ class TestPrivilegeEscalation:
 
         session = db.get(UserSession, _sid(access))
         session.risk_score = 40
-        session.risk_updated_at = datetime.now(UTC) - timedelta(minutes=1)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(minutes=1)
         db.commit()
 
         resp = client.delete(

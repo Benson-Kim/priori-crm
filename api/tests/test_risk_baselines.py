@@ -19,7 +19,6 @@ new place, on a new device, at night, or during a busy minute.
 """
 
 import uuid
-from datetime import UTC, datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -32,6 +31,10 @@ from app.common.security import create_access_token, hash_password
 from app.constants.enums import SessionStatus, UserRole
 from app.lib.config import settings
 from app.modules.auth.models import User, UserBaseline, UserSession
+
+# Timeline fixtures anchor on the pinned instant the gate evaluates at
+# (conftest's `pinned_abac_clock`), not on the real wall clock.
+from tests.conftest import ABAC_EVALUATION_TIME
 
 VALID_PASSWORD = "Str0ng!Passw0rd"
 
@@ -57,17 +60,22 @@ def _seed_user(db, email: str, role: UserRole = UserRole.MEMBER) -> User:
 
 
 def _local_hour(offset: int = 0) -> int:
-    """The tenant-local hour, exactly as the gate computes it."""
-    hour = datetime.now(UTC).astimezone(ZoneInfo(settings.REPORTING_TIMEZONE)).hour
+    """The tenant-local hour, exactly as the gate computes it.
+
+    Anchored on the suite's pinned evaluation instant (conftest's
+    `pinned_abac_clock`), which is what the gate reads — not the real
+    wall clock, which it no longer does.
+    """
+    hour = ABAC_EVALUATION_TIME.astimezone(ZoneInfo(settings.REPORTING_TIMEZONE)).hour
     return (hour + offset) % 24
 
 
 def _all_hours_except_now() -> dict:
-    """An hour histogram where the CURRENT hour (and neighbours) is unseen.
+    """An hour histogram where the EVALUATION hour (and neighbours) is unseen.
 
-    Deterministic at any wall-clock time: whatever hour the suite runs at,
-    that hour and its neighbours read as never-observed while every other
-    hour is habitual.
+    Whatever wall-clock time the suite runs at, the gate evaluates at the
+    pinned instant: that hour and its neighbours read as never-observed
+    while every other hour is habitual.
     """
     excluded = {_local_hour(-1), _local_hour(0), _local_hour(1)}
     return {str(h): 10 for h in range(24) if h not in excluded}
@@ -112,7 +120,11 @@ def _craft_session(db, user: User) -> tuple[UserSession, dict]:
     db.commit()
     token = create_access_token(
         subject=str(user.id),
-        extra={"sid": str(session.id), "sua": int(datetime.now(UTC).timestamp())},
+        extra={
+            "sid": str(session.id),
+            # Fresh relative to the pinned evaluation clock the gate reads.
+            "sua": int(ABAC_EVALUATION_TIME.timestamp()),
+        },
     )
     return session, {"Authorization": f"Bearer {token}"}
 
@@ -366,7 +378,7 @@ class TestSoftSignalFalsePositives:
         )
 
         session, headers = _craft_session(db, user)
-        now = datetime.now(UTC)
+        now = ABAC_EVALUATION_TIME
         # Mid-session shape: start-softs already evaluated, device known,
         # accumulated soft score one point under the terminate line with a
         # fresh decay anchor.
@@ -467,9 +479,10 @@ class TestSessionStartSoftsDoNotDecay:
         )
 
         # The attacker idles 6 hours: pure decay would shed all 50 points.
-        session.risk_updated_at = datetime.now(UTC) - timedelta(hours=6)
+        # (Anchored on the pinned evaluation instant the gate reads.)
+        session.risk_updated_at = ABAC_EVALUATION_TIME - timedelta(hours=6)
         db.commit()
-        assert effective_score(session, datetime.now(UTC)) == session.risk_floor, (
+        assert effective_score(session, ABAC_EVALUATION_TIME) == session.risk_floor, (
             "session-start soft evidence must not decay within the session"
         )
 
@@ -716,7 +729,7 @@ class TestAdaptiveVolumeCeiling:
                 "ewma": 2.0,
                 "count": 0,
                 "windows": 5,
-                "window_started_at": datetime.now(UTC).isoformat(),
+                "window_started_at": ABAC_EVALUATION_TIME.isoformat(),
             }
         }
         db.commit()
