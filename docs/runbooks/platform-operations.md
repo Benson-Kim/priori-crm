@@ -2,7 +2,7 @@
 
 Audience: the platform operator / on-call engineer. Companions:
 `docs/runbooks/platform-operator.md` (account provisioning/rotation/break-glass),
-ADR-0011 (authority model), ADR-0013 (tenancy strategy),
+ADR-0011 (authority model), ADR-0014 (tenancy strategy),
 `docs/operations/tenancy-readiness.md` (subsystem audit),
 `docs/operations/email-outbox-dlq.md` (DLQ tooling).
 
@@ -38,9 +38,9 @@ CI-enforced route-table-wide
    email automatically via the outbox).
 4. Record the tenant, plan and entitlement baseline in the operations log.
 
-> Until ADR-0013 Phase T1 ships, one deployment holds exactly one tenant.
+> Until ADR-0014 Phase T1 ships, one deployment holds exactly one tenant.
 > Onboarding a second organisation today means a second deployment
-> (ADR-0013's documented bridge tactic), including its own operator seed,
+> (ADR-0014's documented bridge tactic), including its own operator seed,
 > backups and monitoring.
 
 ### Suspend / reactivate
@@ -76,7 +76,7 @@ Semantics (enforced in code, this MR):
   its pipeline will report the 403; treat that as expected during a
   suspension, not an incident. The outbox drain and OTP purge live on
   ungated infrastructure routes and keep running. Per-tenant scheduler
-  skip at N>1 lands with ADR-0013 Phase T5
+  skip at N>1 lands with ADR-0014 Phase T5
   (pinned by `api/tests/test_owner_suspension.py`).
 
 Use suspension for: non-payment, suspected compromise of the tenant's
@@ -94,7 +94,7 @@ value, and export after deletion is impossible.
    - Today (single tenant per deployment): a full logical dump
      (`pg_dump`) plus the uploads directory/bucket **is** the tenant
      export.
-   - After ADR-0013 T2–T5: the tenant-scoped export tool (rows
+   - After ADR-0014 T2–T5: the tenant-scoped export tool (rows
      `WHERE owner_profile_id = X` + `tenants/<owner_id>/…` storage
      prefix).
 3. **Retention hold** — default **90 days** suspended-but-retained:
@@ -182,7 +182,7 @@ Honest status of every control this runbook relies on:
 | Suspension: module denial + login/refresh rejection | ✅ this MR | Per-tenant at N>1 needs owner resolution (T1) |
 | Entitlement-change notifications to tenant admins | ✅ this MR (outbox, same-transaction) | Org-membership recipient scoping (T1) |
 | Operator audit read surface | ✅ this MR (`GET /platform/audit` + console view) | Real `owner_profile_id` column filter (T5) |
-| Suspension pauses scheduled transitions for that tenant | ❌ not enforced (schedulers are tenant-global) | T5 |
+| Suspension pauses scheduled transitions | ✅ single-tenant only, verified (this MR): the module gate denies the internal transition endpoints (403) while the deployment's only owner is suspended, and the transitions enqueue no tenant email (`api/tests/test_owner_suspension.py`) | Per-tenant skip at N>1 (schedulers are tenant-global) — T5 |
 | Per-tenant error/metric split | ❌ | T5 |
 | Per-tenant outbox/DLQ attribution | ❌ | T5 |
 | Per-tenant storage attribution/quota | ❌ | T4/T5 |
