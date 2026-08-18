@@ -201,6 +201,13 @@ is irreversible for the recovery window.
       | CI key | per-bucket **read-only** | GitLab masked CI/CD variables (`BACKUP_S3_*`) |
       | Admin key | full access incl. purging versions, bucket settings | **password manager only — never on the droplet, never in CI** |
 
+      The CI key's read-only scoping is **enforced, not assumed**: every
+      scheduled job that touches the bucket (`scheduled:db-restore-verify`,
+      `scheduled:backup-freshness`) first attempts a tiny write with the CI
+      credentials and **fails red if the write succeeds** — a mis-scoped or
+      quietly-rotated-to-read-write key is detected within a day, not during
+      an incident.
+
       Ideally the droplet key would be write-only-with-no-delete, but Spaces
       per-bucket keys cannot express that, and pgBackRest legitimately needs
       delete for its own retention expiry. The **compensating control** is

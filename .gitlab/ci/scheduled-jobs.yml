@@ -148,6 +148,24 @@ scheduled:synthetic-critical-path:
         probe "${FRONTEND_BASE_URL%/}/" ""
       fi
 
+# Read-only credential canary, shared by every job that touches the backup
+# bucket. The BACKUP_S3_* key is DOCUMENTED as read-only, but that scoping is
+# established by a manual bring-up step — nothing else enforces it. This
+# fragment attempts a tiny write and FAILS THE JOB IF THE WRITE SUCCEEDS,
+# turning the read-only assumption into a monitored invariant: a leaked
+# read-write CI key could corrupt the very backups these jobs protect.
+# Expects the RCLONE_CONFIG_BK_* environment to be exported already.
+.bucket-readonly-canary: &bucket-readonly-canary
+  - |
+    canary="bk:${BACKUP_S3_BUCKET}/ci-write-canary-${CI_PIPELINE_ID:-manual}"
+    if printf 'ci read-only canary\n' | rclone rcat "$canary" >/dev/null 2>&1; then
+      echo "FAIL: CI credentials could WRITE ${canary} — BACKUP_S3_ACCESS_KEY_ID is NOT read-only." >&2
+      echo "      Rescope or rotate the key (runbook bring-up checklist, step 2) before trusting any green run." >&2
+      rclone deletefile "$canary" >/dev/null 2>&1 || true
+      exit 1
+    fi
+    echo "OK: read-only canary — write attempt denied, CI key is scoped correctly"
+
 # Monthly backup restore test: fetch the newest nightly dump from the offsite
 # bucket (read-only credentials), restore it into a throwaway Postgres service
 # container, and verify it — migration stamp present, key tables non-empty,
@@ -199,6 +217,7 @@ scheduled:db-restore-verify:
     - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
     - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
     - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    - *bucket-readonly-canary
     # Dump names embed a fixed-width UTC timestamp, so lexical sort order is
     # chronological order and `sort | tail -1` is the newest dump.
     - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | sort | tail -n 1)"
@@ -273,6 +292,7 @@ scheduled:backup-freshness:
     - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
     - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
     - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    - *bucket-readonly-canary
     - |
       now="$(date -u +%s)"
       fail=0
