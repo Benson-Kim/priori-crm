@@ -9,6 +9,31 @@ which need infrastructure that is independent of the feature code.
 > the `X-Internal-Secret` header (`app.common.dependencies.verify_internal_secret`).
 > If `INTERNAL_API_SECRET` is unset the endpoints **fail closed** (403).
 
+### Rotating `INTERNAL_API_SECRET` (zero downtime)
+
+The API accepts `INTERNAL_API_SECRET_NEXT` alongside `INTERNAL_API_SECRET`
+during a rotation overlap window (both compared in constant time; empty
+values never match). The secret also grants the ABAC `service` principal
+(exempt from OTP step-up challenges, issue #67), so treat rotation as a
+security operation, not housekeeping:
+
+1. Generate a new secret:
+   `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+2. Set `INTERNAL_API_SECRET_NEXT=<new>` in the API environment and restart.
+   Existing callers keep working on the old value.
+3. Update **every** caller to send the new value: the GitLab masked CI/CD
+   variable `INTERNAL_API_SECRET`, the GitHub Actions repository secret
+   `INTERNAL_API_SECRET`, and any staging equivalents
+   (`STAGING_INTERNAL_API_SECRET`).
+4. Verify a scheduled run (or `workflow_dispatch`) succeeds on the new value.
+5. Promote: set `INTERNAL_API_SECRET=<new>`, clear `INTERNAL_API_SECRET_NEXT`,
+   restart. The old value is now rejected.
+
+`INTERNAL_API_SECRET_NEXT` must not stay set outside a rotation window — a
+long-lived second secret doubles the leak surface for the challenge
+exemption. Note the header is deliberately **not** in `CORS_ALLOW_HEADERS`:
+browsers have no business carrying the machine secret cross-origin.
+
 ## 1. Internal-job scheduler
 
 The module relies on the transactional email outbox and the existing nightly

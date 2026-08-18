@@ -33,7 +33,6 @@ Signal sources are deliberately pluggable-but-simple:
 import hashlib
 import ipaddress
 import re
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -45,6 +44,7 @@ from fastapi import Request
 from jose import JWTError, jwt
 
 from app.common.authz.sensitivity import SensitivityLevel, classify_path
+from app.common.security import matches_internal_secret
 from app.lib.config import settings
 
 #: HTTP methods that mutate state.
@@ -283,17 +283,15 @@ def _is_verified_service_caller(request: Request) -> bool:
     machine has no inbox — the H1 exemption), so it must never be granted
     on header PRESENCE alone: anyone could attach a garbage
     X-Internal-Secret to dodge the off-hours / unknown-geo challenges
-    (review H9). Classification requires the header VALUE to match
-    ``INTERNAL_API_SECRET`` in constant time — the same comparison
-    ``verify_internal_secret`` makes on the gated routes, which still runs
-    and still owns its own rejection. A wrong or unconfigured secret
+    (review H9). Classification requires the header VALUE to match a
+    configured secret in constant time — via the SAME helper
+    ``verify_internal_secret`` uses on the gated routes (which still runs
+    and still owns its own rejection), so the two checks cannot drift.
+    ``INTERNAL_API_SECRET_NEXT`` is honoured during a rotation overlap
+    window (#67 line review §1c). A wrong or unconfigured secret
     classifies the caller as anonymous (fail closed).
     """
-    supplied = request.headers.get("X-Internal-Secret")
-    expected = settings.INTERNAL_API_SECRET
-    if not supplied or not expected:
-        return False
-    return secrets.compare_digest(supplied, expected)
+    return matches_internal_secret(request.headers.get("X-Internal-Secret"))
 
 
 def build_access_context(request: Request) -> AccessContext:

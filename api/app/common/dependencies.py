@@ -1,6 +1,5 @@
 """FastAPI dependencies for database sessions, authentication, and services."""
 
-import secrets
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
@@ -9,9 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.common.database import get_db
 from app.common.exceptions import ForbiddenException, UnauthorizedException
-from app.common.security import decode_access_token
+from app.common.security import (
+    decode_access_token,
+    internal_secret_configured,
+    matches_internal_secret,
+)
 from app.constants.enums import ESSENTIAL_MODULES, PRIVILEGED_ROLES, ModuleKey, UserRole
-from app.lib.config import settings
 
 # Type alias for database session dependency
 DbSession = Annotated[Session, Depends(get_db)]
@@ -137,16 +139,18 @@ def verify_internal_secret(
     """Authenticate machine-to-machine / scheduler calls via a shared secret.
 
     Used to protect internal endpoints (e.g. nightly overdue transition) that
-    must never be publicly callable. The header is compared in constant time.
-    If no secret is configured the endpoint is refused outright, so a
+    must never be publicly callable. The header is compared in constant time
+    via ``matches_internal_secret``, which also accepts
+    ``INTERNAL_API_SECRET_NEXT`` during a zero-downtime rotation overlap
+    window (#67 line review §1c) and never matches empty values. If no
+    secret is configured at all the endpoint is refused outright, so a
     misconfigured deployment fails closed rather than open.
     """
-    expected = settings.INTERNAL_API_SECRET
-    if not expected:
+    if not internal_secret_configured():
         raise ForbiddenException(
             detail="Internal endpoint is not enabled (no INTERNAL_API_SECRET configured)."
         )
-    if not x_internal_secret or not secrets.compare_digest(x_internal_secret, expected):
+    if not matches_internal_secret(x_internal_secret):
         raise UnauthorizedException("Invalid or missing internal credentials.")
 
 

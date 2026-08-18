@@ -57,8 +57,12 @@ class Settings(BaseSettings):
     # back to the coarse server-derived fingerprint (#67 review F3). The
     # X-Geo-* headers deliberately stay out: they are stamped by the
     # edge/CDN on the way in, never sent by browser JavaScript.
+    # X-Internal-Secret stays out too (#67 line review §1c): it is a
+    # machine-to-machine credential carried by schedulers/cron, never by
+    # browser JavaScript — preflight-approving it would invite cross-origin
+    # pages to carry the machine secret.
     CORS_ALLOW_HEADERS: str = (
-        "Authorization,Content-Type,X-Request-ID,X-Internal-Secret,X-Device-Fingerprint"
+        "Authorization,Content-Type,X-Request-ID,X-Device-Fingerprint"
     )
 
     # Context-aware access control (ABAC + zero trust, issue #67).
@@ -232,7 +236,16 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str = ""
     S3_PRESIGN_EXPIRY: int = Field(default=900, ge=60, le=86400)
 
+    # Shared machine secret for X-Internal-Secret callers. Empty means the
+    # internal endpoints are DISABLED (fail closed): an empty value never
+    # matches any supplied header.
     INTERNAL_API_SECRET: str = ""
+    # Zero-downtime rotation (#67 line review §1c): set the NEW secret here
+    # while INTERNAL_API_SECRET still holds the old one — during the overlap
+    # window both are accepted (each compared in constant time; empty values
+    # never match). Roll every caller onto the new value, then promote it to
+    # INTERNAL_API_SECRET and clear this. Not meant to stay set long-term.
+    INTERNAL_API_SECRET_NEXT: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

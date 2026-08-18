@@ -15,6 +15,38 @@ from app.lib.config import settings
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def internal_secret_configured() -> bool:
+    """Whether the internal (machine-to-machine) surface is enabled at all.
+
+    Empty means disabled: the internal endpoints fail closed until a real
+    secret is configured.
+    """
+    return bool(settings.INTERNAL_API_SECRET or settings.INTERNAL_API_SECRET_NEXT)
+
+
+def matches_internal_secret(supplied: str | None) -> bool:
+    """Constant-time check of an X-Internal-Secret value.
+
+    Single source of truth for BOTH consumers of the header — the service-
+    principal classification (``_is_verified_service_caller``) and the
+    internal-endpoint gate (``verify_internal_secret``) — so the two can
+    never drift apart (#67 line review §1c).
+
+    ``INTERNAL_API_SECRET_NEXT`` is accepted alongside ``INTERNAL_API_SECRET``
+    to allow zero-downtime rotation: configure the new secret in _NEXT, roll
+    the callers, promote it, clear _NEXT. Empty configured values NEVER
+    match (fail closed), and both comparisons always run so timing does not
+    reveal which slot matched.
+    """
+    if not supplied:
+        return False
+    matched = False
+    for expected in (settings.INTERNAL_API_SECRET, settings.INTERNAL_API_SECRET_NEXT):
+        if expected and secrets.compare_digest(supplied, expected):
+            matched = True
+    return matched
+
+
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

@@ -207,6 +207,77 @@ class TestSameRoleDifferentContext:
         )
         assert unconfigured.status_code == 403
 
+    def test_secret_rotation_overlap_accepts_both_generations(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """#67 line review §1c: INTERNAL_API_SECRET_NEXT enables rotation.
+
+        During the overlap window (old secret in INTERNAL_API_SECRET, new
+        secret in INTERNAL_API_SECRET_NEXT) BOTH values must work — on the
+        endpoint gate (verify_internal_secret) and on the service-principal
+        classification (the off-hours exemption), which share one helper.
+        A third value still fails, and after promotion the old secret dies.
+        """
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "old-secret-value")
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET_NEXT", "new-secret-value")
+        _freeze_local_hour(monkeypatch, 2)  # inside the challenge window
+
+        url = "/api/v1/invoices/internal/transition-overdue"
+        old = client.post(url, headers={"X-Internal-Secret": "old-secret-value"})
+        assert old.status_code == 200
+        new = client.post(url, headers={"X-Internal-Secret": "new-secret-value"})
+        assert new.status_code == 200
+        wrong = client.post(url, headers={"X-Internal-Secret": "neither"})
+        assert wrong.status_code == 401
+
+        # Promotion: the new value becomes primary, _NEXT is cleared — the
+        # old secret is rejected immediately.
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "new-secret-value")
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET_NEXT", "")
+        retired = client.post(url, headers={"X-Internal-Secret": "old-secret-value"})
+        assert retired.status_code == 401
+        kept = client.post(url, headers={"X-Internal-Secret": "new-secret-value"})
+        assert kept.status_code == 200
+
+    def test_empty_next_secret_never_matches(
+        self, client, db, off_hours_window, monkeypatch
+    ):
+        """An empty _NEXT slot must not open the surface (fail closed).
+
+        Neither an empty header nor any literal value may match an empty
+        INTERNAL_API_SECRET_NEXT, and _NEXT alone (primary empty) is enough
+        to keep rotation working mid-procedure.
+        """
+        url = "/api/v1/invoices/internal/transition-overdue"
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "real-secret-value")
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET_NEXT", "")
+        _freeze_local_hour(monkeypatch, 2)
+
+        empty_header = client.post(url, headers={"X-Internal-Secret": ""})
+        assert empty_header.status_code == 401
+
+        # Only _NEXT configured (odd mid-rotation state): still enabled,
+        # still constant-time, still rejecting everything but the value.
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET", "")
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET_NEXT", "next-only-value")
+        ok = client.post(url, headers={"X-Internal-Secret": "next-only-value"})
+        assert ok.status_code == 200
+        bad = client.post(url, headers={"X-Internal-Secret": "guess"})
+        assert bad.status_code == 401
+
+        # Both empty: the surface is disabled outright.
+        monkeypatch.setattr(settings, "INTERNAL_API_SECRET_NEXT", "")
+        disabled = client.post(url, headers={"X-Internal-Secret": ""})
+        assert disabled.status_code == 403
+
+    def test_internal_secret_header_not_cors_preflight_approved(self):
+        """#67 line review §1c: browsers must not be preflight-approved to
+        carry the machine secret cross-origin. X-Device-Fingerprint stays
+        (browser clients legitimately send it — review F3)."""
+        allowed = [h.lower() for h in settings.cors_allow_headers_list]
+        assert "x-internal-secret" not in allowed
+        assert "x-device-fingerprint" in allowed
+
     def test_denylisted_ip_denied_even_with_valid_admin_token(
         self, client, db, monkeypatch
     ):
