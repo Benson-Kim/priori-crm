@@ -16,7 +16,7 @@ from app.common.validators import (
     normalize_phone,
     validate_country_code,
 )
-from app.constants.enums import DealStage
+from app.constants.enums import DealStage, OwnerStatus
 from app.constants.settings_defaults import (
     MAX_DEFAULT_SEND_MESSAGE_LENGTH,
     MAX_DEFAULT_TERMS_LENGTH,
@@ -293,12 +293,19 @@ class ModuleSettingUpdate(BaseModel):
 class PlatformOwnerSummary(BaseModel):
     """One owner profile as listed on the platform-operator surface.
 
-    Deliberately identity-only (id + display name): the operator manages
-    entitlements, not tenant business data (ADR-0011).
+    Deliberately identity + lifecycle only (id, display name, status,
+    disabled-module count): the operator manages entitlements and tenant
+    lifecycle, not tenant business data (ADR-0011, ADR-0013 Phase A).
     """
 
     id: uuid.UUID
     full_name: str = Field(alias="fullName")
+    # Tenant lifecycle state (active | suspended), operator-set via the
+    # audited status PATCH (ADR-0013 Phase A).
+    status: OwnerStatus = OwnerStatus.ACTIVE
+    # Number of modules with an explicit enabled=false override — a quick
+    # per-owner entitlement summary for the console list.
+    disabled_module_count: int = Field(0, alias="disabledModuleCount")
 
     model_config = {"populate_by_name": True, "from_attributes": True}
 

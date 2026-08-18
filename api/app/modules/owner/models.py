@@ -50,6 +50,10 @@ class OwnerProfile(Base):
             "char_length(full_name) > 0",
             name="ck_owner_profiles_full_name_not_blank",
         ),
+        CheckConstraint(
+            "status IN ('active', 'suspended')",
+            name="ck_owner_profiles_valid_status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -58,6 +62,17 @@ class OwnerProfile(Base):
         default=SINGLETON_PROFILE_ID,
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Tenant lifecycle state (ADR-0013 Phase A): active | suspended.
+    # Operator-set only, via the audited PATCH /platform/owners/{id}/status.
+    # Org state, never a role mutation (QA finding 09). Enforced at the
+    # module gate (require_module) and at non-operator token issuance.
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="active",
+        server_default=text("'active'"),
+        comment="Tenant lifecycle state: active | suspended (operator-set)",
+    )
     # "Location/Watermark": a short display string rendered as a subtle
     # location/watermark line on the document header (product-clarified as
     # a display-only field; snapshotted like the rest).

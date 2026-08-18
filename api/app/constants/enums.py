@@ -39,6 +39,21 @@ class UserRole(StrEnum):
 PRIVILEGED_ROLES: frozenset["UserRole"] = frozenset({UserRole.ADMIN, UserRole.MANAGER})
 
 
+class OwnerStatus(StrEnum):
+    """Tenant lifecycle state of an owner profile (ADR-0013 Phase A).
+
+    Operator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.
+    Suspension is org state, never a role mutation (QA finding 09): it is
+    reversible, non-destructive, denies non-essential modules and blocks
+    non-operator token issuance while essential modules keep serving
+    existing sessions. Must stay identical to the IN-list in migration
+    ``f3a4b5c6d7e8``.
+    """
+
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
+
 class ModuleKey(StrEnum):
     """Per-owner feature-toggleable application modules.
 
