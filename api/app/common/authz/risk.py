@@ -894,6 +894,23 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
             "session_challenged",
             {"why": why, "soft_clamp": clamped},
         )
+        if clamped:
+            # The clamp is the model's primary false-positive tuning
+            # signal (#67 line review §6) — mirroring _terminate's
+            # logging so it reaches log aggregation, not only the
+            # hand-queried audit trail. Weekly review query + ownership:
+            # docs/adr/0012 "Operating the risk model".
+            logger.warning(
+                "Session risk soft-clamped to challenge (score crossed "
+                "terminate on soft evidence alone)",
+                extra={
+                    "session_id": str(session.id),
+                    "user_id": str(session.user_id),
+                    "risk_score": session.risk_score,
+                    "effective_score": score,
+                    "terminate_threshold": settings.RISK_TERMINATE_THRESHOLD,
+                },
+            )
         verdict = PolicyVerdict(
             decision=Decision.CHALLENGE,
             rule="session_risk",

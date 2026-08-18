@@ -270,13 +270,47 @@ after the initial OTP.
   gate; context signals are only as good as the deployment's edge
   configuration (no outbound geo-IP lookups by design).
 
+## Operating the risk model
+
+**The `soft_clamp` queue must have an owner.** A `soft_clamp` event means
+accumulated SOFT evidence crossed the terminate threshold and the model
+clamped it to a challenge — it is the model's primary false-positive
+tuning signal (#67 line review §6). A written-but-never-read clamp trail
+is a write-only risk engine: **the deployment operator (currently the
+platform owner — assign explicitly at go-live) reviews it weekly** and
+retunes weights/thresholds when the same benign shape keeps clamping.
+Each clamp also emits a `WARNING` log (session/user ids + scores), so log
+aggregation alerts work without touching the database.
+
+Weekly review query:
+
+```sql
+SELECT created_at,
+       entity_id                            AS session_id,
+       actor_id                             AS user_id,
+       after ->> 'why'                      AS why,
+       after ->> 'effective_score'          AS effective_score,
+       after ->> 'path'                     AS path,
+       after ->> 'ip'                       AS ip
+FROM audit_events
+WHERE entity_type = 'session'
+  AND action = 'session_challenged'
+  AND (after ->> 'soft_clamp')::boolean IS TRUE
+  AND created_at > now() - interval '7 days'
+ORDER BY created_at DESC;
+```
+
+What to look for: the same user clamping repeatedly (baseline too narrow
+→ has the aged-out TTL bitten them? — see `RISK_BASELINE_TRUST_TTL_DAYS`),
+one signal dominating the `why` (weight too high for this market), or
+clamps clustering on one path (sensitivity misclassification). Terminations
+(`session_terminated`) and challenges are worth the same look monthly.
+
 ## Improvements
 1. Owner-configurable policy rules (per-tenant off-hours window and
    sensitivity overrides).
 2. Hash-chaining for `audit_events` (#31's end state).
-3. Baseline decay for devices/countries not seen in months (currently
-   oldest-evicted only at the cap).
-4. An ops surface to list/terminate a user's sessions and inspect
+3. An ops surface to list/terminate a user's sessions and inspect
    baselines (the data model already supports it).
 
 ## Resilience & <1s response rules
