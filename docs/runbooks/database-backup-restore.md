@@ -21,7 +21,7 @@ MR !74, `docs/operations/deployment.md` §5.3, `docs/operations/slos.md` (SLO 4)
 | Made by | `archive_command` (continuous) + cron full/diff backups | `deploy/db_backup.sh` (cron, nightly) | `deploy/production_release.sh` (during a production deploy) |
 | When | WAL: continuously, ≤ 60 s idle lag. Full: weekly. Diff: daily | every night, `15 1 * * *` UTC | only when a deploy runs |
 | Contains | exact physical cluster + every WAL segment → restore to **any second** in the retention window | database snapshot (also: `shared/uploads` tar) | database only |
-| Lives | Spaces bucket, `pgbackrest/` prefix, **AES-256-CBC encrypted client-side** | droplet `backups/` + bucket `db/`, `uploads/` | `/srv/priori/backups/pre-<sha>.dump`, droplet only |
+| Lives | Spaces bucket, `pgbackrest/` prefix, **AES-256-CBC encrypted client-side** | droplet `backups/nightly/` (dumps) + `backups/` (uploads tars) + bucket `db/`, `uploads/` | `/srv/priori/backups/pre-<sha>.dump`, droplet only |
 | Purpose | primary recovery: droplet loss, corruption, accidental deletion — with minutes of loss | independent fallback path; version-portable restores; source for surgical row extraction | undo for a bad migration right after a deploy |
 | Tested | daily `pgbackrest check` + daily CI freshness + quarterly drill | **monthly**, by `scheduled:db-restore-verify` + daily CI freshness | never automatically |
 
@@ -47,7 +47,12 @@ get the same treatment:
 
 Retention: newest 14 nightly dumps / 7 uploads tars locally (script
 defaults); bucket lifecycle expires `db/` and `uploads/` objects after 35
-days. pgBackRest manages its own retention (`repo1-retention-full=2` ≈ two
+days. Nightly dumps live in `backups/nightly/` — **not** directly in
+`backups/` — because `deploy/production_release.sh` prunes `backups/*.dump`
+keeping the newest 14 of *all* dumps there; co-located nightly dumps would
+crowd out and evict the `pre-<sha>.dump` deploy-insurance dumps within about
+two weeks. Each retention policy owns its own directory; the bucket layout
+(`db/`, `uploads/`) is unaffected. pgBackRest manages its own retention (`repo1-retention-full=2` ≈ two
 weeks of PITR range) — the lifecycle rules **must not touch the
 `pgbackrest/` prefix** (external deletion corrupts the repo) nor
 `uploads-sync/` or `heartbeats/`.
@@ -286,10 +291,12 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    `PGPASSFILE`, never argv:
    ```bash
    rclone lsf spaces:priori-crm-backups/db/ | sort | tail -1
-   rclone copy spaces:priori-crm-backups/db/nightly-<utc>.dump /srv/priori/backups/
+   # download into backups/nightly/ — never straight into backups/, where the
+   # release script's newest-14 *.dump prune could collect it
+   rclone copy spaces:priori-crm-backups/db/nightly-<utc>.dump /srv/priori/backups/nightly/
    createdb priori_crm
    pg_restore --no-owner --no-privileges --exit-on-error -d "$PG_URL" \
-     /srv/priori/backups/nightly-<utc>.dump
+     /srv/priori/backups/nightly/nightly-<utc>.dump
    ```
 5. Restore uploads — the hourly mirror is fresher than the nightly tar:
    ```bash

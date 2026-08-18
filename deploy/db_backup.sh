@@ -9,11 +9,18 @@
 # droplet as the database it protects.
 #
 # What this script does, in order, failing loudly at each step:
-#   1. pg_dump -Fc of the production database -> backups/nightly-<UTC>.dump
+#   1. pg_dump -Fc of the production database -> backups/nightly/nightly-<UTC>.dump
 #   2. tar.gz of shared/uploads               -> backups/uploads-<UTC>.tar.gz
 #   3. prune local copies (newest DB_RETAIN / UPLOADS_RETAIN kept)
 #   4. copy both artifacts offsite via rclone (RCLONE_REMOTE) — droplet loss
 #      must never take the only backups with it.
+#
+# Nightly dumps live in backups/nightly/, NOT directly in backups/:
+# deploy/production_release.sh prunes backups/*.dump keeping the newest 14 of
+# ALL dumps there, so co-locating the nightly dumps would let them crowd out
+# (and evict) the pre-<sha>.dump deploy-insurance dumps within ~two weeks.
+# Each retention policy owns its own directory. The offsite layout (db/ and
+# uploads/ prefixes in the bucket) is unaffected.
 #
 # Secret handling follows deploy/production_release.sh exactly: DATABASE_URL
 # is parsed out of shared/.env with python-dotenv (the file is dotenv syntax,
@@ -25,6 +32,10 @@ set -euo pipefail
 
 ROOT="${ROOT:-/srv/priori}"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
+# Nightly dumps get their own directory so production_release.sh's
+# newest-14-of-*.dump prune (scoped to $BACKUP_DIR) can never evict them, and
+# vice versa (see header comment).
+NIGHTLY_DIR="${NIGHTLY_DIR:-$BACKUP_DIR/nightly}"
 ENV_FILE="${ENV_FILE:-$ROOT/shared/.env}"
 UPLOADS_DIR="${UPLOADS_DIR:-$ROOT/shared/uploads}"
 # python-dotenv is present in every release venv (pydantic-settings dependency).
@@ -55,8 +66,8 @@ fi
 
 # Dumps and archives hold customer and financial data — never world-readable.
 umask 077
-mkdir -p "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR" "$NIGHTLY_DIR"
+chmod 700 "$BACKUP_DIR" "$NIGHTLY_DIR"
 
 # --- extract DATABASE_URL without sourcing .env -------------------------------
 # Identical helper to deploy/production_release.sh: parse with the same parser
@@ -101,7 +112,7 @@ PY
 STAMP="$(date -u '+%Y%m%d%H%M%S')"
 
 # --- 1. database dump ----------------------------------------------------------
-DB_DUMP="$BACKUP_DIR/nightly-$STAMP.dump"
+DB_DUMP="$NIGHTLY_DIR/nightly-$STAMP.dump"
 log "Dumping database to $DB_DUMP"
 # Remove the partial file if pg_dump fails: a truncated dump that restores
 # cleanly up to the truncation point is worse than no dump at all.
@@ -134,7 +145,7 @@ fi
 # whitespace or control characters — so the ls|tail|xargs pipelines are safe.
 # Pruning is best-effort and must not fail the backup under pipefail.
 # shellcheck disable=SC2012 # info: ls-vs-find; fixed-format names, and find has no portable -t sort
-ls -1t "$BACKUP_DIR"/nightly-*.dump 2>/dev/null | tail -n +"$((DB_RETAIN + 1))" | xargs -r rm -f -- || true
+ls -1t "$NIGHTLY_DIR"/nightly-*.dump 2>/dev/null | tail -n +"$((DB_RETAIN + 1))" | xargs -r rm -f -- || true
 # shellcheck disable=SC2012 # info: same reasoning as above
 ls -1t "$BACKUP_DIR"/uploads-*.tar.gz 2>/dev/null | tail -n +"$((UPLOADS_RETAIN + 1))" | xargs -r rm -f -- || true
 
