@@ -3,7 +3,7 @@
 import secrets
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -16,12 +16,43 @@ from app.lib.config import settings
 # Type alias for database session dependency
 DbSession = Annotated[Session, Depends(get_db)]
 
+#: Path prefixes (under ``settings.API_V1_PREFIX``) where a PLATFORM_OPERATOR
+#: token is accepted. Everything else is tenant surface: the operator's
+#: authority axis is platform administration only (ADR-0011), so an operator
+#: token must be rejected there CENTRALLY — a route with no role gate would
+#: otherwise accept everyone, operator included (isolation contract, #71).
+_OPERATOR_SURFACE_PREFIXES = ("/platform", "/auth", "/health")
+
+
+def _is_operator_surface(path: str) -> bool:
+    """Whether a request path lies on the operator-accessible surface.
+
+    Exact-segment prefix match (``/platform`` or ``/platform/…``, never
+    ``/platformX``) so the allow-list cannot be widened by a lookalike
+    route. Fail-closed by construction: any future router registered
+    outside these prefixes rejects operator tokens with no further work.
+    """
+    for allowed in _OPERATOR_SURFACE_PREFIXES:
+        full = f"{settings.API_V1_PREFIX}{allowed}"
+        if path == full or path.startswith(f"{full}/"):
+            return True
+    return False
+
 
 def get_current_user(
+    request: Request,
     db: DbSession,
     token: dict = Depends(decode_access_token),
 ) -> "User":  # noqa: F821
-    """Extract and validate the current user from the JWT access token."""
+    """Extract and validate the current user from the JWT access token.
+
+    Also the single enforcement point for platform ⟂ tenant isolation
+    (ADR-0011/0013, #71): a PLATFORM_OPERATOR token is rejected with 403
+    on every authenticated route outside ``/platform``, ``/auth`` and
+    ``/health``. Enforced here at the root — not per-route — because most
+    tenant endpoints carry no role gate at all and would otherwise accept
+    any authenticated user, the operator included.
+    """
     from app.modules.auth.models import User
 
     user = db.query(User).filter(User.id == token["sub"]).first()
@@ -31,6 +62,17 @@ def get_current_user(
 
     if not user.is_active:
         raise UnauthorizedException("User account is inactive")
+
+    if UserRole(user.role) is UserRole.PLATFORM_OPERATOR and not _is_operator_surface(
+        request.url.path
+    ):
+        raise ForbiddenException(
+            detail=(
+                "Platform operators have no access to tenant data. "
+                "Use the /platform administration surface."
+            ),
+            required_permission="tenant-surface",
+        )
 
     return user
 

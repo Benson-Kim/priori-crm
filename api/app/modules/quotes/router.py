@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.common.dependencies import (
     DbSession,
     QuoteServiceDep,
+    get_current_user,
     require_privileged,
     verify_internal_secret,
 )
@@ -154,6 +155,10 @@ def get_quote_counts(service: QuoteServiceDep) -> QuoteStatusCounts:
         200: {"description": "Calculated totals"},
         400: {"description": "Invalid line items or discount"},
     },
+    # Authenticated like every tenant-surface route (isolation contract,
+    # #71): the preview reads no tenant data, but an unauthenticated route
+    # on a business router would be a standing hole in the contract suite.
+    dependencies=[Depends(get_current_user)],
 )
 def calculate_quote_totals(
     line_items: list[QuoteLineItemCreate],

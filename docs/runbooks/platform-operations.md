@@ -8,8 +8,10 @@ ADR-0011 (authority model), ADR-0013 (tenancy strategy),
 
 The operator's remit is **platform administration only**: entitlements,
 tenant lifecycle, platform monitoring. The role carries no tenant-data
-access — every tenant role gate rejects it (403), and that isolation is
-CI-enforced route-table-wide
+access — an operator token is rejected (403) centrally at authentication
+(`get_current_user`, `api/app/common/dependencies.py`) on every route
+outside `/platform`, `/auth` and `/health`, in addition to every tenant
+role gate, and that isolation is CI-enforced route-table-wide
 (`api/tests/test_platform_isolation_contract.py`).
 
 ## Duties and cadence
@@ -175,7 +177,7 @@ Honest status of every control this runbook relies on:
 | Control | Enforced today (code/CI) | Planned |
 |---------|--------------------------|---------|
 | Operator-only /platform surface | ✅ `require_role(PLATFORM_OPERATOR)` on every route; CI route-table contract (this MR) | — |
-| Operator excluded from tenant data | ✅ tenant role gates reject operator; CI contract incl. static leg (this MR) | — |
+| Operator excluded from tenant data | ✅ central 403 at authentication on every non-platform/auth/health route, plus tenant role gates; CI contract incl. static + full-surface legs (this MR) | — |
 | No API-reachable operator creation/promotion (QA 09) | ✅ seed script only (`platform-operator.md`); status endpoint never touches roles | — |
 | Entitlement writes audited (before/after) | ✅ `record_audit_event` in owner service | — |
 | Tenant lifecycle audited + reversible | ✅ this MR | — |

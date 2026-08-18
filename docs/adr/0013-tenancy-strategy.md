@@ -296,8 +296,11 @@ are unchanged.
 ## Business logic & rules
 
 - Platform and tenant authority remain disjoint axes (ADR-0011);
-  PLATFORM_OPERATOR stays out of `PRIVILEGED_ROLES` and is rejected by
-  every tenant role gate — now CI-enforced route-table-wide.
+  PLATFORM_OPERATOR stays out of `PRIVILEGED_ROLES` and is rejected
+  centrally at authentication (`get_current_user`) from every route
+  outside `/platform`, `/auth` and `/health` — role-gated or not — in
+  addition to every tenant role gate. Both are CI-enforced
+  route-table-wide.
 - Tenant lifecycle: `active ⇄ suspended` only, operator-set, audited,
   reversible, never touching `users.role` (QA finding 09). Suspension
   denies non-essential modules and new non-operator tokens; essential
