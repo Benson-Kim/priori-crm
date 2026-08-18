@@ -104,12 +104,20 @@ Two explicit riders:
    (`USING (owner_profile_id =
    NULLIF(current_setting('app.current_org', true), '')::uuid)`)
    exist so a forgotten filter fails closed. Neither layer may be relied
-   on alone. Two pitfalls are load-bearing and specified in Phase T6:
-   RLS does **not** bind table owners unless `FORCE ROW LEVEL SECURITY`
-   is set (and the runtime role owns the tables today), and the GUC must
-   be `SET LOCAL` per transaction with explicit fail-closed NULL
-   handling, or pooled connections and unset GUCs quietly disable the
-   backstop.
+   on alone. Two pitfalls are load-bearing: RLS does **not** bind table
+   owners unless `FORCE ROW LEVEL SECURITY` is set (and the runtime role
+   owns the tables today), and the GUC must be `SET LOCAL` per
+   transaction with explicit fail-closed NULL handling, or pooled
+   connections and unset GUCs quietly disable the backstop. **Pulled
+   forward per the !77 reviews (tracked in
+   [#80](https://gitlab.com/kada-group8222234/priori-crm/-/issues/80)):**
+   the `app_migrator`/`app_runtime` role split lands at Phase T1 (it is
+   orthogonal to tenant keys — a pure ops/migration-pipeline change),
+   and `ENABLE`+`FORCE ROW LEVEL SECURITY` rides each key wave (end of
+   T2/T3/T4) per table, so the entire migration window is not left on
+   app-layer WHERE filtering alone. Phase T6 retains the policies, the
+   GUC plumbing and the cutover. Role-creation SQL is documented in
+   `docs/operations/sql/create-db-roles.sql`.
 
 ### Phased migration blueprint
 
@@ -153,9 +161,18 @@ tables).** Small/medium.
   per-tenant identity only together with a per-tenant-domains ADR.
 - A single `resolve_owner_id(request/user)` dependency replaces every
   literal `SINGLETON_PROFILE_ID` read (`require_module` in
-  `api/app/common/dependencies.py`, auth suspension gate, owner service).
-  Falls back to the singleton when no claim exists (backward-compatible
-  tokens during rollout).
+  `api/app/common/dependencies.py`, the `get_current_user` suspension
+  check, auth suspension gate, owner service). Falls back to the
+  singleton when no claim exists (backward-compatible tokens during
+  rollout).
+- **`app_migrator`/`app_runtime` role split (pulled forward from T6 per
+  the !77 reviews; rollout tracked in #80).** `app_migrator` owns all
+  tables/sequences and is the only role Alembic runs as; `app_runtime`
+  is the API's connection role (`NOSUPERUSER`, no `BYPASSRLS`, no
+  ownership, explicit grants + default privileges). Landing this at T1 —
+  before any tenant keys exist — is the cheapest point, and it makes the
+  per-wave `FORCE ROW LEVEL SECURITY` in T2–T4 meaningful from day one.
+  Role-creation SQL: `docs/operations/sql/create-db-roles.sql`.
 
 **Phase T2 — schema wave 1: masters.** Medium.
 - Tables: `customers`, `customer_billing_profiles`, `vendors`, `deals`,
@@ -168,6 +185,12 @@ tables).** Small/medium.
 - Uniqueness that must become composite here: customer/vendor email
   uniqueness (`vendors.check-email` semantics) becomes unique **per
   tenant**.
+- **`ENABLE` + `FORCE ROW LEVEL SECURITY` ride this wave** (pulled
+  forward from T6 per the !77 reviews, #80): as each table's
+  `owner_profile_id` goes NOT NULL, enable and force RLS on it with the
+  standard fail-closed policy (GUC semantics specified in T6), so the
+  backstop exists the moment the key does instead of arriving big-bang
+  at the end.
 
 **Phase T3 — schema wave 2: documents + numbering.** Large; the riskiest
 phase, sequenced behind T2 on purpose.
@@ -240,22 +263,20 @@ storage.** Medium.
   operator tool — required for offboarding (runbook) and surgical
   restore; complements, not replaces, the MR !74 whole-DB stack.
 
-**Phase T6 — RLS + cutover.** Medium.
-- **Enable AND force RLS** on every tenant-keyed table:
-  `ALTER TABLE … ENABLE ROW LEVEL SECURITY` followed by
-  `ALTER TABLE … FORCE ROW LEVEL SECURITY`. Plain `ENABLE` does **not**
-  apply policies to the table owner, and today the single application
-  role owns every table — without `FORCE`, the entire backstop is a
-  no-op for exactly the connections that matter.
-- **Migration-role / runtime-role split (decided):** introduce
-  `app_migrator` (owns all tables and sequences; the only role Alembic
-  runs as; used by deploys and never by request traffic) and
-  `app_runtime` (the API's connection role: `NOSUPERUSER`, **no**
-  `BYPASSRLS`, no ownership, table privileges granted explicitly).
-  `FORCE ROW LEVEL SECURITY` stays on regardless, as belt-and-braces
-  against ownership drift; only roles with `BYPASSRLS`/superuser (used
-  exclusively for DBA maintenance) bypass policies, and the runtime role
-  must never be one.
+**Phase T6 — RLS policies + cutover.** Medium. (Scope reduced per the
+!77 reviews: the `app_migrator`/`app_runtime` role split moved to T1 and
+`ENABLE`+`FORCE ROW LEVEL SECURITY` now rides each key wave at the end
+of T2/T3/T4 — see those phases and #80. Rationale kept here because it
+governs the whole program: plain `ENABLE` does **not** apply policies to
+the table owner, so without the role split + `FORCE`, an RLS backstop is
+a no-op for exactly the connections that matter. `FORCE` stays on even
+after the split, as belt-and-braces against ownership drift; only roles
+with `BYPASSRLS`/superuser — used exclusively for DBA maintenance —
+bypass policies, and the runtime role must never be one.)
+- **Verify RLS coverage**: every tenant-keyed table has
+  `relrowsecurity AND relforcerowsecurity` set (waves T2–T4) and carries
+  the standard policy pair; a table with a tenant key and no
+  forced-RLS policy is a release blocker for cutover.
 - **GUC semantics:** the request dependency sets the org from the JWT
   claim (T1) with `SET LOCAL app.current_org = '<owner uuid>'` inside
   the request's transaction. `SET LOCAL` reverts automatically at

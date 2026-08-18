@@ -202,6 +202,6 @@ Honest status of every control this runbook relies on:
 | Per-tenant storage attribution/quota | ❌ | T4/T5 |
 | Per-tenant rate limits / quotas | ❌ (user/IP buckets only) | T5 |
 | Tenant-scoped export/offboarding tool | ❌ (whole-DB dump stands in while single-tenant) | T5 |
-| Row-Level Security backstop | ❌ (no tenant keys yet) | T2–T4 keys, T6 policies |
-| Operator MFA / step-up auth | ❌ (login+OTP only, like all users) | Separate ADR (follow-up issue) |
+| Row-Level Security backstop | ❌ (no tenant keys yet; role-creation SQL documented, `docs/operations/sql/create-db-roles.sql`) | Role split at T1, per-wave keys + FORCE RLS at T2–T4, policies at T6 (#80) |
+| Operator MFA / step-up auth | ❌ (login+OTP only, like all users) | Separate ADR — follow-up issue #73 |
 | Quarterly access review | ❌ procedural only (this runbook) | Consider automation after first review |
