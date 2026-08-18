@@ -135,6 +135,17 @@ after the initial OTP.
      can never launder their context in. Hour and volume statistics learn
      continuously from scored requests — they suppress false positives
      rather than grant trust, so poisoning them buys nothing.
+     Absorbed trust is **not permanent**: each entry carries a
+     `verified_at` stamp (refreshed on every verified touch) and stops
+     counting as known after `RISK_BASELINE_TRUST_TTL_DAYS` (default 90)
+     — an aged-out context fires the soft signals again, one challenge,
+     then re-absorption. Every absorption is audited
+     (`baseline_absorbed`), and the account owner is emailed for a new
+     **device** and for a new **country** — the latter because replaying
+     a known fingerprint was the laundering path with no other
+     user-visible tell (line review §4). Migration `a7c31f08d2e4` stamps
+     pre-aging rows; unstamped legacy entries count as fresh until their
+     next verified touch.
    - **Fail-safe degradation**: an empty baseline, a missing geo signal
      or an unconfigured enrichment source yields *no signal*, never a
      penalty. Nothing is denied or terminated solely because enrichment

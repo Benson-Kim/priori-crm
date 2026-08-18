@@ -184,10 +184,16 @@ class TestBaselineAbsorption:
 
         baseline = db.get(UserBaseline, user.id)
         assert baseline is not None
-        assert "client:known-laptop" in baseline.known_devices
-        assert "KE" in baseline.known_countries
+        assert "client:known-laptop" in baselines.entry_values(baseline.known_devices)
+        assert "KE" in baselines.entry_values(baseline.known_countries)
         assert baseline.hour_observations >= 1
         assert baseline.hour_counts.get(str(_local_hour()), 0) >= 1
+        # Entries carry a verified_at stamp (#67 line review §4) so
+        # absorbed trust can age out instead of being permanent.
+        assert all(
+            isinstance(entry, dict) and entry.get("verified_at")
+            for entry in baseline.known_devices + baseline.known_countries
+        )
 
     def test_absorption_is_idempotent(self, client, db, trusted_ctx):
         user = _seed_user(db, "again@mail.com")
@@ -195,8 +201,10 @@ class TestBaselineAbsorption:
         _login_session(client, "again@mail.com", headers={**KNOWN_DEVICE, **KE_GEO})
 
         baseline = db.get(UserBaseline, user.id)
-        assert baseline.known_devices.count("client:known-laptop") == 1
-        assert baseline.known_countries.count("KE") == 1
+        devices = baselines.entry_values(baseline.known_devices)
+        countries = baselines.entry_values(baseline.known_countries)
+        assert devices.count("client:known-laptop") == 1
+        assert countries.count("KE") == 1
 
     def test_absorption_is_audited_and_new_device_notifies(
         self, client, db, trusted_ctx
@@ -233,14 +241,135 @@ class TestBaselineAbsorption:
             _login_session(client, "traced@mail.com", headers={**NEW_DEVICE, **US_GEO})
         alert.assert_not_called()
 
+    def test_new_country_absorption_on_known_fingerprint_notifies(
+        self, client, db, trusted_ctx
+    ):
+        """#67 line review §4: the silent-laundering path now has a tell.
+
+        An inbox-compromise attacker who REPLAYS the victim's device
+        fingerprint used to get their location absorbed with zero
+        user-visible signal (the alert was gated on new_device only).
+        A new COUNTRY absorbed on a known fingerprint must notify.
+        """
+        user = _seed_user(db, "replayed@mail.com")
+        _seed_baseline(
+            db,
+            user,
+            devices=("client:known-laptop",),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+
+        with (
+            patch(
+                "app.modules.auth.service.AuthService._send_new_country_alert"
+            ) as country_alert,
+            patch(
+                "app.modules.auth.service.AuthService._send_new_device_alert"
+            ) as device_alert,
+        ):
+            _login_session(
+                client, "replayed@mail.com", headers={**KNOWN_DEVICE, **US_GEO}
+            )
+        country_alert.assert_called_once()
+        assert country_alert.call_args.kwargs.get("country") == "US"
+        device_alert.assert_not_called()
+
+        events = (
+            db.query(AuditEvent)
+            .filter(
+                AuditEvent.entity_type == "baseline",
+                AuditEvent.action == "baseline_absorbed",
+            )
+            .all()
+        )
+        assert events
+        assert events[-1].after["new_device"] is False
+        assert events[-1].after["new_country"] is True
+
+        # Re-login from the now-absorbed country: no further alert.
+        with patch(
+            "app.modules.auth.service.AuthService._send_new_country_alert"
+        ) as country_alert:
+            _login_session(
+                client, "replayed@mail.com", headers={**KNOWN_DEVICE, **US_GEO}
+            )
+        country_alert.assert_not_called()
+
     def test_remember_touches_existing_entries_lru(self, db):
         """H13: the cap evicts the least-recently-VERIFIED entry."""
-        values = ["a", "b", "c"]
-        assert baselines._remember(values, "a", cap=3) is False
-        assert values == ["b", "c", "a"], "re-verified entry moves to most-recent"
+        now = ABAC_EVALUATION_TIME
+        values = ["a", "b", "c"]  # legacy (unstamped) entries
+        assert baselines._remember(values, "a", cap=3, now=now) is False
+        assert baselines.entry_values(values) == ["b", "c", "a"], (
+            "re-verified entry moves to most-recent"
+        )
+        # The touch re-stamped the entry (#67 line review §4).
+        assert values[-1] == {"value": "a", "verified_at": now.isoformat()}
         # A new entry now evicts "b" (least recently verified), not "a".
-        assert baselines._remember(values, "d", cap=3) is True
-        assert values == ["c", "a", "d"]
+        assert baselines._remember(values, "d", cap=3, now=now) is True
+        assert baselines.entry_values(values) == ["c", "a", "d"]
+
+    def test_aged_out_entry_no_longer_counts_and_reabsorbs_as_new(self, db):
+        """#67 line review §4: absorbed trust ages out after the TTL.
+
+        An entry past RISK_BASELINE_TRUST_TTL_DAYS stops counting as
+        known — and re-absorbing its value reads as NEW trust (returns
+        True → the owner is notified again), with a fresh stamp.
+        """
+        from datetime import timedelta
+
+        now = ABAC_EVALUATION_TIME
+        stale = now - timedelta(days=settings.RISK_BASELINE_TRUST_TTL_DAYS + 1)
+        live = now - timedelta(days=1)
+        entries = [
+            {"value": "old-device", "verified_at": stale.isoformat()},
+            {"value": "current-device", "verified_at": live.isoformat()},
+        ]
+
+        assert baselines.fresh_values(entries, now) == {"current-device"}
+        # Legacy unstamped entries stay fresh (graceful pre-migration).
+        assert baselines.fresh_values(["legacy"], now) == {"legacy"}
+
+        # Re-absorbing the aged-out value is a NEW trust event.
+        assert baselines._remember(entries, "old-device", cap=8, now=now) is True
+        assert entries[-1] == {"value": "old-device", "verified_at": now.isoformat()}
+        assert baselines.fresh_values(entries, now) == {
+            "current-device",
+            "old-device",
+        }
+
+    def test_aged_out_device_fires_soft_signal_again(self, client, db, trusted_ctx):
+        """An aged-out device deviates from the baseline again end to end."""
+        from datetime import timedelta
+
+        stale = ABAC_EVALUATION_TIME - timedelta(
+            days=settings.RISK_BASELINE_TRUST_TTL_DAYS + 1
+        )
+        user = _seed_user(db, "returning@mail.com")
+        aged_device = {
+            "value": "client:known-laptop",
+            "verified_at": stale.isoformat(),
+        }
+        _seed_baseline(
+            db,
+            user,
+            devices=(aged_device,),
+            countries=("KE",),
+            hours=_all_hours(),
+        )
+
+        session, headers = _craft_session(db, user)
+        resp = client.get(
+            "/api/v1/customers", headers={**headers, **KNOWN_DEVICE, **KE_GEO}
+        )
+        assert resp.status_code == 200, "one soft signal still allows"
+        db.refresh(session)
+        assert session.risk_score == settings.RISK_SCORE_NEW_DEVICE
+        assert _soft_events(db, "new_device"), (
+            "an entry past the trust TTL must fire new_device again"
+        )
+        assert not _soft_events(db, "new_country"), "the fresh KE entry still counts"
 
     def test_passed_step_up_stops_repeat_challenges_for_same_context(
         self, client, db, trusted_ctx
@@ -280,8 +409,8 @@ class TestBaselineAbsorption:
         assert session.risk_score == 0, "absorbed context must not re-fire"
 
         baseline = db.get(UserBaseline, user.id)
-        assert "client:burner-phone" in baseline.known_devices
-        assert "US" in baseline.known_countries
+        assert "client:burner-phone" in baselines.entry_values(baseline.known_devices)
+        assert "US" in baselines.entry_values(baseline.known_countries)
 
 
 class TestSoftSignalFalsePositives:

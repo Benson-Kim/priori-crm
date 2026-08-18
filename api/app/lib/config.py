@@ -149,6 +149,13 @@ class Settings(BaseSettings):
     # HARD signal: exfiltration-scale reads. A burst this far past the
     # ordinary ceiling is not a busy minute; it terminates directly.
     RISK_SCORE_EXFILTRATION: int = Field(default=100, ge=0, le=10000)
+    # Absorbed trust ages out (#67 line review §4): a device/country entry
+    # counts as known only this many days past its last VERIFIED use (a
+    # passed OTP step-up re-stamps it). Without aging, absorption is
+    # permanent trust — an attacker who once passed a step-up (inbox
+    # compromise) stayed whitelisted forever. An aged-out context fires
+    # the soft signals again: one challenge, then re-absorption.
+    RISK_BASELINE_TRUST_TTL_DAYS: int = Field(default=90, ge=1, le=3650)
     # Minimum hour observations before the unusual-hour signal may fire:
     # with fewer samples the user HAS no "typical hours" and absence of
     # history must not read as anomaly (fail-safe degradation).

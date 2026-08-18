@@ -11,7 +11,14 @@ user's own behaviour* instead of firing on absolutes:
   triggering soft signals into the baseline, so a genuine user is
   challenged for a new device or place at most once — while an attacker
   without inbox access can never launder their context into the victim's
-  baseline.
+  baseline. Absorbed trust is NOT permanent (#67 line review §4): each
+  entry carries a ``verified_at`` stamp, refreshed on every verified
+  touch, and stops counting as known after
+  ``RISK_BASELINE_TRUST_TTL_DAYS`` — an aged-out context fires the soft
+  signals again (one challenge, then re-absorption on success). Legacy
+  entries stored as plain strings (pre-aging rows) count as fresh until
+  their next verified touch stamps them; migration ``a7c31f08d2e4``
+  stamps existing rows in place.
 - **Typical hours** and **typical per-window volume per sensitivity
   class** learn continuously from scored requests
   (:func:`learn_request`). They exist to suppress false positives, never
@@ -95,20 +102,81 @@ def get_or_create_baseline(db: Session, user_id) -> "UserBaseline":  # noqa: F82
     return baseline
 
 
-def _remember(values: list, value: str, cap: int) -> bool:
-    """Record ``value`` most-recent-last (LRU, capped); True when new.
+def _entry_value(entry) -> str | None:
+    """The trusted value inside one baseline entry.
 
-    An already-known value is MOVED to the most-recent slot (#67 H13):
-    the cap then evicts the least-recently-VERIFIED entry, never a device
-    or country still in active, re-verified use.
+    Entries are ``{"value": ..., "verified_at": ...}`` dicts; legacy rows
+    (pre-aging) stored plain strings. Anything else is ignored.
     """
-    if value in values:
-        values.remove(value)
-        values.append(value)
-        return False
-    values.append(value)
-    del values[:-cap]
-    return True
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        value = entry.get("value")
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _entry_is_fresh(entry, now: datetime) -> bool:
+    """Whether the entry still counts as known (inside the trust TTL).
+
+    Legacy entries without a ``verified_at`` stamp count as fresh:
+    failing them wholesale would re-challenge every existing user at
+    once on deploy. They are stamped on their next verified touch, and
+    migration ``a7c31f08d2e4`` stamps stored rows in place.
+    """
+    verified_at = None
+    if isinstance(entry, dict):
+        verified_at = _parse_instant(entry.get("verified_at"))
+    if verified_at is None:
+        return True
+    ttl = timedelta(days=settings.RISK_BASELINE_TRUST_TTL_DAYS)
+    return now - verified_at < ttl
+
+
+def entry_values(entries: list) -> list[str]:
+    """All entry values, fresh or aged-out (introspection/audit/tests)."""
+    return [v for v in (_entry_value(e) for e in entries or []) if v]
+
+
+def fresh_values(entries: list, now: datetime) -> set[str]:
+    """The values that still count as known at ``now``."""
+    return {
+        value
+        for entry in entries or []
+        if (value := _entry_value(entry)) and _entry_is_fresh(entry, now)
+    }
+
+
+def _remember(entries: list, value: str, cap: int, now: datetime) -> bool:
+    """Record ``value`` most-recent-last with a fresh ``verified_at``;
+    True when the value was not currently known.
+
+    - A still-fresh known value is re-stamped and MOVED to the
+      most-recent slot (#67 H13): the cap then evicts the least-recently-
+      VERIFIED entry, never a device or country still in active,
+      re-verified use.
+    - An entry past ``RISK_BASELINE_TRUST_TTL_DAYS`` no longer counts as
+      known (#67 line review §4): re-absorbing its value reads as NEW —
+      trust re-entering the baseline is notification-worthy exactly like
+      the first time. Aged-out entries are pruned here so dead trust
+      cannot linger in the JSON.
+    """
+    was_fresh = False
+    kept: list = []
+    for entry in entries:
+        entry_value = _entry_value(entry)
+        if entry_value is None:
+            continue
+        if entry_value == value:
+            if _entry_is_fresh(entry, now):
+                was_fresh = True
+            continue  # re-appended below with a fresh stamp either way
+        if _entry_is_fresh(entry, now):
+            kept.append(entry)
+    kept.append({"value": value, "verified_at": now.isoformat()})
+    entries[:] = kept[-cap:]
+    return not was_fresh
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,13 +198,16 @@ def absorb_context(
     absorbed device/country stop firing as soft signals, so the user is
     never repeatedly challenged for the same context.
 
-    Absorption is permanent trust, so it leaves a durable trace (#67
+    Absorption is long-lived trust (bounded by
+    ``RISK_BASELINE_TRUST_TTL_DAYS``), so it leaves a durable trace (#67
     H13): every absorption writes a ``baseline_absorbed`` audit event,
-    and a NEW device additionally triggers a user notification (sent by
-    the caller, which knows the user's email) — a compromised inbox is
+    and a NEW device — or a NEW country, even on a known fingerprint
+    (#67 line review §4: fingerprint replay is the laundering path with
+    no other tell) — additionally triggers a user notification (sent by
+    the caller, which knows the user's email); a compromised inbox is
     exactly the scenario where that mail is the victim's only tell.
-    Known entries are LRU-touched so the cap evicts the least-recently-
-    verified context, never one still in active use.
+    Known entries are LRU-touched and re-stamped so the cap evicts the
+    least-recently-verified context, never one still in active use.
 
     Flush-only: rides the verify-otp request transaction, atomic with the
     session mint (``CommitOnSuccessRoute`` owns the commit).
@@ -242,10 +313,20 @@ def evaluate_session_start_signals(
     """
     signals: list[SoftSignal] = []
 
+    # Membership is checked against the FRESH entries only (#67 line
+    # review §4): an entry past RISK_BASELINE_TRUST_TTL_DAYS has aged out
+    # of the baseline and its value deviates again. "History to deviate
+    # from" stays anchored on the raw list — a user whose entries all
+    # expired HAS a history, and their return from an aged-out context is
+    # exactly the one-challenge-then-reabsorb moment aging exists for.
+    now = context.requested_at
+    known_devices = fresh_values(baseline.known_devices, now)
+    known_countries = fresh_values(baseline.known_countries, now)
+
     if (
         context.device_fingerprint
         and baseline.known_devices
-        and context.device_fingerprint not in baseline.known_devices
+        and context.device_fingerprint not in known_devices
     ):
         signals.append(
             SoftSignal(
@@ -253,7 +334,7 @@ def evaluate_session_start_signals(
                 points=settings.RISK_SCORE_NEW_DEVICE,
                 detail={
                     "device_fingerprint": context.device_fingerprint,
-                    "known_devices": len(baseline.known_devices),
+                    "known_devices": len(known_devices),
                 },
             )
         )
@@ -262,7 +343,7 @@ def evaluate_session_start_signals(
         context.geo is not None
         and context.geo.country
         and baseline.known_countries
-        and context.geo.country not in baseline.known_countries
+        and context.geo.country not in known_countries
     ):
         signals.append(
             SoftSignal(
@@ -270,7 +351,7 @@ def evaluate_session_start_signals(
                 points=settings.RISK_SCORE_NEW_COUNTRY,
                 detail={
                     "country": context.geo.country,
-                    "known_countries": list(baseline.known_countries),
+                    "known_countries": sorted(known_countries),
                 },
             )
         )

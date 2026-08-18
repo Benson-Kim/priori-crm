@@ -256,15 +256,19 @@ class AuthService:
         from app.common.authz.baselines import absorb_context
 
         absorption = absorb_context(self._db, user.id, context)
+        country = context.geo.country if context and context.geo else None
         if absorption.new_device:
-            # A never-seen device just became permanently trusted (#67
-            # H13): tell the account owner. A compromised inbox (SIM swap)
-            # is exactly the case where this mail is the victim's only
-            # tell. Fail-safe: a send failure never blocks the login.
-            self._send_new_device_alert(
-                user.email,
-                country=(context.geo.country if context and context.geo else None),
-            )
+            # A never-seen device just became trusted (#67 H13): tell the
+            # account owner. A compromised inbox (SIM swap) is exactly the
+            # case where this mail is the victim's only tell. Fail-safe: a
+            # send failure never blocks the login.
+            self._send_new_device_alert(user.email, country=country)
+        elif absorption.new_country:
+            # A new COUNTRY absorbed on an already-known fingerprint must
+            # notify too (#67 line review §4): fingerprint replay is the
+            # laundering path with no other user-visible tell. When both
+            # are new, the device alert above already names the location.
+            self._send_new_country_alert(user.email, country=country)
 
         access_token = create_access_token(subject=str(user.id), extra=claims)
         refresh_token, _jti, _exp = create_refresh_token(
@@ -831,6 +835,21 @@ class AuthService:
         except Exception as exc:
             logger.error(
                 "Failed to send new-device alert",
+                exc_info=exc,
+                extra={"recipient": recipient},
+            )
+
+    def _send_new_country_alert(self, recipient: str, country: str | None) -> None:
+        """Notify the owner that a new country entered their baseline (§4).
+
+        Same best-effort contract as the new-device alert: absorption is
+        already audited; a delivery failure must never fail the login.
+        """
+        try:
+            email_service.send_new_country_alert(recipient, country=country)
+        except Exception as exc:
+            logger.error(
+                "Failed to send new-country alert",
                 exc_info=exc,
                 extra={"recipient": recipient},
             )

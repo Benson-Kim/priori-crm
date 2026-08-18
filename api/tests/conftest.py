@@ -164,19 +164,27 @@ def reset_auth_throttle():
 
 @pytest.fixture(autouse=True)
 def mute_new_device_alerts():
-    """Mute the new-device absorption alert (#67 H13) suite-wide.
+    """Mute the absorption alerts (#67 H13 / line review §4) suite-wide.
 
     Every FIRST login in a test absorbs a never-seen (derived) device
-    fingerprint, which triggers the owner-notification email from deep
-    inside verify_otp. The OTP mail is explicitly patched per test; this
-    one would otherwise reach the real SES client (ENVIRONMENT here is
-    "test", not "development", so the dev-mode skip does not apply) and
-    stall the suite on credential resolution. Tests asserting the alert
-    patch AuthService._send_new_device_alert explicitly.
+    fingerprint — and possibly a never-seen country — which triggers the
+    owner-notification email from deep inside verify_otp. The OTP mail is
+    explicitly patched per test; these would otherwise reach the real SES
+    client (ENVIRONMENT here is "test", not "development", so the
+    dev-mode skip does not apply) and stall the suite on credential
+    resolution. Tests asserting the alerts patch
+    AuthService._send_new_device_alert / _send_new_country_alert
+    explicitly.
     """
-    with patch(
-        "app.lib.email.EmailService.send_new_device_alert",
-        return_value={"MessageId": "muted-in-tests"},
+    with (
+        patch(
+            "app.lib.email.EmailService.send_new_device_alert",
+            return_value={"MessageId": "muted-in-tests"},
+        ),
+        patch(
+            "app.lib.email.EmailService.send_new_country_alert",
+            return_value={"MessageId": "muted-in-tests"},
+        ),
     ):
         yield
 

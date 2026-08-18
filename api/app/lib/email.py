@@ -80,11 +80,12 @@ class EmailService:
     ) -> dict[str, Any]:
         """Notify the account owner that a NEW device entered their baseline.
 
-        Sent when a passed OTP step-up absorbs a never-seen device into
-        the user's behavioural baseline (#67 H13): absorption permanently
-        stops that device re-firing as a soft signal, so the owner should
-        hear about it once — a compromised inbox (SIM swap) is exactly the
-        scenario where this mail is the victim's only tell.
+        Sent when a passed OTP step-up absorbs a never-seen (or aged-out)
+        device into the user's behavioural baseline (#67 H13): absorption
+        stops that device re-firing as a soft signal for
+        ``RISK_BASELINE_TRUST_TTL_DAYS``, so the owner should hear about
+        it — a compromised inbox (SIM swap) is exactly the scenario where
+        this mail is the victim's only tell.
         """
         subject = f"{settings.APP_NAME} \u2014 New device signed in"
         location = f" from {country}" if country else ""
@@ -92,6 +93,34 @@ class EmailService:
             f"A new device{location} just completed a sign-in verification "
             f"on your {settings.APP_NAME} account and is now remembered as "
             "trusted.\n\n"
+            "If this was you, no action is needed. If you do not recognise "
+            "this sign-in, reset your password immediately — that signs out "
+            "every session."
+        )
+        return self._send(
+            recipient=recipient,
+            subject=subject,
+            body_html=f'<pre style="font-family:inherit">{body_text}</pre>',
+            body_text=body_text,
+        )
+
+    def send_new_country_alert(
+        self, recipient: str, country: str | None = None
+    ) -> dict[str, Any]:
+        """Notify the account owner that a NEW country entered their baseline.
+
+        Sent when a passed OTP step-up absorbs a never-seen (or aged-out)
+        country on an already-known device fingerprint (#67 line review
+        §4). Without it, an inbox-compromise attacker replaying the
+        victim's fingerprint got their location whitelisted with zero
+        user-visible tell — this mail is that tell.
+        """
+        subject = f"{settings.APP_NAME} \u2014 Sign-in from a new location"
+        location = f" ({country})" if country else ""
+        body_text = (
+            f"A sign-in verification on your {settings.APP_NAME} account "
+            f"just completed from a new location{location}, which is now "
+            "remembered as trusted.\n\n"
             "If this was you, no action is needed. If you do not recognise "
             "this sign-in, reset your password immediately — that signs out "
             "every session."
