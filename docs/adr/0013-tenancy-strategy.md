@@ -128,9 +128,29 @@ tables).** Small/medium.
 - Org membership: `user_org_memberships (user_id, owner_profile_id,
   role)` — replaces the implicit "every user belongs to the singleton".
   Backfill: one row per existing user pointing at `SINGLETON_PROFILE_ID`.
+- **Single membership vs M:N — resolved: single membership enforced
+  initially.** The table is shaped M:N for the future, but T1 ships with
+  `UNIQUE(user_id)` on it, so every user belongs to exactly one org and
+  a single JWT `org` claim is *the* enforced membership, not a lossy
+  projection of several. Org switching (dropping the UNIQUE, a
+  choose-org step at sign-in, re-minting the claim on switch) is
+  deferred until a real multi-org user exists; nothing in the claim
+  design has to change for it — only issuance.
 - JWT org claim: `create_access_token` gains an `org` claim
   (`api/app/common/security.py:31` already accepts `extra`); issued at
-  verify-otp from the user's membership.
+  verify-otp from the user's (single) membership.
+- **User identity stays global — email unique across the platform
+  (decided).** Login is email+OTP on one shared domain, so the email
+  alone must resolve to one user; per-tenant email uniqueness would
+  require tenant-scoped sign-in (org picker or per-tenant domains) that
+  this product does not have. The cross-tenant **email-existence leak**
+  this creates is handled at the flows, not the constraint: the
+  login/OTP/reset paths are already enumeration-safe (generic responses,
+  `api/app/modules/auth/service.py`), and any future user-invite path
+  MUST be too (identical response whether the address exists anywhere,
+  delivery by email) — a duplicate-email error surfaced to tenant B
+  about tenant A's user is the leak and is a release blocker. Revisit
+  per-tenant identity only together with a per-tenant-domains ADR.
 - A single `resolve_owner_id(request/user)` dependency replaces every
   literal `SINGLETON_PROFILE_ID` read (`require_module` in
   `api/app/common/dependencies.py`, auth suspension gate, owner service).
