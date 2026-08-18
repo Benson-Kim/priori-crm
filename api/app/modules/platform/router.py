@@ -25,7 +25,9 @@ from app.modules.owner.schemas import (
     ModuleSettingsResponse,
     ModuleSettingState,
     ModuleSettingUpdate,
+    OwnerStatusUpdate,
     PlatformOwnersResponse,
+    PlatformOwnerSummary,
 )
 
 router = APIRouter(
@@ -70,6 +72,40 @@ def list_owner_module_settings(
 ) -> ModuleSettingsResponse:
     """Return the effective entitlement state of every module for one owner."""
     return ModuleSettingsResponse(modules=service.module_settings_for_owner(owner_id))
+
+
+@router.patch(
+    "/owners/{owner_id}/status",
+    response_model=PlatformOwnerSummary,
+    summary="Suspend or reactivate one owner (platform operator only)",
+    description=(
+        "Set the tenant lifecycle status (active | suspended) of one owner "
+        "profile (ADR-0013 Phase A). Reversible and non-destructive: no "
+        "tenant data and no users.role is ever touched (QA finding 09). "
+        "Suspension denies non-essential modules and blocks non-operator "
+        "token issuance; essential modules keep serving existing sessions. "
+        "Both directions are audited (owner_suspended / owner_reactivated) "
+        "with actor and before/after state. Unknown owner ids return 404."
+    ),
+    responses={
+        403: {"description": "Caller is not a platform operator"},
+        404: {"description": "Unknown owner id"},
+        422: {"description": "Invalid status value"},
+    },
+)
+def update_owner_status(
+    owner_id: uuid.UUID,
+    body: OwnerStatusUpdate,
+    service: OwnerServiceDep,
+) -> PlatformOwnerSummary:
+    """Suspend or reactivate one owner (platform operator only; audited)."""
+    profile = service.set_owner_status(owner_id, body.status)
+    return PlatformOwnerSummary(
+        id=profile.id,
+        full_name=profile.full_name,
+        status=profile.status,
+        disabled_module_count=service.disabled_module_count(profile.id),
+    )
 
 
 @router.patch(

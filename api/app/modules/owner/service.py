@@ -232,6 +232,65 @@ class OwnerService:
         """Every owner profile, for the platform-operator listing (ADR-0011)."""
         return self._db.query(OwnerProfile).order_by(OwnerProfile.full_name).all()
 
+    # Tenant lifecycle (ADR-0013 Phase A)
+
+    def set_owner_status(self, owner_profile_id: uuid.UUID, status) -> OwnerProfile:
+        """Set one owner's lifecycle status (platform operator; audited).
+
+        ``active ⇄ suspended`` only, reversible and non-destructive: no
+        tenant data is touched and — deliberately — no ``users`` row is
+        touched (QA finding 09: suspension is org state, never a role
+        mutation; this endpoint can never create or promote operators).
+        Enforcement lives at the module gate (``require_module``) and at
+        non-operator token issuance (auth service).
+
+        Both directions are audited (``owner_suspended`` /
+        ``owner_reactivated``) with actor and before/after state, in the
+        same transaction as the status write. A no-op (status unchanged)
+        writes nothing and audits nothing.
+        """
+        from app.common.audit import record_audit_event
+        from app.constants.enums import OwnerStatus
+
+        status = OwnerStatus(status)
+        profile = self._get_owner_profile_or_404(owner_profile_id)
+        before = profile.status
+        if before == status.value:
+            return profile
+
+        profile.status = status.value
+        self._db.flush()
+
+        record_audit_event(
+            self._db,
+            actor_id=getattr(self._current_user, "id", None),
+            entity_type="owner_profile",
+            entity_id=profile.id,
+            action=(
+                "owner_suspended"
+                if status is OwnerStatus.SUSPENDED
+                else "owner_reactivated"
+            ),
+            before={"status": before},
+            after={"status": status.value},
+        )
+        logger.info(
+            "Owner lifecycle status changed",
+            extra={"owner_profile_id": str(profile.id), "status": status.value},
+        )
+        return profile
+
+    def disabled_module_count(self, owner_profile_id: uuid.UUID) -> int:
+        """Number of modules with an explicit enabled=false override."""
+        return (
+            self._db.query(OwnerModuleSetting)
+            .filter(
+                OwnerModuleSetting.owner_profile_id == owner_profile_id,
+                OwnerModuleSetting.enabled.is_(False),
+            )
+            .count()
+        )
+
     def module_settings_for_owner(
         self, owner_profile_id: uuid.UUID
     ) -> list[ModuleSettingState]:

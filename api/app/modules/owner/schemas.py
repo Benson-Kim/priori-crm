@@ -310,6 +310,17 @@ class PlatformOwnerSummary(BaseModel):
     model_config = {"populate_by_name": True, "from_attributes": True}
 
 
+class OwnerStatusUpdate(BaseModel):
+    """PATCH /platform/owners/{owner_id}/status body (ADR-0013 Phase A).
+
+    ``active ⇄ suspended`` only; anything else is a 422 via enum
+    validation. Deliberately carries nothing but the status: the endpoint
+    can never touch users, roles or entitlements (QA finding 09).
+    """
+
+    status: OwnerStatus
+
+
 class PlatformOwnersResponse(BaseModel):
     """Every owner profile (GET /platform/owners)."""
 
