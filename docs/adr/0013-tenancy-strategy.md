@@ -101,9 +101,15 @@ Two explicit riders:
    back in after Phase T6. This is a stopgap, not the architecture.
 2. **RLS is defense-in-depth, not the primary control.** Every service
    query is scoped by the resolved owner id (app layer); RLS policies
-   (`USING (owner_profile_id = current_setting('app.current_org')::uuid)`)
+   (`USING (owner_profile_id =
+   NULLIF(current_setting('app.current_org', true), '')::uuid)`)
    exist so a forgotten filter fails closed. Neither layer may be relied
-   on alone.
+   on alone. Two pitfalls are load-bearing and specified in Phase T6:
+   RLS does **not** bind table owners unless `FORCE ROW LEVEL SECURITY`
+   is set (and the runtime role owns the tables today), and the GUC must
+   be `SET LOCAL` per transaction with explicit fail-closed NULL
+   handling, or pooled connections and unset GUCs quietly disable the
+   backstop.
 
 ### Phased migration blueprint
 
@@ -194,9 +200,40 @@ storage.** Medium.
   restore; complements, not replaces, the MR !74 whole-DB stack.
 
 **Phase T6 — RLS + cutover.** Medium.
-- Enable RLS on every tenant-keyed table with a policy on
-  `current_setting('app.current_org', true)`; the request dependency sets
-  the GUC per transaction from the JWT org claim (T1).
+- **Enable AND force RLS** on every tenant-keyed table:
+  `ALTER TABLE … ENABLE ROW LEVEL SECURITY` followed by
+  `ALTER TABLE … FORCE ROW LEVEL SECURITY`. Plain `ENABLE` does **not**
+  apply policies to the table owner, and today the single application
+  role owns every table — without `FORCE`, the entire backstop is a
+  no-op for exactly the connections that matter.
+- **Migration-role / runtime-role split (decided):** introduce
+  `app_migrator` (owns all tables and sequences; the only role Alembic
+  runs as; used by deploys and never by request traffic) and
+  `app_runtime` (the API's connection role: `NOSUPERUSER`, **no**
+  `BYPASSRLS`, no ownership, table privileges granted explicitly).
+  `FORCE ROW LEVEL SECURITY` stays on regardless, as belt-and-braces
+  against ownership drift; only roles with `BYPASSRLS`/superuser (used
+  exclusively for DBA maintenance) bypass policies, and the runtime role
+  must never be one.
+- **GUC semantics:** the request dependency sets the org from the JWT
+  claim (T1) with `SET LOCAL app.current_org = '<owner uuid>'` inside
+  the request's transaction. `SET LOCAL` reverts automatically at
+  commit/rollback, so a pooled connection can never leak one request's
+  org into the next; session-scoped `SET` is forbidden for this GUC
+  (it would poison the pool). Any code path that runs multiple
+  transactions per request (e.g. the report snapshot dependency) must
+  re-issue `SET LOCAL` per transaction.
+- **Fail closed on a missing org, at both layers:**
+  - Policies read the GUC with `current_setting('app.current_org',
+    true)` (returns NULL instead of erroring when unset) and compare via
+    `NULLIF(…, '')::uuid` — a NULL/empty GUC therefore matches **zero
+    rows** for `USING` (reads) and rejects every row via `WITH CHECK`
+    (writes). An unset GUC can never mean "all rows".
+  - The request dependency refuses to run tenant queries at all when no
+    org is resolved (hard 401/403 before any SQL), so the zero-row
+    policy behaviour is the backstop, not the interface: a missing org
+    claim is an authentication bug to surface, not an empty list to
+    return.
 - Flip the export stamp: `deployment_boundary` becomes
   `"multi_tenant"` + the owner id (`api/app/modules/reports/audit.py:114`,
   `api/app/modules/sales_desk/audit.py:57`).
