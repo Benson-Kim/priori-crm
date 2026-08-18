@@ -1,4 +1,5 @@
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -84,6 +85,54 @@ async def lifespan(app: FastAPI):
             logger.info("Connected to Redis for rate limiting")
         except Exception as e:
             logger.error("Redis connectivity check failed at startup", exc_info=e)
+    else:
+        # The risk engine's volume/exfiltration counters share this store
+        # (#67 line review §7): with the in-memory backend every worker
+        # keeps its OWN window, so a multi-worker deployment silently
+        # multiplies the volume/exfiltration ceilings by the worker count.
+        # Loud at startup because nothing at request time will ever flag it.
+        logger.warning(
+            "RATE_LIMIT_BACKEND=%s: rate-limit AND session-risk volume "
+            "counters are per-process. With more than one worker the "
+            "volume/exfiltration ceilings are effectively multiplied by "
+            "the worker count; use the redis backend for any multi-worker "
+            "deployment. ALERT: RISK_VOLUME_STORE_PER_PROCESS",
+            settings.RATE_LIMIT_BACKEND,
+        )
+
+    if not settings.ABAC_ENABLED:
+        # The one-variable kill-switch disables the ABAC gate AND the
+        # zero-trust DB guard; flipping it must never be silent (#67 line
+        # review §7). Loud log line plus a best-effort durable audit row
+        # (startup has no request actor, so actor_id is None).
+        logger.warning(
+            "ABAC_ENABLED=false: the context-aware access gate and the "
+            "zero-trust DB guard are DISABLED. Only RBAC, rate limiting "
+            "and the sid-denylist remain. ALERT: ABAC_KILL_SWITCH_ACTIVE"
+        )
+        try:
+            from app.common.audit import record_audit_event
+            from app.common.database import SessionLocal
+
+            with SessionLocal() as audit_db:
+                record_audit_event(
+                    audit_db,
+                    actor_id=None,
+                    entity_type="config",
+                    entity_id=uuid.UUID(int=0),
+                    action="abac_disabled_at_startup",
+                    after={
+                        "ABAC_ENABLED": False,
+                        "environment": settings.ENVIRONMENT,
+                        "app_version": settings.APP_VERSION,
+                    },
+                )
+                audit_db.commit()
+        except Exception as exc:  # noqa: BLE001 — best-effort trail
+            logger.error(
+                "Could not write the ABAC kill-switch audit event",
+                exc_info=exc,
+            )
 
     # OTel metrics (no-op unless OTEL_METRICS_ENABLED).
     setup_metrics()

@@ -705,6 +705,24 @@ soft_signal_new_country 1 | volume_anomaly 1
 
 ## 4. Not yet covered
 
+- **The `ABAC_TRUST_CONTEXT_HEADERS` edge-stripping invariant is a runtime
+  infrastructure requirement and cannot be tested in-repo** (#67 line review
+  §2/§7). With the flag on, `_resolve_geo` and `_device_fingerprint` honour
+  the `X-Geo-*` / `X-Device-Fingerprint` headers with no in-code
+  verification that they were stamped by the edge — the only guarantee is
+  the deployment's proxy configuration setting AND stripping them on every
+  path, forever, and nothing inside this repository can observe that a
+  proxy stopped stripping. `test_untrusted_geo_headers_are_ignored` covers
+  flag-OFF only. Treat the invariant as a deploy-time checklist item, and
+  note the provenance split the code does record: fingerprints carry a
+  `client:` prefix when browser-supplied vs `derived:` when server-derived,
+  so `client:`-prefixed values are **self-attested and corroborating-only
+  in interpretation** — they may fire signals (device change, new device)
+  but a `client:` match should never be read, by an operator or a future
+  detector, as proof of device identity. Making that distinction
+  enforceable in code (edge-authenticated geo/device headers, e.g. an HMAC
+  over the values + timestamp, or edge-CIDR gating) is tracked as a
+  follow-up issue rather than half-implemented here.
 - Whether the schedules actually fire in the deployed environments (see §1).
   This is the only item left that cannot be closed from this machine.
 - Real multi-worker deployment under a process manager (Passenger / lswsgi
