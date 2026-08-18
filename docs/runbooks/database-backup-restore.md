@@ -1,7 +1,7 @@
 # Runbook: database backup & restore (disaster recovery)
 
 Audience: the deployment operator / on-call engineer. Related: issue #70,
-`docs/operations/deployment.md` §5.3, `docs/operations/slos.md` (SLO 4),
+MR !74, `docs/operations/deployment.md` §5.3, `docs/operations/slos.md` (SLO 4),
 `docs/adr/0013-pitr-continuous-wal-archiving-pgbackrest.md` (why pgBackRest).
 
 ## Targets
