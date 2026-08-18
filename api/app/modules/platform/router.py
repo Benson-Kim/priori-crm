@@ -49,13 +49,17 @@ router = APIRouter(
         "platform operator administers, with a per-owner summary "
         "(lifecycle status + disabled-module count). The operator role "
         "carries no access to tenant business data. Backward-compatible: "
-        "with no parameters the (large) default page returns every owner."
+        "with no parameters the default page (per_page=50) covers every "
+        "owner up to 50 profiles — ample at today's ~10-tenant target; "
+        "beyond that, paginate."
     ),
     responses={403: {"description": "Caller is not a platform operator"}},
 )
 def list_owners(
     service: OwnerServiceDep,
-    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    page: Annotated[
+        int, Query(ge=1, le=1000, description="Page number (1-indexed)")
+    ] = 1,
     per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
     search: Annotated[
         str | None,
@@ -92,7 +96,9 @@ def list_owners(
 )
 def list_platform_audit(
     service: OwnerServiceDep,
-    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    page: Annotated[
+        int, Query(ge=1, le=1000, description="Page number (1-indexed)")
+    ] = 1,
     per_page: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
     owner_id: Annotated[
         uuid.UUID | None,

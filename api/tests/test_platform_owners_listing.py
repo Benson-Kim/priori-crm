@@ -145,3 +145,12 @@ class TestSearchAndPagination:
         assert [o["fullName"] for o in body["owners"]] == ["Gamma Inc"]
         assert body["metadata"]["has_next"] is False
         assert body["metadata"]["has_prev"] is True
+
+    def test_page_beyond_bound_is_422_not_500(self, client, db):
+        """!77 review (minor): the Query params must mirror
+        PaginationParams' le=1000, otherwise page=1001 raises a pydantic
+        ValidationError INSIDE the handler and surfaces as a 500."""
+        operator = _seed_operator(db)
+        for url in (OWNERS_URL, "/api/v1/platform/audit"):
+            resp = client.get(url, params={"page": 1001}, headers=_auth(operator))
+            assert resp.status_code == 422, url

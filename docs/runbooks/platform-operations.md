@@ -196,7 +196,7 @@ Honest status of every control this runbook relies on:
 | Entitlement-change notifications to tenant admins | ✅ this MR (outbox, same-transaction) | Org-membership recipient scoping (T1) |
 | Operator audit read surface | ✅ this MR (`GET /platform/audit` + console view) | Real `owner_profile_id` column filter (T5, #78) |
 | Audit trail append-only (tamper resistance) | ✅ DB trigger raises on UPDATE/DELETE (this MR); records **successful writes only** — no sign-ins, reads or denied attempts | REVOKE via role split (#80); sign-in/read auditing unplanned |
-| Suspension pauses scheduled transitions for that tenant | ❌ not enforced (schedulers are tenant-global) | T5 |
+| Suspension pauses scheduled transitions for that tenant | ❌ **per-tenant** granularity not enforced (schedulers are tenant-global). NB: with today's single owner, suspension *does* stop the transitions deployment-wide via the module gate (see "Suspend / reactivate") — this row is about selectively skipping one suspended tenant among many at N>1 | T5 (#78) |
 | Per-tenant error/metric split | ❌ | T5 |
 | Per-tenant outbox/DLQ attribution | ❌ | T5 |
 | Per-tenant storage attribution/quota | ❌ | T4/T5 |
