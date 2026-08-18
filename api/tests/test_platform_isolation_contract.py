@@ -209,8 +209,6 @@ class TestStructuralContract:
     def test_no_router_module_outside_platform_names_the_operator(self):
         """Static leg (source): no non-platform route's endpoint module may
         even reference PLATFORM_OPERATOR."""
-        import inspect
-
         for route in _api_routes():
             if route.path.startswith(PLATFORM_PREFIX):
                 continue
