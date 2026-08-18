@@ -83,8 +83,17 @@ bounded in minutes even under pathological push latency. Target: **≤ 5 min**
 **disk does**: the hourly CI WAL-freshness check turns a stalled archive red
 within ~2 h; the daily `pgbackrest check` backs it up on-droplet.
 
-**Cron — `postgres` user's crontab** (`sudo -u postgres crontab -e`); the
-00:30 slot finishes before the 01:15 nightly dump:
+**Cron — `postgres` user's crontab**, committed as
+[`deploy/cron.d/priori-pgbackrest.cron`](../../deploy/cron.d/priori-pgbackrest.cron)
+(config-as-code: a rebuilt droplet gets its schedule from the repo, never
+from memory). The 00:30 slot finishes before the 01:15 nightly dump.
+Install/replace with:
+
+```bash
+sudo -u postgres crontab deploy/cron.d/priori-pgbackrest.cron
+```
+
+The schedule it installs:
 
 ```cron
 # weekly full backup — Sunday 00:30 UTC
@@ -250,7 +259,7 @@ is irreversible for the recovery window.
          per-file `rclone sync` relies on stable names/mtimes for delta
          syncs and object versioning. Encrypting it client-side means an
          `rclone crypt` remote (breaks direct object recovery and version
-         inspection) — filed as a follow-up, not silently ignored.
+         inspection) — filed as follow-up issue #82, not silently ignored.
 - [ ] **`audit_events` is append-only** (docs/database.md §4) and every
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
@@ -560,26 +569,29 @@ later steps verify earlier ones.
 7. [ ] **First full backup**: `sudo -u postgres pgbackrest --stanza=priori
        --type=full backup`; confirm with `pgbackrest info` and by listing
        `pgbackrest/backup/priori/` in the bucket.
-8. [ ] **Scripts + cron**: from a checkout (the deploy workflow rsyncs only
-       `api/` and `frontend/dist/` — re-run after any script change):
+8. [ ] **Scripts + cron** — all committed under `deploy/` (config-as-code;
+       nothing here is typed from memory). First install from a checkout:
        ```bash
        install -D -m 0700 deploy/db_backup.sh    /srv/priori/bin/db_backup.sh
        install -D -m 0700 deploy/uploads_sync.sh /srv/priori/bin/uploads_sync.sh
        ```
+       (After bring-up, the *Deploy production* workflow re-ships both
+       scripts on every deploy — `/srv/priori/bin` tracks the repo instead
+       of drifting from it.)
+
        Install the age **public** recipient (from step 2; public — not a
        secret, but root-owned so cron can't be silently re-pointed):
        ```bash
        sudo install -D -m 0644 -o root -g root \
          <recipient-file> /etc/priori/backup-age-recipients.txt
        ```
-       Deploy user's crontab:
-       ```cron
-       # nightly DB dump + uploads tar (after the 00:15 UTC nightly transitions)
-       15 1 * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/db_backup.sh >> /srv/priori/backups/backup.log 2>&1
-       # hourly uploads mirror
-       5 * * * *  RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1
+       Install both crontabs from the committed files (they replace each
+       user's whole crontab — merge any unrelated entries into the repo
+       files first):
+       ```bash
+       crontab deploy/cron.d/priori-backups.cron                    # as the deploy user
+       sudo -u postgres crontab deploy/cron.d/priori-pgbackrest.cron
        ```
-       Postgres user's crontab: the four pgBackRest lines from §Tier 1.
 9. [ ] **CI variables** (masked, Settings > CI/CD > Variables):
        - the four `BACKUP_S3_*` variables using the **read-only** key from
          step 2;

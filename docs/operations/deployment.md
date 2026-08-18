@@ -859,6 +859,13 @@ jobs:
           ssh "$SSH_TARGET" "mkdir -p $REL/api $REL/frontend"
           rsync -az --exclude '__pycache__' api/ "$SSH_TARGET:$REL/api/"
           rsync -az frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
+          # Ops scripts are config-as-code: ship them every deploy so
+          # /srv/priori/bin never drifts from deploy/*.sh in the repo.
+          # (Crontab entries live in deploy/cron.d/*.cron and are installed
+          # via the backup runbook's bring-up checklist, step 8.)
+          ssh "$SSH_TARGET" "mkdir -p /srv/priori/bin"
+          rsync -az deploy/db_backup.sh deploy/uploads_sync.sh "$SSH_TARGET:/srv/priori/bin/"
+          ssh "$SSH_TARGET" "chmod 700 /srv/priori/bin/db_backup.sh /srv/priori/bin/uploads_sync.sh"
           ssh "$SSH_TARGET" "CI_COMMIT_SHA=${{ github.sha }} bash -s" \
             < deploy/production_release.sh
 ```
