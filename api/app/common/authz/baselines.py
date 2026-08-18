@@ -274,11 +274,16 @@ def absorb_context(
     return AbsorptionResult(new_device=new_device, new_country=new_country)
 
 
-def _bump_hour(baseline, local_hour: int) -> None:
-    """Count one observation in the tenant-local hour bucket (bounded)."""
+def _bump_hour(baseline, local_hour: int, weight: int = 1) -> None:
+    """Count ``weight`` observations in the tenant-local hour bucket.
+
+    ``weight`` compensates for the learning sample cadence (#67 line
+    review §5): one applied observation stands for ``weight`` requests,
+    keeping the histogram unbiased in expectation.
+    """
     key = str(local_hour)
-    baseline.hour_counts[key] = baseline.hour_counts.get(key, 0) + 1
-    baseline.hour_observations += 1
+    baseline.hour_counts[key] = baseline.hour_counts.get(key, 0) + weight
+    baseline.hour_observations += weight
     if baseline.hour_observations >= _HOUR_HISTOGRAM_CAP:
         baseline.hour_counts = {
             hour: count // 2
@@ -374,14 +379,21 @@ def evaluate_session_start_signals(
     return signals
 
 
-def learn_request(baseline, context: AccessContext) -> None:
-    """Continuously learn hour and per-class volume from one scored request.
+def learn_request(baseline, context: AccessContext, weight: int = 1) -> None:
+    """Learn hour and per-class volume from one scored request.
 
     Rides the request transaction (flush by the caller): losing an
     increment to a rollback only under-counts a failed request, which is
     the safe direction for statistics that exist to SUPPRESS anomalies.
+
+    ``weight`` compensates for the 1-in-N learning sample cadence (#67
+    line review §5, ``RISK_BASELINE_LEARN_SAMPLE_N``): each applied
+    observation stands for ``weight`` requests, so hour histograms and
+    per-window volume counts stay unbiased in expectation while the
+    baseline row is written N times less often.
     """
-    _bump_hour(baseline, context.local_hour)
+    weight = max(1, weight)
+    _bump_hour(baseline, context.local_hour, weight=weight)
     flag_modified(baseline, "hour_counts")
 
     window = settings.RISK_VOLUME_WINDOW_SECONDS
@@ -391,7 +403,7 @@ def learn_request(baseline, context: AccessContext) -> None:
     if entry is None:
         entry = {
             "window_started_at": now.isoformat(),
-            "count": 1,
+            "count": weight,
             "ewma": 0.0,
             "windows": 0,
         }
@@ -409,10 +421,10 @@ def learn_request(baseline, context: AccessContext) -> None:
             else:
                 entry["ewma"] = alpha * count + (1 - alpha) * previous
             entry["windows"] = windows + 1
-            entry["count"] = 1
+            entry["count"] = weight
             entry["window_started_at"] = now.isoformat()
         else:
-            entry["count"] = int(entry.get("count", 0)) + 1
+            entry["count"] = int(entry.get("count", 0)) + weight
     flag_modified(baseline, "volume_baselines")
     baseline.updated_at = now
 
@@ -421,10 +433,14 @@ def volume_ceiling(baseline, sensitivity_class: str) -> int:
     """Mild-volume ceiling for one sensitivity class, from learned habits.
 
     Adapts only after enough active windows are observed; before that the
-    global ceiling applies. Clamped so a very quiet user is never flagged
-    for ordinary activity (floor) and learning can never RAISE the ceiling
-    past the configured global maximum.
+    global ceiling applies (including ``baseline is None`` — a user whose
+    baseline row does not exist yet, read optimistically by the gate's
+    unlocked pre-screen, #67 line review §5). Clamped so a very quiet
+    user is never flagged for ordinary activity (floor) and learning can
+    never RAISE the ceiling past the configured global maximum.
     """
+    if baseline is None:
+        return settings.RISK_VOLUME_MAX_REQUESTS
     entry = (baseline.volume_baselines or {}).get(sensitivity_class)
     min_windows = settings.RISK_VOLUME_MIN_LEARNED_WINDOWS
     if not entry or int(entry.get("windows", 0)) < min_windows:

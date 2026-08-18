@@ -441,9 +441,25 @@ class TestConcurrentScoringAtomicity:
     suite on Postgres, where the lock is real and this load serializes.
     """
 
-    def test_gate_loads_the_session_row_locked(self, client, db, monkeypatch):
+    def test_gate_loads_the_session_row_locked(
+        self, client, db, trusted_geo, monkeypatch
+    ):
+        """F1 preserved under the §5 optimistic-read refactor.
+
+        The score-mutating evaluation must run against a row loaded with
+        SELECT ... FOR UPDATE (parallel anomalies each land their
+        increment on committed state) — while the CLEAN path takes no
+        row lock and performs no session write at all.
+        """
         _seed_user(db, "parallel@mail.com")
         access, _ = _login_session(client, "parallel@mail.com")
+
+        # Prime the session: the first scored request is session-start
+        # (a material trail write — allowed to lock).
+        first = client.get(
+            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
+        )
+        assert first.status_code == 200
 
         from sqlalchemy.orm import Session as SaSession
 
@@ -456,12 +472,25 @@ class TestConcurrentScoringAtomicity:
             return original_get(self, entity, ident, **kw)
 
         monkeypatch.setattr(SaSession, "get", spy)
-        resp = client.get("/api/v1/customers", headers=_bearer(access))
-        assert resp.status_code == 200
 
-        # The gate's load — the first UserSession read of the request —
-        # must carry the row lock.
-        assert lock_loads and lock_loads[0] is True
+        # Clean path: identical context, frozen clock — optimistic read
+        # only, no FOR UPDATE anywhere in the request.
+        clean = client.get(
+            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
+        )
+        assert clean.status_code == 200
+        assert lock_loads and lock_loads[0] is False
+        assert not any(lock_loads), "a clean request must not lock the session row"
+
+        # Firing path (impossible travel): the evaluation re-loads the
+        # row LOCKED before scoring (the F1 guarantee).
+        lock_loads.clear()
+        challenged = client.get(
+            "/api/v1/customers", headers={**_bearer(access), **NEW_YORK}
+        )
+        assert challenged.status_code == 401
+        assert lock_loads[0] is False, "first read stays optimistic"
+        assert any(lock_loads), "a firing evaluation must lock the row"
 
 
 class TestPrivilegeEscalation:

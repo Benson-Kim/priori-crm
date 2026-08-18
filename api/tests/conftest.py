@@ -40,6 +40,12 @@ settings.RATE_LIMIT_ENABLED = False
 settings.ABAC_OFF_HOURS_START = 22
 settings.ABAC_OFF_HOURS_END = 6
 
+# Learn from EVERY scored request in tests: the 1-in-N production sampling
+# (#67 line review §5) trades write amplification for statistical cadence,
+# which would make baseline-learning assertions depend on request ordering
+# across the suite. The sampling maths itself has its own unit tests.
+settings.RISK_BASELINE_LEARN_SAMPLE_N = 1
+
 # The instant every request is EVALUATED at, suite-wide: a fixed
 # working-hours moment (11:30 tenant-local — outside the 22h → 6h window).
 #

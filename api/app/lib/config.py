@@ -184,6 +184,12 @@ class Settings(BaseSettings):
     RISK_VOLUME_MIN_CEILING: int = Field(default=30, ge=1, le=100000)
     RISK_VOLUME_MIN_LEARNED_WINDOWS: int = Field(default=3, ge=1, le=1000)
     RISK_VOLUME_LEARNING_ALPHA: float = Field(default=0.3, ge=0.01, le=1.0)
+    # Baseline-learning write cadence (#67 line review §5): learn from
+    # 1-in-N scored requests per user, each applied observation weighted
+    # by N (unbiased in expectation). Cuts the per-request UPDATE on the
+    # per-user baseline row — the serialization point every session of a
+    # user shares — by Nx. 1 = learn every request (test/dev determinism).
+    RISK_BASELINE_LEARN_SAMPLE_N: int = Field(default=8, ge=1, le=1000)
     # The exfiltration ceiling counts BOTH served requests and rate-limiter
     # rejections (429s feed the same counters — see
     # risk.note_rate_limit_rejection), so it is reachable regardless of

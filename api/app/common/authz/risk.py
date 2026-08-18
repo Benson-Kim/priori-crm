@@ -60,8 +60,18 @@ otherwise roll back the very evidence for it. The volume counter lives in
 the shared ``RateLimitStore``, not on the session row, because a Postgres
 counter is rolled back by any failing request — an attacker probing
 endpoints that error would reset their own window for free. Trail state
-(last seen, geo, fingerprint) rides the request transaction: it is written
-every request and losing it on a failure is not exploitable.
+(last seen, geo, fingerprint) rides the request transaction and is written
+only when it changes MATERIALLY (#67 line review §5): identical values are
+not restated, and ``last_seen_at`` refreshes at ``_TRAIL_REFRESH_SECONDS``
+granularity — losing trail state on a failure is not exploitable.
+
+**Hot-path cost** (#67 line review §5): the clean path — the overwhelming
+majority of requests — is an optimistic (unlocked) session read plus
+atomic shared-store counter hits; NO session-row write, NO row lock. The
+``SELECT ... FOR UPDATE`` re-check runs only when a detector fires, the
+session expired, or the trail changed materially, and baseline learning
+writes are sampled 1-in-``RISK_BASELINE_LEARN_SAMPLE_N`` (weight-
+compensated). See :func:`assess_session_risk` for the two-phase shape.
 
 Sessions also expire: ``SESSION_MAX_AGE_HOURS`` (absolute) and
 ``SESSION_IDLE_TIMEOUT_MINUTES`` (since last seen), each terminating with
@@ -77,6 +87,7 @@ the access-token lifetime.
 
 import logging
 import math
+from collections import OrderedDict
 from datetime import UTC, datetime
 from functools import lru_cache
 
@@ -113,6 +124,20 @@ _MIN_TRAVEL_DISTANCE_KM = 100.0
 #: short so a fresh, legitimate re-login after the burst is not chased by
 #: stale evidence for long.
 _EXFIL_LATCH_WINDOWS = 2
+
+#: How stale ``last_seen_at`` may grow before a clean request refreshes the
+#: trail anyway (#67 line review §5). Bounds two things: the idle-timeout
+#: granularity error (seconds, against timeouts measured in minutes-to-
+#: hours) and how stale a STATIONARY session's geo anchor can get. Small
+#: enough to be noise for both consumers; large enough that a busy session
+#: costs one trail UPDATE per interval instead of one per request.
+_TRAIL_REFRESH_SECONDS = 60
+
+#: Per-process per-user request counters driving the 1-in-N baseline
+#: learning cadence (#67 line review §5); LRU-bounded so an instance
+#: serving many users cannot grow this without limit.
+_LEARN_SAMPLE_MAX_USERS = 4096
+_learn_sample_counters: OrderedDict[str, int] = OrderedDict()
 
 
 @lru_cache(maxsize=1)
@@ -229,20 +254,24 @@ def _audit_session_event(
     )
 
 
-def _detect_impossible_travel(
-    db: Session,
+def _travel_measurements(
     session: "UserSession",  # noqa: F821
     context: AccessContext,
-) -> bool:
-    """Speed between the last and current geolocation above the plausible cap.
+) -> tuple[float, float, float] | None:
+    """``(distance_km, elapsed_hours, speed_kmh)`` of an implausible hop.
+
+    Pure read — shared by the unlocked pre-screen and the locked detector
+    so the two can never disagree on what counts as impossible travel.
+    Returns ``None`` when nothing fires: no geo signal, no anchor
+    (pre-anchor rows or a first-ever fix — fail-safe), a within-jitter
+    distance, or a plausible speed.
 
     Elapsed time is anchored on ``last_geo_at`` — when the stored
-    coordinates were CAPTURED — not on ``last_seen_at``, which every
-    request (geolocated or not) updates. With intermittent geo coverage
-    the latter underestimates the elapsed time and so overestimates the
-    speed: a user who genuinely travelled while sending non-geolocated
-    requests would read as teleporting. No anchor (pre-anchor rows, or a
-    first-ever fix) means no signal — fail-safe.
+    coordinates were CAPTURED — not on ``last_seen_at``, which requests
+    (geolocated or not) update. With intermittent geo coverage the latter
+    underestimates the elapsed time and so overestimates the speed: a
+    user who genuinely travelled while sending non-geolocated requests
+    would read as teleporting.
     """
     geo = context.geo
     last_geo_at = _aware(session.last_geo_at)
@@ -253,18 +282,37 @@ def _detect_impossible_travel(
         or session.last_lon is None
         or last_geo_at is None
     ):
-        return False
+        return None
 
     distance_km = haversine_km(session.last_lat, session.last_lon, geo.lat, geo.lon)
     if distance_km < _MIN_TRAVEL_DISTANCE_KM:
-        return False
+        return None
     elapsed_hours = max(
         (context.requested_at - last_geo_at).total_seconds() / 3600.0,
         _MIN_ELAPSED_HOURS,
     )
     speed_kmh = distance_km / elapsed_hours
     if speed_kmh <= settings.RISK_IMPOSSIBLE_TRAVEL_KMH:
+        return None
+    return distance_km, elapsed_hours, speed_kmh
+
+
+def _detect_impossible_travel(
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+) -> bool:
+    """Score and audit an implausible hop (see :func:`_travel_measurements`).
+
+    Runs under the session row lock against re-checked state: a parallel
+    request that already advanced the geo trail makes the re-check come
+    out clean, so one hop is never scored twice (review F1).
+    """
+    measurements = _travel_measurements(session, context)
+    if measurements is None:
         return False
+    distance_km, elapsed_hours, speed_kmh = measurements
+    geo = context.geo
 
     _add_risk(session, settings.RISK_SCORE_IMPOSSIBLE_TRAVEL, context.requested_at)
     _audit_session_event(
@@ -412,17 +460,24 @@ def note_rate_limit_rejection(request: Request) -> None:
         store.set_flag(f"risk:volu:latch:{uid}", latch_ttl)
 
 
-def _detect_volume_anomaly(
-    db: Session,
+def _observe_volume(
     session: "UserSession",  # noqa: F821
     context: AccessContext,
     baseline,
-) -> tuple[bool, bool]:
-    """Request volume inside the rolling window exceeds a ceiling.
+) -> tuple[bool, bool, dict, dict]:
+    """Charge this request against the shared volume counters (unlocked).
 
-    Returns ``(soft_fired, hard_fired)`` so the caller can tell the mild
-    deviation apart from the exfiltration signal: only the latter is HARD
-    evidence that may carry a termination.
+    Returns ``(soft_fired, hard_fired, soft_detail, hard_detail)`` — the
+    detail dicts are the audit payloads the locked application step
+    records verbatim, so observation and evidence cannot drift.
+
+    Runs OUTSIDE the session row lock, exactly once per request: the
+    store's operations are atomic across workers, and the single-slot
+    ``fired`` latch keys guarantee a crossing is claimed by exactly ONE
+    request per window — so the caller can apply the score under the
+    locked re-check without double-charging or double-scoring (review
+    F1/§5). ``baseline`` may be ``None`` (unlearned user): the global
+    ceiling applies.
 
     Two ceilings, matching the signal taxonomy (#67):
 
@@ -434,11 +489,6 @@ def _detect_volume_anomaly(
       ceiling at ``RISK_VOLUME_EXFIL_MULTIPLIER`` times the global limit;
       no legitimate workflow reads at that rate, so it terminates
       directly.
-
-    Counted in the shared store, keyed on the session (and class for the
-    mild signal). Single-slot ``fired`` keys latch each bump so a
-    sustained burst raises the score once per window at the crossing,
-    rather than once per excess request.
     """
     store = _volume_store()
     window = settings.RISK_VOLUME_WINDOW_SECONDS
@@ -454,18 +504,6 @@ def _detect_volume_anomaly(
         f"risk:vol:{sid}:{cls}", mild_ceiling, window, cost=cost
     ).allowed
     if over_mild and store.hit(f"risk:vol:fired:{sid}:{cls}", 1, window).allowed:
-        _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
-        _audit_session_event(
-            db,
-            session,
-            context,
-            "volume_anomaly",
-            {
-                "window_seconds": window,
-                "max_requests": mild_ceiling,
-                "sensitivity_class": cls,
-            },
-        )
         soft_fired = True
 
     exfil_ceiling = (
@@ -490,22 +528,38 @@ def _detect_volume_anomaly(
     if (over_exfil or over_user or latched) and store.hit(
         f"risk:volx:fired:{sid}", 1, window
     ).allowed:
-        _add_risk(session, settings.RISK_SCORE_EXFILTRATION, context.requested_at)
-        _audit_session_event(
-            db,
-            session,
-            context,
-            "exfiltration_volume",
-            {
-                "window_seconds": window,
-                "max_requests": exfil_ceiling,
-                "scope": "user" if (over_user and not over_exfil) else "session",
-                "rate_limited_evidence": latched,
-            },
-        )
         hard_fired = True
 
-    return soft_fired, hard_fired
+    soft_detail = {
+        "window_seconds": window,
+        "max_requests": mild_ceiling,
+        "sensitivity_class": cls,
+    }
+    hard_detail = {
+        "window_seconds": window,
+        "max_requests": exfil_ceiling,
+        "scope": "user" if (over_user and not over_exfil) else "session",
+        "rate_limited_evidence": latched,
+    }
+    return soft_fired, hard_fired, soft_detail, hard_detail
+
+
+def _apply_volume_signals(
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+    volume_soft: bool,
+    volume_hard: bool,
+    soft_detail: dict,
+    hard_detail: dict,
+) -> None:
+    """Score and audit the pre-observed volume signals, under the row lock."""
+    if volume_soft:
+        _add_risk(session, settings.RISK_SCORE_VOLUME_ANOMALY, context.requested_at)
+        _audit_session_event(db, session, context, "volume_anomaly", soft_detail)
+    if volume_hard:
+        _add_risk(session, settings.RISK_SCORE_EXFILTRATION, context.requested_at)
+        _audit_session_event(db, session, context, "exfiltration_volume", hard_detail)
 
 
 def _terminate(
@@ -539,6 +593,26 @@ def _terminate(
     )
 
 
+def _lifetime_expiry_reason(
+    session: "UserSession",  # noqa: F821
+    now: datetime,
+) -> str | None:
+    """Why the session has expired, or ``None`` while it lives (pure read)."""
+    created_at = _aware(session.created_at)
+    if created_at is not None:
+        age_hours = (now - created_at).total_seconds() / 3600.0
+        if age_hours > settings.SESSION_MAX_AGE_HOURS:
+            return "max session age exceeded"
+
+    last_seen = _aware(session.last_seen_at)
+    if last_seen is not None:
+        idle_minutes = (now - last_seen).total_seconds() / 60.0
+        if idle_minutes > settings.SESSION_IDLE_TIMEOUT_MINUTES:
+            return "session idle timeout"
+
+    return None
+
+
 def _check_lifetime(
     db: Session,
     session: "UserSession",  # noqa: F821
@@ -550,21 +624,93 @@ def _check_lifetime(
     should never read, in the trail, as a session ending because it
     misbehaved.
     """
-    now = context.requested_at
-
-    created_at = _aware(session.created_at)
-    if created_at is not None:
-        age_hours = (now - created_at).total_seconds() / 3600.0
-        if age_hours > settings.SESSION_MAX_AGE_HOURS:
-            return _terminate(db, session, context, "max session age exceeded")
-
-    last_seen = _aware(session.last_seen_at)
-    if last_seen is not None:
-        idle_minutes = (now - last_seen).total_seconds() / 60.0
-        if idle_minutes > settings.SESSION_IDLE_TIMEOUT_MINUTES:
-            return _terminate(db, session, context, "session idle timeout")
-
+    reason = _lifetime_expiry_reason(session, context.requested_at)
+    if reason is not None:
+        return _terminate(db, session, context, reason)
     return None
+
+
+def _status_verdict(
+    session: "UserSession",  # noqa: F821
+) -> PolicyVerdict | None:
+    """The verdict a settled session status dictates (pure read)."""
+    if session.status == SessionStatus.TERMINATED.value:
+        return PolicyVerdict(
+            decision=Decision.TERMINATE,
+            rule="session_risk",
+            reason=f"Session terminated ({session.termination_reason or 'earlier'})",
+        )
+    if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
+        return PolicyVerdict(
+            decision=Decision.CHALLENGE,
+            rule="session_risk",
+            reason="Session awaiting step-up verification",
+        )
+    return None
+
+
+def _trail_needs_update(
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+) -> bool:
+    """Whether the session trail changed MATERIALLY this request (§5).
+
+    The trail exists to feed the detectors (geo anchor, device
+    fingerprint, idle timeout) — restating identical values every request
+    bought nothing and cost a row UPDATE (and its lock) per request.
+    ``last_seen_at`` is refreshed at ``_TRAIL_REFRESH_SECONDS``
+    granularity, which is noise relative to the idle timeout it feeds
+    (minutes to hours) and also bounds how stale the geo anchor of a
+    STATIONARY session can grow.
+    """
+    if session.last_seen_at is None:
+        return True
+    if context.ip != session.last_ip:
+        return True
+    if (
+        context.device_fingerprint
+        and context.device_fingerprint != session.device_fingerprint
+    ):
+        return True
+    geo = context.geo
+    if geo is not None:
+        if geo.country is not None and geo.country != session.last_country:
+            return True
+        if geo.has_coordinates and (
+            geo.lat != session.last_lat or geo.lon != session.last_lon
+        ):
+            return True
+    last_seen = _aware(session.last_seen_at)
+    elapsed = (context.requested_at - last_seen).total_seconds()
+    return elapsed >= _TRAIL_REFRESH_SECONDS
+
+
+def _learn_sampled(db: Session, user_id, context: AccessContext) -> None:
+    """Learn from this request at the configured sampling cadence (§5).
+
+    ``learn_request`` used to UPDATE the per-user baseline row on every
+    scored request — all sessions of one user serializing on one row,
+    plus a row UPDATE per request, purely for statistics. Sampling 1-in-N
+    per user (``RISK_BASELINE_LEARN_SAMPLE_N``) with each applied
+    observation WEIGHTED by N keeps the learned statistics unbiased in
+    expectation while dividing the write rate by N. The counters are
+    per-process (each worker samples its own request stream — still
+    1-in-N of the total); losing one to a restart merely delays the next
+    sample, which only under-counts — the safe direction for statistics
+    that SUPPRESS anomalies.
+    """
+    sample_n = max(1, settings.RISK_BASELINE_LEARN_SAMPLE_N)
+    if sample_n > 1:
+        key = str(user_id)
+        count = _learn_sample_counters.get(key, 0) + 1
+        _learn_sample_counters[key] = count
+        _learn_sample_counters.move_to_end(key)
+        while len(_learn_sample_counters) > _LEARN_SAMPLE_MAX_USERS:
+            _learn_sample_counters.popitem(last=False)
+        if count % sample_n:
+            return
+    baseline = baselines.get_or_create_baseline(db, user_id)
+    baselines.learn_request(baseline, context, weight=sample_n)
 
 
 def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | None:
@@ -574,29 +720,87 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     request (the gate has already published a provisional ALLOW verdict,
     so these reads/writes pass the DB guard). Returns None when the
     session is clean — the static ALLOW stands.
+
+    **Optimistic read, locked re-check** (#67 line review §5). The row
+    lock used to be taken on EVERY sid-carrying request and — the clean
+    path never committing early — held to end of request, serializing all
+    concurrent requests of one session for the duration of the slowest
+    one. Now:
+
+    1. The session is read UNLOCKED and a pure pre-screen decides whether
+       anything must be written: a detector would fire, the session
+       expired, or the trail changed materially. The volume counters are
+       charged here (atomic in the shared store, exactly once per
+       request; the single-slot ``fired`` latches make each crossing
+       claimable by exactly one request per window).
+    2. Only when something must change is the row re-loaded with
+       ``SELECT ... FOR UPDATE`` (``Session.get`` with ``with_for_update``
+       always refreshes) and the evaluation re-run against the
+       re-checked, committed state — preserving the F1/M3 guarantee that
+       every increment and transition lands on fresh state, with none of
+       the clean path's serialization. A transition another request
+       committed meanwhile (terminated / challenged) is honoured.
+
+    The clean path — by far the common case — performs NO session-row
+    write and takes NO row lock. (SQLite has no FOR UPDATE; its whole-
+    database write lock serializes writers anyway. CI runs Postgres.)
     """
     if context.session_id is None:
         # Anonymous, service, or legacy (pre-sid) token: nothing to score.
         return None
 
-    from app.modules.auth.models import UserSession
+    from app.modules.auth.models import UserBaseline, UserSession
 
-    # Locked read (SELECT ... FOR UPDATE), mirroring note_privilege_
-    # escalation (M3): without it, concurrent requests of one session each
-    # read the same stale risk_score, run the detectors on it, and commit
-    # independently computed replacements — last-writer-wins, so N parallel
-    # anomalies accumulate as one and stay below the thresholds (review
-    # F1). The gate already serialized same-session requests at the trail-
-    # state UPDATE's row lock; taking the lock at the READ merely moves it
-    # ahead of the detectors so every increment lands on committed state.
-    # A firing detector commits immediately (releasing the lock); a clean
-    # request holds it exactly as long as the trail-state update always
-    # did. (SQLite has no FOR UPDATE; its whole-database write lock
-    # serializes writers anyway. CI runs Postgres.)
-    session = db.get(UserSession, context.session_id, with_for_update=True)
+    session = db.get(UserSession, context.session_id)
     if session is None:
         # A signed token naming a session we never minted (or one purged):
         # zero trust says refuse, not shrug.
+        return PolicyVerdict(
+            decision=Decision.TERMINATE,
+            rule="session_risk",
+            reason="Unknown session",
+        )
+
+    identity_mismatch = session.user_id != context.user_id
+    if not identity_mismatch:
+        settled = _status_verdict(session)
+        if settled is not None:
+            return settled
+
+    # ---- Unlocked pre-screen (pure reads + atomic store charges) -------
+    expired = _lifetime_expiry_reason(session, context.requested_at) is not None
+    session_start = session.last_seen_at is None
+    travel_hit = _travel_measurements(session, context) is not None
+    device_changed = bool(
+        context.device_fingerprint
+        and session.device_fingerprint
+        and context.device_fingerprint != session.device_fingerprint
+    )
+    # The baseline read is optimistic too: None (never learned) simply
+    # means the global ceilings apply and no soft signal can fire.
+    baseline = db.get(UserBaseline, session.user_id)
+    volume_soft, volume_hard, volume_soft_detail, volume_hard_detail = (
+        _observe_volume(session, context, baseline)
+    )
+
+    anything_fires = (
+        identity_mismatch
+        or expired
+        or session_start
+        or travel_hit
+        or device_changed
+        or volume_soft
+        or volume_hard
+    )
+    if not anything_fires and not _trail_needs_update(session, context):
+        # Clean path: nothing to write on the session row. Baseline
+        # learning still proceeds, at its sampled cadence.
+        _learn_sampled(db, session.user_id, context)
+        return None
+
+    # ---- Locked re-check ------------------------------------------------
+    session = db.get(UserSession, context.session_id, with_for_update=True)
+    if session is None:  # pragma: no cover — sessions are never deleted
         return PolicyVerdict(
             decision=Decision.TERMINATE,
             rule="session_risk",
@@ -608,19 +812,9 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
             db, _terminate(db, session, context, "token/session identity mismatch")
         )
 
-    if session.status == SessionStatus.TERMINATED.value:
-        return PolicyVerdict(
-            decision=Decision.TERMINATE,
-            rule="session_risk",
-            reason=f"Session terminated ({session.termination_reason or 'earlier'})",
-        )
-
-    if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
-        return PolicyVerdict(
-            decision=Decision.CHALLENGE,
-            rule="session_risk",
-            reason="Session awaiting step-up verification",
-        )
+    settled = _status_verdict(session)
+    if settled is not None:
+        return settled
 
     expiry = _check_lifetime(db, session, context)
     if expiry is not None:
@@ -628,10 +822,10 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
 
     baseline = baselines.get_or_create_baseline(db, session.user_id)
 
-    # Behavioural signals for this request. Each returns whether it fired,
-    # so a clean request stays a pure read plus the trail-state update.
+    # Behavioural signals for this request, re-evaluated on locked state.
     # SOFT and HARD evidence are tracked apart: only a batch carrying HARD
-    # evidence (impossible travel, exfiltration-scale reads) may terminate.
+    # evidence (exfiltration-scale reads; impossible travel where policy
+    # says so) may terminate.
     soft_fired = _evaluate_session_start_softs(db, session, context, baseline)
     travel_fired = _detect_impossible_travel(db, session, context)
     # Whether impossible travel counts as HARD evidence is policy, not
@@ -645,15 +839,27 @@ def assess_session_risk(db: Session, context: AccessContext) -> PolicyVerdict | 
     hard_fired = travel_fired and travel_is_hard
     soft_fired |= travel_fired and not travel_is_hard
     soft_fired |= _detect_device_change(db, session, context)
-    volume_soft, volume_hard = _detect_volume_anomaly(db, session, context, baseline)
+    # The volume signals were observed (and the counters charged) in the
+    # unlocked pre-screen; apply their score under the lock. The store's
+    # fired-latches guarantee no other request claimed the same crossing.
+    _apply_volume_signals(
+        db,
+        session,
+        context,
+        volume_soft,
+        volume_hard,
+        volume_soft_detail,
+        volume_hard_detail,
+    )
     soft_fired |= volume_soft
     hard_fired |= volume_hard
     fired = soft_fired or hard_fired
 
     # Continuous learning (typical hours, typical per-class volume) rides
-    # the request transaction: losing an increment to a rollback only
-    # under-counts, which is safe for statistics that SUPPRESS anomalies.
-    baselines.learn_request(baseline, context)
+    # the request transaction at the sampled cadence: losing an increment
+    # to a rollback only under-counts, which is safe for statistics that
+    # SUPPRESS anomalies.
+    _learn_sampled(db, session.user_id, context)
 
     score = effective_score(session, context.requested_at)
     verdict: PolicyVerdict | None = None

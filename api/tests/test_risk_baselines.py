@@ -1108,6 +1108,64 @@ class TestBaselineLearningUnits:
         assert "23" not in baseline.hour_counts  # 1 // 2 == 0: pruned
         assert baseline.hour_observations == 2499
 
+    def test_learning_sample_cadence_is_weight_compensated(self, db, monkeypatch):
+        """#67 line review §5: 1-in-N learning, unbiased by weighting.
+
+        With RISK_BASELINE_LEARN_SAMPLE_N=4, only every 4th request per
+        user touches the baseline row — and each applied observation
+        counts for 4, so hour histograms and per-window volume counts
+        keep the same expectation as per-request learning.
+        """
+        import uuid as uuid_mod
+        from datetime import UTC as UTC_TZ
+        from datetime import datetime as dt
+
+        from app.common.authz import risk
+        from app.common.authz.context import AccessContext
+        from app.common.authz.sensitivity import classify_path
+
+        monkeypatch.setattr(settings, "RISK_BASELINE_LEARN_SAMPLE_N", 4)
+        risk._learn_sample_counters.clear()
+        user = _seed_user(db, "sampled@mail.com")
+
+        def _context() -> AccessContext:
+            path = "/api/v1/customers"
+            return AccessContext(
+                principal="user",
+                user_id=user.id,
+                session_id=uuid_mod.uuid4(),
+                ip="203.0.113.10",
+                ip_denylisted=False,
+                geo=None,
+                device_fingerprint="derived:abc123",
+                requested_at=dt(2026, 8, 14, 9, 0, tzinfo=UTC_TZ),
+                local_hour=9,
+                method="GET",
+                path=path,
+                sensitivity=classify_path(path),
+            )
+
+        for _ in range(3):
+            risk._learn_sampled(db, user.id, _context())
+        assert db.get(UserBaseline, user.id) is None, (
+            "requests 1-3 must not touch the baseline row"
+        )
+
+        risk._learn_sampled(db, user.id, _context())  # the 4th learns
+        db.flush()
+        baseline = db.get(UserBaseline, user.id)
+        assert baseline is not None
+        assert baseline.hour_counts.get("9") == 4, "weight-compensated"
+        assert baseline.hour_observations == 4
+        entry = baseline.volume_baselines[classify_path("/api/v1/customers").value]
+        assert entry["count"] == 4
+
+        # N=1 keeps the historical per-request behaviour.
+        monkeypatch.setattr(settings, "RISK_BASELINE_LEARN_SAMPLE_N", 1)
+        risk._learn_sampled(db, user.id, _context())
+        db.flush()
+        assert baseline.hour_counts.get("9") == 5
+
     def test_concurrent_first_insert_is_idempotent(self, db, monkeypatch):
         """#67 review H14 (prior L3): the first-INSERT race must not 500.
 

@@ -191,6 +191,26 @@ after the initial OTP.
    probing endpoints that error would reset their own window. Trail state
    (last seen, geo, fingerprint) rides the request transaction.
 
+9. **Hot-path capacity envelope** (line review §5). Per scored request,
+   the CLEAN path — the overwhelming majority — costs: one unlocked
+   `SELECT` of the session row, one unlocked `SELECT` of the baseline
+   row, and 3–5 atomic counter hits on the shared `RateLimitStore`
+   (Redis in production). **No session-row write, no `SELECT ... FOR
+   UPDATE`, no audit INSERT.** The locked re-check (row lock + re-run of
+   the detectors, then an UPDATE and usually an explicit COMMIT) runs
+   only when a detector fires, the session expired, or the trail changed
+   materially (IP/device/geo change; otherwise at most once per
+   `_TRAIL_REFRESH_SECONDS` = 60s per session). Baseline learning
+   UPDATEs the per-user row for 1-in-`RISK_BASELINE_LEARN_SAMPLE_N`
+   requests (default 8, weight-compensated so the statistics stay
+   unbiased), so N parallel sessions of one user no longer serialize on
+   the baseline row every request. Same-session parallelism is
+   serialized ONLY across material-change/firing requests — the month-end
+   shape (many users, high volume, few anomalies) stays on the lock-free
+   path. `note_privilege_escalation` (403s) keeps its lock + immediate
+   commit: microseconds, and correctness (M3) beats throughput on an
+   attack-signal path.
+
 ## What it does today
 - `api/app/common/authz/sensitivity.py` — `SensitivityLevel` + ordered
   path classification rules.
