@@ -43,6 +43,19 @@ command -v rclone >/dev/null || { log "FATAL: rclone is not installed"; exit 1; 
 # deleted" — refuse instead of propagating an unmounted/renamed directory.
 [ -d "$UPLOADS_DIR" ] || { log "FATAL: $UPLOADS_DIR does not exist — refusing to sync"; exit 1; }
 
+# --- concurrency guard ---------------------------------------------------------
+# This runs hourly and the FIRST sync of a large uploads directory can take
+# longer than an hour — without a lock, overlapping rclone syncs would fight
+# over the same destination. Skip (exit 0, green) when a run is already in
+# progress: overlap is an expected steady state during a long initial sync,
+# not an anomaly. Deliberate interplay with monitoring: a skipped run does
+# NOT touch the heartbeat (only a *successful sync* does, below), so a wedged
+# long-running sync is surfaced naturally by scheduled:backup-freshness when
+# the heartbeat exceeds UPLOADS_SYNC_MAX_AGE_MIN — no extra alarm needed here.
+LOCKFILE="${LOCKFILE:-$ROOT/.uploads_sync.lock}"
+exec 9>"$LOCKFILE"
+flock -n 9 || { log "another uploads_sync.sh run is in progress (lock: $LOCKFILE) — skipping"; exit 0; }
+
 DEST="$RCLONE_REMOTE/uploads-sync"
 log "Syncing $UPLOADS_DIR -> $DEST (max-delete $MAX_DELETE)"
 rclone sync "$UPLOADS_DIR" "$DEST" \

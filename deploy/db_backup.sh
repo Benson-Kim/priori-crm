@@ -72,6 +72,16 @@ umask 077
 mkdir -p "$BACKUP_DIR" "$NIGHTLY_DIR"
 chmod 700 "$BACKUP_DIR" "$NIGHTLY_DIR"
 
+# --- concurrency guard ---------------------------------------------------------
+# Never let two nightly runs overlap: two pg_dumps double the load, and two
+# runs pruning/copying the same directory race each other. A second nightly
+# run existing at all is anomalous (a wedged previous run, or a manual run
+# colliding with cron), so exit NONZERO — cron/logs must show red, unlike
+# uploads_sync.sh where overlap-skip is an expected steady state.
+LOCKFILE="${LOCKFILE:-$BACKUP_DIR/.db_backup.lock}"
+exec 9>"$LOCKFILE"
+flock -n 9 || { log "FATAL: another db_backup.sh run is in progress (lock: $LOCKFILE)"; exit 1; }
+
 # --- extract DATABASE_URL without sourcing .env -------------------------------
 # Identical helper to deploy/production_release.sh: parse with the same parser
 # the app uses, split the password into PGPASSFILE, normalise the SQLAlchemy
