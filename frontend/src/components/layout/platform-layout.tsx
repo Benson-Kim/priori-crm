@@ -36,7 +36,7 @@ export default function PlatformLayout() {
               Module entitlements per owner organisation — not tenant data.
             </p>
           </div>
-          <span className="ml-2 hidden shrink-0 rounded-full border border-amber-400/50 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-amber-300 uppercase sm:inline">
+          <span className="ml-2 hidden shrink-0 rounded-full border border-amber-400/50 bg-amber-400/10 px-2.5 py-0.5 text-dense-sm font-semibold tracking-wide text-amber-300 uppercase sm:inline">
             Platform operator
           </span>
         </div>

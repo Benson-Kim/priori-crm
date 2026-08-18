@@ -156,7 +156,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
                         <span className="min-w-0">
                             <span
                                 className={cn(
-                                    "block text-[13px] font-semibold",
+                                    "block text-dense-md font-semibold",
                                     company.id === selectedCompanyId
                                         ? "text-sd-brand"
                                         : "text-sd-ink"
@@ -164,7 +164,7 @@ export default function SalesDeskCompaniesWorkspacePage() {
                             >
                                 {company.name}
                             </span>
-                            <span className="block text-[11px] text-sd-muted">
+                            <span className="block text-dense-sm text-sd-muted">
                                 {company.industry} · {company.contact}
                             </span>
                         </span>
@@ -179,10 +179,10 @@ export default function SalesDeskCompaniesWorkspacePage() {
                     <span className="flex flex-col gap-1">
                         {company.profiles.map((profile) => (
                             <span key={profile.code} className="flex items-center gap-3">
-                                <span className="w-8 shrink-0 text-[11px] font-bold text-sd-ink">
+                                <span className="w-8 shrink-0 text-dense-sm font-bold text-sd-ink">
                                     {profile.currency}
                                 </span>
-                                <span className="w-20 shrink-0 font-mono text-[11px] text-sd-muted">
+                                <span className="w-20 shrink-0 font-mono text-dense-sm text-sd-muted">
                                     {profile.code}
                                 </span>
                                 <SyncPill synced={profile.synced} />
@@ -196,9 +196,9 @@ export default function SalesDeskCompaniesWorkspacePage() {
                 header: "Deals",
                 className: `${CELL_CLASS} w-[120px]`,
                 render: (company) => (
-                    <span className="text-[13px] text-sd-ink">
+                    <span className="text-dense-md text-sd-ink">
                         <span className="block">{company.open_deal_count} open</span>
-                        <span className="block text-[11px] text-sd-muted">
+                        <span className="block text-dense-sm text-sd-muted">
                             {company.closed_deal_count} closed
                         </span>
                     </span>

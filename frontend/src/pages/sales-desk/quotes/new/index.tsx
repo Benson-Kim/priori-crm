@@ -328,7 +328,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                     value: entry.id,
                                     label: `${entry.company_name} · ${entry.product}`,
                                 }))}
-                                triggerClassName="border-0 bg-transparent px-0 text-[15px] font-semibold hover:bg-transparent"
+                                triggerClassName="border-0 bg-transparent px-0 text-sm font-semibold hover:bg-transparent"
                             />
                         </div>
 
@@ -368,7 +368,7 @@ export default function SalesDeskQuoteBuilderPage() {
                     </div>
 
                     {/* Which profile this posts against */}
-                    <p className="flex flex-wrap items-center gap-x-1 border-b border-sd-border px-5 py-2.5 text-[11px] text-sd-muted">
+                    <p className="flex flex-wrap items-center gap-x-1 border-b border-sd-border px-5 py-2.5 text-dense-sm text-sd-muted">
                         {priced ? (
                             <>
                                 Posts to{" "}
@@ -379,7 +379,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                 {taxTreatmentLabel(priced.profile.tax)} ·
                                 <SyncPill
                                     synced={priced.profile.synced}
-                                    className="text-[11px]"
+                                    className="text-dense-sm"
                                 />
                                 {isReferenceDisplay && (
                                     <span className="text-sd-warn">
@@ -399,7 +399,7 @@ export default function SalesDeskQuoteBuilderPage() {
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-215 text-left">
                             <thead>
-                                <tr className="border-b border-sd-border text-[13px] font-semibold text-sd-ink">
+                                <tr className="border-b border-sd-border text-dense-md font-semibold text-sd-ink">
                                     <th scope="col" className="px-5 py-3">Product</th>
                                     <th scope="col" className="px-3 py-3">Seats</th>
                                     <th scope="col" className="px-3 py-3">Billing</th>
@@ -489,14 +489,14 @@ export default function SalesDeskQuoteBuilderPage() {
                                             <td className="px-3 py-3 text-right">
                                                 {pricedLine ? (
                                                     <>
-                                                        <span className="block text-[13px] font-semibold text-sd-ink">
+                                                        <span className="block text-dense-md font-semibold text-sd-ink">
                                                             {formatQuoteMoney(
                                                                 pricedLine.per_seat_month,
                                                                 lineCurrency
                                                             )}
                                                         </span>
                                                         {pricedLine.is_discounted && (
-                                                            <span className="block text-[11px] text-sd-muted line-through">
+                                                            <span className="block text-dense-sm text-sd-muted line-through">
                                                                 {formatQuoteMoney(
                                                                     pricedLine.list_per_seat_month,
                                                                     lineCurrency
@@ -505,7 +505,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <span className="text-[13px] text-sd-muted">
+                                                    <span className="text-dense-md text-sd-muted">
                                                         —
                                                     </span>
                                                 )}
@@ -513,18 +513,18 @@ export default function SalesDeskQuoteBuilderPage() {
                                             <td className="px-3 py-3 text-right">
                                                 {pricedLine ? (
                                                     <>
-                                                        <span className="block text-[13px] font-bold text-sd-ink">
+                                                        <span className="block text-dense-md font-bold text-sd-ink">
                                                             {formatQuoteMoney(
                                                                 pricedLine.line_total,
                                                                 lineCurrency
                                                             )}
                                                         </span>
-                                                        <span className="block text-[11px] text-sd-muted">
+                                                        <span className="block text-dense-sm text-sd-muted">
                                                             {pricedLine.period_label}
                                                         </span>
                                                     </>
                                                 ) : (
-                                                    <span className="text-[13px] text-sd-muted">
+                                                    <span className="text-dense-md text-sd-muted">
                                                         —
                                                     </span>
                                                 )}
@@ -563,7 +563,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                 isPricing && "opacity-50"
                             )}
                         >
-                            <p className="text-[11px] text-sd-muted">
+                            <p className="text-dense-sm text-sd-muted">
                                 Subtotal{" "}
                                 {formatQuoteMoney(
                                     priced?.subtotal ?? 0,
@@ -577,11 +577,11 @@ export default function SalesDeskQuoteBuilderPage() {
                                     </>
                                 )}
                             </p>
-                            <p className="text-[17px] font-bold text-sd-ink">
+                            <p className="text-lg font-bold text-sd-ink">
                                 Total {formatQuoteMoney(shownTotal, totalCurrency)}
                             </p>
                             {priced && (
-                                <p className="text-[11px] text-sd-muted">
+                                <p className="text-dense-sm text-sd-muted">
                                     ≈{" "}
                                     {QUOTE_CURRENCIES.filter(
                                         (code) =>
@@ -610,12 +610,12 @@ export default function SalesDeskQuoteBuilderPage() {
 
                 {/* Recent quotes rail */}
                 <aside className="w-full shrink-0 xl:w-70">
-                    <h2 className="text-[10px] font-bold tracking-[1px] text-sd-muted uppercase">
+                    <h2 className="text-dense-xs font-bold tracking-[1px] text-sd-muted uppercase">
                         Recent quotes
                     </h2>
                     <div className="flex flex-col gap-3 pt-3">
                         {recentQuotes.length === 0 ? (
-                            <p className="text-[11px] text-sd-muted">No quotes raised yet.</p>
+                            <p className="text-dense-sm text-sd-muted">No quotes raised yet.</p>
                         ) : (
                             recentQuotes.map((quote) => (
                                 <div
@@ -633,10 +633,10 @@ export default function SalesDeskQuoteBuilderPage() {
                                             </span>
                                             <StatusChip status={quote.status} />
                                         </span>
-                                        <span className="block pt-1.5 text-[13px] font-semibold text-sd-ink">
+                                        <span className="block pt-1.5 text-dense-md font-semibold text-sd-ink">
                                             {quote.company_name}
                                         </span>
-                                        <span className="block pt-0.5 text-[11px] text-sd-muted">
+                                        <span className="block pt-0.5 text-dense-sm text-sd-muted">
                                             <span className="font-mono">
                                                 {quote.profile_code}
                                             </span>{" "}
@@ -649,7 +649,7 @@ export default function SalesDeskQuoteBuilderPage() {
                                             type="button"
                                             disabled={pushingQuoteId === quote.id}
                                             onClick={() => void pushToAccounting(quote)}
-                                            className="block pt-1.5 text-[11px] font-semibold text-sd-brand hover:underline disabled:opacity-50"
+                                            className="block pt-1.5 text-dense-sm font-semibold text-sd-brand hover:underline disabled:opacity-50"
                                         >
                                             {pushingQuoteId === quote.id
                                                 ? "Pushing…"

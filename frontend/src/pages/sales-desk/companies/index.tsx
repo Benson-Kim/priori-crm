@@ -28,8 +28,6 @@ export default function SalesDeskCompaniesPage() {
     const navigate = useNavigate();
 
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
-    // The server's match count, before the row limit — the honest "N companies".
-    const [total, setTotal] = useState(0);
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebounce(search, 250);
     const [isCreating, setIsCreating] = useState(false);
@@ -46,7 +44,6 @@ export default function SalesDeskCompaniesPage() {
             .then((list) => {
                 if (active) {
                     setCompanies(list.items);
-                    setTotal(list.total);
                     setError(null);
                 }
             })
@@ -187,7 +184,16 @@ export default function SalesDeskCompaniesPage() {
                         placeholder="Search companies…"
                         className="h-control w-56 bg-sd-card px-3 [&_svg]:size-4"
                     />
-                    <Button variant="primary" onClick={() => setIsCreating(true)}>
+                    {/*
+                     * `h-control` on both, so the button and the search box
+                     * are the same height by construction rather than by
+                     * padding that happens to add up.
+                     */}
+                    <Button
+                        variant="primary"
+                        className="h-control"
+                        onClick={() => setIsCreating(true)}
+                    >
                         <Plus size={16} /> New Company
                     </Button>
                 </div>
@@ -203,12 +209,6 @@ export default function SalesDeskCompaniesPage() {
                 <LoadingState message="Loading companies..." className="h-64" />
             ) : (
                 <>
-                    {/* The server total, which stays honest past the row limit. */}
-                    <p className="text-xs text-sd-muted">
-                        {total} {total === 1 ? "company" : "companies"}
-                        {total > companies.length &&
-                            ` · showing the ${companies.length} most recently registered`}
-                    </p>
                     <Table
                         columns={columns}
                         data={companies}

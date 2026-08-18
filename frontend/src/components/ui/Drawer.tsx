@@ -27,7 +27,7 @@ export function MicroLabel({
     return (
         <p
             className={cn(
-                "text-[10px] font-bold tracking-[1px] text-sd-muted uppercase",
+                "text-dense-xs font-bold tracking-[1px] text-sd-muted uppercase",
                 className
             )}
         >

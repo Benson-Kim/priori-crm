@@ -239,6 +239,16 @@ const routes = [
                                 },
                             },
                             {
+                                path: "add",
+                                element: lazyPage(() => import("@/pages/purchases/vendors/add")),
+                                handle: {
+                                    header: {
+                                        title: "Create Vendor",
+                                        description: "Add vendor details and manage their information.",
+                                    },
+                                },
+                            },
+                            {
                                 path: ":id",
                                 element: lazyPage(() => import("@/pages/purchases/vendors/detail")),
                                 handle: {

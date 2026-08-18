@@ -32,7 +32,7 @@ function CustomerDropdown({
                     onClose();
                     onAddNew();
                 }}
-                className="w-full text-[20px] mb-6"
+                className="w-full text-xl mb-6"
             >
                 <Plus size={20} /> Add New Customer
             </Button>
@@ -62,7 +62,7 @@ function CustomerDropdown({
                         onClick={() => onSelectCustomer(c)}
                     >
                         <CircleUserRound size={24} stroke="#475467" />
-                        <span className={`block text-[14px] text-gray-800 `}>
+                        <span className={`block text-sm text-gray-800 `}>
                             {c.display_name}
                             {c.phone ? ` (${c.phone})` : ""}
                         </span>
@@ -185,7 +185,7 @@ export function CustomerSelector({
 
             {restrictedMode ? (
                 <div className="flex flex-col gap-1">
-                    <p className="text-[16px] font-bold text-priori-purple">{customerName || customerId}</p>
+                    <p className="text-base font-bold text-priori-purple">{customerName || customerId}</p>
                     {customerDetails && (
                         <>
                             {customerDetails.address && (
@@ -205,7 +205,7 @@ export function CustomerSelector({
                     <div className="relative">
                         <button
                             type="button"
-                            className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
+                            className="text-priori-purple font-bold text-base flex items-center gap-1 hover:underline text-left w-fit"
                             onClick={() => setShowDropdown(!showDropdown)}
                         >
                             {customerName} <SquarePen size={18} />
@@ -236,7 +236,7 @@ export function CustomerSelector({
                 <div className="relative">
                     <button
                         type="button"
-                                className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left cursor-pointer"
+                                className="text-priori-purple font-bold text-base flex items-center gap-1 hover:underline text-left cursor-pointer"
                         onClick={() => setShowDropdown(!showDropdown)}
                     >
                         Add / Select Customer <SquarePen size={18} />

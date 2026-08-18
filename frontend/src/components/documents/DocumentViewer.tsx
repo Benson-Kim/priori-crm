@@ -82,7 +82,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
       {/* Owner identity (logo + company block) — single source of truth. */}
       <div className="p-6 flex justify-between">
         <DocumentOwnerHeader />
-        <h2 className="text-[22px] text-priori-purple  tracking-wide font-bold mb-1 uppercase">
+        <h2 className="text-2xl text-priori-purple  tracking-wide font-bold mb-1 uppercase">
           {label}
         </h2>
       </div>
@@ -94,7 +94,7 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
           <div className="flex flex-col gap-1">
 
             <p className="text-sm text-gray-500 mb-1">To</p>
-            <p className="text-[16px] font-bold text-gray-800 truncate">
+            <p className="text-base font-bold text-gray-800 truncate">
               {data.customer?.display_name ?? data.customerId}
             </p>
             {data.customer && (
@@ -142,12 +142,12 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
 
       {/*  Line Items  */}
       <div className="p-6 flex flex-col gap-6">
-        <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+        <h3 className="text-xl leading-7 font-bold text-gray-800">
           Item Details
         </h3>
 
         <div className="pb-4">
-          <table className="w-full text-[16px] min-w-200">
+          <table className="w-full text-base min-w-200">
             <thead>
               <tr className="bg-priori-purple text-white px-4 py-3 grid grid-cols-7 rounded-t-lg">
                 <th className="text-left px-3 font-bold leading-8 col-span-4">
@@ -212,8 +212,8 @@ export function DocumentViewer({ type, data }: Readonly<DocumentViewerProps>) {
       </div>
 
       <div className="p-8 pt-6">
-        <p className="text-[16px] font-bold text-gray-800 mb-3">Notes</p>
-        <div className="w-full px-3 py-4 text-[16px] text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
+        <p className="text-base font-bold text-gray-800 mb-3">Notes</p>
+        <div className="w-full px-3 py-4 text-base text-gray-700 rounded-xl min-h-15 whitespace-pre-wrap">
           {data.notes ?? "No notes added."}
         </div>
       </div>
@@ -234,12 +234,12 @@ function MetaField({
     <>
       <span
         title={tooltip}
-        className={`text-[16px] font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
+        className={`text-base font-bold text-gray-800 whitespace-nowrap${tooltip ? " cursor-help" : ""}`}
       >
         {label}
       </span>
 
-      <span className="text-[16px] text-gray-800 min-w-0 truncate">
+      <span className="text-base text-gray-800 min-w-0 truncate">
         {children}
       </span>
     </>

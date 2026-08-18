@@ -42,7 +42,7 @@ const TAB_STYLES: Record<
   },
   "brand-filled": {
     base: cn(
-      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13px] font-semibold",
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-full px-3 text-dense-md font-semibold",
       "cursor-pointer transition-colors duration-150",
       "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
       "active:scale-[0.98]"
@@ -55,7 +55,7 @@ const TAB_STYLES: Record<
     // 12px radius, not a full pill, and the active border is brand rather
     // than the hairline grey.
     base: cn(
-      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-xl border px-3 text-[13px] font-semibold",
+      "inline-flex h-control shrink-0 items-center whitespace-nowrap rounded-xl border px-3 text-dense-md font-semibold",
       "cursor-pointer transition-colors duration-150",
       "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sd-brand",
       "active:scale-[0.98]"

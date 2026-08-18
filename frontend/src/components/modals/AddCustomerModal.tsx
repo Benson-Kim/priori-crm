@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { KenyanPhoneInput } from "@/components/ui/KenyanPhoneInput";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { customerStatusOptions, customerTypeOptions, type Currency, type CustomerStatus, type CustomerType } from "@/lib/enums";
 import { createCustomer } from "@/services/customerApi";
@@ -241,16 +242,29 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                             Phone
                             {phoneRequired && <span className="text-red-500"> *</span>}
                         </label>
-                        <Input
-                            {...register("phone", {
+                        {/*
+                         * Controlled, because the field formats as it is
+                         * typed. The individual-customer rule moves onto the
+                         * Controller rather than being lost with `register`.
+                         */}
+                        <Controller
+                            name="phone"
+                            control={control}
+                            rules={{
                                 validate: (value) =>
                                     !phoneRequired || !!value ||
                                     "Phone number is required for individual customers.",
-                            })}
-                            prefix="+254"
-                            type="tel"
-                            placeholder="700 000 000"
-                            error={errors.phone?.message}
+                            }}
+                            render={({ field }) => (
+                                <KenyanPhoneInput
+                                    name={field.name}
+                                    ref={field.ref}
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    onBlur={field.onBlur}
+                                    error={errors.phone?.message}
+                                />
+                            )}
                         />
                     </div>
 

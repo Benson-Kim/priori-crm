@@ -7,20 +7,23 @@
  * deal in the workspace.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { StageChip } from "@/components/ui/Chip";
 import { FilterTabs } from "@/components/ui/FilterTabs";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Table, type Column } from "@/components/ui/Table";
+import { AddDealDialog } from "./components/AddDealDialog";
 import {
     formatDeskMoney,
     getPipelineDeals,
     type DealStatus,
     type PipelineDeal,
 } from "@/services/salesDeskApi";
-import { Avatar } from "@/components/ui/Avatar";
-import { StageChip } from "@/components/ui/Chip";
 
 /** Tab keys are strings because FilterTabs is key-agnostic. */
 type StatusTabKey = "all" | DealStatus;
@@ -48,6 +51,11 @@ export default function SalesDeskPipelinePage() {
     const [tab, setTab] = useState<StatusTabKey>("all");
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isAddingDeal, setIsAddingDeal] = useState(false);
+
+    // Bumped after a deal is added so the list re-reads from the server.
+    const [revision, setRevision] = useState(0);
+    const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
     useEffect(() => {
         let active = true;
@@ -67,7 +75,7 @@ export default function SalesDeskPipelinePage() {
         return () => {
             active = false;
         };
-    }, []);
+    }, [revision]);
 
     /*
      * A row leads to the workspace, where deals are actually worked. The deal
@@ -149,7 +157,7 @@ export default function SalesDeskPipelinePage() {
                             color={deal.owner_color}
                             size={24}
                         />
-                        <span className="text-xs text-sd-muted">
+                        <span className="text-sd-muted">
                             {firstNameOf(deal.owner_name)}
                         </span>
                     </span>
@@ -161,12 +169,27 @@ export default function SalesDeskPipelinePage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <FilterTabs
-                variant="brand-outline"
-                tabs={tabs}
-                activeTab={tab}
-                onTabChange={(key) => setTab(key as StatusTabKey)}
-            />
+            {/*
+             * The status tabs and the add action share a row: this view is
+             * read-first, so creating sits beside the filters rather than
+             * above the table competing with them.
+             */}
+            <div className="flex flex-wrap items-center gap-3">
+                <FilterTabs
+                    variant="brand-outline"
+                    tabs={tabs}
+                    activeTab={tab}
+                    onTabChange={(key) => setTab(key as StatusTabKey)}
+                />
+                <Button
+                    variant="sd-primary"
+                    size="sd"
+                    className="ml-auto h-control"
+                    onClick={() => setIsAddingDeal(true)}
+                >
+                    <Plus size={16} /> Add deal
+                </Button>
+            </div>
 
             {error && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -188,6 +211,20 @@ export default function SalesDeskPipelinePage() {
                     emptyMessage="No deals match this filter."
                 />
             )}
+
+            <AddDealDialog
+                isOpen={isAddingDeal}
+                onClose={() => setIsAddingDeal(false)}
+                onCreated={() => {
+                    setIsAddingDeal(false);
+                    /*
+                     * A new deal is open, so a status tab left on Won or Lost
+                     * would hide it and the write would look like it failed.
+                     */
+                    setTab("all");
+                    refresh();
+                }}
+            />
         </div>
     );
 }
