@@ -17,24 +17,47 @@
  *   (the !56 Settings wipe-bug lesson).
  */
 
-import { Lock, RefreshCw, ServerOff, Users } from "lucide-react";
+import { Ban, Lock, RefreshCw, RotateCcw, ServerOff, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
 import { Toggle } from "@/components/ui/Toggle";
+import { useDebounce } from "@/hooks/useDebounce";
 import { moduleLabel } from "@/lib/module-labels";
+import AuditTrail from "@/pages/platform/audit-trail";
 import {
   getOwnerModuleSettings,
   listPlatformOwners,
   setOwnerModuleEnabled,
+  setOwnerStatus,
   type ModuleSettingState,
   type PlatformOwnerSummary,
 } from "@/services/platformApi";
 
 const ESSENTIAL_HINT =
   "Essential module (auth, organisation profile, health, dashboard) — always enabled; the platform API refuses to disable it (422).";
+
+const OWNERS_PER_PAGE = 10;
+
+/** Lifecycle status pill: the suspended state must be unmissable. */
+function StatusBadge({ status }: Readonly<{ status: string }>) {
+  const suspended = status === "suspended";
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+        suspended
+          ? "border-red-200 bg-red-50 text-red-700"
+          : "border-green-200 bg-green-50 text-green-700"
+      }`}
+    >
+      {suspended ? "Suspended" : "Active"}
+    </span>
+  );
+}
 
 /** Explanatory error panel with a retry action — never a blank screen. */
 function ErrorPanel({
@@ -68,7 +91,22 @@ export default function PlatformConsolePage() {
   const [ownersError, setOwnersError] = useState<string | null>(null);
   const [ownersLoading, setOwnersLoading] = useState(true);
 
+  // Owner list search + pagination (GET /platform/owners hardening, #71).
+  const [ownersSearch, setOwnersSearch] = useState("");
+  const debouncedSearch = useDebounce(ownersSearch, 300);
+  const [ownersPage, setOwnersPage] = useState(1);
+  const [ownersTotalPages, setOwnersTotalPages] = useState(1);
+
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
+
+  // Pending lifecycle change awaiting explicit confirmation (both
+  // directions confirm: suspending locks the tenant out, reactivating
+  // restores paid access — neither should be a stray click).
+  const [pendingStatus, setPendingStatus] = useState<
+    { owner: PlatformOwnerSummary; next: "active" | "suspended" } | null
+  >(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const [modules, setModules] = useState<ModuleSettingState[] | null>(null);
   const [modulesError, setModulesError] = useState<string | null>(null);
@@ -88,8 +126,14 @@ export default function PlatformConsolePage() {
     setOwnersLoading(true);
     setOwnersError(null);
     try {
-      const response = await listPlatformOwners();
+      const response = await listPlatformOwners({
+        page: ownersPage,
+        perPage: OWNERS_PER_PAGE,
+        search: debouncedSearch,
+        withTotal: true,
+      });
       setOwners(response.owners);
+      setOwnersTotalPages(response.metadata?.total_pages ?? 1);
       // Single-tenant deployments hold exactly one owner profile today:
       // select it immediately so the console is one screen, not two clicks.
       setSelectedOwnerId((current) => {
@@ -106,7 +150,7 @@ export default function PlatformConsolePage() {
     } finally {
       setOwnersLoading(false);
     }
-  }, []);
+  }, [ownersPage, debouncedSearch]);
 
   const loadModules = useCallback(async (ownerId: string) => {
     setModulesLoading(true);
@@ -137,6 +181,32 @@ export default function PlatformConsolePage() {
 
   const selectedOwner =
     owners?.find((o) => o.id === selectedOwnerId) ?? null;
+
+  /**
+   * Apply a confirmed suspend/reactivate pessimistically: PATCH, then
+   * refetch the owner list so the rendered status is always the server's
+   * resolved state (on failure the refetch runs too).
+   */
+  const applyStatusChange = useCallback(async () => {
+    if (!pendingStatus) return;
+    const { owner, next } = pendingStatus;
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      await setOwnerStatus(owner.id, next);
+      setPendingStatus(null);
+    } catch (err) {
+      setStatusError(
+        err instanceof Error
+          ? `${next === "suspended" ? "Suspending" : "Reactivating"} ${owner.fullName} failed: ${err.message}`
+          : "The status change could not be applied."
+      );
+      setPendingStatus(null);
+    } finally {
+      setStatusSaving(false);
+      await loadOwners();
+    }
+  }, [pendingStatus, loadOwners]);
 
   /**
    * Apply one grant/revoke pessimistically: PATCH, then refetch the whole
@@ -199,7 +269,7 @@ export default function PlatformConsolePage() {
     );
   }
 
-  if (!owners || owners.length === 0) {
+  if ((!owners || owners.length === 0) && !debouncedSearch) {
     return (
       <div className="mx-auto max-w-3xl">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-12 text-center">
@@ -243,35 +313,67 @@ export default function PlatformConsolePage() {
             Owner organisations
           </h2>
           <p className="text-sm text-gray-500">
-            Select an organisation to administer its module entitlements.
-            Grants and revocations are audited with you as the actor.
+            Select an organisation to administer its module entitlements and
+            tenant lifecycle. Every change is audited with you as the actor.
           </p>
         </div>
-        <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
-          {owners.map((owner) => (
-            <li key={owner.id}>
-              <button
-                type="button"
-                onClick={() => setSelectedOwnerId(owner.id)}
-                aria-pressed={owner.id === selectedOwnerId}
-                className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors ${
-                  owner.id === selectedOwnerId
-                    ? "bg-priori-purple/5"
-                    : "hover:bg-gray-50"
-                }`}
-              >
-                <span className="text-sm font-medium text-gray-800">
-                  {owner.fullName}
-                </span>
-                {owner.id === selectedOwnerId && (
-                  <span className="text-xs font-semibold text-priori-purple">
-                    Selected
+        <SearchInput
+          placeholder="Search organisations by name..."
+          value={ownersSearch}
+          onSearchChange={setOwnersSearch}
+          aria-label="Search owner organisations"
+        />
+        {(owners ?? []).length === 0 ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-8 text-center">
+            <p className="text-sm text-gray-500">
+              No organisation matches “{debouncedSearch}”.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
+            {(owners ?? []).map((owner) => (
+              <li key={owner.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOwnerId(owner.id)}
+                  aria-pressed={owner.id === selectedOwnerId}
+                  className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors ${
+                    owner.id === selectedOwnerId
+                      ? "bg-priori-purple/5"
+                      : "hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium text-gray-800">
+                      {owner.fullName}
+                    </span>
+                    <StatusBadge status={owner.status ?? "active"} />
+                    {(owner.disabledModuleCount ?? 0) > 0 && (
+                      <span className="shrink-0 text-xs text-gray-400">
+                        {owner.disabledModuleCount} module
+                        {owner.disabledModuleCount === 1 ? "" : "s"} disabled
+                      </span>
+                    )}
                   </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
+                  {owner.id === selectedOwnerId && (
+                    <span className="shrink-0 text-xs font-semibold text-priori-purple">
+                      Selected
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {ownersTotalPages > 1 && (
+          <Pagination
+            currentPage={ownersPage}
+            totalPages={ownersTotalPages}
+            perPage={OWNERS_PER_PAGE}
+            onPageChange={setOwnersPage}
+            onPerPageChange={() => setOwnersPage(1)}
+          />
+        )}
       </section>
 
       {/* Entitlement table for the selected owner. */}
@@ -364,6 +466,102 @@ export default function PlatformConsolePage() {
           )}
         </section>
       )}
+
+      {/* Tenant lifecycle (ADR-0013 Phase A): suspend / reactivate with
+          explicit confirmation. Suspension is reversible and
+          non-destructive; the server audits both directions. */}
+      {selectedOwner && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Tenant lifecycle — {selectedOwner.fullName}
+            </h2>
+            <p className="text-sm text-gray-500">
+              Suspension denies every non-essential module and blocks new
+              tenant sign-ins and session refreshes; essential surfaces stay
+              up and no data is touched. It is reversible at any time and
+              both directions are audited.
+            </p>
+          </div>
+
+          {statusError && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {statusError}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-800">
+                Current status
+              </span>
+              <StatusBadge status={selectedOwner.status ?? "active"} />
+            </div>
+            {selectedOwner.status === "suspended" ? (
+              <Button
+                type="button"
+                variant="outline-success"
+                size="sm"
+                className="text-sm"
+                disabled={statusSaving}
+                onClick={() =>
+                  setPendingStatus({ owner: selectedOwner, next: "active" })
+                }
+              >
+                <RotateCcw size={14} aria-hidden="true" />
+                Reactivate organisation
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline-danger"
+                size="sm"
+                className="text-sm"
+                disabled={statusSaving}
+                onClick={() =>
+                  setPendingStatus({ owner: selectedOwner, next: "suspended" })
+                }
+              >
+                <Ban size={14} aria-hidden="true" />
+                Suspend organisation
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Platform audit trail (GET /platform/audit), scoped on demand to
+          the selected owner. */}
+      <AuditTrail
+        ownerId={selectedOwnerId}
+        ownerName={selectedOwner?.fullName ?? null}
+      />
+
+      {/* Suspend/reactivate confirmation: names the owner and spells out
+          the consequences before any PATCH. */}
+      <Dialog
+        isOpen={pendingStatus !== null}
+        onClose={() => setPendingStatus(null)}
+        title={
+          pendingStatus?.next === "suspended"
+            ? "Suspend organisation?"
+            : "Reactivate organisation?"
+        }
+        variant={pendingStatus?.next === "suspended" ? "danger" : "default"}
+        confirmLabel={
+          pendingStatus?.next === "suspended" ? "Suspend" : "Reactivate"
+        }
+        cancelLabel="Cancel"
+        isLoading={statusSaving}
+        onConfirm={() => void applyStatusChange()}
+        description={
+          pendingStatus
+            ? pendingStatus.next === "suspended"
+              ? `Suspend ${pendingStatus.owner.fullName}? Every non-essential module is denied immediately and no tenant user can sign in or refresh a session until reactivation. No data is touched; the change is audited and reversible.`
+              : `Reactivate ${pendingStatus.owner.fullName}? Module access and tenant sign-ins are restored immediately. The change is audited.`
+            : undefined
+        }
+      />
 
       {/* Revoke confirmation: names the owner AND the module. */}
       <Dialog

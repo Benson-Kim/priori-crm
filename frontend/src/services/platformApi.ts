@@ -17,10 +17,76 @@ export type PlatformOwnerSummary = Schema<"PlatformOwnerSummary">;
 export type PlatformOwnersResponse = Schema<"PlatformOwnersResponse">;
 export type ModuleSettingState = Schema<"ModuleSettingState">;
 export type ModuleSettingsResponse = Schema<"ModuleSettingsResponse">;
+export type OwnerStatus = Schema<"OwnerStatus">;
+export type PlatformAuditEvent = Schema<"PlatformAuditEvent">;
+export type PlatformAuditPage = Schema<"PaginatedResponse_PlatformAuditEvent_">;
 
-/** Identity-only owner listing (id + display name) for the console. */
-export function listPlatformOwners(): Promise<PlatformOwnersResponse> {
-  return apiGet<PlatformOwnersResponse>("platform/owners");
+export interface ListPlatformOwnersParams {
+  page?: number;
+  perPage?: number;
+  search?: string;
+  withTotal?: boolean;
+}
+
+/**
+ * Paginated, name-searchable owner listing with per-owner summary
+ * (lifecycle status + disabled-module count). Backward-compatible: with no
+ * parameters the (large) default page returns every owner.
+ */
+export function listPlatformOwners(
+  params: ListPlatformOwnersParams = {}
+): Promise<PlatformOwnersResponse> {
+  return apiGet<PlatformOwnersResponse>("platform/owners", {
+    page: params.page,
+    per_page: params.perPage,
+    search: params.search || undefined,
+    withTotal: params.withTotal,
+  });
+}
+
+/**
+ * Suspend or reactivate one owner (ADR-0013 Phase A). Audited server-side
+ * (owner_suspended / owner_reactivated) with actor and before/after state;
+ * never touches user roles. Callers must refetch pessimistically.
+ */
+export function setOwnerStatus(
+  ownerId: string,
+  status: OwnerStatus
+): Promise<PlatformOwnerSummary> {
+  return apiPatch<PlatformOwnerSummary>(`platform/owners/${ownerId}/status`, {
+    status,
+  });
+}
+
+export interface PlatformAuditParams {
+  page?: number;
+  perPage?: number;
+  ownerId?: string;
+  action?: string;
+  actorId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  withTotal?: boolean;
+}
+
+/**
+ * Paginated, filterable operator audit trail: the audit_events rows written
+ * by the owner service (entitlement grants/revocations + lifecycle status
+ * changes), newest first. Read-only evidence.
+ */
+export function getPlatformAudit(
+  params: PlatformAuditParams = {}
+): Promise<PlatformAuditPage> {
+  return apiGet<PlatformAuditPage>("platform/audit", {
+    page: params.page,
+    per_page: params.perPage,
+    ownerId: params.ownerId,
+    action: params.action,
+    actorId: params.actorId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    withTotal: params.withTotal,
+  });
 }
 
 /**
