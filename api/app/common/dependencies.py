@@ -52,6 +52,18 @@ def get_current_user(
     ``/health``. Enforced here at the root — not per-route — because most
     tenant endpoints carry no role gate at all and would otherwise accept
     any authenticated user, the operator included.
+
+    Tenant lifecycle (ADR-0013 Phase A, hardened per the !77 review): a
+    SUSPENDED organisation is denied on EVERY authenticated route,
+    immediately — a live access token does not ride out its TTL. One
+    indexed PK read (the same read as the module gate, which keeps its
+    own check for the internal-secret endpoints that carry no JWT).
+    Deliberately reactivation-friendly: nothing is revoked or burnt —
+    the un-spent refresh token and any live access token work again the
+    moment the operator reactivates the org. Operators are exempt (their
+    authority axis is disjoint from tenant state, and they must stay
+    able to reactivate). Reads the singleton owner row today; Phase T1
+    (#75) re-points this at the resolved owner.
     """
     from app.modules.auth.models import User
 
@@ -63,15 +75,32 @@ def get_current_user(
     if not user.is_active:
         raise UnauthorizedException("User account is inactive")
 
-    if UserRole(user.role) is UserRole.PLATFORM_OPERATOR and not _is_operator_surface(
-        request.url.path
-    ):
+    if UserRole(user.role) is UserRole.PLATFORM_OPERATOR:
+        if not _is_operator_surface(request.url.path):
+            raise ForbiddenException(
+                detail=(
+                    "Platform operators have no access to tenant data. "
+                    "Use the /platform administration surface."
+                ),
+                required_permission="tenant-surface",
+            )
+        return user
+
+    from app.constants.enums import OwnerStatus
+    from app.modules.owner.models import SINGLETON_PROFILE_ID, OwnerProfile
+
+    status = (
+        db.query(OwnerProfile.status)
+        .filter(OwnerProfile.id == SINGLETON_PROFILE_ID)
+        .scalar()
+    )
+    if status == OwnerStatus.SUSPENDED:
         raise ForbiddenException(
             detail=(
-                "Platform operators have no access to tenant data. "
-                "Use the /platform administration surface."
+                "This organisation's account is suspended. Contact the "
+                "platform operator."
             ),
-            required_permission="tenant-surface",
+            required_permission="owner:active",
         )
 
     return user
@@ -137,12 +166,16 @@ def require_module(module_key: ModuleKey):
     gated (defense in depth — their routers should not attach this at all).
 
     Tenant lifecycle (ADR-0013 Phase A): a SUSPENDED owner is denied every
-    non-essential module outright, before the override lookup. Essential
-    modules (auth, owner, health, dashboard) carry no gate and keep serving
-    existing sessions. The hot path stays two indexed reads: the owner
+    non-essential module outright, before the override lookup. JWT-borne
+    requests are additionally denied centrally in :func:`get_current_user`
+    (per the !77 review, suspension applies immediately on EVERY
+    authenticated route, essential surfaces included); the check HERE
+    remains load-bearing for the internal-secret scheduler endpoints,
+    which carry no JWT and would otherwise keep transitioning a suspended
+    owner's documents. The hot path stays two indexed reads: the owner
     status (PK read) and the override row (unique-composite read). Both
-    reads resolve the singleton today; Phase T1 re-points them at the
-    resolved owner (readiness audit #2/#15).
+    reads resolve the singleton today; Phase T1 (#75) re-points them at
+    the resolved owner (readiness audit #2/#15).
     """
 
     def _check(db: DbSession) -> None:

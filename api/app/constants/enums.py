@@ -44,10 +44,12 @@ class OwnerStatus(StrEnum):
 
     Operator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.
     Suspension is org state, never a role mutation (QA finding 09): it is
-    reversible, non-destructive, denies non-essential modules and blocks
-    non-operator token issuance while essential modules keep serving
-    existing sessions. Must stay identical to the IN-list in migration
-    ``f3a4b5c6d7e8``.
+    reversible, non-destructive, denies every authenticated route
+    immediately (``get_current_user``), every non-essential module
+    (``require_module``, incl. the JWT-less internal endpoints) and all
+    non-operator token issuance. Nothing is revoked: reactivation restores
+    existing sessions and un-burnt OTP/refresh tokens. Must stay identical
+    to the IN-list in migration ``f3a4b5c6d7e8``.
     """
 
     ACTIVE = "active"

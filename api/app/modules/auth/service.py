@@ -100,6 +100,16 @@ class AuthService:
         if not user.is_active:
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
+        # Tenant lifecycle gate (ADR-0013 Phase A, !77 review): deliberately
+        # AFTER the credential check — exactly like verify-otp — so the clear
+        # 403 is only ever shown to a caller who has already proven the
+        # password, never to an unauthenticated prober (enumeration safety).
+        # Gating step 1 stops OTP emails a suspended tenant cannot use
+        # (SES spend + confusing UX). resend_otp is intentionally NOT gated:
+        # it takes no credential, so a distinct 403 there would be an
+        # unauthenticated account-existence oracle.
+        self._ensure_owner_not_suspended(user)
+
         otp_code = self._create_otp(user)
         self._send_otp_email(user.email, otp_code)
 
@@ -422,14 +432,16 @@ class AuthService:
     # Private Helpers
 
     def _ensure_owner_not_suspended(self, user: User) -> None:
-        """Reject token issuance while the organisation is suspended.
+        """Reject the auth flow while the organisation is suspended.
 
-        ADR-0013 Phase A: applied at BOTH minting points — verify-otp
-        (login step 2) and refresh — so a suspended tenant can neither
-        sign in nor extend an existing session. Deliberately a clear 403
-        (not the generic 401): the caller has already proven their
-        credentials, and suspension is org state the tenant is entitled
-        to see, not a credential secret.
+        ADR-0013 Phase A (hardened per the !77 review): applied at login
+        step 1 (post-credential), verify-otp (login step 2) and refresh —
+        so a suspended tenant can neither start a sign-in, complete one,
+        nor extend an existing session. Live access tokens are denied
+        separately and immediately by ``get_current_user``. Deliberately
+        a clear 403 (not the generic 401): the caller has already proven
+        their credentials, and suspension is org state the tenant is
+        entitled to see, not a credential secret.
 
         Platform operators are exempt: the operator must stay able to
         sign in to reactivate the org (their authority axis is disjoint

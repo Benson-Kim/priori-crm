@@ -1,17 +1,23 @@
-"""Suspension enforcement (ADR-0013 Phase A, #71).
+"""Suspension enforcement (ADR-0013 Phase A, #71; hardened per !77 review).
 
-Pins the two enforcement seams of the `owner_profiles.status` lifecycle:
+Pins the three enforcement seams of the `owner_profiles.status` lifecycle:
 
-1. Module gate (``require_module``): a suspended owner is denied every
-   non-essential module with a clear 403; essential modules (auth, owner,
-   health, dashboard) keep serving existing sessions.
-2. Token issuance (``AuthService._ensure_owner_not_suspended``): both
-   minting points — verify-otp and refresh — reject non-operator users
-   with a clear 403 while suspended. The platform operator can always
-   sign in (it must be able to reactivate the org).
+1. Authentication (``get_current_user``): a suspended owner is denied on
+   EVERY authenticated route immediately — a live access token does not
+   ride out its TTL, essential surfaces (owner, dashboard) included.
+   Health stays up (unauthenticated infrastructure probe).
+2. Module gate (``require_module``): load-bearing for the internal-secret
+   scheduler endpoints, which carry no JWT — suspension still denies the
+   nightly transitions for the suspended owner's documents.
+3. Auth flow (``AuthService._ensure_owner_not_suspended``): login step 1
+   (post-credential, enumeration-safe), verify-otp and refresh all reject
+   non-operator users with a clear 403 while suspended. The platform
+   operator can always sign in (it must be able to reactivate the org).
 
-Suspension is reversible and non-destructive: reactivation restores
-everything, the un-burnt OTP included, and no ``users`` row is touched.
+Suspension is reversible and non-destructive: nothing is revoked or
+burnt — reactivation restores everything (the un-burnt OTP, the un-spent
+refresh token, and any live access token), and no ``users`` row is
+touched.
 """
 
 from unittest.mock import patch
@@ -74,15 +80,17 @@ class TestModuleGateDenial:
             assert resp.status_code == 403, path
             assert "suspended" in resp.json()["error"].lower(), path
 
-    def test_essential_surfaces_keep_serving_existing_sessions(self, client, db):
+    def test_essential_authenticated_surfaces_denied_health_stays_up(self, client, db):
+        """!77 review hardening: suspension is immediate on EVERY
+        authenticated route — essential surfaces no longer serve existing
+        sessions. Only the unauthenticated health probe stays up."""
         admin = _seed_user(db, "admin@mail.com", UserRole.ADMIN)
         _set_owner_status(db, OwnerStatus.SUSPENDED)
         headers = _auth(admin)
-        # owner profile (essential: owner) and dashboard (essential) stay up.
-        assert client.get("/api/v1/owner", headers=headers).status_code == 200
-        assert (
-            client.get("/api/v1/dashboard/summary", headers=headers).status_code == 200
-        )
+        for path in ("/api/v1/owner", "/api/v1/dashboard/summary"):
+            resp = client.get(path, headers=headers)
+            assert resp.status_code == 403, path
+            assert "suspended" in resp.json()["error"].lower(), path
         # health stays up (unauthenticated infrastructure probe).
         assert client.get("/api/v1/health").status_code == 200
 
@@ -124,10 +132,38 @@ class TestModuleGateDenial:
 
 
 class TestTokenIssuanceDenial:
-    def test_verify_otp_rejected_with_clear_403_while_suspended(self, client, db):
+    def test_login_step1_rejected_with_clear_403_while_suspended(self, client, db):
+        """!77 review: gating step 1 (post-credential) stops OTP emails a
+        suspended tenant cannot use. No OTP email is sent."""
         _seed_user(db, "member@mail.com")
         _set_owner_status(db, OwnerStatus.SUSPENDED)
+        with patch("app.modules.auth.service.AuthService._send_otp_email") as send:
+            resp = client.post(
+                "/api/v1/auth/login",
+                json={"email": "member@mail.com", "password": VALID_PASSWORD},
+            )
+        assert resp.status_code == 403
+        assert "suspended" in resp.json()["error"].lower()
+        send.assert_not_called()
+
+    def test_login_wrong_password_still_generic_401_while_suspended(self, client, db):
+        """Enumeration safety pin: the suspension 403 surfaces only AFTER
+        the credential check — a wrong password gets the same generic 401
+        as always, so suspension is not an unauthenticated oracle."""
+        _seed_user(db, "member@mail.com")
+        _set_owner_status(db, OwnerStatus.SUSPENDED)
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": "member@mail.com", "password": "Wrong!Password1"},
+        )
+        assert resp.status_code == 401
+
+    def test_verify_otp_rejected_with_clear_403_while_suspended(self, client, db):
+        # OTP minted while active (login is itself gated while suspended);
+        # suspension lands between step 1 and step 2.
+        _seed_user(db, "member@mail.com")
         code = _login_and_capture_otp(client, "member@mail.com")
+        _set_owner_status(db, OwnerStatus.SUSPENDED)
         resp = client.post(
             "/api/v1/auth/verify-otp",
             json={"email": "member@mail.com", "code": code},
@@ -137,8 +173,8 @@ class TestTokenIssuanceDenial:
 
     def test_otp_not_burnt_reactivation_lets_same_code_succeed(self, client, db):
         _seed_user(db, "member@mail.com")
-        _set_owner_status(db, OwnerStatus.SUSPENDED)
         code = _login_and_capture_otp(client, "member@mail.com")
+        _set_owner_status(db, OwnerStatus.SUSPENDED)
         assert (
             client.post(
                 "/api/v1/auth/verify-otp",
@@ -200,3 +236,32 @@ class TestTokenIssuanceDenial:
             json={"email": "member@mail.com", "code": code},
         )
         assert resp.status_code == 200
+
+
+class TestLiveSessionDenial:
+    """!77 review hardening (seam 1): a live access token minted before
+    suspension is denied immediately by ``get_current_user`` — it does not
+    ride out its TTL — and works again after reactivation, because
+    suspension freezes the session rather than revoking it."""
+
+    def test_live_access_token_denied_immediately_and_restored(self, client, db):
+        member = _seed_user(db, "member@mail.com")
+        headers = _auth(member)
+        # Token demonstrably live before suspension.
+        assert client.get("/api/v1/customers", headers=headers).status_code == 200
+
+        _set_owner_status(db, OwnerStatus.SUSPENDED)
+        # Immediate denial on business AND essential authenticated routes,
+        # with the SAME token.
+        for path in (
+            "/api/v1/customers",
+            "/api/v1/dashboard/summary",
+            "/api/v1/owner",
+        ):
+            resp = client.get(path, headers=headers)
+            assert resp.status_code == 403, path
+            assert "suspended" in resp.json()["error"].lower(), path
+
+        # Reactivation restores the SAME token: frozen, not revoked.
+        _set_owner_status(db, OwnerStatus.ACTIVE)
+        assert client.get("/api/v1/customers", headers=headers).status_code == 200

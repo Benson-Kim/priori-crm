@@ -172,10 +172,12 @@ def list_owner_module_settings(
         "Set the tenant lifecycle status (active | suspended) of one owner "
         "profile (ADR-0013 Phase A). Reversible and non-destructive: no "
         "tenant data and no users.role is ever touched (QA finding 09). "
-        "Suspension denies non-essential modules and blocks non-operator "
-        "token issuance; essential modules keep serving existing sessions. "
-        "Both directions are audited (owner_suspended / owner_reactivated) "
-        "with actor and before/after state. Unknown owner ids return 404."
+        "Suspension takes effect immediately on every authenticated route "
+        "(live sessions included), denies non-essential modules and blocks "
+        "non-operator sign-in/refresh; nothing is revoked, so reactivation "
+        "restores existing sessions and tokens. Both directions are "
+        "audited (owner_suspended / owner_reactivated) with actor and "
+        "before/after state. Unknown owner ids return 404."
     ),
     responses={
         403: {"description": "Caller is not a platform operator"},

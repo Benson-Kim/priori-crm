@@ -303,9 +303,12 @@ are unchanged.
   route-table-wide.
 - Tenant lifecycle: `active ⇄ suspended` only, operator-set, audited,
   reversible, never touching `users.role` (QA finding 09). Suspension
-  denies non-essential modules and new non-operator tokens; essential
-  modules (auth, owner, health, dashboard) keep serving existing
-  sessions.
+  takes effect immediately on every authenticated route (live sessions
+  included, enforced in `get_current_user`), denies non-essential
+  modules (incl. the JWT-less internal scheduler endpoints, enforced at
+  the module gate) and blocks non-operator sign-in/refresh. Nothing is
+  revoked: reactivation restores existing sessions and un-burnt
+  OTP/refresh tokens.
 - App-level tenant scoping is the primary isolation control; RLS is the
   mandatory backstop from Phase T6 on. A query path with neither is a
   release blocker.
@@ -359,7 +362,9 @@ Tracked as follow-up issues:
 
 - Owner resolution (T1) is one indexed PK/membership read per request,
   cacheable per request-scope; the `require_module` hot path stays two
-  indexed reads (status + override) as measured today.
+  indexed reads (status + override) as measured today. The immediate
+  suspension check in `get_current_user` (!77 review hardening) adds one
+  indexed PK read per authenticated request (none for operators).
 - RLS predicates are single-column equality on an indexed
   `owner_profile_id` GUC comparison — no joins in policies (hence the
   denormalized keys in Phase T4).

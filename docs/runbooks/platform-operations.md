@@ -53,12 +53,19 @@ or `PATCH /platform/owners/{owner_id}/status` with
 
 Semantics (enforced in code, this MR):
 
-- Suspension is **reversible and non-destructive** — no data is touched.
-- Every non-essential module is denied with a clear 403
-  (`require_module`, `api/app/common/dependencies.py`); essential modules
-  (auth, owner, health, dashboard) keep serving existing sessions.
-- **Non-operator token issuance is rejected** with a clear 403: login
-  (verify-otp) and refresh both gate
+- Suspension is **reversible and non-destructive** — no data is touched,
+  and nothing is revoked: reactivation restores existing sessions and any
+  un-burnt OTP / un-spent refresh token.
+- **Suspension takes effect immediately on every authenticated route**
+  (`get_current_user`, `api/app/common/dependencies.py`): live access
+  tokens are denied with a clear 403 at once — they do not ride out
+  their TTL. Only the unauthenticated health probe keeps answering.
+- Every non-essential module is additionally denied at the module gate
+  (`require_module`) — load-bearing for the JWT-less internal scheduler
+  endpoints.
+- **Non-operator sign-in and refresh are rejected** with a clear 403:
+  login step 1 (after the credential check — enumeration-safe),
+  verify-otp and refresh all gate
   (`api/app/modules/auth/service.py::_ensure_owner_not_suspended`). The
   operator remains able to sign in.
 - Never touches `users.role` — suspension is org state, not a role
@@ -181,7 +188,7 @@ Honest status of every control this runbook relies on:
 | No API-reachable operator creation/promotion (QA 09) | ✅ seed script only (`platform-operator.md`); status endpoint never touches roles | — |
 | Entitlement writes audited (before/after) | ✅ `record_audit_event` in owner service | — |
 | Tenant lifecycle audited + reversible | ✅ this MR | — |
-| Suspension: module denial + login/refresh rejection | ✅ this MR | Per-tenant at N>1 needs owner resolution (T1) |
+| Suspension: immediate denial on every authenticated route + module denial + login/refresh rejection | ✅ this MR | Per-tenant at N>1 needs owner resolution (T1, #75) |
 | Entitlement-change notifications to tenant admins | ✅ this MR (outbox, same-transaction) | Org-membership recipient scoping (T1) |
 | Operator audit read surface | ✅ this MR (`GET /platform/audit` + console view) | Real `owner_profile_id` column filter (T5) |
 | Suspension pauses scheduled transitions for that tenant | ❌ not enforced (schedulers are tenant-global) | T5 |
