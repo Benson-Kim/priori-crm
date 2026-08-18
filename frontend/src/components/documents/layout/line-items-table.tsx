@@ -42,7 +42,7 @@ export function LineItemsTable({
 }: Readonly<LineItemsTableProps>) {
     return (
         <div className="flex flex-col gap-3 pb-4">
-            <table className="w-full text-[16px]">
+            <table className="w-full text-base">
                 <thead>
                     <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-7 rounded-t-lg">
                         <th className="text-left px-3 font-bold leading-8 col-span-2">Item</th>

@@ -44,7 +44,7 @@ export function KpiCard({
       <p className="text-xs font-semibold tracking-[0.3px] text-sd-muted uppercase">
         {label}
       </p>
-      <p className={cn("text-[25.6px] leading-tight font-bold", TONE_STYLES[tone])}>
+      <p className={cn("text-2xl leading-tight font-bold", TONE_STYLES[tone])}>
         {value}
       </p>
       {subline !== undefined && (

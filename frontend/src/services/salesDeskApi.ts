@@ -52,9 +52,7 @@ export {
     INDUSTRIES,
     LOST_REASONS,
     PAYMENT_TERMS,
-    TAX_TREATMENTS,
-    WON_REASONS,
-    taxTreatmentLabel
+    TAX_TREATMENTS, taxTreatmentLabel, WON_REASONS
 } from "./salesDeskVocabulary";
 export type { BillingCurrency, DealStage, DealStatus } from "./salesDeskVocabulary";
 
@@ -350,8 +348,8 @@ function toPipelineDeal(record: Schema<"DealResponse">): PipelineDeal {
             record.status === "open"
                 ? record.stage_label
                 : record.status === "won"
-                  ? "Won"
-                  : "Lost",
+                    ? "Won"
+                    : "Lost",
         status: record.status as DealStatus,
         close_reason: record.close_reason,
         owner_id: record.owner.id,
@@ -370,7 +368,7 @@ function toPipelineDeal(record: Schema<"DealResponse">): PipelineDeal {
 const ACTIVITY_LABELS: Record<ActivityFilterKey, string> = {
     all: "All deals",
     active_this_week: "Active this week",
-    quiet_8_30: "8–30 days quiet",
+    quiet_8_30: "8-30 days quiet",
     no_activity_30: "No activity 30d+",
     open_45: "Open 45d+",
 };
@@ -623,6 +621,57 @@ export async function getDealDetail(dealId: string): Promise<DealDetail> {
 //
 // Each resolves with the server's updated deal, so callers refresh from the
 // returned value rather than refetching the list.
+
+/**
+ * What the pipeline needs to open a deal on an existing company.
+ *
+ * `engageProspect` is the other way a deal is born, and it leaves product,
+ * seats and currency to the server's defaults because a promoted prospect has
+ * not been scoped yet. This path is the opposite case — the rep already knows
+ * what they are selling — so those three are required rather than defaulted.
+ */
+export interface NewDealInput {
+    /** An existing company; the desk has no path that creates one inline. */
+    companyId: string;
+    ownerId: string;
+    product: string;
+    seats: number;
+    /** Annual value (ARR) in `currency`, not converted. */
+    value: number;
+    /**
+     * Must be one of the company's billing-profile currencies — the server
+     * rejects anything else, so the caller picks from `CompanyRow.profiles`.
+     */
+    currency: BillingCurrency;
+    /** First stage record; the server writes "Deal created." when blank. */
+    note?: string;
+}
+
+/**
+ * Open a deal at Activation against a company already on the book.
+ *
+ * The deal starts at the first stage with an open status, exactly as a
+ * promoted prospect does, so it enters the same activity and ageing counts
+ * the rest of the pipeline is measured by.
+ */
+export async function createDeal(input: NewDealInput): Promise<PipelineDeal> {
+    const deal = await apiPost<Schema<"DealResponse">>("/deals", {
+        customerId: input.companyId,
+        ownerId: input.ownerId,
+        product: input.product,
+        seats: input.seats,
+        value: input.value,
+        currency: input.currency,
+        // Omitted rather than sent empty, so the server's own default note
+        // stands instead of this writing a blank first record.
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    });
+
+    // A new open deal changes the company's deal counts and the desk's
+    // scoreboards, which subscribed views read off this signal.
+    announceDeskChange();
+    return toPipelineDeal(deal);
+}
 
 /** Record what happened without moving the deal. */
 export async function logDealActivity(dealId: string, note: string): Promise<PipelineDeal> {
@@ -1242,15 +1291,15 @@ export async function engageProspect(
         "customerId" in input
             ? { customerId: input.customerId }
             : {
-                  customer: {
-                      customerType: "business",
-                      companyName: input.company,
-                      firstName: input.customer.firstName,
-                      lastName: input.customer.lastName,
-                      email: input.customer.email,
-                      phone: input.customer.phone,
-                  },
-              };
+                customer: {
+                    customerType: "business",
+                    companyName: input.company,
+                    firstName: input.customer.firstName,
+                    lastName: input.customer.lastName,
+                    email: input.customer.email,
+                    phone: input.customer.phone,
+                },
+            };
 
     try {
         const deal = await apiPost<Schema<"DealResponse">>(

@@ -597,19 +597,19 @@ export default function VendorDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
             <div className="rounded-2xl border border-gray-200 bg-white space-y-6 lg:col-span-3">
               <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
-                <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-[14px]">
+                <p className="flex shrink-0 items-center justify-center bg-purple-25 w-12 h-12 rounded-full text-priori-purple font-bold text-sm">
                   {initials}
                 </p>
                 {/* min-w-0 lets the name wrap instead of forcing the row wider
                     than the card and squashing the avatar into an oval. */}
                 <div className="flex-1 min-w-0">
                   <p
-                    className="font-bold text-gray-800 text-[18px] wrap-break-word line-clamp-2"
+                    className="font-bold text-gray-800 text-lg wrap-break-word line-clamp-2"
                     title={displayName}
                   >
                     {displayName}
                   </p>
-                  <p className="text-[14px] text-gray-400">
+                  <p className="text-sm text-gray-400">
                     Vendor Since {vendorSinceYear}
                   </p>
                 </div>
@@ -617,11 +617,11 @@ export default function VendorDetailPage() {
 
               {vendor.email && (
                 <div className="p-4">
-                  <p className="text-gray-500 text-[14px]">Email</p>
+                  <p className="text-gray-500 text-sm">Email</p>
                   {/* wrap-break-word keeps a long address inside the card
                       border; the title carries the full value when it clamps. */}
                   <p
-                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                    className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                     title={vendor.email}
                   >
                     {vendor.email}
@@ -630,9 +630,9 @@ export default function VendorDetailPage() {
               )}
               {vendor.phone_primary && (
                 <div className="p-4">
-                  <p className="text-gray-500 text-[14px]">Phone</p>
+                  <p className="text-gray-500 text-sm">Phone</p>
                   <p
-                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                    className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                     title={vendor.phone_primary}
                   >
                     {vendor.phone_primary}
@@ -641,9 +641,9 @@ export default function VendorDetailPage() {
               )}
               {vendor.currency && (
                 <div className="p-4">
-                  <p className="text-gray-500 text-[14px]">Currency</p>
+                  <p className="text-gray-500 text-sm">Currency</p>
                   <p
-                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                    className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                     title={vendor.currency}
                   >
                     {vendor.currency}
@@ -652,9 +652,9 @@ export default function VendorDetailPage() {
               )}
               {vendor.vat_number && (
                 <div className="p-4">
-                  <p className="text-gray-500 text-[14px]">Tax ID/Pin Number</p>
+                  <p className="text-gray-500 text-sm">Tax ID/Pin Number</p>
                   <p
-                    className="text-gray-800 font-bold text-[16px] wrap-break-word line-clamp-2"
+                    className="text-gray-800 font-bold text-base wrap-break-word line-clamp-2"
                     title={vendor.vat_number}
                   >
                     {vendor.vat_number}
@@ -663,13 +663,13 @@ export default function VendorDetailPage() {
               )}
               {vendor.website && (
                 <div className="p-4">
-                  <p className="text-gray-500 text-[14px]">Website</p>
+                  <p className="text-gray-500 text-sm">Website</p>
                   <a
                     href={vendor.website}
                     target="_blank"
                     rel="noreferrer"
                     title={vendor.website}
-                    className="text-priori-purple hover:underline font-bold text-[16px] wrap-break-word line-clamp-2"
+                    className="text-priori-purple hover:underline font-bold text-base wrap-break-word line-clamp-2"
                   >
                     {vendor.website}
                   </a>
@@ -778,7 +778,7 @@ export default function VendorDetailPage() {
               owns its own date filter + Excel/PDF export and lists the
               underlying transactions tagged paid/pending. */}
           <div className="space-y-4">
-            <h2 className="text-[20px] font-bold text-gray-800">Supplier Statements</h2>
+            <h2 className="text-xl font-bold text-gray-800">Supplier Statements</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <VendorSummaryCard
                 vendorId={vendor.id}
@@ -827,7 +827,7 @@ export default function VendorDetailPage() {
                   <div className="flex flex-col md:flex-row justify-between items-start py-6">
                     <div className="flex flex-col gap-1">
                       <p className="text-sm text-gray-500 mb-1">To</p>
-                      <p className="text-[16px] font-bold text-gray-800">
+                      <p className="text-base font-bold text-gray-800">
                         {statement.vendor.vendor_name}
                       </p>
                       {statement.vendor && (
@@ -843,7 +843,7 @@ export default function VendorDetailPage() {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <h2 className="text-[24px] font-black text-priori-purple tracking-wider leading-8 uppercase text-end">
+                      <h2 className="text-2xl font-black text-priori-purple tracking-wider leading-8 uppercase text-end">
                         {label}
                       </h2>
                       <div className="flex flex-col gap-1">
@@ -898,7 +898,7 @@ export default function VendorDetailPage() {
                 </div>
 
                 <div className="p-6">
-                  <table className="w-full text-[16px] min-w-[800px] pb-3">
+                  <table className="w-full text-base min-w-[800px] pb-3">
                     <thead>
                       <tr className="bg-priori-purple text-white px-3 py-4 grid grid-cols-5 rounded-t-lg">
                         <th className="text-left px-3 font-bold leading-8 col-span-2">

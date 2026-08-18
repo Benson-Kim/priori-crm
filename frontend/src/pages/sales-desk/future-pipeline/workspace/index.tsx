@@ -255,7 +255,7 @@ export default function SalesDeskFuturePipelineWorkspacePage() {
 
             {/* Heading and search share the line; the card starts at the table. */}
             <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
-                <h2 className="text-[13px] font-semibold text-sd-ink">Planned prospects</h2>
+                <h2 className="text-dense-md font-semibold text-sd-ink">Planned prospects</h2>
                 <span className="rounded-full bg-sd-brand-bg px-2 py-0.5 text-xs font-bold text-sd-brand">
                     {summary?.prospect_count ?? 0}
                 </span>

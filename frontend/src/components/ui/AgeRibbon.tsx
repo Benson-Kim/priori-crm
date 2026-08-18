@@ -55,7 +55,7 @@ export function AgeRibbon({
             {idleDays !== undefined && (
                 <p
                     className={cn(
-                        "text-[11px]",
+                        "text-dense-sm",
                         idleDays >= IDLE_STALE_DAYS
                             ? "font-medium text-sd-danger"
                             : "text-sd-muted"

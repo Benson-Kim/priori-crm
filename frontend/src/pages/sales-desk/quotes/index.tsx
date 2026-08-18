@@ -182,7 +182,7 @@ export default function SalesDeskQuotesPage() {
             )}
 
             <section className="overflow-hidden rounded-2xl border border-sd-border bg-sd-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-                <h2 className="border-b border-sd-border px-5 py-4 text-[13px] font-semibold text-sd-ink">
+                <h2 className="border-b border-sd-border px-5 py-4 text-dense-md font-semibold text-sd-ink">
                     Active quotes
                 </h2>
                 {isLoading ? (
@@ -200,7 +200,7 @@ export default function SalesDeskQuotesPage() {
             </section>
 
             <section className="overflow-hidden rounded-2xl border border-sd-border bg-sd-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-                <h2 className="border-b border-sd-border px-5 py-4 text-[13px] font-semibold text-sd-ink">
+                <h2 className="border-b border-sd-border px-5 py-4 text-dense-md font-semibold text-sd-ink">
                     Product catalogue · list prices (USD/seat/month)
                 </h2>
                 {isLoading ? (

@@ -85,7 +85,7 @@ export function EngageProspectDialog({
         >
             <div className="flex flex-col gap-4">
                 {error && (
-                    <p role="alert" className="text-[13px] text-red-600">
+                    <p role="alert" className="text-dense-md text-red-600">
                         {error}
                     </p>
                 )}
