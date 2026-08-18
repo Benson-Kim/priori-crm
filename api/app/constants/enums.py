@@ -40,7 +40,7 @@ PRIVILEGED_ROLES: frozenset["UserRole"] = frozenset({UserRole.ADMIN, UserRole.MA
 
 
 class OwnerStatus(StrEnum):
-    """Tenant lifecycle state of an owner profile (ADR-0013 Phase A).
+    """Tenant lifecycle state of an owner profile (ADR-0014 Phase A).
 
     Operator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.
     Suspension is org state, never a role mutation (QA finding 09): it is

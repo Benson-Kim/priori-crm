@@ -467,7 +467,7 @@ export default function PlatformConsolePage() {
         </section>
       )}
 
-      {/* Tenant lifecycle (ADR-0013 Phase A): suspend / reactivate with
+      {/* Tenant lifecycle (ADR-0014 Phase A): suspend / reactivate with
           explicit confirmation. Suspension is reversible and
           non-destructive; the server audits both directions. */}
       {selectedOwner && (

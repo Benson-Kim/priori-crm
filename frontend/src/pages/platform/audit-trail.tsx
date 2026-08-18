@@ -1,5 +1,5 @@
 /**
- * Platform audit trail (issue #71, ADR-0013 Phase A).
+ * Platform audit trail (issue #71, ADR-0014 Phase A).
  *
  * Read-only view over GET /platform/audit: every entitlement
  * grant/revocation and tenant lifecycle change the operator (or the

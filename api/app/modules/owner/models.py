@@ -62,7 +62,7 @@ class OwnerProfile(Base):
         default=SINGLETON_PROFILE_ID,
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    # Tenant lifecycle state (ADR-0013 Phase A): active | suspended.
+    # Tenant lifecycle state (ADR-0014 Phase A): active | suspended.
     # Operator-set only, via the audited PATCH /platform/owners/{id}/status.
     # Org state, never a role mutation (QA finding 09). Enforced at the
     # module gate (require_module) and at non-operator token issuance.

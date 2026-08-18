@@ -4,7 +4,7 @@ Revision ID: f3a4b5c6d7e8
 Revises: d1e2f3a4b5c6
 Create Date: 2026-08-18 12:00:00.000000
 
-Issue #71 / ADR-0013 Phase A: tenant lifecycle state on the owner profile.
+Issue #71 / ADR-0014 Phase A: tenant lifecycle state on the owner profile.
 ``status`` is org state, never a role mutation (QA finding 09): suspension
 is set by the platform operator via the audited
 ``PATCH /platform/owners/{owner_id}/status`` and enforced at the module

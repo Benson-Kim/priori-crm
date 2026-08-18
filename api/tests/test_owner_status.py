@@ -1,6 +1,6 @@
 """Tenant lifecycle: owner_profiles.status + audited operator PATCH (#71).
 
-Pins the ADR-0013 Phase A lifecycle contract:
+Pins the ADR-0014 Phase A lifecycle contract:
 
 - ``active ⇄ suspended`` only, operator-set via
   ``PATCH /platform/owners/{owner_id}/status``;

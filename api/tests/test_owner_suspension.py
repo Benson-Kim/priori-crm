@@ -1,4 +1,4 @@
-"""Suspension enforcement (ADR-0013 Phase A, #71).
+"""Suspension enforcement (ADR-0014 Phase A, #71).
 
 Pins the two enforcement seams of the `owner_profiles.status` lifecycle:
 

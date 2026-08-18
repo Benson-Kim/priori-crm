@@ -94,7 +94,7 @@ def require_module(module_key: ModuleKey):
     is org state, not a per-user permission. Essential modules are never
     gated (defense in depth — their routers should not attach this at all).
 
-    Tenant lifecycle (ADR-0013 Phase A): a SUSPENDED owner is denied every
+    Tenant lifecycle (ADR-0014 Phase A): a SUSPENDED owner is denied every
     non-essential module outright, before the override lookup. Essential
     modules (auth, owner, health, dashboard) carry no gate and keep serving
     existing sessions. The hot path stays two indexed reads: the owner

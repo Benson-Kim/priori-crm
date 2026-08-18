@@ -1,4 +1,4 @@
-"""Operator audit read surface: GET /platform/audit (#71, ADR-0013 Phase A).
+"""Operator audit read surface: GET /platform/audit (#71, ADR-0014 Phase A).
 
 Pins the contract:
 

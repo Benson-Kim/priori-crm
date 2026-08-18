@@ -1,4 +1,4 @@
-# ADR-0013: Tenancy strategy — shared schema with tenant keys and RLS, delivered in phases
+# ADR-0014: Tenancy strategy — shared schema with tenant keys and RLS, delivered in phases
 
 - **Status:** Proposed
 - **Date:** 2026-08-17

@@ -45,7 +45,7 @@ export function listPlatformOwners(
 }
 
 /**
- * Suspend or reactivate one owner (ADR-0013 Phase A). Audited server-side
+ * Suspend or reactivate one owner (ADR-0014 Phase A). Audited server-side
  * (owner_suspended / owner_reactivated) with actor and before/after state;
  * never touches user roles. Callers must refetch pessimistically.
  */

@@ -247,7 +247,7 @@ class OwnerService:
     def platform_owner_summaries(self, params, *, search: str | None = None):
         """Paginated, searchable owner listing with per-owner summary.
 
-        GET /platform/owners hardening (ADR-0013 Phase A): stable
+        GET /platform/owners hardening (ADR-0014 Phase A): stable
         name-ordered pagination, LIKE-safe name search (shared
         ``build_search_clause`` helper) and a per-owner entitlement
         summary (lifecycle ``status`` + ``disabled_module_count``,
@@ -307,7 +307,7 @@ class OwnerService:
             metadata=page.metadata,
         )
 
-    # Tenant lifecycle (ADR-0013 Phase A)
+    # Tenant lifecycle (ADR-0014 Phase A)
 
     def set_owner_status(self, owner_profile_id: uuid.UUID, status) -> OwnerProfile:
         """Set one owner's lifecycle status (platform operator; audited).
@@ -366,7 +366,7 @@ class OwnerService:
             .count()
         )
 
-    # Platform audit read surface (ADR-0013 Phase A)
+    # Platform audit read surface (ADR-0014 Phase A)
 
     def platform_audit_events(
         self,

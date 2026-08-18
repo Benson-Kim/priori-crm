@@ -170,7 +170,7 @@ def list_owner_module_settings(
     summary="Suspend or reactivate one owner (platform operator only)",
     description=(
         "Set the tenant lifecycle status (active | suspended) of one owner "
-        "profile (ADR-0013 Phase A). Reversible and non-destructive: no "
+        "profile (ADR-0014 Phase A). Reversible and non-destructive: no "
         "tenant data and no users.role is ever touched (QA finding 09). "
         "Suspension denies non-essential modules and blocks non-operator "
         "token issuance; essential modules keep serving existing sessions. "

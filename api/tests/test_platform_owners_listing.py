@@ -1,4 +1,4 @@
-"""GET /platform/owners hardening (#71, ADR-0013 Phase A).
+"""GET /platform/owners hardening (#71, ADR-0014 Phase A).
 
 Pins the hardened listing contract:
 

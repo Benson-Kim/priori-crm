@@ -195,7 +195,7 @@ class AuthService:
         # Both writes flush within the request-scoped transaction; the commit
         # is owned by CommitOnSuccessRoute (app/common/routing.py), which
         # commits before the response is sent; get_db()'s teardown commit
-        # Tenant lifecycle gate (ADR-0013 Phase A): after the credential
+        # Tenant lifecycle gate (ADR-0014 Phase A): after the credential
         # check (a suspended org must not become an account-enumeration
         # oracle for unauthenticated callers) and before any token exists.
         # Raising rolls the request back, so the OTP is not burnt: it stays
@@ -333,7 +333,7 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedException("Invalid or inactive user.")
 
-        # Tenant lifecycle gate (ADR-0013 Phase A): a suspended org cannot
+        # Tenant lifecycle gate (ADR-0014 Phase A): a suspended org cannot
         # extend an existing session. Checked BEFORE the rotation spends the
         # presented token, so reactivation within the refresh window lets
         # the same token succeed rather than punishing the tenant with a
@@ -424,7 +424,7 @@ class AuthService:
     def _ensure_owner_not_suspended(self, user: User) -> None:
         """Reject token issuance while the organisation is suspended.
 
-        ADR-0013 Phase A: applied at BOTH minting points — verify-otp
+        ADR-0014 Phase A: applied at BOTH minting points — verify-otp
         (login step 2) and refresh — so a suspended tenant can neither
         sign in nor extend an existing session. Deliberately a clear 403
         (not the generic 401): the caller has already proven their

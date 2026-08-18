@@ -7025,7 +7025,7 @@
         "type": "object"
       },
       "OwnerStatus": {
-        "description": "Tenant lifecycle state of an owner profile (ADR-0013 Phase A).\n\nOperator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.\nSuspension is org state, never a role mutation (QA finding 09): it is\nreversible, non-destructive, denies non-essential modules and blocks\nnon-operator token issuance while essential modules keep serving\nexisting sessions. Must stay identical to the IN-list in migration\n``f3a4b5c6d7e8``.",
+        "description": "Tenant lifecycle state of an owner profile (ADR-0014 Phase A).\n\nOperator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.\nSuspension is org state, never a role mutation (QA finding 09): it is\nreversible, non-destructive, denies non-essential modules and blocks\nnon-operator token issuance while essential modules keep serving\nexisting sessions. Must stay identical to the IN-list in migration\n``f3a4b5c6d7e8``.",
         "enum": [
           "active",
           "suspended"
@@ -7034,7 +7034,7 @@
         "type": "string"
       },
       "OwnerStatusUpdate": {
-        "description": "PATCH /platform/owners/{owner_id}/status body (ADR-0013 Phase A).\n\n``active \u21c4 suspended`` only; anything else is a 422 via enum\nvalidation. Deliberately carries nothing but the status: the endpoint\ncan never touch users, roles or entitlements (QA finding 09).",
+        "description": "PATCH /platform/owners/{owner_id}/status body (ADR-0014 Phase A).\n\n``active \u21c4 suspended`` only; anything else is a 422 via enum\nvalidation. Deliberately carries nothing but the status: the endpoint\ncan never touch users, roles or entitlements (QA finding 09).",
         "properties": {
           "status": {
             "$ref": "#/components/schemas/OwnerStatus"
@@ -7715,7 +7715,7 @@
         "type": "object"
       },
       "PlatformOwnerSummary": {
-        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity + lifecycle only (id, display name, status,\ndisabled-module count): the operator manages entitlements and tenant\nlifecycle, not tenant business data (ADR-0011, ADR-0013 Phase A).",
+        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity + lifecycle only (id, display name, status,\ndisabled-module count): the operator manages entitlements and tenant\nlifecycle, not tenant business data (ADR-0011, ADR-0014 Phase A).",
         "properties": {
           "disabledModuleCount": {
             "default": 0,
@@ -7744,7 +7744,7 @@
         "type": "object"
       },
       "PlatformOwnersResponse": {
-        "description": "Owner profiles page (GET /platform/owners).\n\nBackward-compatible hardening (ADR-0013 Phase A): the original\nidentity-only ``owners`` list keeps its shape (each entry gains the\nadditive ``status`` and ``disabledModuleCount`` fields) and the\nresponse gains optional pagination ``metadata`` \u2014 a client unaware of\npagination still receives every owner on the (large) default page.",
+        "description": "Owner profiles page (GET /platform/owners).\n\nBackward-compatible hardening (ADR-0014 Phase A): the original\nidentity-only ``owners`` list keeps its shape (each entry gains the\nadditive ``status`` and ``disabledModuleCount`` fields) and the\nresponse gains optional pagination ``metadata`` \u2014 a client unaware of\npagination still receives every owner on the (large) default page.",
         "properties": {
           "metadata": {
             "anyOf": [
@@ -19920,7 +19920,7 @@
     },
     "/api/v1/platform/owners/{owner_id}/status": {
       "patch": {
-        "description": "Set the tenant lifecycle status (active | suspended) of one owner profile (ADR-0013 Phase A). Reversible and non-destructive: no tenant data and no users.role is ever touched (QA finding 09). Suspension denies non-essential modules and blocks non-operator token issuance; essential modules keep serving existing sessions. Both directions are audited (owner_suspended / owner_reactivated) with actor and before/after state. Unknown owner ids return 404.",
+        "description": "Set the tenant lifecycle status (active | suspended) of one owner profile (ADR-0014 Phase A). Reversible and non-destructive: no tenant data and no users.role is ever touched (QA finding 09). Suspension denies non-essential modules and blocks non-operator token issuance; essential modules keep serving existing sessions. Both directions are audited (owner_suspended / owner_reactivated) with actor and before/after state. Unknown owner ids return 404.",
         "operationId": "update_owner_status_api_v1_platform_owners__owner_id__status_patch",
         "parameters": [
           {

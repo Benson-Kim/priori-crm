@@ -1,4 +1,4 @@
-"""CI-enforced platform ⟂ tenant isolation contract (#71, ADR-0011/0013).
+"""CI-enforced platform ⟂ tenant isolation contract (#71, ADR-0011/0014).
 
 Route-table-driven: every expectation is DERIVED from ``app.routes`` and
 each route's dependency graph at test time — no hardcoded path lists — so

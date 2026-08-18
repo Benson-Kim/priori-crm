@@ -296,13 +296,13 @@ class PlatformOwnerSummary(BaseModel):
 
     Deliberately identity + lifecycle only (id, display name, status,
     disabled-module count): the operator manages entitlements and tenant
-    lifecycle, not tenant business data (ADR-0011, ADR-0013 Phase A).
+    lifecycle, not tenant business data (ADR-0011, ADR-0014 Phase A).
     """
 
     id: uuid.UUID
     full_name: str = Field(alias="fullName")
     # Tenant lifecycle state (active | suspended), operator-set via the
-    # audited status PATCH (ADR-0013 Phase A).
+    # audited status PATCH (ADR-0014 Phase A).
     status: OwnerStatus = OwnerStatus.ACTIVE
     # Number of modules with an explicit enabled=false override — a quick
     # per-owner entitlement summary for the console list.
@@ -333,7 +333,7 @@ class PlatformAuditEvent(BaseModel):
 
 
 class OwnerStatusUpdate(BaseModel):
-    """PATCH /platform/owners/{owner_id}/status body (ADR-0013 Phase A).
+    """PATCH /platform/owners/{owner_id}/status body (ADR-0014 Phase A).
 
     ``active ⇄ suspended`` only; anything else is a 422 via enum
     validation. Deliberately carries nothing but the status: the endpoint
@@ -346,7 +346,7 @@ class OwnerStatusUpdate(BaseModel):
 class PlatformOwnersResponse(BaseModel):
     """Owner profiles page (GET /platform/owners).
 
-    Backward-compatible hardening (ADR-0013 Phase A): the original
+    Backward-compatible hardening (ADR-0014 Phase A): the original
     identity-only ``owners`` list keeps its shape (each entry gains the
     additive ``status`` and ``disabledModuleCount`` fields) and the
     response gains optional pagination ``metadata`` — a client unaware of
