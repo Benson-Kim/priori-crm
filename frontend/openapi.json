@@ -7024,6 +7024,28 @@
         "title": "OwnerProfileUpdate",
         "type": "object"
       },
+      "OwnerStatus": {
+        "description": "Tenant lifecycle state of an owner profile (ADR-0013 Phase A).\n\nOperator-set via the audited ``PATCH /platform/owners/{owner_id}/status``.\nSuspension is org state, never a role mutation (QA finding 09): it is\nreversible, non-destructive, denies non-essential modules and blocks\nnon-operator token issuance while essential modules keep serving\nexisting sessions. Must stay identical to the IN-list in migration\n``f3a4b5c6d7e8``.",
+        "enum": [
+          "active",
+          "suspended"
+        ],
+        "title": "OwnerStatus",
+        "type": "string"
+      },
+      "OwnerStatusUpdate": {
+        "description": "PATCH /platform/owners/{owner_id}/status body (ADR-0013 Phase A).\n\n``active \u21c4 suspended`` only; anything else is a 422 via enum\nvalidation. Deliberately carries nothing but the status: the endpoint\ncan never touch users, roles or entitlements (QA finding 09).",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OwnerStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "OwnerStatusUpdate",
+        "type": "object"
+      },
       "PaginatedResponse": {
         "description": "Standard paginated response wrapper with metadata.",
         "properties": {
@@ -7201,6 +7223,26 @@
           "metadata"
         ],
         "title": "PaginatedResponse[OnboardingResponse]",
+        "type": "object"
+      },
+      "PaginatedResponse_PlatformAuditEvent_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformAuditEvent"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PaginationMetadata"
+          }
+        },
+        "required": [
+          "items",
+          "metadata"
+        ],
+        "title": "PaginatedResponse[PlatformAuditEvent]",
         "type": "object"
       },
       "PaginatedResponse_PurchaseOrderSummary_": {
@@ -7599,11 +7641,61 @@
         "title": "PipelineWeightedKpi",
         "type": "object"
       },
-      "PlatformOwnerSummary": {
-        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity-only (id + display name): the operator manages\nentitlements, not tenant business data (ADR-0011).",
+      "PlatformAuditEvent": {
+        "description": "One audited platform-operator action (GET /platform/audit).\n\nA read-only projection of an ``audit_events`` row for the entity types\nthe owner service writes: ``owner_module_setting`` (entitlement\ngrants/revocations) and ``owner_profile`` (lifecycle status changes).\nThe trail is evidence, not state \u2014 rows are never updated or deleted.",
         "properties": {
-          "fullName": {
-            "title": "Fullname",
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actorId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actorid"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "entityId": {
+            "format": "uuid",
+            "title": "Entityid",
+            "type": "string"
+          },
+          "entityType": {
+            "title": "Entitytype",
             "type": "string"
           },
           "id": {
@@ -7614,14 +7706,56 @@
         },
         "required": [
           "id",
+          "entityType",
+          "entityId",
+          "action",
+          "createdAt"
+        ],
+        "title": "PlatformAuditEvent",
+        "type": "object"
+      },
+      "PlatformOwnerSummary": {
+        "description": "One owner profile as listed on the platform-operator surface.\n\nDeliberately identity + lifecycle only (id, display name, status,\ndisabled-module count): the operator manages entitlements and tenant\nlifecycle, not tenant business data (ADR-0011, ADR-0013 Phase A).",
+        "properties": {
+          "disabledModuleCount": {
+            "default": 0,
+            "title": "Disabledmodulecount",
+            "type": "integer"
+          },
+          "fullName": {
+            "title": "Fullname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OwnerStatus",
+            "default": "active"
+          }
+        },
+        "required": [
+          "id",
           "fullName"
         ],
         "title": "PlatformOwnerSummary",
         "type": "object"
       },
       "PlatformOwnersResponse": {
-        "description": "Every owner profile (GET /platform/owners).",
+        "description": "Owner profiles page (GET /platform/owners).\n\nBackward-compatible hardening (ADR-0013 Phase A): the original\nidentity-only ``owners`` list keeps its shape (each entry gains the\nadditive ``status`` and ``disabledModuleCount`` fields) and the\nresponse gains optional pagination ``metadata`` \u2014 a client unaware of\npagination still receives every owner on the (large) default page.",
         "properties": {
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaginationMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "owners": {
             "items": {
               "$ref": "#/components/schemas/PlatformOwnerSummary"
@@ -19389,10 +19523,244 @@
         ]
       }
     },
+    "/api/v1/platform/audit": {
+      "get": {
+        "description": "Paginated, filterable view over the audit_events rows written by the owner service: entitlement grants/revocations (entity_type 'owner_module_setting') and tenant lifecycle changes (entity_type 'owner_profile'). Newest first. Read-only evidence \u2014 rows are never updated or deleted.",
+        "operationId": "list_platform_audit_api_v1_platform_audit_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only events attributable to this owner (lifecycle events directly; entitlement events via the setting row's owner FK)",
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events attributable to this owner (lifecycle events directly; entitlement events via the setting row's owner FK)",
+              "title": "Ownerid"
+            }
+          },
+          {
+            "description": "Exact action filter, e.g. module_enabled, module_disabled, owner_suspended, owner_reactivated",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact action filter, e.g. module_enabled, module_disabled, owner_suspended, owner_reactivated",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Only events by this acting user",
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events by this acting user",
+              "title": "Actorid"
+            }
+          },
+          {
+            "description": "Only events at/after this instant",
+            "in": "query",
+            "name": "dateFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events at/after this instant",
+              "title": "Datefrom"
+            }
+          },
+          {
+            "description": "Only events at/before this instant",
+            "in": "query",
+            "name": "dateTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events at/before this instant",
+              "title": "Dateto"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_PlatformAuditEvent_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Operator audit trail (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
     "/api/v1/platform/owners": {
       "get": {
-        "description": "Identity-only listing (id + display name) of the owner profiles whose module entitlements the platform operator administers. The operator role carries no access to tenant business data.",
+        "description": "Paginated, name-searchable listing of the owner profiles the platform operator administers, with a per-owner summary (lifecycle status + disabled-module count). The operator role carries no access to tenant business data. Backward-compatible: with no parameters the (large) default page returns every owner.",
         "operationId": "list_owners_api_v1_platform_owners_get",
+        "parameters": [
+          {
+            "description": "Page number (1-indexed)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number (1-indexed)",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Case-insensitive substring match on the display name",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match on the display name",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+            "in": "query",
+            "name": "withTotal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include total/total_pages (runs a COUNT(*); off by default)",
+              "title": "Withtotal",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -19406,6 +19774,16 @@
           },
           "403": {
             "description": "Caller is not a platform operator"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -19413,7 +19791,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List every owner profile (platform operator only)",
+        "summary": "List owner profiles (platform operator only)",
         "tags": [
           "Platform"
         ]
@@ -19535,6 +19913,64 @@
           }
         ],
         "summary": "Grant or revoke one module for one owner (platform operator only)",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/platform/owners/{owner_id}/status": {
+      "patch": {
+        "description": "Set the tenant lifecycle status (active | suspended) of one owner profile (ADR-0013 Phase A). Reversible and non-destructive: no tenant data and no users.role is ever touched (QA finding 09). Suspension denies non-essential modules and blocks non-operator token issuance; essential modules keep serving existing sessions. Both directions are audited (owner_suspended / owner_reactivated) with actor and before/after state. Unknown owner ids return 404.",
+        "operationId": "update_owner_status_api_v1_platform_owners__owner_id__status_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformOwnerSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Caller is not a platform operator"
+          },
+          "404": {
+            "description": "Unknown owner id"
+          },
+          "422": {
+            "description": "Invalid status value"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suspend or reactivate one owner (platform operator only)",
         "tags": [
           "Platform"
         ]
