@@ -1,13 +1,21 @@
 name: API CI
 
 # Mirrors the GitLab `api:lint` and `api:test` jobs in .gitlab-ci.yml.
-# .gitlab-ci.yml remains the authoritative pipeline; these workflows are
-# kept in sync so the repository stays CI-ready if GitHub becomes the
-# default VCS.
+# Day-to-day work and merge requests are gated by .gitlab-ci.yml; GitHub is the
+# authoritative remote and runs the deploys (docs/operations/deployment.md).
 
 on:
+  # Called by deploy-staging.yml / deploy-production.yml. The `paths:` filters
+  # below mean a frontend-only push never runs this workflow standalone, so a
+  # deploy that merely *observed* CI could ship untested API code. Calling the
+  # workflow instead runs the full suite on the exact commit being deployed.
+  # See docs/operations/deployment.md §3.1.
+  workflow_call:
+  # `develop` is deliberately absent: deploy-staging.yml calls this workflow on
+  # every push there, so listing it here ran the whole suite twice per merge for
+  # nothing. Pull requests into develop are unaffected (see below). §3.7.
   push:
-    branches: [main, develop]
+    branches: [main]
     paths: ["api/**", ".github/workflows/api-ci.yml"]
   pull_request:
     branches: [main, develop]

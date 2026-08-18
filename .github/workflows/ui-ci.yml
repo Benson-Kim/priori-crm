@@ -10,8 +10,15 @@ name: UI CI
 # against the freshly exported contract.
 
 on:
+  # Called by deploy-staging.yml / deploy-production.yml so a deploying commit
+  # runs the full suite regardless of which paths changed, and so the deploy
+  # builds against a contract exported from that exact commit.
+  # See docs/operations/deployment.md §3.1.
+  workflow_call:
+  # `develop` is deliberately absent — deploy-staging.yml calls this workflow on
+  # every push there. See §3.7 and the note in api-ci.yml.
   push:
-    branches: [main, develop]
+    branches: [main]
     paths: ["frontend/**", "api/**", ".github/workflows/ui-ci.yml"]
   pull_request:
     branches: [main, develop]
@@ -25,8 +32,6 @@ concurrency:
 jobs:
   openapi-schema:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     defaults:
       run:
         working-directory: api
@@ -52,48 +57,15 @@ jobs:
           pip install -r requirements.txt
 
       - name: Export OpenAPI schema
-        # Write the committed, build-time copy Vercel reads (no Python runtime
-        # in the Vercel image).
         run: python -m scripts.export_openapi "$GITHUB_WORKSPACE/frontend/openapi.json"
 
-      - name: Commit updated schema
-        # On push to main/develop, commit the regenerated schema back so the
-        # Vercel deploy always has a fresh contract with no manual step.
-        # Skipped on pull_request events; no-op when the schema is unchanged.
-        if: github.event_name == 'push'
-        working-directory: ${{ github.workspace }}
-        run: |
-          if ! git diff --quiet -- frontend/openapi.json; then
-            git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-            git config user.name "${{ github.actor }}"
-            git add frontend/openapi.json
-            git commit -m "chore: update generated OpenAPI schema [skip ci]"
-            
-            # Pull with rebase to handle any concurrent changes, then push
-            # Retry up to 3 times in case of conflicts
-            max_retries=3
-            retry_count=0
-            while [ $retry_count -lt $max_retries ]; do
-              if git pull --rebase origin ${GITHUB_REF_NAME} && git push origin HEAD:${GITHUB_REF_NAME}; then
-                echo "Successfully pushed OpenAPI schema update"
-                exit 0
-              else
-                retry_count=$((retry_count + 1))
-                if [ $retry_count -lt $max_retries ]; then
-                  echo "Push failed, retrying ($retry_count/$max_retries)..."
-                  sleep 2
-                else
-                  echo "Error: Failed to push after $max_retries attempts"
-                  echo "This may indicate a merge conflict or concurrent push."
-                  echo "The schema update will need to be committed manually."
-                  exit 1
-                fi
-              fi
-            done
-          else
-            echo "OpenAPI schema unchanged; nothing to commit."
-          fi
-
+      # LOAD-BEARING — do not remove. deploy-staging.yml and deploy-production.yml
+      # both download this artifact to build the SPA against a contract exported
+      # from the exact commit being deployed. The "Commit updated schema" step
+      # that used to sit above it existed only to keep Vercel's build fed; with
+      # Vercel disconnected it was a bot push racing the deploy, so it was removed
+      # along with this job's `contents: write`.
+      # See docs/operations/deployment.md §3.5.
       - name: Upload schema artifact
         uses: actions/upload-artifact@v4
         with:

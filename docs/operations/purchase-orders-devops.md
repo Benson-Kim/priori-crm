@@ -128,7 +128,8 @@ backend: `api:lint` (ruff), `api:openapi-schema` (offline OpenAPI export +
 frontend type generation), `api:test` (Postgres-guarded suite), and the
 GitLab-managed SAST / Dependency-Scanning / Secret-Detection analyzers. The
 `.github/workflows/` definitions remain authoritative for the GitHub-side
-checks (incl. CodeQL and gitleaks), and `.github/workflows/scheduled-jobs.yml`
+checks (dependency scanning via pip-audit/npm audit, and secret detection via
+gitleaks — see deployment.md §3.8), and `.github/workflows/scheduled-jobs.yml`
 mirrors the internal-job scheduler.
 
 Both schedulers (GitLab CI/CD Schedules and GitHub Actions Schedules) target

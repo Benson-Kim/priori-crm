@@ -4,13 +4,21 @@ psycopg2-binary==2.9.12
 
 fastapi==0.136.1
 uvicorn==0.46.0
-python-multipart==0.0.28
+# 0.0.30 fixes PYSEC-2026-3036/3037, 0.0.31 fixes PYSEC-2026-3040 (form-parsing DoS).
+python-multipart==0.0.31
+# WSGI adapter for the cPanel/Passenger staging host only (passenger_wsgi.py).
+# Production runs uvicorn directly and never imports it.
+a2wsgi==1.10.10
 
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2  # 2.14.2 fixes GHSA-4xgf-cpjx-pc3j
 pydantic_core==2.46.4
 email-validator
 
+# Pulls in `ecdsa`, which carries PYSEC-2026-1325 (Minerva timing side-channel on
+# ECDSA signing) with no fixed release. Not exercised here: JWT_ALGORITHM is HS256
+# (HMAC, symmetric) and no EC key is ever signed with — see app/lib/config.py.
+# The dependency-scan job ignores that ID; revisit if we ever move to ES256.
 python-jose==3.5.0
 passlib==1.7.4
 bcrypt
