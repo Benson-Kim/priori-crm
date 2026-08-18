@@ -1095,10 +1095,13 @@ class TestBaselineLearningUnits:
         user = _seed_user(db, "unit3@mail.com")
         baseline = _seed_baseline(db, user)
         for i in range(20):
-            baselines._remember(baseline.known_devices, f"client:dev-{i}", 8)
+            baselines._remember(
+                baseline.known_devices, f"client:dev-{i}", 8, ABAC_EVALUATION_TIME
+            )
         assert len(baseline.known_devices) == 8
-        assert baseline.known_devices[-1] == "client:dev-19"
-        assert "client:dev-0" not in baseline.known_devices
+        devices = baselines.entry_values(baseline.known_devices)
+        assert devices[-1] == "client:dev-19"
+        assert "client:dev-0" not in devices
 
     def test_hour_histogram_halves_at_cap(self, db):
         user = _seed_user(db, "unit4@mail.com")
