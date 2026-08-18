@@ -38,6 +38,19 @@ operations/quality; **Low**: cosmetic or informational.
   presented (`user:{sub}`), else first `X-Forwarded-For` hop (only when
   `RATE_LIMIT_TRUST_FORWARDED_FOR=true`), else socket IP
   (`api/app/common/middleware.py:205-232`). No tenant dimension.
+  **Signature verification — verified (this MR, #9/T5):** the identity
+  derivation calls `decode_access_token`
+  (`api/app/common/security.py`), which runs a full `jwt.decode` against
+  `JWT_SECRET_KEY` with the algorithm pinned to the configured HS256 —
+  signature and expiry are checked *before* `sub` is trusted, and any
+  invalid/forged token falls through to IP identity instead. Implication
+  for org-keyed quotas: T5 may derive the `org` bucket key from the same
+  verified claim safely — a forged token cannot plant an arbitrary
+  `org:{org}` key to burn another tenant's quota; it lands in the
+  caller's own IP bucket. The residual weakness is not forgery but
+  legitimacy: any *valid* token maps to its real org, so noisy-neighbor
+  control still requires per-org ceilings (the T5 work itself), and
+  unauthenticated traffic stays IP-bucketed with no org dimension.
 - **JWT claim contents**: access = `sub`, `exp`, `type` (+optional
   `extra`, unused today) — `api/app/common/security.py:35`; refresh adds
   `iat`, `jti`. No org/tenant claim.

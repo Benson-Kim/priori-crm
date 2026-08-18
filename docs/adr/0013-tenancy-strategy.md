@@ -229,7 +229,12 @@ storage.** Medium.
 - **Per-tenant rate-limit keys**: `_client_identity`
   (`api/app/common/middleware.py`) gains the org claim →
   `org:{org}:user:{sub}`, enabling per-tenant quotas (noisy-neighbor
-  control).
+  control). Safe precondition **verified in code** (readiness audit #9):
+  the limiter's identity derivation signature-verifies the JWT
+  (`decode_access_token` — pinned HS256 against `JWT_SECRET_KEY`) before
+  trusting any claim, and invalid tokens fall through to IP identity, so
+  an attacker cannot forge an `org` claim to consume another tenant's
+  quota.
 - **Per-tenant backup/offboarding export**: a tenant-scoped logical
   export (all rows `WHERE owner_profile_id = X` + storage prefix) as an
   operator tool — required for offboarding (runbook) and surgical
