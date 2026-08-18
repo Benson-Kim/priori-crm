@@ -264,9 +264,7 @@ class TestOperatorRejectedFromEntireTenantSurface:
         """Sanity: the derivation must cover the real business surface."""
         assert len(_tenant_surface_routes()) >= 50
 
-    def test_operator_403_on_every_route_outside_platform_auth_health(
-        self, client, db
-    ):
+    def test_operator_403_on_every_route_outside_platform_auth_health(self, client, db):
         operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
         headers = _auth(operator)
         for route in _tenant_surface_routes():

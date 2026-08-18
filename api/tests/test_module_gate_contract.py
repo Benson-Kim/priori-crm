@@ -57,8 +57,7 @@ def _api_routes() -> list[APIRoute]:
 
 def _is_ungated_surface(route: APIRoute) -> bool:
     if any(
-        route.path == p or route.path.startswith(f"{p}/")
-        for p in _UNGATED_PREFIXES
+        route.path == p or route.path.startswith(f"{p}/") for p in _UNGATED_PREFIXES
     ):
         return True
     module = inspect.getmodule(route.endpoint)
