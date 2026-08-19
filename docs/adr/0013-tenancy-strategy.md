@@ -110,7 +110,7 @@ Two explicit riders:
    transaction with explicit fail-closed NULL handling, or pooled
    connections and unset GUCs quietly disable the backstop. **Pulled
    forward per the !77 reviews (tracked in
-   [#80](https://gitlab.com/kada-group8222234/priori-crm/-/issues/80)):**
+   [#80](https://gitlab.com/vako-group/priori-crm/-/issues/80)):**
    the `app_migrator`/`app_runtime` role split lands at Phase T1 (it is
    orthogonal to tenant keys — a pure ops/migration-pipeline change),
    and `ENABLE`+`FORCE ROW LEVEL SECURITY` rides each key wave (end of
@@ -358,26 +358,26 @@ are unchanged.
 Tracked as follow-up issues:
 
 1. Phase T1 — org membership model + JWT org claim + owner-resolution
-   seam: [#75](https://gitlab.com/kada-group8222234/priori-crm/-/issues/75).
+   seam: [#75](https://gitlab.com/vako-group/priori-crm/-/issues/75).
 2. Phase T2 — masters partitioning wave:
-   [#74](https://gitlab.com/kada-group8222234/priori-crm/-/issues/74).
+   [#74](https://gitlab.com/vako-group/priori-crm/-/issues/74).
 3. Phase T3 — documents partitioning + per-tenant numbering
    (`reference_sequences` re-scoping):
-   [#76](https://gitlab.com/kada-group8222234/priori-crm/-/issues/76).
+   [#76](https://gitlab.com/vako-group/priori-crm/-/issues/76).
 4. Phase T4 — children/storage partitioning wave:
-   [#77](https://gitlab.com/kada-group8222234/priori-crm/-/issues/77)
+   [#77](https://gitlab.com/vako-group/priori-crm/-/issues/77)
    (the issue; distinct from MR !77).
 5. Phase T5 — cross-cutting: per-tenant quotas/metering, scheduled-job
    tenant iteration, tenant-granular export:
-   [#78](https://gitlab.com/kada-group8222234/priori-crm/-/issues/78).
+   [#78](https://gitlab.com/vako-group/priori-crm/-/issues/78).
 6. Phase T6 — RLS policies + GUC plumbing + `deployment_boundary` flip:
-   [#79](https://gitlab.com/kada-group8222234/priori-crm/-/issues/79).
+   [#79](https://gitlab.com/vako-group/priori-crm/-/issues/79).
 7. Operator MFA/step-up auth ADR (out of ADR-0011 scope, needed before
    tenant count grows — the highest-priority deferral):
-   [#73](https://gitlab.com/kada-group8222234/priori-crm/-/issues/73).
+   [#73](https://gitlab.com/vako-group/priori-crm/-/issues/73).
 8. `app_migrator`/`app_runtime` role split (T1) + per-wave FORCE RLS
    (T2–T4) rollout — pulled forward from T6 per the !77 reviews:
-   [#80](https://gitlab.com/kada-group8222234/priori-crm/-/issues/80).
+   [#80](https://gitlab.com/vako-group/priori-crm/-/issues/80).
 
 ## Resilience & <1s response rules
 
