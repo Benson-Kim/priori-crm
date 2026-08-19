@@ -211,15 +211,57 @@ after the initial OTP.
    commit: microseconds, and correctness (M3) beats throughput on an
    attack-signal path.
 
+10. **Trust-context headers can be edge-authenticated in code**
+    (issue #83, `app/common/authz/edge.py`). `ABAC_TRUST_CONTEXT_HEADERS`
+    alone honours the `X-Geo-*` headers on the sole strength of the proxy
+    configuration setting and stripping them — an invariant whose failure
+    (a proxy that stops stripping, a path that bypasses the edge) is
+    invisible at request time (#67 line review §2). Two verifiable layers
+    close that:
+
+    - **Edge HMAC** (preferred): the edge stamps `X-Geo-Signature:
+      v1=HMAC_SHA256(key, country|lat|lon|unix_minute)`. With
+      `ABAC_EDGE_HMAC_KEY` configured, geo headers are honoured ONLY with
+      a valid signature within `ABAC_EDGE_HMAC_SKEW_SECONDS`; a missing,
+      malformed or stale signature degrades to "no geo signal" — the same
+      untrusted shape as stripped headers, which the unknown-geo rules
+      already treat as anomalous for sensitive access — never a lockout
+      and never "trusted-empty". `ABAC_EDGE_HMAC_KEY_NEXT` gives
+      zero-downtime rotation, mirroring `INTERNAL_API_SECRET_NEXT`; all
+      key/minute candidates are compared in constant time.
+    - **Edge CIDR allowlist** (defence in depth or standalone):
+      `ABAC_EDGE_CIDRS` restricts ALL context headers to requests whose
+      DIRECT socket peer — never X-Forwarded-For, which the edge itself
+      writes — is inside the configured ranges.
+
+    `X-Device-Fingerprint` cannot be edge-authenticated (it is
+    deliberately browser-sent, review F3), so `client:`-prefixed
+    fingerprints are **corroborating-only by construction**: the
+    server-derived fingerprint rides alongside in the `AccessContext`,
+    and a `client:` baseline match suppresses the new-device signal only
+    when the derived form is ALSO known. Replaying the victim's
+    fingerprint from an unfamiliar browser therefore fires `new_device`
+    again instead of silently laundering the context; a passed step-up
+    absorbs BOTH forms, so a genuine user is still challenged at most
+    once. The effective trust mode (`disabled` / `unauthenticated` /
+    `hmac` / `cidr` / `hmac+cidr`) is logged at startup — WARNING for
+    `unauthenticated` (`ALERT: ABAC_EDGE_UNAUTHENTICATED`), consistent
+    with the loud fail-open guards.
+
 ## What it does today
 - `api/app/common/authz/sensitivity.py` — `SensitivityLevel` + ordered
   path classification rules.
 - `api/app/common/authz/context.py` — `AccessContext` assembly: client IP
   (trusted-proxy aware), geolocation and device fingerprint from trusted
   edge headers (`ABAC_TRUST_CONTEXT_HEADERS`, off by default; fingerprint
-  falls back to a server-derived header hash), config-driven IP-reputation
-  denylist (`ABAC_IP_DENYLIST`: IPs / CIDRs / literal identifiers), and
-  the tenant-local hour (`REPORTING_TIMEZONE`).
+  falls back to a server-derived header hash, and the derived form always
+  rides alongside a client-supplied one for corroboration — issue #83),
+  config-driven IP-reputation denylist (`ABAC_IP_DENYLIST`: IPs / CIDRs /
+  literal identifiers), and the tenant-local hour (`REPORTING_TIMEZONE`).
+- `api/app/common/authz/edge.py` — edge authentication for the context
+  headers (issue #83): `X-Geo-Signature` HMAC verification with
+  dual-key rotation and skew window, the `ABAC_EDGE_CIDRS` direct-peer
+  allowlist, and the startup trust-mode log.
 - `api/app/common/authz/engine.py` — ordered rules: IP reputation (DENY),
   geo blocklist (DENY), off-hours sensitive access (CHALLENGE: RESTRICTED
   any method, CONFIDENTIAL writes), unknown-geo RESTRICTED writes when a
@@ -240,6 +282,8 @@ after the initial OTP.
 - `api/app/main.py` — `FastAPI(dependencies=[Depends(zero_trust_gate)])`
   plus guard installation.
 - Settings: `ABAC_ENABLED`, `ABAC_TRUST_CONTEXT_HEADERS`,
+  `ABAC_EDGE_HMAC_KEY` (+`_NEXT`, `ABAC_EDGE_HMAC_SKEW_SECONDS`),
+  `ABAC_EDGE_CIDRS`,
   `ABAC_IP_DENYLIST`, `ABAC_GEO_BLOCKLIST`, `ABAC_OFF_HOURS_START/END`
   (start == end disables; default 22 → 6 local), and
   `ABAC_AUDIT_ALLOW_DECISIONS`; the `RISK_*` and `SESSION_*` families
@@ -257,7 +301,9 @@ after the initial OTP.
 - Off-hours means the organisation's local night (`REPORTING_TIMEZONE`),
   not UTC.
 - Context headers are honoured only when the deployment explicitly trusts
-  its edge; otherwise they are attacker-controlled and ignored.
+  its edge; otherwise they are attacker-controlled and ignored. With edge
+  authentication configured (issue #83), "trusts its edge" is verified
+  per request: unsigned/off-range context degrades to no signal.
 - Every decision is one append-only audit row with rule, reason, path,
   method, sensitivity, principal, IP, geo country and device fingerprint.
 

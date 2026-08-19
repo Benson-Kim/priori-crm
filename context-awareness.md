@@ -705,24 +705,36 @@ soft_signal_new_country 1 | volume_anomaly 1
 
 ## 4. Not yet covered
 
-- **The `ABAC_TRUST_CONTEXT_HEADERS` edge-stripping invariant is a runtime
-  infrastructure requirement and cannot be tested in-repo** (#67 line review
-  §2/§7). With the flag on, `_resolve_geo` and `_device_fingerprint` honour
-  the `X-Geo-*` / `X-Device-Fingerprint` headers with no in-code
-  verification that they were stamped by the edge — the only guarantee is
-  the deployment's proxy configuration setting AND stripping them on every
-  path, forever, and nothing inside this repository can observe that a
-  proxy stopped stripping. `test_untrusted_geo_headers_are_ignored` covers
-  flag-OFF only. Treat the invariant as a deploy-time checklist item, and
-  note the provenance split the code does record: fingerprints carry a
-  `client:` prefix when browser-supplied vs `derived:` when server-derived,
-  so `client:`-prefixed values are **self-attested and corroborating-only
-  in interpretation** — they may fire signals (device change, new device)
-  but a `client:` match should never be read, by an operator or a future
-  detector, as proof of device identity. Making that distinction
-  enforceable in code (edge-authenticated geo/device headers, e.g. an HMAC
-  over the values + timestamp, or edge-CIDR gating) is tracked as a
-  follow-up issue rather than half-implemented here.
+- **The `ABAC_TRUST_CONTEXT_HEADERS` edge invariant now has an
+  authenticated mode** (issue #83, superseding the original "cannot be
+  tested in-repo" caveat here). Deploy-time checklist:
+
+  1. Set `ABAC_EDGE_HMAC_KEY` (shared with the edge) so the edge stamps
+     `X-Geo-Signature: v1=HMAC_SHA256(key, country|lat|lon|unix_minute)`
+     — geo headers are then honoured ONLY with a valid, fresh signature;
+     unsigned/spoofed geo degrades to "no geo signal" (fail-safe). Rotate
+     with `ABAC_EDGE_HMAC_KEY_NEXT` (dual-key, zero downtime, mirrors
+     `INTERNAL_API_SECRET_NEXT`).
+  2. Set `ABAC_EDGE_CIDRS` to the edge's egress ranges as defence in
+     depth (direct-peer check, never X-Forwarded-For) — or standalone
+     for an edge that cannot stamp an HMAC.
+  3. Check the startup log: the API logs the effective trust mode
+     (`hmac` / `cidr` / `hmac+cidr` / `unauthenticated`); running
+     trust-headers with NO edge authentication logs
+     `ALERT: ABAC_EDGE_UNAUTHENTICATED`, because in that legacy mode the
+     stripping invariant is purely operational and its failure is
+     invisible at request time.
+
+  The provenance split is now enforced in code, not just recorded:
+  `client:`-prefixed fingerprints are **corroborating-only by
+  construction** — the server-`derived:` fingerprint rides alongside in
+  the `AccessContext`, a `client:` baseline match suppresses the
+  new-device signal only when the derived form is also known, and a
+  passed step-up absorbs both forms. `X-Device-Fingerprint` itself
+  remains self-attested (browser-sent by design, F3) — no edge signature
+  can cover it, which is exactly why it can no longer raise trust on its
+  own. Coverage: `test_edge_authentication.py` (spoofed-geo rejection,
+  skew, rotation, CIDR gating, fingerprint corroboration).
 - Whether the schedules actually fire in the deployed environments (see §1).
   This is the only item left that cannot be closed from this machine.
 - Real multi-worker deployment under a process manager (Passenger / lswsgi
