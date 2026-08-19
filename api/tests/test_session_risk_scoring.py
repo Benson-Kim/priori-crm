@@ -456,9 +456,7 @@ class TestConcurrentScoringAtomicity:
 
         # Prime the session: the first scored request is session-start
         # (a material trail write — allowed to lock).
-        first = client.get(
-            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
-        )
+        first = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
         assert first.status_code == 200
 
         from sqlalchemy.orm import Session as SaSession
@@ -475,9 +473,7 @@ class TestConcurrentScoringAtomicity:
 
         # Clean path: identical context, frozen clock — optimistic read
         # only, no FOR UPDATE anywhere in the request.
-        clean = client.get(
-            "/api/v1/customers", headers={**_bearer(access), **NAIROBI}
-        )
+        clean = client.get("/api/v1/customers", headers={**_bearer(access), **NAIROBI})
         assert clean.status_code == 200
         assert lock_loads and lock_loads[0] is False
         assert not any(lock_loads), "a clean request must not lock the session row"
