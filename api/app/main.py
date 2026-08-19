@@ -133,6 +133,14 @@ async def lifespan(app: FastAPI):
                 "Could not write the ABAC kill-switch audit event",
                 exc_info=exc,
             )
+    else:
+        # Context-header trust mode (issue #83): deployments must be able
+        # to SEE whether the geo/device headers are edge-authenticated
+        # (hmac / cidr) or trusted on proxy configuration alone
+        # (unauthenticated — WARNING, matching the loud fail-open guards).
+        from app.common.authz.edge import log_edge_trust_mode
+
+        log_edge_trust_mode()
 
     # OTel metrics (no-op unless OTEL_METRICS_ENABLED).
     setup_metrics()

@@ -14,11 +14,22 @@ Signal sources are deliberately pluggable-but-simple:
   the rate limiter's ``RATE_LIMIT_TRUST_FORWARDED_FOR``).
 - **Geolocation** — supplied by a trusted edge (CDN / reverse proxy) via
   ``X-Geo-Country`` / ``X-Geo-Lat`` / ``X-Geo-Lon`` headers, honoured only
-  when ``ABAC_TRUST_CONTEXT_HEADERS`` is enabled. There is no outbound
-  geo-IP lookup: the API makes no network calls on the request path.
+  when ``ABAC_TRUST_CONTEXT_HEADERS`` is enabled — and, when edge
+  authentication is configured (issue #83, ``app.common.authz.edge``),
+  only with a valid ``X-Geo-Signature`` HMAC and/or a direct peer inside
+  ``ABAC_EDGE_CIDRS``. A failed edge check degrades to "no geo signal"
+  (the untrusted shape the unknown-geo rules treat as anomalous), never
+  a lockout. There is no outbound geo-IP lookup: the API makes no
+  network calls on the request path.
 - **Device fingerprint** — a client-supplied ``X-Device-Fingerprint``
   (trusted-header mode), else derived server-side from stable client
-  headers so every request carries *some* device signal.
+  headers so every request carries *some* device signal. The
+  server-derived form is ALWAYS carried alongside
+  (``derived_device_fingerprint``): a ``client:`` value is self-attested
+  even behind a correct edge (the browser sends it), so it is
+  corroborating-only — it may fire signals but can never suppress the
+  new-device signal on its own when the derived fingerprint disagrees
+  (issue #83; see ``baselines.evaluate_session_start_signals``).
 - **IP reputation** — a config-driven denylist (``ABAC_IP_DENYLIST``:
   exact IPs, CIDR ranges, or literal identifiers), evaluated locally.
 - **Time** — the request instant converted to the organisation's
@@ -43,6 +54,11 @@ from zoneinfo import ZoneInfo
 from fastapi import Request
 from jose import JWTError, jwt
 
+from app.common.authz.edge import (
+    edge_hmac_configured,
+    peer_is_edge,
+    verify_geo_signature,
+)
 from app.common.authz.sensitivity import SensitivityLevel, classify_path
 from app.common.security import matches_internal_secret
 from app.lib.config import settings
@@ -88,6 +104,12 @@ class AccessContext:
     path: str
     sensitivity: SensitivityLevel
     stepped_up_at: datetime | None = None
+    #: The server-derived fingerprint, ALWAYS carried alongside the primary
+    #: one (issue #83). Equal to ``device_fingerprint`` outside trusted-
+    #: header mode; in trusted mode it is the second factor that a
+    #: self-attested ``client:`` fingerprint must corroborate before it can
+    #: suppress the new-device signal.
+    derived_device_fingerprint: str | None = None
 
     @property
     def is_write(self) -> bool:
@@ -174,9 +196,25 @@ def _parse_float(value: str | None) -> float | None:
         return None
 
 
-def _resolve_geo(request: Request) -> GeoPoint | None:
-    """Geolocation from trusted edge headers; None when there is no signal."""
+def _resolve_geo(request: Request, now: datetime) -> GeoPoint | None:
+    """Geolocation from trusted edge headers; None when there is no signal.
+
+    Edge authentication (issue #83) gates the headers when configured:
+
+    - ``ABAC_EDGE_CIDRS`` set → the DIRECT peer must be a known edge;
+    - ``ABAC_EDGE_HMAC_KEY`` (or ``_NEXT``) set → the headers must carry a
+      valid, fresh ``X-Geo-Signature``.
+
+    A failed check returns None — the request degrades to the SAME shape
+    as stripped headers (context untrusted, not trusted-empty), which the
+    unknown-geo rules already treat as anomalous for sensitive access.
+    Nothing is denied outright: fail-safe, never a lockout.
+    """
     if settings.ABAC_TRUST_CONTEXT_HEADERS is not True:
+        return None
+    if not peer_is_edge(request):
+        return None
+    if edge_hmac_configured() and not verify_geo_signature(request, now):
         return None
     country = request.headers.get("X-Geo-Country") or None
     lat = _parse_float(request.headers.get("X-Geo-Lat"))
@@ -203,19 +241,15 @@ def _stable_user_agent(user_agent: str) -> str:
     return _UA_VERSION.sub(lambda m: "/" + m.group(0)[1:].split(".")[0], user_agent)
 
 
-def _device_fingerprint(request: Request) -> str | None:
-    """Client-supplied fingerprint, else one derived from stable headers.
+def _derived_fingerprint(request: Request) -> str | None:
+    """Server-derived device fingerprint from stable client headers.
 
-    The derived form hashes a version-stabilized User-Agent plus the primary
+    Hashes a version-stabilized User-Agent plus the primary
     Accept-Language tag: coarse, but it changes when the presenting device
     or browser genuinely changes, which is the signal session risk scoring
-    needs. Prefixes distinguish provenance so a client-supplied value is
-    never confused with a derived one.
+    needs. The ``derived:`` prefix distinguishes provenance so a
+    client-supplied value is never confused with a derived one.
     """
-    if settings.ABAC_TRUST_CONTEXT_HEADERS is True:
-        supplied = request.headers.get("X-Device-Fingerprint")
-        if supplied:
-            return f"client:{supplied.strip()[:128]}"
     user_agent = request.headers.get("User-Agent", "")
     accept_language = request.headers.get("Accept-Language", "")
     if not user_agent and not accept_language:
@@ -226,6 +260,32 @@ def _device_fingerprint(request: Request) -> str | None:
     material = f"{_stable_user_agent(user_agent)}\n{primary_language}"
     digest = hashlib.sha256(material.encode()).hexdigest()
     return f"derived:{digest[:32]}"
+
+
+def _device_fingerprints(request: Request) -> tuple[str | None, str | None]:
+    """``(primary, derived)`` fingerprints for this request (issue #83).
+
+    The primary is the client-supplied ``X-Device-Fingerprint`` in
+    trusted-header mode, else the derived form. The derived form is
+    ALWAYS computed and carried alongside: a ``client:`` value is
+    browser-sent — self-attested even behind a correct edge, and no edge
+    signature can change that — so trust decisions treat it as
+    corroborating-only, with the derived fingerprint as the second
+    factor.
+
+    The client header is only honoured when the direct peer passes the
+    ``ABAC_EDGE_CIDRS`` check (when configured): all context headers ride
+    the same transport path, so a request that did not arrive through the
+    edge gets no say in its own device identity either. The HMAC layer
+    does NOT gate it — the signature covers the edge-stamped geo values,
+    which the browser-originated fingerprint is not.
+    """
+    derived = _derived_fingerprint(request)
+    if settings.ABAC_TRUST_CONTEXT_HEADERS is True and peer_is_edge(request):
+        supplied = request.headers.get("X-Device-Fingerprint")
+        if supplied:
+            return f"client:{supplied.strip()[:128]}", derived
+    return derived, derived
 
 
 def _decode_token_leniently(request: Request) -> dict | None:
@@ -312,6 +372,7 @@ def build_access_context(request: Request) -> AccessContext:
     ip = _client_ip(request)
     requested_at = _now()
     local_hour = requested_at.astimezone(ZoneInfo(settings.REPORTING_TIMEZONE)).hour
+    device_fingerprint, derived_device_fingerprint = _device_fingerprints(request)
 
     return AccessContext(
         principal=principal,
@@ -319,12 +380,13 @@ def build_access_context(request: Request) -> AccessContext:
         session_id=session_id,
         ip=ip,
         ip_denylisted=is_ip_denylisted(ip),
-        geo=_resolve_geo(request),
-        device_fingerprint=_device_fingerprint(request),
+        geo=_resolve_geo(request, requested_at),
+        device_fingerprint=device_fingerprint,
         requested_at=requested_at,
         local_hour=local_hour,
         method=request.method,
         path=request.url.path,
         sensitivity=classify_path(request.url.path),
         stepped_up_at=stepped_up_at,
+        derived_device_fingerprint=derived_device_fingerprint,
     )

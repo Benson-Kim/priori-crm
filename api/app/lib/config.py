@@ -95,6 +95,29 @@ class Settings(BaseSettings):
     # amplification, and the non-allow decisions — the ones with evidentiary
     # value — are always recorded regardless of this switch.
     ABAC_AUDIT_ALLOW_DECISIONS: bool = False
+    # Edge authentication for the trust-context headers (issue #83). With
+    # ABAC_TRUST_CONTEXT_HEADERS alone, the X-Geo-* headers are honoured on
+    # the sole strength of the proxy configuration setting and stripping
+    # them — an invariant nothing in the code can observe failing. When
+    # ABAC_EDGE_HMAC_KEY is set, geo headers are honoured ONLY with a valid
+    # X-Geo-Signature (v1=HMAC-SHA256 over country|lat|lon|unix_minute)
+    # within ABAC_EDGE_HMAC_SKEW_SECONDS of the API's clock; a bad or
+    # missing signature degrades to "no geo signal" (fail-safe, never a
+    # lockout). Empty (default) preserves the previous behaviour and logs
+    # a startup warning. _NEXT enables zero-downtime key rotation exactly
+    # like INTERNAL_API_SECRET_NEXT: set the new key in _NEXT, roll the
+    # edge, promote, clear.
+    ABAC_EDGE_HMAC_KEY: str = ""
+    ABAC_EDGE_HMAC_KEY_NEXT: str = ""
+    # Clock-skew tolerance for the signature's unix-minute component.
+    # Small on purpose: a captured signature must go stale within minutes.
+    ABAC_EDGE_HMAC_SKEW_SECONDS: int = Field(default=120, ge=0, le=3600)
+    # Defence in depth (or standalone for edges that cannot stamp an
+    # HMAC): comma-separated CIDRs / exact IPs / literal peer identifiers.
+    # When set, ALL context headers (X-Geo-*, X-Device-Fingerprint) are
+    # honoured only when the DIRECT socket peer — never X-Forwarded-For —
+    # is in these ranges. Empty (default) disables the check.
+    ABAC_EDGE_CIDRS: str = ""
 
     # Continuous session risk scoring (issue #67). Behavioural anomalies
     # add their score to the session; crossing the challenge threshold
