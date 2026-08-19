@@ -26,6 +26,17 @@ class TestInMemoryStore:
         assert store.hit("x", limit=1, window_seconds=60).allowed is False
         assert store.hit("y", limit=1, window_seconds=60).allowed is True
 
+    def test_peek_reads_without_charging(self):
+        """#84: peek reports the window's units and never counts itself."""
+        store = InMemoryRateLimitStore()
+        assert store.peek("s", window_seconds=60) == 0
+        store.hit("s", limit=100, window_seconds=60)
+        store.hit("s", limit=100, window_seconds=60, cost=25)
+        assert store.peek("s", window_seconds=60) == 26
+        # Repeated peeks are free: the window is unchanged.
+        for _ in range(5):
+            assert store.peek("s", window_seconds=60) == 26
+
 
 class _FakePipeline:
     def __init__(self, store, fail=False):
@@ -62,6 +73,12 @@ class _FakeRedis:
             raise ConnectionError("redis down")
         self._flags[key] = value
         return True
+
+    def get(self, key):
+        if self._fail:
+            raise ConnectionError("redis down")
+        value = self._store.get(key)
+        return None if value is None else str(value)
 
     def exists(self, key):
         if self._fail:
@@ -103,3 +120,14 @@ class TestRedisStore:
 
         broken = _redis_store_with(_FakeRedis(fail=True))
         assert broken.get_flag("mark") is False  # fails open, never locks out
+
+    def test_peek_reads_without_charging_and_fails_open(self):
+        """#84: peek mirrors the fixed-window counter; outages read 0."""
+        store = _redis_store_with(_FakeRedis())
+        assert store.peek("s", window_seconds=60) == 0
+        store.hit("s", limit=100, window_seconds=60, cost=26)
+        assert store.peek("s", window_seconds=60) == 26
+        assert store.peek("s", window_seconds=60) == 26  # non-charging
+
+        broken = _redis_store_with(_FakeRedis(fail=True))
+        assert broken.peek("s", window_seconds=60) == 0  # fails open

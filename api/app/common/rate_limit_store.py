@@ -35,11 +35,19 @@ class RateLimitStore(Protocol):
     ``get_flag`` are simple TTL'd markers used to carry evidence across
     window boundaries (e.g. "this session crossed the exfiltration ceiling
     inside a window the next scored request no longer sees").
+
+    ``peek`` reads the units currently recorded in a key's window WITHOUT
+    charging it (issue #84): the missing-geo CONFIDENTIAL-read backstop is
+    a *static* policy rule that must observe the volume window before the
+    risk layer charges this request, and a read that counted itself would
+    turn observation into evidence.
     """
 
     def hit(
         self, key: str, limit: int, window_seconds: int, cost: int = 1
     ) -> RateLimitResult: ...
+
+    def peek(self, key: str, window_seconds: int) -> int: ...
 
     def set_flag(self, key: str, ttl_seconds: int) -> None: ...
 
@@ -89,6 +97,15 @@ class InMemoryRateLimitStore:
         # NEXT hit, mirroring the single-unit behaviour.
         self._requests[key].extend([now] * max(1, cost))
         return RateLimitResult(allowed=True, retry_after=0)
+
+    def peek(self, key: str, window_seconds: int) -> int:
+        """Units currently in the key's window, WITHOUT charging it (#84)."""
+        timestamps = self._requests.get(key)
+        if not timestamps:
+            return 0
+        now = datetime.now()
+        window = timedelta(seconds=window_seconds)
+        return sum(1 for ts in timestamps if now - ts < window)
 
     def set_flag(self, key: str, ttl_seconds: int) -> None:
         self._flags[key] = time.time() + max(1, ttl_seconds)
@@ -187,6 +204,30 @@ class RedisRateLimitStore:
             retry_after = window_seconds - (int(time.time()) % window_seconds)
             return RateLimitResult(allowed=False, retry_after=max(1, retry_after))
         return RateLimitResult(allowed=True, retry_after=0)
+
+    def peek(self, key: str, window_seconds: int) -> int:
+        """Units currently in the key's fixed window, WITHOUT charging (#84).
+
+        Fails OPEN (0), consistent with the store's posture: a Redis
+        outage degrades to "no volume evidence" — the backstop rule then
+        stays silent — never a hard outage or a spurious challenge.
+        """
+        if self._redis is None:
+            return self._fallback_store.peek(key, window_seconds)
+        window_id = int(time.time()) // window_seconds
+        redis_key = f"{self._key_prefix}:{key}:{window_id}"
+        try:
+            value = self._redis.get(redis_key)
+        except self._redis_exc as exc:
+            logger.error(
+                "Rate-limit Redis backend unavailable on peek; failing open",
+                exc_info=exc,
+            )
+            return 0
+        try:
+            return int(value) if value is not None else 0
+        except (TypeError, ValueError):
+            return 0
 
     def set_flag(self, key: str, ttl_seconds: int) -> None:
         if self._redis is None:
