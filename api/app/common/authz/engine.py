@@ -232,11 +232,100 @@ def _rule_unknown_geo_restricted_write(
     return None
 
 
+def _rule_unknown_geo_confidential_read(
+    context: AccessContext,
+) -> PolicyVerdict | None:
+    """Bulk CONFIDENTIAL reads with no geo provenance step up (issue #84).
+
+    The exfiltration target — invoices and financial reports — had no
+    missing-geo backstop at all: when the geo signal is absent the whole
+    geo detector family silently disables (by design, fail-safe), and
+    signal ABSENCE is attacker-selectable — omit the headers on a path
+    that bypasses the edge. The RESTRICTED-write rule above covers writes
+    only; CONFIDENTIAL *reads* were protected solely by the volume/
+    exfiltration ceilings.
+
+    Same "configured but missing" gating as the RESTRICTED-write rule,
+    so deployments without geo enrichment are untouched, PLUS a
+    rate-aware gate so a single invoice view never challenges: the rule
+    fires only when the session's per-class volume window already holds
+    at least ``ABAC_GEO_BACKSTOP_VOLUME_PERCENT``% of the GLOBAL mild
+    ceiling (``RISK_VOLUME_MAX_REQUESTS``) — the "bulk CONFIDENTIAL
+    reads with no geo provenance" exfiltration shape.
+
+    Covers CONFIDENTIAL **and above** (RESTRICTED reads too — the issue
+    names CONFIDENTIAL reads as the uncovered gap, and by the
+    sensitivity ranking a geo-less bulk read of the audit trail or the
+    platform surface is at least as anomalous as one of invoices;
+    excluding it would leave the HIGHER tier with the WEAKER backstop).
+    Writes are out of scope here: RESTRICTED writes already challenge on
+    the very first geo-less request via the rule above.
+    The global ceiling is used deliberately: static rules run before the
+    gate clears DB access, so the per-user ADAPTIVE ceiling (a DB read)
+    is out of reach here — it keeps driving the SOFT volume signal in
+    the risk layer, which still applies on top.
+
+    CHALLENGE, satisfiable via the existing ``sua`` step-up, and only
+    for authenticated ``user`` principals (H1: machines have no inbox;
+    anonymous callers are authentication's problem — same reasoning as
+    the off-hours rule). Never DENY/TERMINATE: the CGNAT-friendly
+    posture stands — ordinary geo-less traffic is never hard-locked by
+    this rule, whatever it accumulates to; the exfiltration ceilings
+    remain the only terminating volume evidence.
+
+    A legacy token without a ``sid`` has no volume window to measure:
+    the rule stays silent (those tokens age out with the access-token
+    lifetime and can no longer be minted).
+    """
+    if settings.ABAC_TRUST_CONTEXT_HEADERS is not True:
+        return None
+    if settings.ABAC_GEO_BACKSTOP_CONFIDENTIAL_READS is not True:
+        return None
+    if context.principal != "user":
+        return None
+    if not context.sensitivity.at_least(SensitivityLevel.CONFIDENTIAL):
+        return None
+    if context.is_write:
+        return None
+    if context.geo is not None and context.geo.country is not None:
+        return None
+    if context.session_id is None:
+        return None
+    if context.stepped_up_within(settings.ABAC_STEP_UP_TTL_MINUTES):
+        # A fresh OTP is the answer to this challenge: honour it rather
+        # than looping the caller (the satisfiability invariant every
+        # CHALLENGE rule must uphold — ADR-0012 decision 5).
+        return None
+
+    # Lazy import: risk.py imports this module at load time, so the
+    # volume-window read has to come in at call time to avoid the cycle.
+    from app.common.authz.risk import observed_class_volume
+
+    threshold = max(
+        1,
+        settings.RISK_VOLUME_MAX_REQUESTS
+        * settings.ABAC_GEO_BACKSTOP_VOLUME_PERCENT
+        // 100,
+    )
+    observed = observed_class_volume(context.session_id, context.sensitivity.value)
+    if observed < threshold:
+        return None
+    return PolicyVerdict(
+        decision=Decision.CHALLENGE,
+        rule="unknown_geo_confidential_read",
+        reason=(
+            f"Bulk confidential reads ({observed} units in the volume "
+            "window) without a geolocation signal require step-up"
+        ),
+    )
+
+
 _RULES: tuple[Callable[[AccessContext], PolicyVerdict | None], ...] = (
     _rule_ip_reputation,
     _rule_geo_blocklist,
     _rule_off_hours,
     _rule_unknown_geo_restricted_write,
+    _rule_unknown_geo_confidential_read,
 )
 
 

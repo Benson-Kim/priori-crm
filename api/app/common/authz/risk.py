@@ -460,6 +460,25 @@ def note_rate_limit_rejection(request: Request) -> None:
         store.set_flag(f"risk:volu:latch:{uid}", latch_ttl)
 
 
+def observed_class_volume(session_id, sensitivity_class: str) -> int:
+    """Units currently in a session's per-class volume window (issue #84).
+
+    A NON-charging read of the same shared counter ``_observe_volume``
+    charges, exposed for the static missing-geo CONFIDENTIAL-read
+    backstop (``engine._rule_unknown_geo_confidential_read``): the rule
+    runs BEFORE the risk layer touches the counters, so it observes what
+    the window already contains — served requests plus the rate-limited
+    429 evidence (F8) — without turning its own observation into volume
+    evidence. Store outages fail open to 0 (rule stays silent), matching
+    the counters' fail-safe posture.
+    """
+    store = _volume_store()
+    return store.peek(
+        f"risk:vol:{session_id}:{sensitivity_class}",
+        settings.RISK_VOLUME_WINDOW_SECONDS,
+    )
+
+
 def _observe_volume(
     session: "UserSession",  # noqa: F821
     context: AccessContext,

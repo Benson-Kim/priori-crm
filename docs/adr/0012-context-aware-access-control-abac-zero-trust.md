@@ -223,7 +223,20 @@ after the initial OTP.
 - `api/app/common/authz/engine.py` — ordered rules: IP reputation (DENY),
   geo blocklist (DENY), off-hours sensitive access (CHALLENGE: RESTRICTED
   any method, CONFIDENTIAL writes), unknown-geo RESTRICTED writes when a
-  geo signal is configured (CHALLENGE).
+  geo signal is configured (CHALLENGE), and the missing-geo backstop for
+  bulk CONFIDENTIAL reads (issue #84): with a geo signal CONFIGURED but
+  ABSENT on the request — absence is attacker-selectable —
+  CONFIDENTIAL-or-higher reads CHALLENGE once the session's per-class
+  volume window
+  holds `ABAC_GEO_BACKSTOP_VOLUME_PERCENT`% of the global mild ceiling
+  (default 50% × 300 = 150 units/min; observed via a non-charging
+  `peek` on the shared volume store). A single geo-less read never
+  challenges; machine/anonymous principals are exempt (H1) and a fresh
+  `sua` clears it (satisfiable). CHALLENGE by construction — never a
+  termination, so the CGNAT posture
+  (`RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION=challenge`) is untouched and
+  geo-less deployments (`ABAC_TRUST_CONTEXT_HEADERS=false`) see no
+  change at all.
 - `api/app/common/authz/enforcement.py` — the gate: evaluate, publish the
   verdict, audit the decision, reject non-allow. PUBLIC probes (health,
   ping) bypass evaluation entirely.
@@ -241,7 +254,9 @@ after the initial OTP.
   plus guard installation.
 - Settings: `ABAC_ENABLED`, `ABAC_TRUST_CONTEXT_HEADERS`,
   `ABAC_IP_DENYLIST`, `ABAC_GEO_BLOCKLIST`, `ABAC_OFF_HOURS_START/END`
-  (start == end disables; default 22 → 6 local), and
+  (start == end disables; default 22 → 6 local),
+  `ABAC_GEO_BACKSTOP_CONFIDENTIAL_READS` /
+  `ABAC_GEO_BACKSTOP_VOLUME_PERCENT` (issue #84), and
   `ABAC_AUDIT_ALLOW_DECISIONS`; the `RISK_*` and `SESSION_*` families
   configure every signal weight, threshold, ceiling and learning rate
   (rationale for each default lives in `api/.env.example` and

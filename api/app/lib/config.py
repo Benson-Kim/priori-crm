@@ -95,6 +95,23 @@ class Settings(BaseSettings):
     # amplification, and the non-allow decisions — the ones with evidentiary
     # value — are always recorded regardless of this switch.
     ABAC_AUDIT_ALLOW_DECISIONS: bool = False
+    # Missing-geo backstop for CONFIDENTIAL reads (issue #84). When a geo
+    # signal is CONFIGURED (ABAC_TRUST_CONTEXT_HEADERS=true) but ABSENT on
+    # a request — headers stripped, edge bypassed: absence is attacker-
+    # selectable — bulk CONFIDENTIAL reads step up (CHALLENGE, satisfiable
+    # via the sua claim; user principals only, H1). Rate-aware so a single
+    # invoice view never challenges: fires only once the session's
+    # CONFIDENTIAL-class volume window holds at least
+    # ABAC_GEO_BACKSTOP_VOLUME_PERCENT% of RISK_VOLUME_MAX_REQUESTS (the
+    # GLOBAL mild ceiling — static rules run before DB access is cleared,
+    # so the adaptive per-user ceiling stays with the risk layer). The
+    # decision is CHALLENGE by construction, never a termination: the
+    # CGNAT-friendly posture (RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION=challenge)
+    # is untouched and ordinary geo-less traffic is never hard-locked.
+    # Default ON — but inert until trust-headers are enabled, so
+    # deployments without geo enrichment are untouched (fail-safe).
+    ABAC_GEO_BACKSTOP_CONFIDENTIAL_READS: bool = True
+    ABAC_GEO_BACKSTOP_VOLUME_PERCENT: int = Field(default=50, ge=1, le=100)
 
     # Continuous session risk scoring (issue #67). Behavioural anomalies
     # add their score to the session; crossing the challenge threshold
