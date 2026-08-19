@@ -221,17 +221,24 @@ def absorb_context(
     baseline = get_or_create_baseline(db, user_id)
     new_device = False
     new_country = False
+    # The verified request's evaluation instant — the same clock every
+    # other baseline read/write uses (learn_request, session-start
+    # signals), so TTL freshness and verified_at stamps stay coherent.
+    now = context.requested_at
 
     if context.device_fingerprint:
         new_device = _remember(
-            baseline.known_devices, context.device_fingerprint, _MAX_KNOWN_DEVICES
+            baseline.known_devices,
+            context.device_fingerprint,
+            _MAX_KNOWN_DEVICES,
+            now,
         )
         # Both a new entry and an LRU touch reorder the list: persist.
         flag_modified(baseline, "known_devices")
 
     if context.geo is not None and context.geo.country:
         new_country = _remember(
-            baseline.known_countries, context.geo.country, _MAX_KNOWN_COUNTRIES
+            baseline.known_countries, context.geo.country, _MAX_KNOWN_COUNTRIES, now
         )
         flag_modified(baseline, "known_countries")
 
