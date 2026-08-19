@@ -239,6 +239,10 @@ after the initial OTP.
   authz-internal bypass used to persist decision evidence.
 - `api/app/main.py` — `FastAPI(dependencies=[Depends(zero_trust_gate)])`
   plus guard installation.
+- `api/app/modules/admin_ops/` — the RESTRICTED ops surface (issue #85):
+  list/terminate a user's sessions, inspect/expire absorbed baseline
+  trust, and the risk-event listing behind the weekly `soft_clamp`
+  review (see "Ops surface" below).
 - Settings: `ABAC_ENABLED`, `ABAC_TRUST_CONTEXT_HEADERS`,
   `ABAC_IP_DENYLIST`, `ABAC_GEO_BLOCKLIST`, `ABAC_OFF_HOURS_START/END`
   (start == end disables; default 22 → 6 local), and
@@ -282,7 +286,20 @@ retunes weights/thresholds when the same benign shape keeps clamping.
 Each clamp also emits a `WARNING` log (session/user ids + scores), so log
 aggregation alerts work without touching the database.
 
-Weekly review query:
+**The weekly review runs from the ops endpoint** (issue #85):
+
+```
+GET /api/v1/admin/risk-events?action=session_challenged&soft_clamp=true&since=<7 days ago>
+```
+
+Paginated, newest first, with an exact `total` so a truncated page is
+never mistaken for the full queue; each event carries the session id,
+acting user and the full decision payload (`why`, raw + effective
+scores, path, IP). The monthly termination/challenge look uses the same
+endpoint (`?action=session_terminated` / `?action=session_challenged`).
+The endpoint is RESTRICTED-classified and operator/admin-gated (see "Ops
+surface" below). The equivalent SQL remains as a fallback for operators
+working directly against the database:
 
 ```sql
 SELECT created_at,
@@ -306,12 +323,46 @@ one signal dominating the `why` (weight too high for this market), or
 clamps clustering on one path (sensitivity misclassification). Terminations
 (`session_terminated`) and challenges are worth the same look monthly.
 
+## Ops surface (issue #85)
+
+`api/app/modules/admin_ops/` — the remediation and tuning surface the
+risk model was missing, mounted at `/admin` (RESTRICTED-classified,
+`require_role(PLATFORM_OPERATOR, ADMIN)` — an explicit ad-hoc set, not a
+hierarchy, ADR-0011). Layers exclusively on existing primitives (the
+`_terminate` denylist + audit path, `audit_events`, the baseline entry
+helpers); no new state:
+
+- `GET /admin/users/{id}/sessions` — every session with raw and
+  decay-adjusted risk score, floor, status, termination reason and last
+  context; the triage view for a suspect account.
+- `POST /admin/sessions/{id}/terminate` — audited kill through the risk
+  engine's own `_terminate`: the sid is denylisted, so the victim's live
+  access tokens die on their very next request; the audit actor is the
+  OPERATOR, distinguishable from a risk kill.
+- `GET /admin/users/{id}/baseline` — absorbed devices/countries with
+  `verified_at` freshness (evaluated by the same rule the detectors
+  use), hour histogram, learned volume EWMAs.
+- `DELETE /admin/users/{id}/baseline/{devices|countries}?value=…` —
+  audited expiry of ONE absorbed entry: sets it aged-out (never edits
+  history), so the next use re-fires the soft signal — one challenge,
+  then re-absorption + owner notification on a passed step-up.
+- `GET /admin/risk-events` — the listing above.
+
+**Step-up gating arrives via issue #73** (operator MFA for the platform
+console): when that lands, this surface must be wired behind it too.
+Until then the gate is RBAC + RESTRICTED classification, exactly like
+`/platform`. The self-service subset (a user sees/terminates their own
+sessions — the "manage trusted devices" page) is deliberately later;
+the operator surface unblocks incident response first.
+
 ## Improvements
 1. Owner-configurable policy rules (per-tenant off-hours window and
    sensitivity overrides).
 2. Hash-chaining for `audit_events` (#31's end state).
-3. An ops surface to list/terminate a user's sessions and inspect
-   baselines (the data model already supports it).
+3. ~~An ops surface to list/terminate a user's sessions and inspect
+   baselines (the data model already supports it).~~ Shipped (issue #85,
+   see "Ops surface" above); the self-service subset and the #73
+   step-up gate remain open.
 
 ## Resilience & <1s response rules
 - The gate does zero network I/O and zero DB reads on the request path;
