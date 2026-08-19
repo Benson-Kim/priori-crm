@@ -596,8 +596,13 @@ later steps verify earlier ones.
        postgresql-client`; `install -d -o postgres -g postgres -m 750
        /var/log/pgbackrest`. (A droplet built from
        `deploy/cloud-init/droplet-user-data.yaml` already has all of this.)
-       Configure the deploy user's rclone remote
-       (`rclone config`, name `spaces`) with the droplet key.
+       Configure the deploy user's rclone remotes from
+       [`deploy/rclone-uploads-crypt.conf.template`](../../deploy/rclone-uploads-crypt.conf.template)
+       → `~deploy/.config/rclone/rclone.conf` (0600): the base `spaces`
+       remote (droplet RW key) **and** the `spaces-uploads-crypt` crypt
+       remote (password + salt from step 2, `rclone obscure`d —
+       `uploads_sync.sh` refuses to mirror to anything that is not a crypt
+       remote).
 4. [ ] **pgBackRest config**: fill `deploy/pgbackrest.conf.template` →
        `/etc/pgbackrest/pgbackrest.conf`, `postgres:postgres` 0600 (bucket
        key + cipher passphrase from step 2).
@@ -668,8 +673,5 @@ later steps verify earlier ones.
         SKIPPED rows remaining.
 12. [ ] **First restore test**: trigger the `restore-verify` schedule
         manually and watch it pass end-to-end; then run drill Variant B
-        (PITR to a scratch cluster) once, timed. Record both in the ops log.
-13. [ ] Quarterly thereafter: the DR drill (§above), alternating variants.
-d watch it pass end-to-end; then run drill Variant B
         (PITR to a scratch cluster) once, timed. Record both in the ops log.
 13. [ ] Quarterly thereafter: the DR drill (§above), alternating variants.
