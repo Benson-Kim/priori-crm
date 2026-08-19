@@ -148,6 +148,69 @@ def fresh_values(entries: list, now: datetime) -> set[str]:
     }
 
 
+def describe_entries(entries: list, now: datetime) -> list[dict]:
+    """``{value, verified_at, fresh}`` view of the raw entries (issue #85).
+
+    The ops surface's read model: exposes each absorbed device/country
+    with its ``verified_at`` stamp and whether it still counts as known
+    at ``now`` — the same freshness rule the soft signals evaluate
+    (``_entry_is_fresh``), so what the operator sees is exactly what the
+    detectors will do. Legacy string entries read as fresh with no
+    stamp, matching their runtime semantics.
+    """
+    described: list[dict] = []
+    for entry in entries or []:
+        value = _entry_value(entry)
+        if value is None:
+            continue
+        verified_at = None
+        if isinstance(entry, dict):
+            verified_at = _parse_instant(entry.get("verified_at"))
+        described.append(
+            {
+                "value": value,
+                "verified_at": verified_at,
+                "fresh": _entry_is_fresh(entry, now),
+            }
+        )
+    return described
+
+
+def expire_entry(entries: list, value: str, now: datetime) -> dict | None:
+    """Mark one absorbed entry aged-out IN PLACE (issue #85).
+
+    Operator remediation for absorbed-but-suspect trust (an inbox
+    compromise that passed a step-up): the entry is not deleted — that
+    would edit history invisibly — its ``verified_at`` is rewritten to
+    just past ``RISK_BASELINE_TRUST_TTL_DAYS``, the exact aged-out shape
+    the TTL machinery already handles. The next use of that context
+    re-fires the soft signal (one challenge), and a passed re-step-up
+    re-absorbs it as NEW trust (owner notification included — the
+    ``_remember`` path treats aged-out values as never known).
+
+    Returns the entry's previous state (for the audit ``before``), or
+    ``None`` when no entry carries ``value``. The caller owns
+    ``flag_modified`` and the audit row.
+    """
+    expired_stamp = (
+        now - timedelta(days=settings.RISK_BASELINE_TRUST_TTL_DAYS, seconds=1)
+    ).isoformat()
+    for index, entry in enumerate(entries or []):
+        entry_value = _entry_value(entry)
+        if entry_value != value:
+            continue
+        before = {
+            "value": entry_value,
+            "verified_at": entry.get("verified_at")
+            if isinstance(entry, dict)
+            else None,
+            "was_fresh": _entry_is_fresh(entry, now),
+        }
+        entries[index] = {"value": entry_value, "verified_at": expired_stamp}
+        return before
+    return None
+
+
 def _remember(entries: list, value: str, cap: int, now: datetime) -> bool:
     """Record ``value`` most-recent-last with a fresh ``verified_at``;
     True when the value was not currently known.

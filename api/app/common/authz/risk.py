@@ -593,6 +593,26 @@ def _terminate(
     )
 
 
+def operator_terminate_session(
+    db: Session,
+    session: "UserSession",  # noqa: F821
+    context: AccessContext,
+    reason: str,
+) -> None:
+    """Audited operator termination (issue #85) — the ops-surface seam.
+
+    Deliberately the SAME ``_terminate`` path the risk detectors use, so
+    an operator kill is not a second, weaker implementation: the sid
+    lands on the shared denylist (live access tokens die immediately, on
+    the token-validation path itself — F5), the status flip and the
+    ``session_terminated`` audit row are identical, and the audit's
+    ``actor_id`` is the OPERATOR (the request context's user), cleanly
+    distinguishable in the trail from a risk kill acting for the session
+    owner. The caller (CommitOnSuccessRoute) owns the commit.
+    """
+    _terminate(db, session, context, reason)
+
+
 def _lifetime_expiry_reason(
     session: "UserSession",  # noqa: F821
     now: datetime,

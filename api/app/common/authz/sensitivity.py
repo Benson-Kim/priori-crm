@@ -91,6 +91,11 @@ _PREFIX_RULES: tuple[tuple[str, SensitivityLevel], ...] = (
     ("/owner", SensitivityLevel.RESTRICTED),
     ("/platform", SensitivityLevel.RESTRICTED),
     ("/audit", SensitivityLevel.RESTRICTED),
+    # ABAC / session-risk ops surface (issue #85): session termination,
+    # baseline trust expiry and the risk-event listing are incident-
+    # response tooling — as sensitive as the platform console it will
+    # share the #73 operator step-up gate with once both land.
+    ("/admin", SensitivityLevel.RESTRICTED),
     # Financial documents and reporting.
     ("/invoices", SensitivityLevel.CONFIDENTIAL),
     ("/expenses", SensitivityLevel.CONFIDENTIAL),

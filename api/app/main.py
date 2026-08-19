@@ -41,6 +41,7 @@ from app.common.middleware import (
 from app.common.otel import setup_metrics, shutdown_metrics
 from app.constants.enums import ModuleKey
 from app.lib.config import settings
+from app.modules.admin_ops.router import router as admin_ops_router
 from app.modules.auth.router import router as auth_router
 from app.modules.customers.router import router as customers_router
 from app.modules.dashboard.router import router as dashboard_router
@@ -282,6 +283,14 @@ def _register_routers(app: FastAPI) -> None:
     # keep working even when every toggleable module is disabled.
     app.include_router(
         platform_router, prefix=f"{api_prefix}/platform", tags=["Platform"]
+    )
+    # ABAC / session-risk ops surface (issue #85): RESTRICTED-classified,
+    # operator/admin-gated incident-response tooling. Never module-gated —
+    # remediation must keep working whatever modules are disabled. NOTE:
+    # the operator step-up gate (issue #73, in flight on the tenancy
+    # branch) must be wired in front of this router when both land.
+    app.include_router(
+        admin_ops_router, prefix=f"{api_prefix}/admin", tags=["Admin Ops"]
     )
     app.include_router(
         statements_router,
