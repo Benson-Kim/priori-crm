@@ -1,0 +1,51 @@
+# rclone remotes for the deploy user — TEMPLATE, not a live config (issue #82).
+#
+# Install on the production droplet as the deploy user's rclone config
+# (~deploy/.config/rclone/rclone.conf, mode 0600). Replace every
+# <placeholder> before use; never commit a filled-in copy.
+#
+# Two remotes:
+#   [spaces]               — the base S3 remote. db_backup.sh writes the
+#                            age-encrypted nightly artifacts through it and
+#                            uploads_sync.sh touches the heartbeat on it.
+#   [spaces-uploads-crypt] — an rclone *crypt* remote layered over
+#                            spaces:<bucket>/uploads-sync. uploads_sync.sh
+#                            refuses to mirror to anything that is not a
+#                            crypt remote: proof-of-payment documents must
+#                            never sit plaintext in the bucket (runbook,
+#                            anti-tamper section; issue #82).
+#
+# Key material (bring-up checklist step 2): generate password AND salt with
+# `openssl rand -base64 32` (two separate values) and store BOTH in the
+# password manager (canonical escrow) BEFORE they touch the droplet. The
+# values below must be the `rclone obscure <value>` form — obscured, not
+# secure: this file is a secret and stays 0600 on the droplet only. The
+# crypt key is deliberately NOT in CI (no scheduled job reads mirror
+# content) and deliberately separate from both the pgBackRest cipher
+# passphrase and the Tier-2 age identity — no two tiers share a point of
+# loss.
+
+[spaces]
+type = s3
+provider = DigitalOcean
+env_auth = false
+access_key_id = <DROPLET_RW_ACCESS_KEY_ID>
+secret_access_key = <DROPLET_RW_SECRET_ACCESS_KEY>
+endpoint = <region>.digitaloceanspaces.com
+acl = private
+
+[spaces-uploads-crypt]
+type = crypt
+# The crypt remote IS the mirror destination — it already points inside
+# the bucket, so uploads_sync.sh syncs to "spaces-uploads-crypt:" directly.
+remote = spaces:<bucket>/uploads-sync
+# Encrypt names as well as content: stored upload names embed the user's
+# original filename (api/app/common/uploads.py -> "<token>_<original>"),
+# which is customer-identifying metadata. Deterministic encryption keeps
+# delta-sync and per-file versioning working; rclone cryptdecode maps
+# plaintext names to bucket object names when a specific prior version
+# must be recovered (see the runbook's decision table).
+filename_encryption = standard
+directory_name_encryption = true
+password = <RCLONE_OBSCURED_CRYPT_PASSWORD>
+password2 = <RCLONE_OBSCURED_CRYPT_SALT>

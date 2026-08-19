@@ -17,5 +17,7 @@
 15 1 * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/db_backup.sh >> /srv/priori/backups/backup.log 2>&1
 
 # hourly uploads mirror to the bucket (freshness tier; heartbeat for the
-# dead-man's switch)
-5 * * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1
+# dead-man's switch). Destination is the CRYPT remote (issue #82) — the
+# script refuses a non-crypt destination; the base remote is only for the
+# heartbeat, which lives outside the encrypted mirror.
+5 * * * * RCLONE_REMOTE=spaces:priori-crm-backups UPLOADS_CRYPT_REMOTE=spaces-uploads-crypt: /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1

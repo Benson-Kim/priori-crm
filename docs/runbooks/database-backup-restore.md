@@ -42,11 +42,11 @@ get the same treatment:
 
 | | Hourly mirror | Nightly archive |
 |---|---|---|
-| Made by | `deploy/uploads_sync.sh` (cron, hourly): `rclone sync` to bucket `uploads-sync/` | `deploy/db_backup.sh`: tar to bucket `uploads/` |
+| Made by | `deploy/uploads_sync.sh` (cron, hourly): `rclone sync` through the **crypt remote** `spaces-uploads-crypt:` into bucket `uploads-sync/` | `deploy/db_backup.sh`: tar to bucket `uploads/` |
 | Exposure | ≤ ~1 hour | ≤ 24 hours |
 | Purpose | freshness — droplet loss costs at most an hour of documents | point-in-time archive |
-| Deletion safety | deletions propagate — **bucket versioning is required** so any deleted/overwritten file is recoverable as a prior version; `--max-delete` refuses mass deletions | tars are immutable snapshots |
-| Encryption | **plaintext in the bucket — accepted risk** (see anti-tamper section): per-file `rclone sync` needs stable names/mtimes for delta sync and versioning; client-side encryption here means an `rclone crypt` remote, filed as follow-up | age-encrypted client-side, same key as the nightly dumps |
+| Deletion safety | deletions propagate — **bucket versioning is required** so any deleted/overwritten file is recoverable as a prior version; `--max-delete` refuses mass deletions (both unchanged by the crypt layer: one source file = one encrypted object) | tars are immutable snapshots |
+| Encryption | **client-side via `rclone crypt`** (issue #82): names **and** content encrypted before leaving the droplet (`deploy/rclone-uploads-crypt.conf.template`; the script refuses a non-crypt destination). Crypt's deterministic filename encryption keeps delta-sync and per-file versioning working; recovery of a specific file goes through the crypt remote (decision table) | age-encrypted client-side, same key as the nightly dumps |
 
 Retention: newest 14 nightly dumps / 7 uploads tars locally (script
 defaults); bucket lifecycle expires `db/` and `uploads/` objects after 35
@@ -214,6 +214,7 @@ is irreversible for the recovery window.
       | Droplet key | per-bucket read-write | droplet only (`pgbackrest.conf` 0600, deploy user's rclone config 0600) |
       | CI key | per-bucket **read-only** | GitLab masked CI/CD variables (`BACKUP_S3_*`) |
       | Admin key | full access incl. purging versions, bucket settings | **password manager only — never on the droplet, never in CI** |
+      | uploads-crypt password + salt | decrypts the hourly `uploads-sync/` mirror | password manager (canonical) + deploy user's rclone config 0600 (obscured) — **never in CI** (no scheduled job reads mirror content) |
 
       The CI key's read-only scoping is **enforced, not assumed**: every
       scheduled job that touches the bucket (`scheduled:db-restore-verify`,
@@ -255,11 +256,27 @@ is irreversible for the recovery window.
          key alone — leaked, logged, or exposed by a bucket-policy mistake —
          now yields ciphertext), and it is the price of an automatically
          tested restore path. Rotate both on any suspicion.
-      2. the hourly `uploads-sync/` mirror is **plaintext in the bucket**:
-         per-file `rclone sync` relies on stable names/mtimes for delta
-         syncs and object versioning. Encrypting it client-side means an
-         `rclone crypt` remote (breaks direct object recovery and version
-         inspection) — filed as follow-up issue #82, not silently ignored.
+      2. ~~the hourly `uploads-sync/` mirror is plaintext in the bucket~~ —
+         **closed by issue #82**: the mirror now goes through an `rclone
+         crypt` remote (names + content encrypted client-side;
+         `uploads_sync.sh` refuses a non-crypt destination). What remains,
+         accepted deliberately:
+         - the crypt password lives on the droplet (deploy user's 0600
+           rclone config, `rclone obscure`d — reversible obscuring, not
+           encryption). This adds **no new exposure class**: the droplet
+           already holds the plaintext source directory the mirror copies;
+         - crypt hides names and content, **not existence** — object count,
+           approximate sizes, and sync timestamps stay visible to any
+           bucket key;
+         - a **lost** crypt password makes the mirror unreadable. Bounded:
+           the mirror is the freshness tier only — the nightly
+           age-encrypted tar (separately escrowed key) and the droplet
+           source remain. Escrow: password manager (canonical) + droplet
+           config, same two-location rule as the pgBackRest passphrase;
+         - recovery/inspection of mirror objects requires rclone + the
+           crypt password — the bucket console alone can no longer confirm
+           a specific file is mirrored. The decision-table row documents
+           the concrete recovery commands.
 - [ ] **`audit_events` is append-only** (docs/database.md §4) and every
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
@@ -429,9 +446,12 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    pg_restore --no-owner --no-privileges --exit-on-error -d "$PG_URL" \
      /srv/priori/backups/nightly-<utc>.dump
    ```
-5. Restore uploads — the hourly mirror is fresher than the nightly tar:
+5. Restore uploads — the hourly mirror is fresher than the nightly tar.
+   The mirror is crypt-encrypted, so sync **from the crypt remote** (it
+   decrypts transparently; the crypt password + salt come from the
+   password manager into the rebuilt droplet's rclone config — step 1.3):
    ```bash
-   rclone sync spaces:priori-crm-backups/uploads-sync /srv/priori/shared/uploads
+   rclone sync spaces-uploads-crypt: /srv/priori/shared/uploads
    chmod 700 /srv/priori/shared/uploads
    # fallback: fetch the newest uploads-<utc>.tar.gz.age from uploads/,
    # age -d -i <identity> it (as in step 4), then tar -xzf the result
@@ -445,8 +465,9 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    resurrect erased personal data.
 8. Point DNS at the new droplet; verify `/api/v1/health`, log in, open a
    recent invoice, download one uploaded document.
-9. Re-run the Bring-up checklist from step 8 (scripts, age recipient, cron
-   entries) — the rebuilt droplet has none — and confirm the next
+9. Verify the droplet-side half of the Bring-up checklist (step 8):
+   `droplet_provision.sh` already installed the ops scripts and both
+   crontabs — confirm the age public recipient is in place and the next
    `scheduled:backup-freshness` run is green end-to-end.
 
 ### 2. Bad migration right after a deploy
@@ -490,7 +511,10 @@ Do not let the first full restore be during an incident. Once a quarter
 (first week), one engineer runs the drill **timed end-to-end**; alternate
 between the two variants so both paths stay rehearsed:
 
-- **Variant A (full rebuild):** scenario 1 on a throwaway droplet, through
+- **Variant A (full rebuild):** scenario 1 on a throwaway droplet **using
+  the rebuild automation** (cloud-init user-data + `droplet_provision.sh`,
+  scenario 1 step 1 — a drill that hand-builds the machine does not
+  rehearse the path an incident would take), through
   step 8 (app serving, document downloadable; the erasure re-apply of step
   7 may be simulated in a drill — pick one past erasure from `audit_events`
   and prove it can be re-applied).
@@ -505,7 +529,8 @@ Checklist (record every timestamp in the ops log):
 - [ ] **Cipher-passphrase retrieval from escrow — by someone other than the
       person who set it up, timed.** An engineer who is **not** the author
       of the backup configuration retrieves the pgBackRest repo-cipher
-      passphrase (and the bucket key, Variant A; and the Tier-2 age identity
+      passphrase (and the bucket key + uploads-crypt password, Variant A;
+      and the Tier-2 age identity
       whenever the drill exercises the logical fallback) from the password manager
       **without help from the author**, and the retrieval timestamp
       (T_escrow) is recorded separately in the ops log. If only the author
@@ -562,7 +587,11 @@ later steps verify earlier ones.
        age keypair (`age-keygen`) on a trusted machine: store the **private
        identity** in the password manager (it later also becomes the
        `BACKUP_AGE_IDENTITY` CI variable, step 9); only the **public
-       recipient** line goes to the droplet (step 8).
+       recipient** line goes to the droplet (step 8). Generate the
+       **uploads-crypt password and salt** (`openssl rand -base64 32`,
+       twice — two separate values) and store **both** in the password
+       manager before they touch the droplet (they go into the deploy
+       user's rclone config in step 3; never into CI).
 3. [ ] **Droplet packages**: `apt-get install pgbackrest rclone age
        postgresql-client`; `install -d -o postgres -g postgres -m 750
        /var/log/pgbackrest`. (A droplet built from
@@ -639,5 +668,8 @@ later steps verify earlier ones.
         SKIPPED rows remaining.
 12. [ ] **First restore test**: trigger the `restore-verify` schedule
         manually and watch it pass end-to-end; then run drill Variant B
+        (PITR to a scratch cluster) once, timed. Record both in the ops log.
+13. [ ] Quarterly thereafter: the DR drill (§above), alternating variants.
+d watch it pass end-to-end; then run drill Variant B
         (PITR to a scratch cluster) once, timed. Record both in the ops log.
 13. [ ] Quarterly thereafter: the DR drill (§above), alternating variants.
