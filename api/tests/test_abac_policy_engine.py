@@ -40,12 +40,14 @@ def _context(
     ip_denylisted: bool = False,
     geo: GeoPoint | None = None,
     principal: str = "user",
+    session_id: uuid.UUID | None = None,
+    stepped_up_at: datetime | None = None,
 ) -> AccessContext:
     """Build a context by hand so every attribute is test-controlled."""
     return AccessContext(
         principal=principal,  # type: ignore[arg-type]
         user_id=uuid.uuid4() if principal == "user" else None,
-        session_id=None,
+        session_id=session_id,
         ip=ip,
         ip_denylisted=ip_denylisted,
         geo=geo,
@@ -55,6 +57,7 @@ def _context(
         method=method,
         path=path,
         sensitivity=sensitivity if sensitivity is not None else classify_path(path),
+        stepped_up_at=stepped_up_at,
     )
 
 
@@ -328,3 +331,171 @@ class TestAnonymousPrincipal:
         verdict = evaluate(_context(geo=GeoPoint(country="KP"), principal="anonymous"))
         assert verdict.decision is Decision.DENY
         assert verdict.rule == "geo_blocklist"
+
+
+class TestGeoBackstopConfidentialReads:
+    """Missing-geo backstop for bulk CONFIDENTIAL reads (issue #84).
+
+    Matrix: geo present/absent x read/write x sensitivity, plus the H1
+    principal exemptions, the sua satisfiability leg, the volume
+    threshold boundary, and the default-threshold composition (§8.1
+    style). The volume window is read through
+    ``risk.observed_class_volume``; these pure tests pin it via
+    monkeypatch — the end-to-end legs live in test_geo_backstop.py.
+    """
+
+    RULE = "unknown_geo_confidential_read"
+
+    @pytest.fixture(autouse=True)
+    def _configured_signal(self, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_TRUST_CONTEXT_HEADERS", True)
+
+    @pytest.fixture
+    def bulk_volume(self, monkeypatch):
+        """The session's window already holds bulk-read volume."""
+        monkeypatch.setattr(
+            "app.common.authz.risk.observed_class_volume",
+            lambda session_id, sensitivity_class: 10_000,
+        )
+
+    @pytest.fixture
+    def quiet_volume(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.common.authz.risk.observed_class_volume",
+            lambda session_id, sensitivity_class: 0,
+        )
+
+    def _ctx(self, **kwargs):
+        kwargs.setdefault("session_id", uuid.uuid4())
+        kwargs.setdefault("method", "GET")
+        kwargs.setdefault("path", "/api/v1/invoices")
+        kwargs.setdefault("geo", None)
+        return _context(**kwargs)
+
+    # --- The matrix -----------------------------------------------------
+
+    def test_bulk_confidential_read_without_geo_challenges(self, bulk_volume):
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.CHALLENGE
+        assert verdict.rule == self.RULE
+
+    def test_restricted_read_is_covered_too(self, bulk_volume):
+        """The higher tier must never carry the weaker backstop."""
+        verdict = evaluate(self._ctx(path="/api/v1/audit/events"))
+        assert verdict.decision is Decision.CHALLENGE
+        assert verdict.rule == self.RULE
+
+    def test_geo_present_allows(self, bulk_volume):
+        verdict = evaluate(self._ctx(geo=GeoPoint(country="KE")))
+        assert verdict.decision is Decision.ALLOW
+
+    def test_internal_read_not_covered(self, bulk_volume):
+        verdict = evaluate(self._ctx(path="/api/v1/customers"))
+        assert verdict.decision is Decision.ALLOW
+
+    def test_confidential_write_not_covered_by_this_rule(self, bulk_volume):
+        # Writes are the existing rules' territory (off-hours,
+        # RESTRICTED-write unknown-geo); this rule is reads-only.
+        verdict = evaluate(self._ctx(method="POST"))
+        assert verdict.decision is Decision.ALLOW
+
+    def test_single_read_does_not_challenge(self, quiet_volume):
+        """Acceptance: a single geo-less read never steps up."""
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.ALLOW
+
+    # --- Exemptions and satisfiability -----------------------------------
+
+    def test_service_principal_exempt(self, bulk_volume):
+        """H1: machine callers have no inbox; a CHALLENGE is a lockout."""
+        verdict = evaluate(self._ctx(principal="service"))
+        assert verdict.decision is Decision.ALLOW
+
+    def test_anonymous_principal_exempt(self, bulk_volume):
+        verdict = evaluate(self._ctx(principal="anonymous"))
+        assert verdict.decision is Decision.ALLOW
+
+    def test_fresh_step_up_satisfies(self, bulk_volume):
+        verdict = evaluate(
+            self._ctx(stepped_up_at=datetime(2026, 8, 14, 9, 0, tzinfo=UTC))
+        )
+        assert verdict.decision is Decision.ALLOW
+
+    def test_stale_step_up_does_not_satisfy(self, bulk_volume, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_STEP_UP_TTL_MINUTES", 30)
+        verdict = evaluate(
+            self._ctx(stepped_up_at=datetime(2026, 8, 14, 6, 0, tzinfo=UTC))
+        )
+        assert verdict.decision is Decision.CHALLENGE
+
+    def test_legacy_token_without_session_is_silent(self, bulk_volume):
+        verdict = evaluate(self._ctx(session_id=None))
+        assert verdict.decision is Decision.ALLOW
+
+    # --- Configuration gates ----------------------------------------------
+
+    def test_silent_when_geo_signal_unconfigured(self, bulk_volume, monkeypatch):
+        """Acceptance: with geo unconfigured, behaviour is unchanged."""
+        monkeypatch.setattr(settings, "ABAC_TRUST_CONTEXT_HEADERS", False)
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.ALLOW
+
+    def test_kill_switch_disables_the_backstop(self, bulk_volume, monkeypatch):
+        monkeypatch.setattr(settings, "ABAC_GEO_BACKSTOP_CONFIDENTIAL_READS", False)
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.ALLOW
+
+    def test_threshold_boundary(self, monkeypatch):
+        monkeypatch.setattr(settings, "RISK_VOLUME_MAX_REQUESTS", 100)
+        monkeypatch.setattr(settings, "ABAC_GEO_BACKSTOP_VOLUME_PERCENT", 50)
+        observed = {"value": 49}
+        monkeypatch.setattr(
+            "app.common.authz.risk.observed_class_volume",
+            lambda session_id, sensitivity_class: observed["value"],
+        )
+        assert evaluate(self._ctx()).decision is Decision.ALLOW
+        observed["value"] = 50
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.CHALLENGE
+
+    # --- Default-threshold composition (§8.1 style) -----------------------
+
+    def test_default_threshold_composition(self, monkeypatch):
+        """Pins how the DEFAULT knobs compose (#67 line review §8.1 style).
+
+        At the shipped defaults the backstop fires at 150 units/window —
+        half the global mild ceiling (300) and a tenth of the
+        exfiltration ceiling (1500) — so the geo-less exfiltration shape
+        is CHALLENGED long before the volume evidence could terminate,
+        and the decision is a CHALLENGE by construction: the
+        CGNAT-friendly posture (impossible travel capped at a challenge)
+        is not reintroduced through the back door for geo-less traffic.
+        """
+        assert settings.ABAC_GEO_BACKSTOP_CONFIDENTIAL_READS is True
+        assert settings.ABAC_GEO_BACKSTOP_VOLUME_PERCENT == 50
+        assert settings.RISK_VOLUME_MAX_REQUESTS == 300
+        assert settings.RISK_VOLUME_EXFIL_MULTIPLIER == 5
+        assert settings.RISK_IMPOSSIBLE_TRAVEL_MAX_ACTION == "challenge", (
+            "the backstop must not disturb the CGNAT-market default"
+        )
+
+        threshold = (
+            settings.RISK_VOLUME_MAX_REQUESTS
+            * settings.ABAC_GEO_BACKSTOP_VOLUME_PERCENT
+            // 100
+        )
+        exfil_ceiling = (
+            settings.RISK_VOLUME_MAX_REQUESTS * settings.RISK_VOLUME_EXFIL_MULTIPLIER
+        )
+        assert threshold == 150
+        assert threshold < exfil_ceiling, (
+            "the challenge must precede any volume-based termination"
+        )
+
+        monkeypatch.setattr(
+            "app.common.authz.risk.observed_class_volume",
+            lambda session_id, sensitivity_class: threshold,
+        )
+        verdict = evaluate(self._ctx())
+        assert verdict.decision is Decision.CHALLENGE, "never DENY/TERMINATE"
+        assert verdict.decision is not Decision.TERMINATE
