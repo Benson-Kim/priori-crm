@@ -1,0 +1,28 @@
+# systemd unit for the production API — canonical copy (issue #81).
+#
+# Installed by deploy/droplet_provision.sh to
+# /etc/systemd/system/priori-api.service. This committed file is the source
+# of truth for a rebuilt droplet: bind address, port and worker count here
+# must stay in agreement with deploy/templates/nginx-priori.conf.template
+# (proxy_pass) — change them together or the API 502s.
+#
+# No EnvironmentFile= on purpose: the app loads /srv/priori/current/api/.env
+# itself (a symlink to /srv/priori/shared/.env) via pydantic-settings, and
+# systemd's env parser is stricter than python-dotenv's — an inline comment
+# after a value becomes part of the value, silently. See
+# docs/operations/deployment-setup.md §2.4 for the full reasoning.
+
+[Unit]
+Description=Priori CRM API
+After=network.target
+
+[Service]
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/priori/current/api
+ExecStart=/srv/priori/current/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

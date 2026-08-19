@@ -382,13 +382,27 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
 
 ### 1. Droplet loss (rebuild from offsite)
 
-1. Provision a new droplet; follow `docs/operations/deployment-setup.md` to
-   recreate `/srv/priori/{releases,current,shared,backups}`, the deploy
-   user, sudoers, nginx, systemd unit, and `shared/.env` (secrets from the
-   password manager — they are not in any backup).
-2. Reinstall PostgreSQL 16 + pgBackRest and both config files (Bring-up
-   checklist steps 3–5); the bucket key and **cipher passphrase** come from
-   the password manager.
+1. Provision a new droplet **from the committed rebuild automation** (issue
+   #81 — do not rebuild the machine by hand):
+   1. create the droplet with
+      [`deploy/cloud-init/droplet-user-data.yaml`](../../deploy/cloud-init/droplet-user-data.yaml)
+      as user-data (paste the deploy **public** key into its one
+      placeholder first) — packages, deploy user, sudoers, directory
+      skeleton;
+   2. from a checkout on your machine, ship `deploy/` and run the
+      idempotent finish script — nginx site, systemd unit, ops scripts,
+      config templates (placeholders intact), both crontabs:
+      ```bash
+      rsync -az deploy/ root@<new-droplet>:/tmp/priori-deploy/
+      ssh root@<new-droplet> 'bash /tmp/priori-deploy/droplet_provision.sh'
+      ```
+   3. hand-finish exactly what the script prints — **secrets** (from the
+      password manager, never in any backup: `shared/.env`, the
+      `pgbackrest.conf` placeholders, the rclone remote(s), the age public
+      recipient), **DNS**, **TLS** — nothing else is manual.
+2. Fill the pre-installed pgBackRest/archiving configs' placeholders (step
+   1.3); the bucket key and **cipher passphrase** come from the password
+   manager.
 3. **Primary path — physical restore with WAL replay** (loses only the last
    un-archived seconds/minutes):
    ```bash
@@ -551,7 +565,9 @@ later steps verify earlier ones.
        recipient** line goes to the droplet (step 8).
 3. [ ] **Droplet packages**: `apt-get install pgbackrest rclone age
        postgresql-client`; `install -d -o postgres -g postgres -m 750
-       /var/log/pgbackrest`. Configure the deploy user's rclone remote
+       /var/log/pgbackrest`. (A droplet built from
+       `deploy/cloud-init/droplet-user-data.yaml` already has all of this.)
+       Configure the deploy user's rclone remote
        (`rclone config`, name `spaces`) with the droplet key.
 4. [ ] **pgBackRest config**: fill `deploy/pgbackrest.conf.template` →
        `/etc/pgbackrest/pgbackrest.conf`, `postgres:postgres` 0600 (bucket
@@ -570,7 +586,10 @@ later steps verify earlier ones.
        --type=full backup`; confirm with `pgbackrest info` and by listing
        `pgbackrest/backup/priori/` in the bucket.
 8. [ ] **Scripts + cron** — all committed under `deploy/` (config-as-code;
-       nothing here is typed from memory). First install from a checkout:
+       nothing here is typed from memory). A droplet provisioned via
+       `deploy/droplet_provision.sh` already has the scripts and both
+       crontabs installed — **verify instead of re-installing**. First
+       install from a checkout:
        ```bash
        install -D -m 0700 deploy/db_backup.sh    /srv/priori/bin/db_backup.sh
        install -D -m 0700 deploy/uploads_sync.sh /srv/priori/bin/uploads_sync.sh

@@ -1,0 +1,43 @@
+# nginx site for accounting.priori.co.ke — canonical copy (issue #81).
+#
+# Installed by deploy/droplet_provision.sh to
+# /etc/nginx/sites-available/priori (symlinked into sites-enabled). The
+# proxy_pass target must stay in agreement with the bind/port in
+# deploy/templates/priori-api.service — change them together.
+#
+# TLS is deliberately absent here: certbot --nginx issues the certificate
+# and rewrites this server block on the droplet during the hand-finish
+# (droplet_provision.sh prints the step). Do not commit certificate paths
+# that do not exist yet — nginx would refuse to start.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name accounting.priori.co.ke;
+
+    # SPA — static files built in CI, shipped per release; the symlink is
+    # what makes deploys atomic (deployment.md §5).
+    root /srv/priori/current/frontend/dist;
+    index index.html;
+
+    # API upload cap is 10 MB (api/app/common/uploads.py); allow multipart
+    # overhead but refuse runaway bodies at the edge.
+    client_max_body_size 12m;
+
+    # API — proxy_pass WITHOUT a URI part so the full original path
+    # (/api/v1/...) reaches uvicorn unchanged: production runs with the
+    # default API_V1_PREFIX=/api/v1 (unlike staging, where Passenger strips
+    # the mount prefix — deployment-setup.md §1.2).
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA deep links fall back to index.html, never 404.
+    location / {
+        try_files $uri /index.html;
+    }
+}

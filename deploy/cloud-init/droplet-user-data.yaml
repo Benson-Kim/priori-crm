@@ -1,0 +1,83 @@
+#cloud-config
+# Production droplet rebuild — cloud-init user-data (issue #81).
+#
+# Paste this file into "User data" when creating the replacement droplet
+# (DigitalOcean: Create Droplet > Advanced Options > Add Initialization
+# scripts). Together with deploy/droplet_provision.sh it replaces "follow
+# deployment-setup.md by hand" as restore scenario 1 step 1 in
+# docs/runbooks/database-backup-restore.md — the 4-hour RTO must not rest
+# on a hand-built machine.
+#
+# What this file does (OS layer only — nothing here needs the repo):
+#   - installs every package the droplet needs (nginx, PostgreSQL 16,
+#     pgbackrest, rclone, age, python3.12-venv, postgresql-client, rsync)
+#   - creates the deploy user (key-only SSH) + the exact two sudo rights
+#     the release script uses
+#   - creates the /srv/priori directory skeleton and /etc/priori
+#
+# What it deliberately does NOT do — run deploy/droplet_provision.sh from a
+# repo checkout afterwards for the repo-file layer (nginx site, systemd
+# unit, ops scripts, crontabs, config templates), and hand-finish ONLY:
+# secrets (shared/.env, pgbackrest placeholders, rclone remotes, age
+# recipient — all from the password manager), DNS, and TLS issuance.
+# Secrets never live in this file: user-data is stored by the cloud
+# provider and readable from the instance metadata service.
+#
+# ONE placeholder to fill before use, marked <DEPLOY_SSH_PUBLIC_KEY>: the
+# PUBLIC half of the dedicated deploy keypair (deployment-setup.md §2.2,
+# `priori-prod-deploy.pub`). Public key — safe in user-data.
+#
+# Node.js is intentionally absent: the SPA is built in CI and shipped as
+# static files (frontend/dist), served by nginx — there is no Node runtime
+# on the droplet.
+#
+# Target OS: Ubuntu 24.04 LTS (python3.12 and PostgreSQL 16 are the
+# distribution defaults; on a different base image, check both versions
+# against deploy/postgresql-archiving.conf.template and the venv step in
+# deploy/production_release.sh before continuing).
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - nginx
+  - postgresql            # PostgreSQL 16 on Ubuntu 24.04
+  - postgresql-contrib    # pg_trgm — production keeps its trigram indexes
+  - postgresql-client     # pg_dump/pg_restore for the release + backup scripts
+  - pgbackrest
+  - rclone
+  - age
+  - python3.12-venv
+  - rsync
+
+users:
+  - default
+  - name: deploy
+    gecos: ""
+    shell: /bin/bash
+    lock_passwd: true     # key-only; no password auth ever
+    ssh_authorized_keys:
+      - "<DEPLOY_SSH_PUBLIC_KEY>"
+
+write_files:
+  # Exactly the two sudo rights the release pipeline needs — nothing more.
+  # /usr/bin/systemctl (not /bin): sudoers matches the literal path and
+  # /bin is a symlink it will not follow (deployment-setup.md §2.2).
+  - path: /etc/sudoers.d/priori-deploy
+    permissions: "0440"
+    owner: root:root
+    content: |
+      deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart priori-api, /usr/bin/systemctl reload nginx
+
+runcmd:
+  # A syntactically broken sudoers file locks everyone out of sudo — verify
+  # what write_files installed before anything else runs.
+  - visudo -c
+  # Directory skeleton (deployment-setup.md §2.3 + /bin for the ops scripts).
+  - mkdir -p /srv/priori/releases /srv/priori/shared/uploads /srv/priori/backups /srv/priori/bin
+  - chown -R deploy:deploy /srv/priori
+  - chmod 700 /srv/priori/backups /srv/priori/shared/uploads
+  # age public recipient + other non-secret host config land here later.
+  - mkdir -p /etc/priori
+  # pgBackRest log dir (runbook bring-up step 3).
+  - install -d -o postgres -g postgres -m 750 /var/log/pgbackrest
