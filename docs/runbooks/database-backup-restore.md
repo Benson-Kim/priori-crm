@@ -335,8 +335,32 @@ events used to re-apply them — is preserved.
 | Physical/page corruption detected | Tier 1: full backup from **before** the corruption + PITR stopping just before it | physical restore is exact; if corruption predates all retained fulls, fall back to the newest clean nightly dump — logical dumps read rows and cannot carry page corruption |
 | Droplet loss | Tier 1: latest full + diff + replay of **all** archived WAL (scenario 1) | minutes of loss instead of 24 h; Tier 2 is the fallback path in the same scenario |
 | pgBackRest repo unusable (lost passphrase, poisoned repo) | Tier 2: newest `nightly-*.dump.age` (decrypt with the age identity from the password manager) | the independent tier — this is why it exists |
-| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning); else the nightly `uploads-*.tar.gz.age` (decrypt with the age identity first) | versioning keeps every generation for 14 days after deletion |
+| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning), **through the crypt remote** — see "Recovering one mirrored upload" below; else the nightly `uploads-*.tar.gz.age` (decrypt with the age identity first) | versioning keeps every generation for 14 days after deletion |
 | Bucket tampered with using the droplet's key | object versions, restored with the **admin key** from a clean machine | droplet key cannot purge versions |
+
+**Recovering one mirrored upload (crypt).** The mirror is name- and
+content-encrypted (`rclone crypt`, issue #82), so recovery goes through the
+`spaces-uploads-crypt` remote (crypt password + salt from the password
+manager if not on this machine) and uses `--s3-version-at`, which reads the
+bucket **as it was at a moment in time** — versioning flags apply to the
+wrapped S3 remote, and decryption stays transparent:
+
+```bash
+# Current version of one file (decrypts transparently):
+rclone copy 'spaces-uploads-crypt:expenses/<stored-name>.pdf' /tmp/restore/
+
+# The version that existed just BEFORE a deletion/overwrite at 14:37 UTC:
+rclone --s3-version-at '2026-08-17T14:36:00Z' \
+  copy 'spaces-uploads-crypt:expenses/<stored-name>.pdf' /tmp/restore/
+
+# Map a plaintext name to its encrypted bucket object name (only needed to
+# inspect raw versions in the bucket console/admin tooling):
+rclone cryptdecode --reverse spaces-uploads-crypt: 'expenses/<stored-name>.pdf'
+```
+
+(Do **not** use `--s3-versions` through the crypt remote: it splices a
+`-v...` suffix into the *encrypted* object names, which then no longer
+decode. `--s3-version-at` is the supported path.)
 
 All restores are deliberate, data-loss-bearing human decisions — never
 automated. Announce before starting; record what was restored and why in the
