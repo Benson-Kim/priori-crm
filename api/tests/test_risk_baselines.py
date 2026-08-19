@@ -18,6 +18,7 @@ new place, on a new device, at night, or during a busy minute.
   no signal — absence of data never reads as anomaly.
 """
 
+import hashlib
 import uuid
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -43,6 +44,15 @@ US_GEO = {"X-Geo-Country": "US", "X-Geo-Lat": "40.712", "X-Geo-Lon": "-74.006"}
 
 KNOWN_DEVICE = {"X-Device-Fingerprint": "known-laptop"}
 NEW_DEVICE = {"X-Device-Fingerprint": "burner-phone"}
+
+# The server-DERIVED fingerprint every TestClient request carries
+# (User-Agent "testclient", no Accept-Language) — mirrors
+# context._derived_fingerprint. Since issue #83 a client-supplied
+# fingerprint is corroborating-only: a `client:` baseline match suppresses
+# the new-device signal only when the derived form is ALSO known, so
+# baselines modelling "this browser passed a step-up" must seed both —
+# exactly what absorb_context records post-#83.
+TESTCLIENT_DERIVED_FP = "derived:" + hashlib.sha256(b"testclient\n").hexdigest()[:32]
 
 
 def _seed_user(db, email: str, role: UserRole = UserRole.MEMBER) -> User:
@@ -252,10 +262,15 @@ class TestBaselineAbsorption:
         A new COUNTRY absorbed on a known fingerprint must notify.
         """
         user = _seed_user(db, "replayed@mail.com")
+        # Both fingerprint forms are known: the victim's own browser
+        # (client-supplied + derived) passed an earlier step-up. Only the
+        # COUNTRY is new here — the pure fingerprint-replay-with-a-
+        # different-browser shape is covered by the #83 corroboration
+        # tests (test_edge_authentication.py).
         _seed_baseline(
             db,
             user,
-            devices=("client:known-laptop",),
+            devices=("client:known-laptop", TESTCLIENT_DERIVED_FP),
             countries=("KE",),
             hours=_all_hours(),
         )
@@ -662,7 +677,7 @@ class TestSoftSignalFalsePositives:
         _seed_baseline(
             db,
             user,
-            devices=("client:known-laptop",),
+            devices=("client:known-laptop", TESTCLIENT_DERIVED_FP),
             countries=("KE",),
             hours=_all_hours(),
         )
@@ -737,7 +752,7 @@ class TestUnusualHour:
         _seed_baseline(
             db,
             user,
-            devices=("client:known-laptop",),
+            devices=("client:known-laptop", TESTCLIENT_DERIVED_FP),
             countries=("KE",),
             hours=_all_hours_except_now(),
         )
@@ -759,7 +774,7 @@ class TestUnusualHour:
         _seed_baseline(
             db,
             user,
-            devices=("client:known-laptop",),
+            devices=("client:known-laptop", TESTCLIENT_DERIVED_FP),
             countries=("KE",),
             hours={str(_local_hour(6)): 3},
         )
@@ -776,7 +791,11 @@ class TestUnusualHour:
         user = _seed_user(db, "earlybird@mail.com")
         hours = {str(_local_hour(1)): 60}  # enough history, all next hour
         _seed_baseline(
-            db, user, devices=("client:known-laptop",), countries=("KE",), hours=hours
+            db,
+            user,
+            devices=("client:known-laptop", TESTCLIENT_DERIVED_FP),
+            countries=("KE",),
+            hours=hours,
         )
 
         session, headers = _craft_session(db, user)

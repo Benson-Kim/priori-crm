@@ -48,8 +48,11 @@ from app.lib.config import settings
 logger = logging.getLogger(__name__)
 
 #: Cap on remembered devices / countries: oldest evicted first. Bounded so
-#: the JSON stays small; 8 devices is generous for one human.
-_MAX_KNOWN_DEVICES = 8
+#: the JSON stays small; 12 devices is generous for one human — a browser
+#: context in trusted-header mode consumes TWO slots since issue #83 (the
+#: self-attested ``client:`` fingerprint plus the server-``derived:`` one
+#: that corroborates it), so the cap is sized for six such pairs.
+_MAX_KNOWN_DEVICES = 12
 _MAX_KNOWN_COUNTRIES = 8
 
 #: When the total hour observations reach this, all buckets are halved so
@@ -233,6 +236,18 @@ def absorb_context(
             _MAX_KNOWN_DEVICES,
             now,
         )
+        # The server-derived fingerprint is absorbed ALONGSIDE a
+        # client-supplied one (issue #83): the step-up proved inbox
+        # control from this browser, so the derived form — the second
+        # factor a self-attested ``client:`` value must corroborate
+        # before it can suppress the new-device signal — becomes known
+        # through the SAME (and only) trust-granting path.
+        derived = context.derived_device_fingerprint
+        if derived and derived != context.device_fingerprint:
+            new_derived = _remember(
+                baseline.known_devices, derived, _MAX_KNOWN_DEVICES, now
+            )
+            new_device = new_device or new_derived
         # Both a new entry and an LRU touch reorder the list: persist.
         flag_modified(baseline, "known_devices")
 
@@ -259,6 +274,7 @@ def absorb_context(
         action="baseline_absorbed",
         after={
             "device_fingerprint": context.device_fingerprint,
+            "derived_fingerprint": context.derived_device_fingerprint,
             "country": context.geo.country if context.geo else None,
             "local_hour": context.local_hour,
             "ip": context.ip,
@@ -335,21 +351,41 @@ def evaluate_session_start_signals(
     known_devices = fresh_values(baseline.known_devices, now)
     known_countries = fresh_values(baseline.known_countries, now)
 
-    if (
-        context.device_fingerprint
-        and baseline.known_devices
-        and context.device_fingerprint not in known_devices
-    ):
-        signals.append(
-            SoftSignal(
-                name="new_device",
-                points=settings.RISK_SCORE_NEW_DEVICE,
-                detail={
-                    "device_fingerprint": context.device_fingerprint,
-                    "known_devices": len(known_devices),
-                },
-            )
+    if context.device_fingerprint and baseline.known_devices:
+        # A ``client:`` fingerprint is self-attested (browser-sent, no
+        # edge signature can cover it — issue #83), so a match against
+        # the baseline is corroborating-only: it suppresses the
+        # new-device signal ONLY when the server-DERIVED fingerprint —
+        # which the client does not control the same way — agrees, i.e.
+        # is itself known. Replaying the victim's fingerprint from an
+        # unfamiliar browser therefore no longer silences the signal.
+        # Derived-mode fingerprints (primary == derived) are unaffected,
+        # and a missing derived form (no UA/language headers at all)
+        # cannot corroborate, so it does not suppress either.
+        primary_unknown = context.device_fingerprint not in known_devices
+        derived = context.derived_device_fingerprint
+        client_match_uncorroborated = (
+            not primary_unknown
+            and context.device_fingerprint.startswith("client:")
+            and (derived is None or derived not in known_devices)
         )
+        if primary_unknown or client_match_uncorroborated:
+            signals.append(
+                SoftSignal(
+                    name="new_device",
+                    points=settings.RISK_SCORE_NEW_DEVICE,
+                    detail={
+                        "device_fingerprint": context.device_fingerprint,
+                        "derived_fingerprint": derived,
+                        "reason": (
+                            "uncorroborated_client_match"
+                            if client_match_uncorroborated
+                            else "unknown_device"
+                        ),
+                        "known_devices": len(known_devices),
+                    },
+                )
+            )
 
     if (
         context.geo is not None
