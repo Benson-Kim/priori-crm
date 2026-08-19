@@ -12,7 +12,7 @@ The system holds financial records of record. It must survive process crashes, d
 We make the app **crash-safe and degradation-tolerant** (transactional writes, idempotent jobs, fail-open caches with alerting, health endpoints) and commit to a **documented, rehearsed backup/restore posture** with defined RPO/RTO. Reliability gaps are tracked as work-items, not left implicit.
 
 ## What it does today
-- **Transactional integrity**: `get_db()` commits on success / rolls back on error; audit + outbox rows are written in-transaction with their trigger (ADR-0002/0005) — no partial financial state.
+- **Transactional integrity**: the request-scoped commit is owned by `CommitOnSuccessRoute` ([api/app/common/routing.py](../../api/app/common/routing.py)), which commits before the response is sent; `get_db()`'s teardown commit is a safety net only, and rollback on error stays in `get_db()`. Audit + outbox rows are written in-transaction with their trigger (ADR-0002/0005) — no partial financial state.
 - **Idempotent recovery**: internal jobs (transitions, purge, drain) are safe to re-run; the outbox retries then dead-letters (ADR-0005).
 - **Soft-delete + FK protection**: customers soft-delete (`status=DELETED`, reads filter it out); hard-delete is gated by `ondelete=RESTRICT` + `passive_deletes` to protect document history; `X-Delete-Type` header distinguishes soft vs hard.
 - **Graceful degradation**: rate-limit + token denylist **fail open** on Redis outage (availability over security); export gate sheds load with 503 + Retry-After.
