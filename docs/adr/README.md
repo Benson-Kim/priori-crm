@@ -22,5 +22,6 @@ Each ADR follows [`0000-template.md`](0000-template.md): **Status · Context · 
 | [0010](0010-billing-profile-sync-as-internal-posting-flag.md) | Billing-profile "sync" is an internal posting/readiness flag | Accepted |
 | [0011](0011-platform-operator-and-tenant-scoped-module-entitlements.md) | Platform-operator role and operator-granted module entitlements | Accepted |
 | [0013](0013-tenancy-strategy.md) | Tenancy strategy — shared schema with tenant keys and RLS, phased | Proposed |
+| [0014](0014-operator-mfa-and-step-up-auth.md) | Operator MFA (TOTP) and step-up re-auth for the platform console | Proposed |
 
 Related backlog: [`../work-items.md`](../work-items.md).
