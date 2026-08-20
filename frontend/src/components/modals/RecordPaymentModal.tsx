@@ -290,14 +290,17 @@ export function RecordPaymentModal({
         setPaymentDate(reportingDate);
     }, [reportingDate, isOpen, editPayment]);
 
-    // Keep the rate pinned to 1 whenever the payment currency matches the PO
-    // currency (the backend enforces this too).
-    useEffect(() => {
-        if (isPurchaseOrder && paymentCurrency === poCurrency) {
+    // Keep the rate pinned to 1 whenever the user selects the PO currency as
+    // the payment currency (the backend enforces this too). Handled in the
+    // select's change handler instead of an effect; the submit path already
+    // normalises the rate to 1 whenever the currencies match.
+    const handlePaymentCurrencyChange = (value: string) => {
+        setPaymentCurrency(value);
+        if (isPurchaseOrder && value === poCurrency) {
             setExchangeRate("1");
             setExchangeDirection("paymentToPo");
         }
-    }, [isPurchaseOrder, paymentCurrency, poCurrency]);
+    };
 
     const markExistingForDeletion = (docId: string) => {
         setDeletedDocIds((prev) => new Set(prev).add(docId));
@@ -458,7 +461,7 @@ export function RecordPaymentModal({
                                 <Select
                                     id="payment-currency"
                                     value={paymentCurrency}
-                                    onChange={(e) => setPaymentCurrency(e.target.value)}
+                                    onChange={(e) => handlePaymentCurrencyChange(e.target.value)}
                                     options={CURRENCY_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
                                 />
                             </div>

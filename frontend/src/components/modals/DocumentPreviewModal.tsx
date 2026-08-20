@@ -48,25 +48,34 @@ export function DocumentPreviewModal({
     const [objectUrl, setObjectUrl] = useState<string | null>(null);
     const [blob, setBlob] = useState<Blob | null>(null);
     const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(0);
     const [previewWidth, setPreviewWidth] = useState(900);
 
     const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
+    // Identity of the download the UI currently wants; null while closed.
+    // The tick makes every (re)open a fresh request, so a stale result or
+    // error from a previous open can never be shown. isLoading/error derive
+    // from comparing it against the request that last settled instead of
+    // being set synchronously inside the effect
+    // (react-hooks/set-state-in-effect, #61).
+    const [openTick, setOpenTick] = useState(0);
+    const [wasOpen, setWasOpen] = useState(isOpen);
+    if (isOpen !== wasOpen) {
+        setWasOpen(isOpen);
+        if (isOpen) setOpenTick((tick) => tick + 1);
+    }
+    const requestKey =
+        isOpen && documentId ? `${poId}|${documentId}|${openTick}` : null;
+    const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(
+        null
+    );
+
     useEffect(() => {
-        if (!isOpen || !documentId) return;
+        if (requestKey === null || !documentId) return;
 
         let cancelled = false;
         let createdUrl: string | null = null;
-
-        setIsLoading(true);
-        setError(null);
-        setBlob(null);
-        setObjectUrl(null);
-        setPdfData(null)
-        setNumPages(0);
 
         (async () => {
             try {
@@ -80,15 +89,14 @@ export function DocumentPreviewModal({
                 setBlob(fetched);
                 setPdfData(buffer);
                 setObjectUrl(createdUrl);
+                setSettled({ key: requestKey, error: null });
             } catch (err) {
                 if (!cancelled) {
-                    setError(
-                        err instanceof Error ? err.message : "Failed to load document"
-                    );
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsLoading(false);
+                    setSettled({
+                        key: requestKey,
+                        error:
+                            err instanceof Error ? err.message : "Failed to load document",
+                    });
                 }
             }
         })();
@@ -105,7 +113,11 @@ export function DocumentPreviewModal({
             setPdfData(null);
             setNumPages(0);
         };
-    }, [isOpen, poId, documentId]);
+    }, [requestKey, poId, documentId]);
+
+    const isLoading = requestKey !== null && settled?.key !== requestKey;
+    const error =
+        requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
     useEffect(() => {
         if (!isOpen) return;

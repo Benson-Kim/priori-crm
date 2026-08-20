@@ -23,7 +23,7 @@ import {
     uploadPurchaseOrderDocument,
 } from "@/services/purchaseOrderApi";
 import { CreditCard, Download, Eye, Paperclip, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Input } from "../ui/Input";
 import { DocumentPreviewModal } from "./DocumentPreviewModal";
 
@@ -55,13 +55,19 @@ export function PurchaseOrderPaymentModal({
     const [previewDocument, setPreviewDocument] = useState<PurchaseOrderDocument | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (isOpen) {
+    // Reset the form whenever the modal (re)opens or is switched to another
+    // payment. Render-time adjustment (react.dev "adjusting state when props
+    // change") instead of an effect, which set state synchronously.
+    const openKey = isOpen ? `${payment?.id ?? ""}` : null;
+    const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
+    if (openKey !== prevOpenKey) {
+        setPrevOpenKey(openKey);
+        if (openKey !== null) {
             setFiles([]);
             setError(null);
             setPreviewDocument(null);
         }
-    }, [isOpen, payment?.id]);
+    }
 
     if (!payment) return null;
 
