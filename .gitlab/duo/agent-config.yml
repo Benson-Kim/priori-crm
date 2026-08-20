@@ -29,6 +29,19 @@ setup_script:
   # then: export GH_TOKEN=... ; gh auth status confirms.
   - 'apt-get install -y -qq gh || echo "WARNING - gh CLI could not be installed"'
   - gh --version || true
+  # Local PostgreSQL for api/ pytest runs (issue #60 acceptance; issue #88:
+  # the documented SQLite fallback no longer builds the schema - 802
+  # collection-time errors - so real verification needs Postgres).
+  # Best-effort, never hard-fails the flow. The suite's fail-closed guard
+  # (api/tests/conftest.py::_require_test_database) requires a database
+  # name containing 'test'; CI uses prioritech_test. Sessions export:
+  #   DATABASE_URL=postgresql://priori:priori@localhost:5432/prioritech_test
+  - 'apt-get install -y -qq postgresql || echo "WARNING - postgresql could not be installed"'
+  - 'service postgresql start || true'
+  - |
+    su postgres -c "psql -c \"CREATE ROLE priori LOGIN SUPERUSER PASSWORD 'priori'\"" || true
+  - 'su postgres -c "createdb -O priori prioritech_test" || true'
+  - 'su postgres -c "psql -c \"SELECT version()\"" || true'
 
 network_policy:
   include_recommended_allowed: true
@@ -43,6 +56,15 @@ network_policy:
     # ruff, shellcheck-py etc. for local verification
     - pypi.org
     - files.pythonhosted.org
+    # npm registry, so sessions can run `npm ci` / `npm run lint` /
+    # `npm run build` in frontend/ (issue #60: QA hand-off sessions
+    # 6359439/6359441 were cancelled mid-verification because npm ci hung
+    # against the blocked registry). Every frontend dependency - including
+    # the vite/esbuild/rollup/tailwind-oxide native binaries - ships as an
+    # npm tarball from this single host; `npx openapi-typescript`
+    # (gen:api/prebuild) resolves from here too. No other npm-adjacent
+    # domain is needed by this dependency set.
+    - registry.npmjs.org
     # GitHub, so sessions can watch Actions runs on the deploy mirror
     # benson-priori/priori-crm (REST API + gh CLI + log downloads)
     - github.com
