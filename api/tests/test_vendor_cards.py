@@ -4,8 +4,8 @@ Vendor detail summary cards (Total POs / Total Payments / Total Bills).
 Proves the three card builders return correct aggregates (total / paid /
 pending / count), a paid-or-pending tag per row, honour the date filter, and
 that the Payments card unions PO payments with expense payments. Uses the same
-portable SQL as the transaction-list tests, so these run on SQLite and
-Postgres alike.
+portable SQL as the transaction-list tests; like every schema-building test
+they require a Postgres DATABASE_URL (skipped at collection time otherwise).
 """
 
 from datetime import date, timedelta

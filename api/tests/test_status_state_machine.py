@@ -1,7 +1,8 @@
 """Status changes routed through the state machine + payment locking.
 
-Schema-level tests run anywhere. Service-level tests use the shared `db`
-fixture (PostgreSQL in CI, SQLite locally).
+Service-level tests use the shared `db` fixture and therefore require
+PostgreSQL (CI provides it; without a Postgres DATABASE_URL the whole file
+is skipped at collection time).
 """
 
 import uuid
