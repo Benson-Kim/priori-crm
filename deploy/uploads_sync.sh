@@ -49,7 +49,14 @@ UPLOADS_DIR="${UPLOADS_DIR:-$ROOT/shared/uploads}"
 # OUTSIDE uploads-sync/ (see below): the heartbeat is timing metadata, not
 # document content, and the dead-man's switch reads it with the CI key that
 # must never hold the crypt password.
-RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+#
+# Deliberately NOT named RCLONE_REMOTE (#85): rclone parses RCLONE_*
+# environment variables as its own configuration. There is no global
+# --remote flag today, so rclone happens to ignore that name — but any
+# future rclone release adding one would silently reinterpret our value as
+# rclone's own setting (exactly what happened with RCLONE_CRYPT_REMOTE /
+# --crypt-remote in #82).
+BACKUP_BUCKET_REMOTE="${BACKUP_BUCKET_REMOTE:-}"
 # rclone CRYPT remote wrapping <bucket>/uploads-sync, e.g.
 # "spaces-crypt-uploads:" (rclone config: type=crypt,
 # remote=spaces:priori-crm-backups/uploads-sync, filename_encryption=
@@ -70,7 +77,7 @@ MAX_DELETE="${MAX_DELETE:-200}"
 
 log() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
 
-[ -n "$RCLONE_REMOTE" ] || { log "FATAL: RCLONE_REMOTE is not set (e.g. spaces:priori-crm-backups)"; exit 1; }
+[ -n "$BACKUP_BUCKET_REMOTE" ] || { log "FATAL: BACKUP_BUCKET_REMOTE is not set (e.g. spaces:priori-crm-backups)"; exit 1; }
 [ -n "$UPLOADS_CRYPT_REMOTE" ] || { log "FATAL: UPLOADS_CRYPT_REMOTE is not set (e.g. spaces-crypt-uploads: — a crypt remote over <bucket>/uploads-sync)"; exit 1; }
 command -v rclone >/dev/null || { log "FATAL: rclone is not installed"; exit 1; }
 # A missing source directory must never be treated as "everything was
@@ -103,7 +110,7 @@ rclone sync "$UPLOADS_DIR" "$UPLOADS_CRYPT_REMOTE" \
 # This marker's mtime can: it is touched only after a successful sync. It
 # lives OUTSIDE uploads-sync/ because sync would delete any file not present
 # in the source.
-rclone touch "$RCLONE_REMOTE/heartbeats/uploads-sync" || {
+rclone touch "$BACKUP_BUCKET_REMOTE/heartbeats/uploads-sync" || {
   rc=$?
   log "FATAL: could not update the uploads-sync heartbeat (exit $rc)"
   exit "$rc"
