@@ -17,10 +17,11 @@ Pins the ADR-0013 Phase A lifecycle contract:
 import uuid
 
 from app.common.audit import AuditEvent
-from app.common.security import create_access_token, hash_password
+from app.common.security import hash_password
 from app.constants.enums import OwnerStatus, UserRole
 from app.modules.auth.models import User
 from app.modules.owner.service import OwnerService
+from tests.operator_mfa_utils import auth_headers
 
 
 def _seed_user(db, email: str, role: UserRole) -> User:
@@ -38,7 +39,8 @@ def _seed_user(db, email: str, role: UserRole) -> User:
 
 
 def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
+    # Operators get a full-MFA token + fresh step-up code (ADR-0014, #73).
+    return auth_headers(user)
 
 
 def _seed_owner(db) -> uuid.UUID:

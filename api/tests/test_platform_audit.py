@@ -4,9 +4,10 @@ Pins the contract:
 
 - operator-only (tenant roles 403), never module-gated (works while the
   owner is suspended and every toggleable module disabled);
-- scoped to exactly the entity types the owner service writes:
-  ``owner_module_setting`` and ``owner_profile``
-  (``PLATFORM_AUDIT_ENTITY_TYPES``) — foreign audit rows (invoices etc.)
+- scoped to exactly the platform entity types
+  (``PLATFORM_AUDIT_ENTITY_TYPES``): ``owner_module_setting`` and
+  ``owner_profile`` from the owner service, plus ``operator_mfa`` from
+  the MFA service (ADR-0014) — foreign audit rows (invoices etc.)
   never leak in;
 - newest first, paginated with the shared window pagination;
 - filterable by owner (lifecycle events directly, entitlement events via
@@ -17,11 +18,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app.common.audit import record_audit_event
-from app.common.security import create_access_token, hash_password
+from app.common.security import hash_password
 from app.constants.enums import UserRole
 from app.modules.auth.models import User
 from app.modules.owner.models import OwnerProfile
 from app.modules.owner.service import OwnerService
+from tests.operator_mfa_utils import auth_headers
 
 AUDIT_URL = "/api/v1/platform/audit"
 
@@ -41,7 +43,8 @@ def _seed_user(db, email: str, role: UserRole) -> User:
 
 
 def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
+    # Operators get a full-MFA token + fresh step-up code (ADR-0014, #73).
+    return auth_headers(user)
 
 
 def _seed_owner(db) -> uuid.UUID:
@@ -58,7 +61,12 @@ def _seed_second_owner(db) -> uuid.UUID:
 
 
 def _drive_events(client, db, operator, owner_id) -> None:
-    """One entitlement disable + one suspension via the audited APIs."""
+    """One entitlement disable + one suspension via the audited APIs.
+
+    Since ADR-0014, each destructive PATCH is preceded by a step-up
+    proof, so this drives FOUR audit rows (chronologically):
+    step_up_granted, module_disabled, step_up_granted, owner_suspended.
+    """
     resp = client.patch(
         f"/api/v1/platform/owners/{owner_id}/modules/customers",
         json={"enabled": False},
@@ -87,7 +95,7 @@ class TestAccessControl:
         _drive_events(client, db, operator, owner_id)
         resp = client.get(AUDIT_URL, headers=_auth(operator))
         assert resp.status_code == 200
-        assert len(resp.json()["items"]) == 2
+        assert len(resp.json()["items"]) == 4
 
 
 class TestScopeAndOrdering:
@@ -108,10 +116,16 @@ class TestScopeAndOrdering:
         resp = client.get(AUDIT_URL, headers=_auth(operator))
         assert resp.status_code == 200
         items = resp.json()["items"]
-        assert [i["action"] for i in items] == ["owner_suspended", "module_disabled"]
+        assert [i["action"] for i in items] == [
+            "owner_suspended",
+            "step_up_granted",
+            "module_disabled",
+            "step_up_granted",
+        ]
         assert {i["entityType"] for i in items} == {
             "owner_profile",
             "owner_module_setting",
+            "operator_mfa",
         }
         suspended = items[0]
         assert suspended["actorId"] == str(operator.id)
@@ -131,13 +145,13 @@ class TestScopeAndOrdering:
         assert resp.status_code == 200
         body = resp.json()
         assert len(body["items"]) == 1
-        assert body["metadata"]["total"] == 2
+        assert body["metadata"]["total"] == 4
         assert body["metadata"]["has_next"] is True
         assert body["metadata"]["has_prev"] is False
 
         resp = client.get(
             AUDIT_URL,
-            params={"per_page": 1, "page": 2},
+            params={"per_page": 1, "page": 4},
             headers=_auth(operator),
         )
         body = resp.json()
@@ -209,7 +223,8 @@ class TestFilters:
             headers=_auth(operator),
         )
         assert {i["actorId"] for i in resp.json()["items"]} == {str(operator.id)}
-        assert len(resp.json()["items"]) == 2
+        # 2 writes + their 2 step-up grants (ADR-0014).
+        assert len(resp.json()["items"]) == 4
 
     def test_date_range_filter(self, client, db):
         operator = _seed_user(db, "operator@mail.com", UserRole.PLATFORM_OPERATOR)
@@ -224,7 +239,7 @@ class TestFilters:
             params={"dateFrom": past, "dateTo": future},
             headers=_auth(operator),
         )
-        assert len(resp.json()["items"]) == 2
+        assert len(resp.json()["items"]) == 4
 
         resp = client.get(
             AUDIT_URL, params={"dateFrom": future}, headers=_auth(operator)

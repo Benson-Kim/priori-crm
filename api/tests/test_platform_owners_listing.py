@@ -13,11 +13,12 @@ Pins the hardened listing contract:
 
 import uuid
 
-from app.common.security import create_access_token, hash_password
+from app.common.security import hash_password
 from app.constants.enums import UserRole
 from app.modules.auth.models import User
 from app.modules.owner.models import OwnerProfile
 from app.modules.owner.service import OwnerService
+from tests.operator_mfa_utils import auth_headers
 
 OWNERS_URL = "/api/v1/platform/owners"
 
@@ -37,7 +38,8 @@ def _seed_operator(db) -> User:
 
 
 def _auth(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
+    # Operators get a full-MFA token + fresh step-up code (ADR-0014, #73).
+    return auth_headers(user)
 
 
 def _seed_owners(db, names: list[str]) -> dict[str, uuid.UUID]:
@@ -73,31 +75,32 @@ class TestSummary:
     def test_disabled_module_count_and_status_per_owner(self, client, db):
         operator = _seed_operator(db)
         ids = _seed_owners(db, ["Acme Ltd", "Beta Corp"])
-        headers = _auth(operator)
+        # Recompute headers per PATCH: each destructive call needs a
+        # FRESH step-up code (replay fence, ADR-0014).
         for key in ("customers", "reports"):
             resp = client.patch(
                 f"{OWNERS_URL}/{ids['Acme Ltd']}/modules/{key}",
                 json={"enabled": False},
-                headers=headers,
+                headers=_auth(operator),
             )
             assert resp.status_code == 200
         # An explicit enabled=true override must NOT count as disabled.
         resp = client.patch(
             f"{OWNERS_URL}/{ids['Beta Corp']}/modules/vendors",
             json={"enabled": True},
-            headers=headers,
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
         resp = client.patch(
             f"{OWNERS_URL}/{ids['Beta Corp']}/status",
             json={"status": "suspended"},
-            headers=headers,
+            headers=_auth(operator),
         )
         assert resp.status_code == 200
 
         owners = {
             o["fullName"]: o
-            for o in client.get(OWNERS_URL, headers=headers).json()["owners"]
+            for o in client.get(OWNERS_URL, headers=_auth(operator)).json()["owners"]
         }
         assert owners["Acme Ltd"]["disabledModuleCount"] == 2
         assert owners["Acme Ltd"]["status"] == "active"
