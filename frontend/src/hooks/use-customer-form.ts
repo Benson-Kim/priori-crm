@@ -35,9 +35,15 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
                 firstName: customer.first_name,
                 lastName: customer.last_name,
                 email: customer.email || "",
-                // Optional: strip the country prefix only when a number is
-                // on file. Calling .replace() on an absent phone throws.
-                phone: (customer.phone || "").replace(/^\+?254/, "").trim(),
+                // Strip-on-seed applies only to Kenyan customers, whose form
+                // renders a +254 decoration over local digits. Any other
+                // country's number is edited as full E.164, so it seeds
+                // verbatim — stripping "+254" from e.g. a stored "+2547…"
+                // Rwandan-adjacent number would mangle it (#63/#64).
+                phone:
+                    (customer.country || "KE") === "KE"
+                        ? (customer.phone || "").replace(/^\+?254/, "").trim()
+                        : (customer.phone || "").trim(),
                 website: customer.website || "",
                 vatNumber: customer.vat_number || "",
                 currency: customer.currency,

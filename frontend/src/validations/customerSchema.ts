@@ -13,11 +13,11 @@ export const customerSchema = z
       .email("Please enter a valid email address")
       .optional()
       .or(z.literal("")),
-    phone: z
-      .string()
-      .regex(/^[0-9]{9,10}$/, "Phone number must be between 9-10 digits")
-      .optional()
-      .or(z.literal("")),
+    // Phone format depends on the selected country, so it is validated in
+    // the superRefine below rather than here: Kenyan numbers are entered as
+    // local digits behind the form's +254 decoration, every other country
+    // takes full international (+…) input (#63/#64 convention).
+    phone: z.string().optional().or(z.literal("")),
     website: z.url("Please enter a valid URL").optional().or(z.literal("")),
     vatNumber: z.string().optional(),
     currency: z.string().min(1, "Please select a currency"),
@@ -57,6 +57,38 @@ export const customerSchema = z
       message: "Phone number is required for individual customers.",
       path: ["phone"],
     }
-  );
+  )
+  // Country-aware phone format (#64): the form stores Kenyan numbers as the
+  // 9-10 local digits (the +254 is input decoration and re-added on submit);
+  // any other country's number is stored as typed and must be full
+  // international E.164, which the API accepts verbatim for every country.
+  .superRefine((data, ctx) => {
+    if (!data.phone) return;
+    if (data.country === "KE" || !data.country) {
+      if (!/^[0-9]{9,10}$/.test(data.phone)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["phone"],
+          message: "Phone number must be between 9-10 digits",
+        });
+      }
+      return;
+    }
+    const trimmed = data.phone.trim();
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (
+      !trimmed.startsWith("+") ||
+      digits.length < 8 ||
+      digits.length > 15 ||
+      !/^\+[\d ()-]+$/.test(trimmed)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["phone"],
+        message:
+          "Enter the number in international format, e.g. +250 788 123 456",
+      });
+    }
+  });
 
 export type CustomerFormData = z.infer<typeof customerSchema>;

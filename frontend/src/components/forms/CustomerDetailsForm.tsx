@@ -59,11 +59,19 @@ export function CustomerDetailsForm({
     }, [initialData, reset]);
 
     const customerType = watch("customerType");
+    // The phone field's convention follows the selected country (#63/#64):
+    // Kenya keeps the guided local-digits entry behind a +254 decoration;
+    // every other country takes full international (+…) input verbatim,
+    // which the API's normalize_phone accepts for any country.
+    const country = watch("country");
+    const isKenyanPhone = country === DEFAULT_COUNTRY || !country;
 
     const onSubmit = (data: CustomerFormData) => {
         onSave?.({
             ...data,
-            phone: normalizeKenyanPhoneNumber(data.phone ?? ""),
+            phone: isKenyanPhone
+                ? normalizeKenyanPhoneNumber(data.phone ?? "")
+                : (data.phone ?? "").trim(),
         });
     };
 
@@ -194,6 +202,22 @@ export function CustomerDetailsForm({
                             name="phone"
                             control={control}
                             render={({ field }) => {
+                                if (!isKenyanPhone) {
+                                    // Non-KE country: full international
+                                    // entry, no +254 decoration or Kenyan
+                                    // masking (#64).
+                                    return (
+                                        <Input
+                                            id="phone"
+                                            type="tel"
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            placeholder="+250 788 123 456"
+                                            error={errors.phone?.message}
+                                        />
+                                    );
+                                }
+
                                 const formattedValue = formatKenyanPhoneInput(field.value ?? "");
 
                                 return (

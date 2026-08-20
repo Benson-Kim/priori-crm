@@ -70,6 +70,11 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
     const emailValue = useWatch({ name: "email", control });
     const customerTypeValue = useWatch({ name: "customerType", control });
     const phoneRequired = customerTypeValue === "individual";
+    // Phone entry follows the selected country (#63/#64): Kenya keeps the
+    // +254 decoration with local entry; any other country takes full
+    // international (+…) input, which the API accepts for every country.
+    const countryValue = useWatch({ name: "country", control });
+    const isKenyanPhone = countryValue === DEFAULT_COUNTRY || !countryValue;
 
 
     const onSubmit = async (data: QuickCustomerForm) => {
@@ -243,13 +248,27 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         </label>
                         <Input
                             {...register("phone", {
-                                validate: (value) =>
-                                    !phoneRequired || !!value ||
-                                    "Phone number is required for individual customers.",
+                                validate: (value) => {
+                                    if (phoneRequired && !value) {
+                                        return "Phone number is required for individual customers.";
+                                    }
+                                    if (value && !isKenyanPhone) {
+                                        const trimmed = value.trim();
+                                        const digits = trimmed.replace(/[^\d]/g, "");
+                                        if (
+                                            !trimmed.startsWith("+") ||
+                                            digits.length < 8 ||
+                                            digits.length > 15
+                                        ) {
+                                            return "Enter the number in international format, e.g. +250 788 123 456";
+                                        }
+                                    }
+                                    return true;
+                                },
                             })}
-                            prefix="+254"
+                            prefix={isKenyanPhone ? "+254" : undefined}
                             type="tel"
-                            placeholder="700 000 000"
+                            placeholder={isKenyanPhone ? "700 000 000" : "+250 788 123 456"}
                             error={errors.phone?.message}
                         />
                     </div>
