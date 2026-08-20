@@ -167,11 +167,53 @@ class TestEndToEnd:
         return {"Authorization": f"Bearer {data['access_token']}"}
 
     def test_operator_authenticates_and_lists_owners(self, client, db):
+        """Freshly seeded operator: constrained until MFA-enrolled (#73).
+
+        The seed script remains step one only — the first sign-in yields
+        an enrollment-scoped token (403 on the console proper, 200 on
+        /platform/mfa). After enrolling and signing in again WITH the
+        TOTP, the console works (ADR-0014).
+        """
+        from app.common.mfa import hotp, totp_at, totp_counter
+
         headers = self._login(client, db)
         owner_id = OwnerService(db).get_or_create().id
         db.commit()
 
-        resp = client.get("/api/v1/platform/owners", headers=headers)
+        # Unenrolled: enrollment-only surface.
+        assert client.get("/api/v1/platform/owners", headers=headers).status_code == 403
+        assert client.get("/api/v1/platform/mfa", headers=headers).status_code == 200
+
+        # Enroll via the API, exactly as the runbook documents.
+        secret = client.post("/api/v1/platform/mfa/enrollment", headers=headers).json()[
+            "secret"
+        ]
+        activated = client.post(
+            "/api/v1/platform/mfa/enrollment/activate",
+            json={"code": totp_at(secret)},
+            headers=headers,
+        )
+        assert activated.status_code == 200
+
+        # Fresh sign-in with the second factor (next step's code — the
+        # activation spent the current counter) yields full console access.
+        with patch("app.modules.auth.service.AuthService._send_otp_email") as send:
+            resp = client.post(
+                "/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD}
+            )
+            assert resp.status_code == 200
+        verify = client.post(
+            "/api/v1/auth/verify-otp",
+            json={
+                "email": EMAIL,
+                "code": send.call_args[0][1],
+                "totp_code": hotp(secret, totp_counter() + 1),
+            },
+        )
+        assert verify.status_code == 200
+        full_headers = {"Authorization": f"Bearer {verify.json()['access_token']}"}
+
+        resp = client.get("/api/v1/platform/owners", headers=full_headers)
         assert resp.status_code == 200
         assert [o["id"] for o in resp.json()["owners"]] == [str(owner_id)]
 
