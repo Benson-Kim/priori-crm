@@ -130,7 +130,7 @@ export function PurchaseOrderPaymentModal({
                 )}
 
                 <div className="space-y-2">
-                    <Label htmlFor="payment-amount" className="font-bold text-base">Amount</Label>
+                    <Label htmlFor="payment-amount" className="font-bold text-sm">Amount</Label>
                     <Input
                         className="text-gray-700"
                         id="payment-amount"
@@ -140,7 +140,7 @@ export function PurchaseOrderPaymentModal({
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
+                    <Label htmlFor="payment-date" className="font-bold text-sm">Date</Label>
                     <Input
                         className="text-gray-700"
                         id="payment-date"
@@ -151,7 +151,7 @@ export function PurchaseOrderPaymentModal({
                 </div>
                 {payment.reference && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-reference" className="font-bold text-base">Reference</Label>
+                        <Label htmlFor="payment-reference" className="font-bold text-sm">Reference</Label>
                         <Input
                             className="text-gray-700"
                             id="payment-reference"
@@ -163,7 +163,7 @@ export function PurchaseOrderPaymentModal({
                 )}
                 {payment.notes && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-notes" className="font-bold text-base">Notes</Label>
+                        <Label htmlFor="payment-notes" className="font-bold text-sm">Notes</Label>
                         <Input
                             className="text-gray-700"
                             id="payment-notes"
@@ -212,7 +212,7 @@ export function PurchaseOrderPaymentModal({
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-base text-gray-400">No documents linked to this payment.</p>
+                        <p className="text-sm text-gray-400">No documents linked to this payment.</p>
                     )}
                 </div>
 
@@ -222,7 +222,7 @@ export function PurchaseOrderPaymentModal({
                         type="button"
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2 w-full border-dashed h-28 text-[20px]"
+                        className="w-full border-dashed h-28 "
                     >
                         <Plus size={20} /> Upload document
                     </Button>

@@ -471,7 +471,6 @@ export function PurchaseOrderEditor({
             variant="primary"
             onClick={handleSubmit}
             loading={isLoading}
-            className="px-5 py-4 flex items-center gap-2"
           >
             <Save size={18} /> Save &amp; Continue
           </Button>
@@ -528,7 +527,7 @@ export function PurchaseOrderEditor({
 
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
                 {/* Reference */}
-                <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
+                <label className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap">
                   PO No.
                 </label>
                 <Input
@@ -540,7 +539,7 @@ export function PurchaseOrderEditor({
                 {/* Order Date */}
                 <label
                   htmlFor="order-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Order Date
                 </label>
@@ -561,7 +560,7 @@ export function PurchaseOrderEditor({
                 {/* Delivery Date (optional) */}
                 <label
                   htmlFor="delivery-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Delivery Date
                 </label>
@@ -580,7 +579,7 @@ export function PurchaseOrderEditor({
 
                 <label
                   htmlFor="vat-enabled"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Add VAT
                 </label>

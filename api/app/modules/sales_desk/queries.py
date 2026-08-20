@@ -227,9 +227,9 @@ class SalesDeskRepository:
                 func.lower(
                     func.coalesce(Customer.company_name, "")
                     + " "
-                    + Customer.first_name
+                    + func.coalesce(Customer.first_name, "")
                     + " "
-                    + Customer.last_name
+                    + func.coalesce(Customer.last_name, "")
                     + " "
                     + func.coalesce(Customer.industry, "")
                     + " "

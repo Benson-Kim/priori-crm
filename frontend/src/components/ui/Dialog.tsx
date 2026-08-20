@@ -86,7 +86,6 @@ export function Dialog({
               <Button
                 variant="outline-secondary"
                 onClick={onClose}
-                className="p-4 text-[20px] leading-7.5 border border-gray-600 text-gray-600"
               >
                 {cancelLabel}
               </Button>
@@ -94,7 +93,6 @@ export function Dialog({
                 variant={variant === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
                 loading={isLoading}
-                className="p-4 text-[20px] leading-7.5 font-sans"
               >
                 {confirmLabel}
               </Button>

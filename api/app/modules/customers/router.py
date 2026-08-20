@@ -469,7 +469,7 @@ def _statement_display_name(statement) -> str:
     customer = statement.customer
     return (
         customer.company_name
-        or f"{customer.first_name} {customer.last_name}".strip()
+        or f"{customer.first_name or ''} {customer.last_name or ''}".strip()
         or customer.email
     )
 

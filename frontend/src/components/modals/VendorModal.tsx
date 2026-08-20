@@ -13,7 +13,7 @@ import {
 } from "@/services/vendorApi";
 import { vendorSchema, type VendorFormData } from "@/validations/vendorSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { Select } from "../ui/Select";
@@ -426,9 +426,9 @@ export function VendorModal({ isOpen, onClose, vendorId, onSuccess }: VendorModa
                             <Button
                                 type="submit"
                                 disabled={isLoading}
-                                className="flex-1 px-4 py-3 bg-priori-purple text-white font-semibold rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1"
                             >
-                                <Check size={20} /> {isLoading ? "Saving..." : "Save Vendor"}
+                                <CheckCircle size={20} /> {isLoading ? "Saving..." : "Save Vendor"}
                             </Button>
                         </div>
                     </Card>

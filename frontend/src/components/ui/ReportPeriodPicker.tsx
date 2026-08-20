@@ -165,19 +165,19 @@ export function ReportPeriodPicker({
         aria-expanded={isOpen}
         onClick={toggle}
         className={cn(
-          "flex items-center gap-2 p-3 rounded-lg border border-gray-300 bg-gray-50",
-          "text-base font-normal leading-6 text-gray-900 transition-all cursor-pointer whitespace-nowrap",
+          "flex items-center gap-2 px-4 py-3 rounded-2xl border border-gray-300 bg-gray-50",
+          "text-sm font-normal leading-5 text-gray-600 transition-all cursor-pointer whitespace-nowrap",
           "hover:border-priori-purple/50",
           isOpen && "border-priori-purple ring-1 ring-priori-purple/20",
           triggerClassName
         )}
       >
         <CalendarDays size={16} className="shrink-0 text-gray-400" />
-        <span>{periodLabel(value)}</span>
+        <span className="">{periodLabel(value)}</span>
         <ChevronDown
           size={16}
           className={cn(
-            "shrink-0 text-gray-400 transition-transform duration-150",
+            "shrink-0 text-gray-500 transition-transform duration-150",
             isOpen && "rotate-180"
           )}
         />

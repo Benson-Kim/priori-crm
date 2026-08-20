@@ -16,9 +16,13 @@ interface DropdownProps {
   trigger?: ReactNode;
   className?: string;
   disabled?: boolean;
+  /** Rendered above the items, e.g. a signed-in-user summary. */
+  header?: ReactNode;
+  /** Override the panel's default width (`min-w-44 max-w-60`). */
+  panelClassName?: string;
 }
 
-export function Dropdown({ items, trigger, className, disabled }: Readonly<DropdownProps>) {
+export function Dropdown({ items, trigger, className, disabled, header, panelClassName }: Readonly<DropdownProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -88,9 +92,13 @@ export function Dropdown({ items, trigger, className, disabled }: Readonly<Dropd
       {isOpen && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 mt-1 min-w-44 max-w-60 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl"
+          className={cn(
+            "fixed z-50 mt-1 min-w-44 max-w-60 bg-white shadow-lg border border-border animate-in fade-in slide-in-from-top-1 duration-150 rounded-b-2xl overflow-hidden",
+            panelClassName
+          )}
           style={{ top: coords.top, right: coords.right }}
         >
+          {header}
           {items.map((item) => (
             <button
               key={item.key}

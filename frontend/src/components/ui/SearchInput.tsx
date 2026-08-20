@@ -15,20 +15,20 @@ export function SearchInput({
   return (
     <div
       className={cn(
-        "flex items-center p-3 gap-3 rounded-lg border border-border bg-white transition-colors",
-        "focus-within:border-priori-purple focus-within:ring-1 focus-within:ring-primary/30",
+        "flex items-center px-5 py-3 gap-2 rounded-2xl border border-border bg-white transition-colors",
+        "focus-within:border-priori-purple focus-within:ring-1 focus-within:ring-priori-purple/20",
         className
       )}
     >
       <input
         type="text"
-        className="w-full bg-transparent leading-6 text-base text-content-priori-purple placeholder:text-content-gray-400 outline-none  "
+        className="ui-input w-full bg-transparent leading-5 text-sm text-gray-600 placeholder:text-content-gray-400 outline-none"
         onChange={(e) => onSearchChange?.(e.target.value)}
         {...props}
       />
       <Search
-        size={24}
-        className="text-gray-500 shrink-0 font-light"
+        size={16}
+        className="text-gray-500 shrink-0"
       />
     </div>
   );

@@ -377,7 +377,7 @@ class InvoiceService(BaseDocumentService):
                 if row.company_name:
                     customer_name = row.company_name
                 else:
-                    customer_name = f"{row.first_name} {row.last_name}".strip()
+                    customer_name = f"{row.first_name or ''} {row.last_name or ''}".strip()
 
                 items.append(
                     InvoiceSummary(

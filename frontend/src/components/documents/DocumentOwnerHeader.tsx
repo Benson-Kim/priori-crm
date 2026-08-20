@@ -52,7 +52,7 @@ export function DocumentOwnerHeader({
 
       {/* Owner identity */}
       <div className="flex flex-col gap-1 text-gray-800">
-        <h3 className="font-bold text-base mb-1">{profile?.fullName ?? ""}</h3>
+        <h3 className="font-bold text-sm mb-1">{profile?.fullName ?? ""}</h3>
         {profile?.address && <p className="text-sm">{profile.address}</p>}
         {profile?.phone && <p className="text-sm">{profile.phone}</p>}
         {profile?.email && <p className="text-sm">{profile.email}</p>}

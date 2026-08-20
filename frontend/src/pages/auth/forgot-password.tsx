@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
                 asChild
                 variant="primary"
                 size="lg"
-                className="w-full text-[18px] font-bold"
+                className="w-full"
               >
                 <Link to="/login">Back to sign in</Link>
               </Button>
@@ -138,7 +138,7 @@ export default function ForgotPasswordPage() {
               variant="primary"
               size="lg"
               loading={submitting}
-              className="w-full text-[18px] font-bold"
+                className="w-full"
             >
               Send reset link
             </Button>

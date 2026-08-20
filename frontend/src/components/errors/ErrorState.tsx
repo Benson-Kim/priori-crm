@@ -47,7 +47,6 @@ export function ErrorState({ message, staleChunk = false }: Readonly<ErrorStateP
         <Button
           variant="primary"
           onClick={() => window.location.reload()}
-          className="flex items-center gap-2"
         >
           <RotateCw size={18} /> Reload page
         </Button>

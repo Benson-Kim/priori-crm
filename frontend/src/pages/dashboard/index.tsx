@@ -157,7 +157,7 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
       {/* Downward pointer, same fill as the card. */}
       <span
         aria-hidden
-        className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-[10px] border-t-[12px] border-x-transparent border-t-[#f8f9fb]"
+        className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-10 border-t-12 border-x-transparent border-t-[#f8f9fb]"
       />
     </div>
   );
@@ -211,18 +211,15 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
   return (
     <section>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center mb-4">
-        <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-bold text-gray-800">Overview</h2>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-end-safe">
             <InlineSelect
               options={CURRENCY_OPTIONS}
               value={currency}
               onChange={onCurrencyChange}
               aria-label="Display currency"
-              triggerClassName="bg-white p-2"
+            triggerClassName="bg-white px-4 py-3 rounded-2xl"
             />
-            <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
-          </div>
+          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
         </div>
       </div>
 
@@ -320,12 +317,12 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
     <Card padding="lg" className="relative flex flex-col justify-between rounded-xl">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
         <div>
-          <h4 className="text-lg leading-6 text-gray-500">Cash Flow</h4>
+          <h4 className="text-sm leading-5 text-gray-900 font-medium">Cash Flow</h4>
           <p className="font-bold py-3 leading-6 text-lg text-gray-800">
             {money(series?.net_total)}
           </p>
         </div>
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -478,8 +475,8 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
   return (
     <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <h3 className="font-bold py-3 leading-6 text-[20px] text-gray-800">Top Sales</h3>
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
+        <h4 className="text-sm leading-5 text-gray-900 font-medium">Top Sales</h4>
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {error && (
@@ -590,7 +587,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
         <span
-          className="block max-w-[120px] truncate text-sm leading-6 text-gray-600"
+          className="block max-w-30 truncate text-sm leading-6 text-gray-600"
           title={item.ref_no}
         >
           {item.ref_no}
@@ -603,7 +600,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
         <span
-          className="block max-w-[150px] truncate text-sm leading-6 text-gray-800"
+          className="block max-w-37.5 truncate text-sm leading-6 text-gray-800"
           title={item.item_name ?? undefined}
         >
           {item.item_name ?? "\u2014"}
@@ -616,7 +613,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
         <span
-          className="block max-w-[170px] truncate text-sm leading-6 text-gray-800"
+          className="block max-w-42.5 truncate text-sm leading-6 text-gray-800"
           title={item.entity_name}
         >
           {item.entity_name}
@@ -629,7 +626,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
       className: "font-normal whitespace-nowrap",
       render: (item: DashboardTransaction) => (
         <span
-          className="block max-w-[120px] truncate text-sm leading-6 text-gray-600"
+          className="block max-w-30 truncate text-sm leading-6 text-gray-600"
           title={item.category ?? undefined}
         >
           {item.category ?? "\u2014"}
@@ -651,14 +648,14 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
   ];
 
   return (
-    <div className="bg-white gap-4 px-4 py-6 flex flex-col rounded-2xl border border-gray-200 overflow-hidden">
+    <Card className="relative flex flex-col gap-4 rounded-2xl overflow-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pr-3">
-        <h3 className="font-bold p-3 leading-7.5 text-[20px] text-gray-800">
+        <h4 className="text-sm leading-5 text-gray-900 font-medium">
           Last Transactions
-        </h3>
+        </h4>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
-          <Button variant="outline" className="p-2">View all</Button>
+          <Button variant="outline">View all</Button>
         </div>
       </div>
 
@@ -679,7 +676,7 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
           emptyMessage="No transactions available for the selected period."
         />
       )}
-    </div>
+    </Card>
   );
 }
 

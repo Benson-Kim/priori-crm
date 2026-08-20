@@ -35,9 +35,9 @@ function SalesDeskHeader({
              * other module. Screens do not repeat them in their own content.
              */}
             <div className="min-w-0">
-                <h1 className="truncate text-base font-bold text-sd-ink">{title}</h1>
+                <h1 className="truncate text-[20px] leading-7.5 font-bold text-sd-ink">{title}</h1>
                 {description && (
-                    <p className="truncate text-xs text-sd-muted">{description}</p>
+                    <p className="truncate text-[12px] leading-4.5 text-sd-muted">{description}</p>
                 )}
             </div>
 

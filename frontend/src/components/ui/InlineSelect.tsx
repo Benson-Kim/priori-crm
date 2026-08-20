@@ -64,7 +64,7 @@ const SEARCHABLE_THRESHOLD = 12;
 const TRIGGER_STYLES = {
   default: [
     "px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
-    "text-sm font-normal leading-6 text-gray-900",
+    "text-sm font-normal leading-5 text-gray-600",
     "hover:border-priori-purple/50",
   ].join(" "),
   /*
@@ -289,7 +289,7 @@ export function InlineSelect({
           size={16}
           className={cn(
             "shrink-0 transition-transform duration-150",
-            "text-gray-400",
+            "text-gray-500",
             isOpen && "rotate-180"
           )}
         />

@@ -354,14 +354,14 @@ export function AddCustomerModal({ isOpen, onClose, onCustomerAdded }: AddCustom
                         onClick={handleClose}
                         disabled={isLoading}
                         variant="outline"
-                        className="flex-1 text-gray-600 border border-gray-600"
+                        className="flex-1"
                     >
                         <X size={20} /> Cancel
                     </Button>
                     <Button
                         type="submit"
                         disabled={isLoading}
-                        className="flex-1 font-semibold"
+                        className="flex-1"
                     >
                         <CheckCircle size={20} /> {isLoading ? "Saving..." : "Save Customer"}
                     </Button>

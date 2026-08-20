@@ -41,7 +41,7 @@ export default function ReportsIndexPage() {
   return (
     <div className="flex flex-col space-y-6">
       <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
-        <p className="text-content-secondary text-base">
+        <p className="text-content-secondary text-sm">
           Select a report to view financial insights for your business.
         </p>
 
@@ -58,7 +58,7 @@ export default function ReportsIndexPage() {
                 <div className={`w-10 h-10 rounded-xl ${card.bgColor} flex items-center justify-center mb-4`}>
                   <Icon size={20} className={card.iconColor} />
                 </div>
-                <h3 className="font-semibold text-gray-900 text-base mb-1">{card.title}</h3>
+                <h3 className="font-semibold text-gray-900 text-sm mb-1">{card.title}</h3>
                 <p className="text-sm text-content-secondary leading-5">{card.description}</p>
               </button>
             );

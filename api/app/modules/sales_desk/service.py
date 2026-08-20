@@ -302,9 +302,12 @@ class SalesDeskService:
         recent_companies = [
             RecentCompany(
                 id=str(row.id),
-                name=(row.company_name or f"{row.first_name} {row.last_name}".strip()),
+                name=(
+                    row.company_name
+                    or f"{row.first_name or ''} {row.last_name or ''}".strip()
+                ),
                 industry=row.industry,
-                contact=f"{row.first_name} {row.last_name}".strip(),
+                contact=f"{row.first_name or ''} {row.last_name or ''}".strip(),
                 currency=row.primary_currency or row.currency,
                 created_date=_org_local_date(row.created_at),
             )
@@ -751,10 +754,11 @@ class SalesDeskService:
                 DeskCompanyRow(
                     id=str(row.id),
                     name=(
-                        row.company_name or f"{row.first_name} {row.last_name}".strip()
+                        row.company_name
+                        or f"{row.first_name or ''} {row.last_name or ''}".strip()
                     ),
                     industry=row.industry,
-                    contact=f"{row.first_name} {row.last_name}".strip(),
+                    contact=f"{row.first_name or ''} {row.last_name or ''}".strip(),
                     email=row.email,
                     phone=row.phone,
                     tenant=row.tenant_domain,

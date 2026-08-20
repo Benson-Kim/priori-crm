@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 def seed_user(
     email: str,
     password: str,
-    first_name: str = "Frank",
-    last_name: str = "Degods",
+    first_name: str = "Anthony",
+    last_name: str = "Maina",
 ) -> None:
     """Create a user if one does not already exist. Development use only."""
     if settings.ENVIRONMENT == "production":

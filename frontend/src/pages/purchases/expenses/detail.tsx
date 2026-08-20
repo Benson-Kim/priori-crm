@@ -242,7 +242,6 @@ export default function ExpensesDetailPage() {
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="flex items-center gap-2"
                     >
                         <Plus size={16} /> {isUploading ? "Uploading..." : "Attach Document"}
                     </Button>

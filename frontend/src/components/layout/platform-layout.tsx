@@ -29,10 +29,10 @@ export default function PlatformLayout() {
             <ShieldCheck size={20} aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold">
+            <h1 className="truncate text-[20px] leading-7.5 font-bold">
               Platform operator console
             </h1>
-            <p className="truncate text-xs text-slate-400">
+            <p className="truncate text-[12px] leading-4.5 text-slate-400">
               Module entitlements per owner organisation — not tenant data.
             </p>
           </div>

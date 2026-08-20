@@ -2,7 +2,7 @@ import { cva } from "class-variance-authority";
 
 export const buttonVariants = cva(
   [
-    "inline-flex gap-2 items-center justify-center whitespace-nowrap rounded-lg text-[20px] font-medium",
+    "inline-flex gap-2 items-center justify-center whitespace-nowrap rounded-2xl text-[14px] leading-5 font-semibold",
     "transition-colors duration-150",
     /*
      * The ring was previously set to both `ring-2` and `ring-0`, so the later
@@ -52,9 +52,9 @@ export const buttonVariants = cva(
           "text-[13px] font-semibold text-sd-brand underline-offset-4 hover:underline",
       },
       size: {
-        default: "px-4 py-3",
-        sm: "rounded-md py-1.5 px-3",
-        lg: "rounded-md py-4 px-8",
+        default: "px-5 py-3",
+        sm: "py-1.5 px-3",
+        lg: "px-5 py-3",
         icon: "h-10 w-10",
         /** Sales Desk buttons/inputs — radius 10–12 (style-reference.md §1). */
         sd: "rounded-[10px] px-3.5 py-2",

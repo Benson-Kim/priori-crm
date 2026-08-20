@@ -7,10 +7,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Focus treatment for a text-field wrapper: the visible border lives on an
+ * outer div, but focus lands on the `<input>` inside it, so `focus-within`
+ * is what fires — a plain `focus:` here never matches (the div itself is
+ * never focused) and silently renders nothing. Purple to match every other
+ * focused/open control (InlineSelect, CalendarPicker, the global
+ * `input:focus-visible` rule in index.css).
+ */
 export const focusInput = [
-  "focus:ring-2",
-  "focus:ring-blue-200 focus:dark:ring-blue-700/30",
-  "focus:border-blue-500 focus:dark:border-blue-700",
+  "focus-within:ring-1",
+  "focus-within:ring-priori-purple/20",
+  "focus-within:border-priori-purple",
 ];
 
 export const focusRing = [
@@ -222,6 +230,11 @@ export function formatKenyanPhoneInput(value: string) {
 
 export function getKenyanPhoneGhostText(value: string) {
   const digits = getKenyanPhoneDigits(value);
+
+  // Nothing typed yet: the loop below only matches once digitCount has
+  // advanced past zero, so an empty field fell through to "" and the mask
+  // only appeared after the first keystroke. Show the full mask up front.
+  if (digits.length === 0) return PHONE_MASK;
 
   let digitCount = 0;
 

@@ -177,7 +177,7 @@ export default function LoginPage() {
             variant="primary"
             size="lg"
             loading={submitting}
-            className="w-full text-[18px] font-bold"
+            className="w-full"
           >
             Continue
           </Button>

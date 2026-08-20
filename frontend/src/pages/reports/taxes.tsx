@@ -189,7 +189,7 @@ export default function TaxReportPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-6">
-          <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="px-2 py-1.5" />
+          <ReportPeriodPicker value={period} onChange={setPeriod} />
           <Button size="sm" variant="outline" onClick={handleExport} disabled={isExporting || !data}>
             {isExporting ? "Exporting..." : "Export Excel"}
           </Button>

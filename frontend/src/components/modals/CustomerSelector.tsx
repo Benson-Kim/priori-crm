@@ -32,7 +32,7 @@ function CustomerDropdown({
                     onClose();
                     onAddNew();
                 }}
-                className="w-full text-[20px] mb-6"
+                className="w-full mb-6"
             >
                 <Plus size={20} /> Add New Customer
             </Button>

@@ -26,14 +26,14 @@ function VendorDropdown({
     const [isFocused, setIsFocused] = useState(false);
 
     return (
-        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
+        <div className="absolute z-20 top-full mt-2 w-143 p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
             <Button
                 variant="outline"
                 onClick={() => {
                     onClose();
                     onAddNew();
                 }}
-                className="w-full text-[20px] mb-6"
+                className="w-full mb-6"
             >
                 <Plus size={20} /> Add New Vendor
             </Button>

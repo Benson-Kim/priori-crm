@@ -38,11 +38,17 @@ class CustomerCreate(BaseModel):
         description="Company name (required for business customers)",
         alias="companyName",
     )
-    first_name: str = Field(
-        ..., min_length=1, max_length=100, description="First name", alias="firstName"
+    first_name: str | None = Field(
+        None,
+        max_length=100,
+        description="First name (required for individual customers)",
+        alias="firstName",
     )
-    last_name: str = Field(
-        ..., min_length=1, max_length=100, description="Last name", alias="lastName"
+    last_name: str | None = Field(
+        None,
+        max_length=100,
+        description="Last name (required for individual customers)",
+        alias="lastName",
     )
     email: EmailStr | None = Field(None, description="Email address")
     phone: str | None = Field(None, description="Phone number in international format")
@@ -78,6 +84,8 @@ class CustomerCreate(BaseModel):
 
     @field_validator(
         "company_name",
+        "first_name",
+        "last_name",
         "email",
         "phone",
         "website",
@@ -132,6 +140,22 @@ class CustomerCreate(BaseModel):
         """
         if self.customer_type == CustomerType.INDIVIDUAL and not self.phone:
             raise ValueError("Phone number is required for individual customers.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_individual_name(self) -> "CustomerCreate":
+        """Individual customers must have a first and last name.
+
+        Names are optional for companies, which are identified by
+        company_name and may have no billing contact on file yet, but an
+        individual customer has no other identity to fall back on.
+        """
+        if self.customer_type == CustomerType.INDIVIDUAL and (
+            not self.first_name or not self.last_name
+        ):
+            raise ValueError(
+                "First name and last name are required for individual customers."
+            )
         return self
 
     model_config = {
@@ -199,6 +223,8 @@ class CustomerUpdate(BaseModel):
 
     @field_validator(
         "company_name",
+        "first_name",
+        "last_name",
         "email",
         "phone",
         "website",
@@ -296,8 +322,8 @@ class CustomerResponse(BaseModel):
     customer_type: str
     status: str
     company_name: str | None = None
-    first_name: str
-    last_name: str
+    first_name: str | None = None
+    last_name: str | None = None
     email: str | None = None
     phone: str | None = None
     website: str | None = None

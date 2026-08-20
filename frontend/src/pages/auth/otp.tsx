@@ -180,14 +180,14 @@ export default function OTPPage() {
           <div className="flex items-center justify-between gap-4">
             <Button type="button" variant="outline" size="lg" disabled={submitting}
               onClick={() => navigate("/login")}
-              className="w-full text-[18px] font-bold"
+              className="w-full"
             >
               <ArrowLeft />
               Back
             </Button>
             <Button type="button" variant="primary" size="lg" loading={submitting}
               onClick={() => void submitCode(code)}
-              className="w-full text-[18px] font-bold"
+              className="w-full"
             >
               Continue
             </Button>

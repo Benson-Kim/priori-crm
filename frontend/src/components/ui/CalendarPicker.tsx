@@ -250,7 +250,7 @@ export function CalendarPicker({
   // Trigger styles
   const toolbarTrigger = cn(
     "flex items-center justify-between gap-2 px-3 py-3 rounded-lg border border-gray-300 bg-gray-50",
-    "text-base w-full font-normal leading-6 transition-all cursor-pointer whitespace-nowrap",
+    "text-sm w-full font-normal leading-5 transition-all cursor-pointer whitespace-nowrap",
     "hover:border-priori-purple/50",
     value ? "text-gray-900" : "text-gray-400",
     isOpen && "border-priori-purple ring-1 ring-priori-purple/20",
