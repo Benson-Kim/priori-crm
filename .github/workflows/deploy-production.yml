@@ -83,116 +83,23 @@ jobs:
     uses: ./.github/workflows/security.yml
     secrets: inherit
 
+  # The deploy steps live in deploy-release.yml (workflow_call) so the DR
+  # drill (deploy-drill.yml, issue #87) exercises the exact same plumbing
+  # against a throwaway droplet instead of a hand-rsync approximation. This
+  # caller pins every target value to production; there is no input that can
+  # redirect it. VITE_API_BASE_URL is same-origin: nginx serves the SPA at /
+  # and proxies /api. HEALTH_URL matches production_release.sh's default,
+  # passed explicitly now that the script is shared with the drill path.
   deploy:
     needs: [api-ci, ui-ci, security]
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://accounting.priori.co.ke
-    env:
-      # Production is same-origin: nginx serves the SPA at / and proxies /api.
-      VITE_API_BASE_URL: https://accounting.priori.co.ke
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Download OpenAPI schema
-        uses: actions/download-artifact@v4
-        with:
-          name: openapi-schema
-          path: ${{ github.workspace }}/frontend
-
-      - name: Build SPA
-        working-directory: frontend
-        env:
-          VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/frontend/openapi.json
-        run: |
-          test -n "$VITE_API_BASE_URL" || {
-            echo "VITE_API_BASE_URL is empty — the bundle would call undefined/api/v1/"
-            exit 1
-          }
-          npm ci
-          npm run build
-          test -f dist/index.html
-
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
-          SSH_USER: ${{ secrets.PROD_SSH_USER }}
-          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-        run: |
-          test -n "$SSH_KEY" || { echo "PROD_SSH_KEY is not set"; exit 1; }
-          test -n "$KNOWN_HOSTS" || { echo "PROD_KNOWN_HOSTS is not set"; exit 1; }
-          # An empty user or host makes SSH_TARGET degenerate ("@host" or
-          # "user@") in every later step — fail here, with a clear name.
-          test -n "$SSH_USER" || { echo "PROD_SSH_USER is not set"; exit 1; }
-          test -n "$SSH_HOST" || { echo "PROD_SSH_HOST is not set"; exit 1; }
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Upload release
-        env:
-          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
-          REL: /srv/priori/releases/${{ github.sha }}
-        run: |
-          ssh "$SSH_TARGET" "mkdir -p '$REL/api' '$REL/frontend/dist'"
-          rsync -az --exclude '__pycache__/' --exclude '.venv/' --exclude 'tests/' \
-            api/ "$SSH_TARGET:$REL/api/"
-          rsync -az --delete frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
-
-      - name: Ship ops scripts
-        # /srv/priori/bin must never drift from deploy/*.sh in the repo: the
-        # cron-driven backup scripts used to be installed once by hand
-        # (runbook bring-up step 8) and then diverge the moment a script MR
-        # merged. Shipping them on every deploy makes the repo canonical.
-        # Crontab entries are config-as-code too: deploy/cron.d/*.cron
-        # (installed via the bring-up checklist; cron itself is not touched
-        # here because `crontab <file>` replaces a user's whole crontab and
-        # the postgres user's crontab needs sudo this job does not have).
-        env:
-          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
-        run: |
-          ssh "$SSH_TARGET" "mkdir -p /srv/priori/bin"
-          rsync -az deploy/db_backup.sh deploy/uploads_sync.sh "$SSH_TARGET:/srv/priori/bin/"
-          ssh "$SSH_TARGET" "chmod 700 /srv/priori/bin/db_backup.sh /srv/priori/bin/uploads_sync.sh"
-
-      - name: Back up, migrate, cut over
-        # Everything consequential happens here, in deploy/production_release.sh:
-        # pg_dump, then alembic, then the symlink swap and restart, then a health
-        # check that rolls the symlink back if the new release does not come up.
-        env:
-          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
-          SHA: ${{ github.sha }}
-        run: |
-          ssh "$SSH_TARGET" "CI_COMMIT_SHA='$SHA' bash -s" < deploy/production_release.sh
-
-      - name: Record outcome
-        if: always()
-        env:
-          SHA: ${{ github.sha }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          if [ "$JOB_STATUS" = "success" ]; then
-            echo "Production is running \`$SHA\`." >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "### Deploy failed"
-              echo ""
-              echo "The release script rolls the symlink back automatically, but it"
-              echo "does **not** revert the migration. If the previous release cannot"
-              echo "run against the new schema, restore"
-              echo "\`/srv/priori/backups/pre-$SHA.dump\` by hand — see §5.3."
-              echo "(On a redeploy of an existing SHA the dump is timestamped instead;"
-              echo "the release log prints the exact path.)"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment_name: production
+      environment_url: https://accounting.priori.co.ke
+      vite_api_base_url: https://accounting.priori.co.ke
+      health_url: https://accounting.priori.co.ke/api/v1/health
+    secrets:
+      ssh_key: ${{ secrets.PROD_SSH_KEY }}
+      ssh_known_hosts: ${{ secrets.PROD_KNOWN_HOSTS }}
+      ssh_user: ${{ secrets.PROD_SSH_USER }}
+      ssh_host: ${{ secrets.PROD_SSH_HOST }}

@@ -1,0 +1,170 @@
+name: Deploy DR drill
+
+# Drill Variant A's real deploy path (issue #87). Restore scenario 1 rebuilds
+# a throwaway droplet, but the *Deploy production* workflow cannot deploy to
+# it: PROD_SSH_* pin the live machine and the health gate pins
+# accounting.priori.co.ke. Before this workflow existed, the runbook
+# substituted a hand-rsync + local health URL — so the workflow plumbing
+# (artifact download, rsync steps, ops-script shipping) was first exercised
+# against a rebuilt machine during a REAL disaster. This workflow runs the
+# identical plumbing (deploy-release.yml, shared with deploy-production.yml)
+# against the drill droplet, using drill-only DRILL_SSH_* secrets.
+#
+# The guard is the point — a drill must be impossible to point at production:
+#   1. separate secrets: this workflow never reads PROD_SSH_KEY, so it holds
+#      no credential that COULD reach production;
+#   2. the operator types the drill host twice, and it must equal the
+#      DRILL_SSH_HOST secret (catches both typos and a stale secret);
+#   3. confirm must be the literal "drill";
+#   4. the target is refused if it is accounting.priori.co.ke, anything under
+#      .priori.co.ke, equal to PROD_SSH_HOST, or if it RESOLVES to any IP
+#      that production resolves to (fails closed if production cannot be
+#      resolved for comparison);
+#   5. the health URL is refused if it mentions accounting.priori.co.ke;
+#   6. deploy-release.yml re-checks 4–5 against the actual SSH target in the
+#      job that holds the key (forbid_production_target) — defence in depth
+#      against a mis-wired caller or a DNS change between jobs;
+#   7. the run name below labels the run as a drill, loudly.
+#
+# DRILL_SSH_* are provisioned per drill (throwaway droplet = new IP, new host
+# key, new keypair) and deleted with the droplet — see the runbook's drill
+# Variant A section in docs/runbooks/database-backup-restore.md.
+
+run-name: "🚨 DR DRILL deploy → ${{ inputs.drill_host }} — NOT PRODUCTION (@${{ github.actor }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      drill_host:
+        description: "Drill droplet host or IP (must equal the DRILL_SSH_HOST secret)"
+        required: true
+        type: string
+      drill_host_confirm:
+        description: "Type the drill host again, exactly"
+        required: true
+        type: string
+      health_url:
+        description: "Health gate URL as seen FROM the drill droplet"
+        required: true
+        default: "http://localhost/api/v1/health"
+        type: string
+      confirm:
+        description: 'Type "drill" to confirm this targets a throwaway droplet'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-drill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate drill target and record it loudly
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          DRILL_HOST: ${{ inputs.drill_host }}
+          DRILL_HOST_CONFIRM: ${{ inputs.drill_host_confirm }}
+          HEALTH_URL: ${{ inputs.health_url }}
+          DRILL_SSH_HOST: ${{ secrets.DRILL_SSH_HOST }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_HOST: accounting.priori.co.ke
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ "$CONFIRM" = "drill" ] || fail "confirm must be exactly \"drill\" (got: \"$CONFIRM\")"
+          # A drill rehearses a real droplet loss, and a real droplet loss
+          # deploys main (restore scenario 1 step 6). Anything else is not
+          # the disaster path and belongs on the hand-rsync fallback.
+          [ "$REF_NAME" = "main" ] || fail "drill deploys run from main only, like the disaster they rehearse (got: \"$REF_NAME\")"
+
+          # Typed twice, and both must match the provisioned secret — this
+          # catches a typo AND a DRILL_SSH_HOST left over from a past drill.
+          [ -n "$DRILL_HOST" ] || fail "drill_host is empty"
+          [ "$DRILL_HOST" = "$DRILL_HOST_CONFIRM" ] || fail "drill_host and drill_host_confirm differ — type the exact same host twice"
+          [ -n "$DRILL_SSH_HOST" ] || fail "DRILL_SSH_HOST secret is not set — provision the DRILL_* secrets first (runbook, drill Variant A)"
+          [ "$DRILL_HOST" = "$DRILL_SSH_HOST" ] || fail "drill_host does not match the DRILL_SSH_HOST secret — one of them is wrong or stale"
+
+          # Strict charsets: hostnames/IPs and plain http(s) URLs only. This
+          # is what lets later steps embed the values in remote commands.
+          printf '%s' "$DRILL_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || fail "drill_host has characters outside [A-Za-z0-9.-]"
+          printf '%s' "$HEALTH_URL" | grep -Eq '^https?://[A-Za-z0-9./:_-]+$' || fail "health_url must be a plain http(s) URL (got: \"$HEALTH_URL\")"
+
+          # Production refusal, by literal…
+          case "$DRILL_HOST" in
+            "$PROD_HOST"|*.priori.co.ke) fail "drill_host \"$DRILL_HOST\" is in the production zone — a drill never targets *.priori.co.ke" ;;
+          esac
+          if [ -n "$PROD_SSH_HOST" ] && [ "$DRILL_HOST" = "$PROD_SSH_HOST" ]; then
+            fail "drill_host equals PROD_SSH_HOST — refusing"
+          fi
+          case "$HEALTH_URL" in
+            *"$PROD_HOST"*) fail "health_url mentions $PROD_HOST — a drill health gate is local to the drill droplet" ;;
+          esac
+
+          # …and by resolution: the drill host must not resolve to any IP
+          # production resolves to. Fails closed — if production cannot be
+          # resolved there is nothing to compare against, and "probably fine"
+          # is not a guard.
+          resolve() { getent ahosts "$1" | awk '{print $1}' | sort -u; }
+          PROD_IPS="$(resolve "$PROD_HOST" || true)"
+          if [ -n "$PROD_SSH_HOST" ]; then
+            PROD_IPS="$(printf '%s\n%s\n' "$PROD_IPS" "$(resolve "$PROD_SSH_HOST" || true)" | grep -v '^$' | sort -u)"
+          fi
+          [ -n "$PROD_IPS" ] || fail "could not resolve $PROD_HOST to compare against — failing closed; use the runbook's hand-rsync fallback"
+          DRILL_IPS="$(resolve "$DRILL_HOST" || true)"
+          [ -n "$DRILL_IPS" ] || fail "drill_host \"$DRILL_HOST\" does not resolve"
+          OVERLAP="$(comm -12 <(printf '%s\n' "$PROD_IPS") <(printf '%s\n' "$DRILL_IPS"))"
+          [ -z "$OVERLAP" ] || fail "drill_host \"$DRILL_HOST\" resolves to a production IP ($OVERLAP) — refusing"
+
+          {
+            echo "### 🚨 DR DRILL deploy — NOT production"
+            echo ""
+            echo "- **target:** \`$DRILL_HOST\` (verified ≠ production, by name and by IP)"
+            echo "- **health gate:** \`$HEALTH_URL\`"
+            echo "- **commit:** \`$SHA\` (main)"
+            echo "- **triggered by:** @$ACTOR"
+            echo ""
+            echo "Destroy the droplet and delete the \`DRILL_*\` secrets when the drill ends."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Same CI gate as a production deploy, on the same commit — the drill times
+  # the path an operator would actually wait through in a disaster.
+  api-ci:
+    needs: guard
+    uses: ./.github/workflows/api-ci.yml
+    secrets: inherit
+
+  ui-ci:
+    needs: guard
+    uses: ./.github/workflows/ui-ci.yml
+    secrets: inherit
+
+  security:
+    needs: guard
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+  deploy:
+    needs: [api-ci, ui-ci, security]
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment_name: drill
+      environment_url: http://${{ inputs.drill_host }}
+      # The drill droplet has no DNS or TLS; the SPA is served same-origin
+      # over plain HTTP at the droplet's address.
+      vite_api_base_url: http://${{ inputs.drill_host }}
+      health_url: ${{ inputs.health_url }}
+      forbid_production_target: true
+    secrets:
+      ssh_key: ${{ secrets.DRILL_SSH_KEY }}
+      ssh_known_hosts: ${{ secrets.DRILL_KNOWN_HOSTS }}
+      ssh_user: ${{ secrets.DRILL_SSH_USER }}
+      ssh_host: ${{ secrets.DRILL_SSH_HOST }}

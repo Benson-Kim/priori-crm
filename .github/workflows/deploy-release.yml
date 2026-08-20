@@ -1,0 +1,212 @@
+name: Deploy release (reusable)
+
+# The droplet release path — SPA build, rsync upload, ops-script shipping,
+# deploy/production_release.sh over ssh — extracted from deploy-production.yml
+# so that deploy-drill.yml can exercise the SAME plumbing against a throwaway
+# drill droplet (issue #87). One copy, two callers: the alternative (a copied
+# deploy job in the drill workflow) would drift from the real one silently,
+# which is exactly the failure mode the drill exists to catch.
+#
+# This workflow carries NO trigger of its own and NO default target: every
+# caller must name the environment, the health gate, and the SSH secrets
+# explicitly. The production/drill guards live in the callers — plus the
+# forbid_production_target re-check below, which a drill caller sets so that
+# even a mis-wired caller cannot point a drill at production.
+
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        description: "GitHub environment to record the deploy under (production | drill)"
+        required: true
+        type: string
+      environment_url:
+        description: "URL shown on the environment/deployment record"
+        required: true
+        type: string
+      vite_api_base_url:
+        description: "Baked into the SPA bundle as VITE_API_BASE_URL (public by definition)"
+        required: true
+        type: string
+      health_url:
+        description: "Health-gate URL as seen FROM the target host (production_release.sh curls it locally)"
+        required: true
+        type: string
+      forbid_production_target:
+        description: "Drill callers set true: refuse to run if the target host or health URL is production"
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      ssh_key:
+        description: "Private deploy key (PROD_SSH_KEY or DRILL_SSH_KEY)"
+        required: true
+      ssh_known_hosts:
+        description: "ssh-keyscan output for the target host (PROD_KNOWN_HOSTS or DRILL_KNOWN_HOSTS)"
+        required: true
+      ssh_user:
+        description: "Deploy user on the target host (PROD_SSH_USER or DRILL_SSH_USER)"
+        required: true
+      ssh_host:
+        description: "Target host (PROD_SSH_HOST or DRILL_SSH_HOST)"
+        required: true
+
+permissions:
+  contents: read
+  actions: read # download-artifact (openapi-schema from the caller's ui-ci run)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment_name }}
+      url: ${{ inputs.environment_url }}
+    env:
+      VITE_API_BASE_URL: ${{ inputs.vite_api_base_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Defence in depth for drills (issue #87 hard constraint). The drill
+      # workflow's guard job already validated the operator's inputs, but the
+      # SSH secrets used HERE are a different surface: a stale or mis-set
+      # DRILL_SSH_HOST could still name the production machine. Re-check the
+      # actual deploy target, by literal AND by DNS, in the job that holds the
+      # key. Fails closed: if production cannot be resolved for comparison,
+      # the drill does not run.
+      - name: Refuse production targets (drill runs only)
+        if: ${{ inputs.forbid_production_target }}
+        env:
+          TARGET_HOST: ${{ secrets.ssh_host }}
+          HEALTH_URL: ${{ inputs.health_url }}
+          PROD_HOST: accounting.priori.co.ke
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          case "$TARGET_HOST" in
+            "$PROD_HOST"|*.priori.co.ke)
+              fail "target host '$TARGET_HOST' is in the production zone — refusing to deploy a drill there" ;;
+          esac
+          case "$HEALTH_URL" in
+            *"$PROD_HOST"*)
+              fail "health_url points at production ($PROD_HOST) — refusing" ;;
+          esac
+          resolve() { getent ahosts "$1" | awk '{print $1}' | sort -u; }
+          PROD_IPS="$(resolve "$PROD_HOST" || true)"
+          [ -n "$PROD_IPS" ] || fail "could not resolve $PROD_HOST to compare against — failing closed; use the runbook's hand-rsync fallback"
+          TARGET_IPS="$(resolve "$TARGET_HOST" || true)"
+          [ -n "$TARGET_IPS" ] || fail "target host '$TARGET_HOST' does not resolve"
+          OVERLAP="$(comm -12 <(printf '%s\n' "$PROD_IPS") <(printf '%s\n' "$TARGET_IPS"))"
+          [ -z "$OVERLAP" ] || fail "target host '$TARGET_HOST' resolves to a production IP ($OVERLAP) — refusing"
+          echo "drill target '$TARGET_HOST' verified distinct from production"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Download OpenAPI schema
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-schema
+          path: ${{ github.workspace }}/frontend
+
+      - name: Build SPA
+        working-directory: frontend
+        env:
+          VITE_OPENAPI_SCHEMA: ${{ github.workspace }}/frontend/openapi.json
+        run: |
+          test -n "$VITE_API_BASE_URL" || {
+            echo "VITE_API_BASE_URL is empty — the bundle would call undefined/api/v1/"
+            exit 1
+          }
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.ssh_key }}
+          KNOWN_HOSTS: ${{ secrets.ssh_known_hosts }}
+          SSH_USER: ${{ secrets.ssh_user }}
+          SSH_HOST: ${{ secrets.ssh_host }}
+        run: |
+          test -n "$SSH_KEY" || { echo "ssh_key is not set (caller passes PROD_SSH_KEY or DRILL_SSH_KEY)"; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo "ssh_known_hosts is not set (caller passes PROD_KNOWN_HOSTS or DRILL_KNOWN_HOSTS)"; exit 1; }
+          # An empty user or host makes SSH_TARGET degenerate ("@host" or
+          # "user@") in every later step — fail here, with a clear name.
+          test -n "$SSH_USER" || { echo "ssh_user is not set (caller passes PROD_SSH_USER or DRILL_SSH_USER)"; exit 1; }
+          test -n "$SSH_HOST" || { echo "ssh_host is not set (caller passes PROD_SSH_HOST or DRILL_SSH_HOST)"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          SSH_TARGET: ${{ secrets.ssh_user }}@${{ secrets.ssh_host }}
+          REL: /srv/priori/releases/${{ github.sha }}
+        run: |
+          ssh "$SSH_TARGET" "mkdir -p '$REL/api' '$REL/frontend/dist'"
+          rsync -az --exclude '__pycache__/' --exclude '.venv/' --exclude 'tests/' \
+            api/ "$SSH_TARGET:$REL/api/"
+          rsync -az --delete frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
+
+      - name: Ship ops scripts
+        # /srv/priori/bin must never drift from deploy/*.sh in the repo: the
+        # cron-driven backup scripts used to be installed once by hand
+        # (runbook bring-up step 8) and then diverge the moment a script MR
+        # merged. Shipping them on every deploy makes the repo canonical.
+        # Crontab entries are config-as-code too: deploy/cron.d/*.cron
+        # (installed via the bring-up checklist; cron itself is not touched
+        # here because `crontab <file>` replaces a user's whole crontab and
+        # the postgres user's crontab needs sudo this job does not have).
+        env:
+          SSH_TARGET: ${{ secrets.ssh_user }}@${{ secrets.ssh_host }}
+        run: |
+          ssh "$SSH_TARGET" "mkdir -p /srv/priori/bin"
+          rsync -az deploy/db_backup.sh deploy/uploads_sync.sh "$SSH_TARGET:/srv/priori/bin/"
+          ssh "$SSH_TARGET" "chmod 700 /srv/priori/bin/db_backup.sh /srv/priori/bin/uploads_sync.sh"
+
+      - name: Back up, migrate, cut over
+        # Everything consequential happens here, in deploy/production_release.sh:
+        # pg_dump, then alembic, then the symlink swap and restart, then a health
+        # check that rolls the symlink back if the new release does not come up.
+        # HEALTH_URL overrides the script's production default so a drill gates
+        # on the throwaway droplet's own endpoint. The charset check below
+        # keeps the single-quoted embedding unbreakable regardless of what a
+        # caller passed (the drill guard validates the same pattern earlier;
+        # production passes a YAML literal).
+        env:
+          SSH_TARGET: ${{ secrets.ssh_user }}@${{ secrets.ssh_host }}
+          SHA: ${{ github.sha }}
+          HEALTH_URL: ${{ inputs.health_url }}
+        run: |
+          printf '%s' "$HEALTH_URL" | grep -Eq '^https?://[A-Za-z0-9./:_-]+$' || {
+            echo "health_url must be a plain http(s) URL (got: \"$HEALTH_URL\")"
+            exit 1
+          }
+          ssh "$SSH_TARGET" "CI_COMMIT_SHA='$SHA' HEALTH_URL='$HEALTH_URL' bash -s" < deploy/production_release.sh
+
+      - name: Record outcome
+        if: always()
+        env:
+          SHA: ${{ github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          ENV_NAME: ${{ inputs.environment_name }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            echo "\`$ENV_NAME\` is running \`$SHA\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Deploy failed"
+              echo ""
+              echo "The release script rolls the symlink back automatically, but it"
+              echo "does **not** revert the migration. If the previous release cannot"
+              echo "run against the new schema, restore"
+              echo "\`/srv/priori/backups/pre-$SHA.dump\` by hand — see §5.3."
+              echo "(On a redeploy of an existing SHA the dump is timestamped instead;"
+              echo "the release log prints the exact path.)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
