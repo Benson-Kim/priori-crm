@@ -43,9 +43,16 @@ def normalize_phone(phone: str, country: str | None = None) -> str:
     """
     Validate and normalize a phone number to E.164 format.
     """
-    dial_code = COUNTRY_DIAL_CODES.get(
-        country.upper() if country else "", DEFAULT_DIAL_CODE
-    )
+    # Country handling (#64): a missing country keeps the historical KE
+    # default, but a country we have no dial code for must NOT fall back to
+    # +254 — that silently coerced e.g. a Japanese local number into a
+    # Kenyan one. For unmapped countries only full international (+...)
+    # input is accepted.
+    country_code = country.upper() if country else None
+    if country_code is None:
+        dial_code: str | None = DEFAULT_DIAL_CODE
+    else:
+        dial_code = COUNTRY_DIAL_CODES.get(country_code)
 
     cleaned = phone.strip()
     had_plus = cleaned.startswith("+")
@@ -55,6 +62,16 @@ def normalize_phone(phone: str, country: str | None = None) -> str:
 
     if not digits:
         raise ValueError(f"Invalid phone number: '{phone}'. No digits found.")
+
+    if dial_code is None:
+        # Unmapped country: no local-format inference possible.
+        if not had_plus:
+            raise ValueError(
+                f"Invalid phone number: '{phone}'. For country "
+                f"{country_code}, enter the number in international "
+                f"format, e.g. +81312345678."
+            )
+        dial_code = ""
 
     # Expected national-number length per dial code (E.164 subscriber digits).
     national_len = {"254": 9, "1": 10, "91": 10, "44": 10}.get(dial_code)
