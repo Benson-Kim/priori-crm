@@ -7,8 +7,9 @@ Verifies:
 - Soft-deleted (DELETED) customers are excluded from default reads.
 
 The FK-RESTRICT behaviour is enforced by PostgreSQL, so the destructive-delete
-assertion is only meaningful on Postgres (the CI service). It is skipped on the
-SQLite fallback used for local pure-logic runs.
+assertion is only meaningful on Postgres (the CI service). Like every
+schema-building test, this file is skipped when no Postgres DATABASE_URL is
+configured (see conftest.pytest_collection_modifyitems).
 """
 
 from datetime import date, timedelta

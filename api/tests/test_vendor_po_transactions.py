@@ -6,8 +6,10 @@ alongside expenses (source_type/transaction_type = 'purchase_order'), in a
 single paginated query, and that purchase orders stay OUT of the vendor
 statement (Only the resulting Bill drives financials).
 
-The union uses portable SQL, so these run on SQLite and Postgres alike; the
-no-N+1 assertion counts emitted statements and is dialect-independent.
+The union uses portable SQL and the no-N+1 assertion counts emitted
+statements, so nothing here is dialect-specific — but like every
+schema-building test they require a Postgres DATABASE_URL (skipped at
+collection time otherwise).
 """
 
 from datetime import date, timedelta

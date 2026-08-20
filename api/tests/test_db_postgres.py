@@ -1,8 +1,8 @@
 """Tests that exercise PostgreSQL-only database constructs.
 
-These are skipped when the suite runs against SQLite (local pure-logic
-runs). In CI they run against the postgres:16 service so behaviour such as
-row-level locking with `with_for_update()` is actually validated.
+These are skipped when no Postgres DATABASE_URL is configured. In CI they
+run against the postgres:16 service so behaviour such as row-level locking
+with `with_for_update()` is actually validated.
 """
 
 import uuid

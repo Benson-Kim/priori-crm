@@ -21,11 +21,16 @@ from app.main import app
 # every dispatch, so flipping it here is sufficient.
 settings.RATE_LIMIT_ENABLED = False
 
-# Prefer the real PostgreSQL database (provided by the CI service via
-# DATABASE_URL) so Postgres-only constructs - gen_random_uuid(),
-# partial/GIN indexes, with_for_update(), pg_advisory_xact_lock,
-# case/extract/cast - are actually exercised. Fall back to in-memory
-# SQLite for local pure-logic runs when no database is configured.
+# PostgreSQL is REQUIRED for every schema-building test (CI provides it via
+# DATABASE_URL). The schema and several code paths are Postgres-only -
+# gen_random_uuid(), char_length() CHECK constraints, partial/GIN indexes,
+# with_for_update(), pg_advisory_xact_lock - so ``Base.metadata.create_all``
+# cannot run on SQLite (first offender: sqlite3.OperationalError: no such
+# function: char_length). Without a Postgres DATABASE_URL only the pure-logic
+# tests marked ``no_db`` run; everything else is skipped at collection time
+# (see ``pytest_collection_modifyitems`` below). The in-memory SQLite engine
+# below exists solely so the session/app fixtures still construct for those
+# ``no_db`` legs - it is never asked to build the schema.
 DATABASE_URL = os.getenv("DATABASE_URL")
 USING_POSTGRES = bool(DATABASE_URL) and DATABASE_URL.startswith("postgresql")
 
@@ -46,7 +51,7 @@ def _require_test_database(url: str) -> None:
             f"{db_name!r}: the suite drops and recreates every table, and the "
             "database name does not contain 'test'. Point DATABASE_URL at a "
             "dedicated test database (e.g. 'prioritech_test'), or unset it "
-            "to run against in-memory SQLite."
+            "to run only the no_db pure-logic tests."
         )
 
 
@@ -68,6 +73,33 @@ def pytest_configure(config):
         "markers",
         "no_db: test is a pure in-memory check and must skip schema building",
     )
+
+
+_REQUIRES_POSTGRES_SKIP = pytest.mark.skip(
+    reason=(
+        "requires PostgreSQL: the schema uses Postgres-only constructs "
+        "(char_length CHECK constraints, gen_random_uuid, partial/GIN "
+        "indexes) that SQLite cannot build. Point DATABASE_URL at a "
+        "postgresql:// test database (name must contain 'test', e.g. "
+        "prioritech_test); only tests marked no_db run without one."
+    )
+)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip every schema-building test when no Postgres database is configured.
+
+    ``setup_db`` builds the full schema for any test not marked ``no_db``,
+    and ``Base.metadata.create_all`` fails on SQLite (see the engine comment
+    above), which used to surface as an error wall (802 setup errors) instead
+    of a useful run. Skipping at collection keeps the no-Postgres outcome to
+    passes + skips only: the ``no_db`` pure-logic legs still run and report.
+    """
+    if USING_POSTGRES:
+        return
+    for item in items:
+        if item.get_closest_marker("no_db") is None:
+            item.add_marker(_REQUIRES_POSTGRES_SKIP)
 
 
 @pytest.fixture(autouse=True)
