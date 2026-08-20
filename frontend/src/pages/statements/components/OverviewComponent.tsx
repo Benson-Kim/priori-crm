@@ -11,7 +11,7 @@ import {
      getStatementOverview,
      type StatementOverview,
 } from "@/services/statementsApi";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 
 
@@ -34,40 +34,53 @@ export const OverviewComponent = ({
      currency = DEFAULT_CURRENCY,
 }: OverviewComponentProps) => {
      const [overview, setOverview] = useState<StatementOverview | null>(null);
-     const [isLoading, setIsLoading] = useState(false);
-     const [error, setError] = useState<string | null>(null);
 
      const reportingDay = useReportingDate();
      const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
      const periodReady = isReportPeriodReady(period, reportingDay);
 
-     // Stale-response guard: only the latest request may write state, so
+     // Identity of the fetch the UI currently wants; null while the period
+     // is incomplete. `settled` records which request last finished, so
+     // isLoading/error derive during render instead of being set
+     // synchronously inside the effect (react-hooks/set-state-in-effect).
+     const requestKey = periodReady ? `${dateFrom}|${dateTo}|${currency}` : null;
+     const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(
+          null,
+     );
+
+     // Clear stale cards the moment the period becomes un-ready (previously
+     // a synchronous reset inside the effect). Render-time adjustment per
+     // react.dev "adjusting state when props change".
+     if (requestKey === null && overview !== null) {
+          setOverview(null);
+     }
+
+     // Stale-response guard: the cleanup cancels superseded requests, so
      // rapid period switching can never paint out-of-order results.
-     const seqRef = useRef(0);
      useEffect(() => {
-          if (!periodReady) {
-               seqRef.current++;
-               setOverview(null);
-               setError(null);
-               setIsLoading(false);
-               return;
-          }
-          const seq = ++seqRef.current;
-          setIsLoading(true);
-          setError(null);
+          if (requestKey === null) return;
+          let cancelled = false;
           getStatementOverview({ range: "custom", dateFrom, dateTo }, currency)
                .then((data) => {
-                    if (seq === seqRef.current) setOverview(data);
+                    if (cancelled) return;
+                    setOverview(data);
+                    setSettled({ key: requestKey, error: null });
                })
                .catch((err) => {
-                    if (seq === seqRef.current) {
-                         setError(err instanceof Error ? err.message : "Failed to load overview");
-                    }
-               })
-               .finally(() => {
-                    if (seq === seqRef.current) setIsLoading(false);
+                    if (cancelled) return;
+                    setSettled({
+                         key: requestKey,
+                         error: err instanceof Error ? err.message : "Failed to load overview",
+                    });
                });
-     }, [periodReady, dateFrom, dateTo, currency]);
+          return () => {
+               cancelled = true;
+          };
+     }, [requestKey, dateFrom, dateTo, currency]);
+
+     const isLoading = requestKey !== null && settled?.key !== requestKey;
+     const error =
+          requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
      const marginValue =
           isLoading || overview?.profit_margin.percent == null

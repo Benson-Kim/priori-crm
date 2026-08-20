@@ -14,7 +14,7 @@ import {
      type IncomeStatement,
      type IncomeStatementLine,
 } from "@/services/statementsApi";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { OverviewComponent } from "../components/OverviewComponent";
 
@@ -25,40 +25,53 @@ export default function IncomeStatementsPage() {
           defaultReportPeriod(reportingDay)
      );
      const [statement, setStatement] = useState<IncomeStatement | null>(null);
-     const [isLoading, setIsLoading] = useState(true);
-     const [error, setError] = useState<string | null>(null);
 
      const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
      const periodReady = isReportPeriodReady(period, reportingDay);
 
-     // Stale-response guard: only the latest request may write state.
-     const seqRef = useRef(0);
+     // Identity of the fetch the UI currently wants; null while the period
+     // is incomplete. `settled` records which request last finished, so
+     // isLoading/error derive during render instead of being set
+     // synchronously inside the effect (react-hooks/set-state-in-effect).
+     const requestKey = periodReady ? `${dateFrom}|${dateTo}` : null;
+     const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(
+          null,
+     );
+
+     // Clear the stale statement the moment the period becomes un-ready
+     // (previously a synchronous reset inside the effect). Render-time
+     // adjustment per react.dev "adjusting state when props change".
+     if (requestKey === null && statement !== null) {
+          setStatement(null);
+     }
+
+     // Stale-response guard: the cleanup cancels superseded requests, so
+     // only the latest request may write state.
      useEffect(() => {
-          if (!periodReady) {
-               seqRef.current++;
-               setStatement(null);
-               setError(null);
-               setIsLoading(false);
-               return;
-          }
-          const seq = ++seqRef.current;
-          setIsLoading(true);
-          setError(null);
+          if (requestKey === null) return;
+          let cancelled = false;
           getIncomeStatement({ range: "custom", dateFrom, dateTo })
                .then((data) => {
-                    if (seq === seqRef.current) setStatement(data);
+                    if (cancelled) return;
+                    setStatement(data);
+                    setSettled({ key: requestKey, error: null });
                })
                .catch((err) => {
-                    if (seq === seqRef.current) {
-                         setError(
+                    if (cancelled) return;
+                    setSettled({
+                         key: requestKey,
+                         error:
                               err instanceof Error ? err.message : "Failed to load income statement",
-                         );
-                    }
-               })
-               .finally(() => {
-                    if (seq === seqRef.current) setIsLoading(false);
+                    });
                });
-     }, [periodReady, dateFrom, dateTo]);
+          return () => {
+               cancelled = true;
+          };
+     }, [requestKey, dateFrom, dateTo]);
+
+     const isLoading = requestKey !== null && settled?.key !== requestKey;
+     const error =
+          requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
      // Drill down into the cashflow ledger filtered to this account
      // category, carrying the current period (including custom dates).

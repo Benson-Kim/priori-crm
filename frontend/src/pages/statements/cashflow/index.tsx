@@ -69,8 +69,6 @@ export default function CashflowPage() {
      const [entries, setEntries] = useState<CashflowEntry[]>([]);
      const [totalPages, setTotalPages] = useState(1);
      const [counts, setCounts] = useState<CashflowCounts>({ all: 0, income: 0, expense: 0 });
-     const [isLoading, setIsLoading] = useState(true);
-     const [error, setError] = useState<string | null>(null);
 
      const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
      const periodReady = isReportPeriodReady(period, reportingDay);
@@ -81,21 +79,46 @@ export default function CashflowPage() {
           return () => clearTimeout(timer);
      }, [search]);
 
-     // Ledger window. Stale-response guard: only the latest request may
-     // write state, so rapid filter changes never paint out-of-order pages.
-     const listSeq = useRef(0);
+     // Any filter change restarts pagination from the first page. Render-time
+     // adjustment (react.dev "adjusting state when props change") instead of
+     // an effect, so the reset lands before the fetch below ever sees the
+     // stale page number.
+     const filterKey = [
+          categoryFilter,
+          debouncedSearch,
+          accountCategory ?? "",
+          dateFrom ?? "",
+          dateTo ?? "",
+     ].join("|");
+     const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+     if (filterKey !== prevFilterKey) {
+          setPrevFilterKey(filterKey);
+          setCurrentPage(1);
+     }
+
+     // Identity of the ledger window the UI currently wants; null while the
+     // period is incomplete. `settled` records which request last finished,
+     // so isLoading/error derive during render instead of being set
+     // synchronously inside the effect (react-hooks/set-state-in-effect).
+     const requestKey = periodReady ? `${filterKey}|${currentPage}|${perPage}` : null;
+     const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(
+          null,
+     );
+
+     // Clear the stale ledger the moment the period becomes un-ready
+     // (previously a synchronous reset inside the effect).
+     if (requestKey === null && entries.length > 0) {
+          setEntries([]);
+     }
+     if (requestKey === null && totalPages !== 1) {
+          setTotalPages(1);
+     }
+
+     // Ledger window. Stale-response guard: the cleanup cancels superseded
+     // requests, so rapid filter changes never paint out-of-order pages.
      useEffect(() => {
-          if (!periodReady) {
-               listSeq.current++;
-               setEntries([]);
-               setTotalPages(1);
-               setError(null);
-               setIsLoading(false);
-               return;
-          }
-          const seq = ++listSeq.current;
-          setIsLoading(true);
-          setError(null);
+          if (requestKey === null) return;
+          let cancelled = false;
           getCashflow({
                period: { range: "custom", dateFrom, dateTo },
                category: categoryFilter,
@@ -105,19 +128,23 @@ export default function CashflowPage() {
                perPage,
           })
                .then((data) => {
-                    if (seq !== listSeq.current) return;
+                    if (cancelled) return;
                     setEntries(data.items);
                     setTotalPages(data.metadata.total_pages ?? 1);
+                    setSettled({ key: requestKey, error: null });
                })
                .catch((err) => {
-                    if (seq !== listSeq.current) return;
-                    setError(err instanceof Error ? err.message : "Failed to load cashflow");
-               })
-               .finally(() => {
-                    if (seq === listSeq.current) setIsLoading(false);
+                    if (cancelled) return;
+                    setSettled({
+                         key: requestKey,
+                         error: err instanceof Error ? err.message : "Failed to load cashflow",
+                    });
                });
+          return () => {
+               cancelled = true;
+          };
      }, [
-          periodReady,
+          requestKey,
           dateFrom,
           dateTo,
           categoryFilter,
@@ -126,6 +153,10 @@ export default function CashflowPage() {
           currentPage,
           perPage,
      ]);
+
+     const isLoading = requestKey !== null && settled?.key !== requestKey;
+     const error =
+          requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
      // Tab counts (separate endpoint so the list query never pays a
      // mandatory COUNT). Counts ignore the active category tab by design.
@@ -146,11 +177,6 @@ export default function CashflowPage() {
                     console.error("Failed to fetch cashflow counts:", err);
                });
      }, [periodReady, dateFrom, dateTo, accountCategory, debouncedSearch]);
-
-     // Any filter change restarts pagination from the first page.
-     useEffect(() => {
-          setCurrentPage(1);
-     }, [categoryFilter, debouncedSearch, accountCategory, dateFrom, dateTo]);
 
      const handleCategoryChange = useCallback((key: string) => {
           if (isCashflowCategory(key)) setCategoryFilter(key);
