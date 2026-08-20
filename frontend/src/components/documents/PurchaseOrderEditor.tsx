@@ -178,14 +178,24 @@ export function PurchaseOrderEditor({
   // on first render. Seed the compliance ref from it once it arrives, but
   // only for a NEW PO and only while the field is still untouched, so we
   // never clobber a persisted value or something the user has typed.
-  const vatRefTouched = useRef(false);
-  useEffect(() => {
-    if (isEditingDoc || vatRefTouched.current) return;
-    if (initialData?.vatComplianceRef != null) return;
-    if (initialData?.vatRate != null) return;
+  // Render-time adjustment (react.dev "adjusting state when props change")
+  // instead of an effect: the seed re-applies whenever the profile's VAT
+  // values change (the effect's dependency list previously missed
+  // profile.vatRate — react-hooks/exhaustive-deps). The old vatRefTouched
+  // ref was never written anywhere, so dropping it changes nothing.
+  const vatProfileKey = `${profile?.taxPin ?? ""}|${profile?.vatRate ?? ""}`;
+  const [seededVatProfileKey, setSeededVatProfileKey] = useState<string | null>(null);
+  if (
+    !isEditingDoc &&
+    initialData?.vatComplianceRef == null &&
+    initialData?.vatRate == null &&
+    (profile?.taxPin || profile?.vatRate) &&
+    seededVatProfileKey !== vatProfileKey
+  ) {
+    setSeededVatProfileKey(vatProfileKey);
     if (profile?.taxPin) setVatComplianceRef(profile.taxPin);
     if (profile?.vatRate) setVatRatePct(profile.vatRate * 100 + '%');
-  }, [isEditingDoc, initialData?.vatComplianceRef, profile?.taxPin]);
+  }
 
   const isEditing = !!initialData?.poReference;
   const [termsAndConditions, setTermsAndConditions] = useState(

@@ -181,27 +181,27 @@ export function DocumentEditor({
   // Default new documents to the owner's (our own) VAT settings: the
   // toggle, the rate and the compliance ref all seed from the profile
   // until the user touches them. Editing an existing document never
-  // re-defaults, and the seed runs at most once.
-  const vatRefTouched = useRef(false);
-  const vatDefaulted = useRef(false);
-  useEffect(() => {
-    if (isEditing || vatRefTouched.current || vatDefaulted.current) return;
-    if (initialData?.vatComplianceRef != null) return;
-    if (initialData?.vatRate != null || initialData?.vatEnabled != null) return;
-    if (!profile) return;
-    vatDefaulted.current = true;
+  // re-defaults, and the seed runs at most once. Render-time adjustment
+  // (react.dev "adjusting state when props change") instead of an effect;
+  // the seed marker is state, not a ref, so a discarded render cannot
+  // record a seed that never committed. (The old vatRefTouched ref was
+  // never written anywhere, so dropping it changes nothing.)
+  const [vatDefaulted, setVatDefaulted] = useState(false);
+  if (
+    !isEditing &&
+    !vatDefaulted &&
+    initialData?.vatComplianceRef == null &&
+    initialData?.vatRate == null &&
+    initialData?.vatEnabled == null &&
+    profile
+  ) {
+    setVatDefaulted(true);
     if (profile.taxPin) setVatComplianceRef(profile.taxPin);
     if (profile.vatRate) {
       setVatRatePct(String(Number((profile.vatRate * 100).toFixed(4))));
     }
     if (profile.vatEnabled != null) setVatEnabled(Boolean(profile.vatEnabled));
-  }, [
-    isEditing,
-    initialData?.vatComplianceRef,
-    initialData?.vatEnabled,
-    initialData?.vatRate,
-    profile,
-  ]);
+  }
 
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() => {

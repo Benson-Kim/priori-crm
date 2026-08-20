@@ -150,10 +150,8 @@ export function ExpenseEditor({
     [lineItems]
   );
 
-  const vatLabel = useMemo(
-    () => buildVatLabel(null),
-    [lineItems]
-  );
+  // Expenses always render the flat no-VAT label; no inputs involved.
+  const vatLabel = buildVatLabel(null);
 
   // Line item handlers
   const addRow = () => setLineItems((prev) => [...prev, createEmptyRow()]);

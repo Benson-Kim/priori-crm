@@ -6,7 +6,7 @@
  * (/settings/organisation). On editor surfaces, privileged users get a
  * subtle "Edit in Settings" link instead of inline edit controls.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useCanEditOwner } from "@/hooks/auth-context";
@@ -25,12 +25,12 @@ export function DocumentOwnerHeader({
   // else, so never show the Settings link to them
   const canEdit = useCanEditOwner();
   const showEdit = editable && canEdit;
-  const [logoError, setLogoError] = useState(false);
-  useEffect(() => {
-    setLogoError(false);
-  }, [logoUrl]);
+  // Remember which URL failed instead of resetting an error flag in an
+  // effect: a new logoUrl no longer matches the failed one, so the error
+  // state "resets" by derivation (react.dev "you might not need an effect").
+  const [erroredLogoUrl, setErroredLogoUrl] = useState<string | null>(null);
 
-  const hasLogo = Boolean(logoUrl && !logoError);
+  const hasLogo = Boolean(logoUrl && erroredLogoUrl !== logoUrl);
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,7 +40,7 @@ export function DocumentOwnerHeader({
           <img
             src={logoUrl as string}
             alt=""
-            onError={() => setLogoError(true)}
+            onError={() => setErroredLogoUrl(logoUrl)}
             className="max-h-12 w-auto"
           />
         ) : (
