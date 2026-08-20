@@ -382,13 +382,33 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
 
 ### 1. Droplet loss (rebuild from offsite)
 
-1. Provision a new droplet; follow `docs/operations/deployment-setup.md` to
-   recreate `/srv/priori/{releases,current,shared,backups}`, the deploy
-   user, sudoers, nginx, systemd unit, and `shared/.env` (secrets from the
-   password manager — they are not in any backup).
-2. Reinstall PostgreSQL 16 + pgBackRest and both config files (Bring-up
-   checklist steps 3–5); the bucket key and **cipher passphrase** come from
-   the password manager.
+1. **Rebuild the machine with the automation — do not follow
+   `deployment-setup.md` by hand** (issue #81). Provision a fresh Ubuntu
+   24.04 droplet with [`deploy/cloud-init.yaml.template`](../../deploy/cloud-init.yaml.template)
+   as user-data (fill the two placeholders; **revoke the read token** once
+   the rebuild completes), or provision it plain, copy a checkout across,
+   and run `sudo deploy/droplet_rebuild.sh`. Either path installs
+   everything that is code: packages (nginx, PostgreSQL 16, pgbackrest,
+   rclone, age, python3.12, certbot — no Node: the SPA ships prebuilt),
+   the deploy user + sudoers, the `/srv/priori/{releases,shared,backups,bin}`
+   skeleton, the nginx site + systemd unit from the committed
+   [`deploy/nginx-site.conf`](../../deploy/nginx-site.conf) /
+   [`deploy/priori-api.service`](../../deploy/priori-api.service), both
+   config templates (placeholders intact), the ops scripts in
+   `/srv/priori/bin`, and both crontabs. Progress:
+   `cloud-init status --wait`, then `/var/log/priori-rebuild.log`.
+2. **Hand-finish: secrets** (the script prints this exact list when it
+   completes; nothing here is in any backup). From the password manager:
+   `shared/.env`; every `<placeholder>` in `/etc/pgbackrest/pgbackrest.conf`
+   (bucket key + **cipher passphrase**; keep 0600); the deploy user's
+   rclone remote (`sudo -u deploy rclone config`, name `spaces`); the age
+   **public** recipient → `/etc/priori/backup-age-recipients.txt`; the
+   deploy `.pub` → `/home/deploy/.ssh/authorized_keys`. Then create the
+   stanza and prove archiving round-trips:
+   ```bash
+   sudo -u postgres pgbackrest --stanza=priori stanza-create
+   sudo -u postgres pgbackrest --stanza=priori check
+   ```
 3. **Primary path — physical restore with WAL replay** (loses only the last
    un-archived seconds/minutes):
    ```bash
@@ -422,18 +442,36 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    # fallback: fetch the newest uploads-<utc>.tar.gz.age from uploads/,
    # age -d -i <identity> it (as in step 4), then tar -xzf the result
    ```
-6. Deploy the current `main` via *Deploy production* (`workflow_dispatch`).
+6. **Hand-finish: DNS, then TLS.** Point DNS at the new droplet, then issue
+   the certificate: `certbot --nginx -d accounting.priori.co.ke` (the
+   rebuild deliberately leaves the site HTTP-only — a committed 443 block
+   would reference certificates that do not exist yet). Both must precede
+   the next step: the deploy's health check calls
+   `https://accounting.priori.co.ke/api/v1/health`, which needs DNS
+   resolving to this droplet and a valid certificate — against the dead
+   droplet it can only fail. Repointing DNS "early" serves nothing worse
+   than the outage already in progress; start it as soon as the data
+   restore looks healthy, because TTL propagation runs in parallel with
+   the remaining steps.
+7. Deploy the current `main` via *Deploy production* (`workflow_dispatch`).
    The release script's `alembic upgrade head` brings the restored schema to
    the deployed code's head if the backup predates it.
-7. **Re-apply erasures** performed since the backup/target time (§Erasure
+8. **Re-apply erasures** performed since the backup/target time (§Erasure
    obligations vs. backups) — from `audit_events` and the offboarding log —
-   before the restored data serves traffic. A restore must not silently
-   resurrect erased personal data.
-8. Point DNS at the new droplet; verify `/api/v1/health`, log in, open a
-   recent invoice, download one uploaded document.
-9. Re-run the Bring-up checklist from step 8 (scripts, age recipient, cron
-   entries) — the rebuilt droplet has none — and confirm the next
-   `scheduled:backup-freshness` run is green end-to-end.
+   **immediately after the deploy**. With DNS already live (step 6),
+   restored-but-not-yet-re-erased data is reachable for this interval —
+   keep it to minutes, and do not announce recovery complete until this
+   step is done. A restore must not silently resurrect erased personal
+   data.
+9. Verify: `/api/v1/health`, log in, open a recent invoice, download one
+   uploaded document. Nothing needs re-installing — the automation placed
+   the ops scripts, crontabs, unit, and config templates (step 1) and the
+   age recipient landed with the secrets (step 2); *verify* instead
+   (`sudo crontab -l -u deploy`, `sudo crontab -l -u postgres`,
+   `ls /srv/priori/bin`), and confirm the next
+   `scheduled:backup-freshness` run is green end-to-end. Take a fresh full
+   backup if step 3 did not already (`--type=full`), and revoke the
+   cloud-init read token if one was used.
 
 ### 2. Bad migration right after a deploy
 
@@ -477,9 +515,18 @@ Do not let the first full restore be during an incident. Once a quarter
 between the two variants so both paths stay rehearsed:
 
 - **Variant A (full rebuild):** scenario 1 on a throwaway droplet, through
-  step 8 (app serving, document downloadable; the erasure re-apply of step
-  7 may be simulated in a drill — pick one past erasure from `audit_events`
-  and prove it can be re-applied).
+  step 9 (app serving, document downloadable; the erasure re-apply of step
+  8 may be simulated in a drill — pick one past erasure from `audit_events`
+  and prove it can be re-applied; production DNS is **not** repointed in a
+  drill — steps 6–7 are exercised by running `deploy/production_release.sh`
+  by hand on the throwaway droplet with `HEALTH_URL` overridden to
+  `http://localhost/api/v1/health`, which skips only DNS/TLS issuance).
+  The rebuild **must** use the automation
+  (`deploy/droplet_rebuild.sh`, via cloud-init or from a checkout) — the
+  drill is what validates it against the 4 h budget (issue #81 acceptance).
+  Record **T_rebuilt** (automation finished, hand-finish list printed) in
+  the ops log alongside T₀/T_final, so the automated share of the RTO is
+  measured separately from the hand-finish and restore.
 - **Variant B (PITR surgical):** scenario 0 against a scratch cluster —
   pick an arbitrary target time from yesterday, recover, extract one
   invoice + its payments, verify against `audit_events`.
@@ -531,6 +578,15 @@ access nor a reason.
 Everything below is infrastructure work on the bucket, the droplet, and
 GitLab settings; none of it can live in the tree. Do it **in this order** —
 later steps verify earlier ones.
+
+> **On a droplet built by `deploy/droplet_rebuild.sh`** (restore scenario 1,
+> drill Variant A — issue #81), the automation has already done the
+> code-shaped parts: step 3's packages and log dir, step 5's archiving
+> config (restart included), and step 8's scripts + crontabs. It also
+> pre-placed step 4's config **with placeholders intact**. What remains of
+> those steps is exactly the secret material: fill the placeholders (4),
+> configure the deploy user's rclone remote (3), install the age recipient
+> (8). Verify the rest instead of re-doing it.
 
 1. [ ] **Bucket**: create the Spaces bucket (e.g. `priori-crm-backups`, same
        region as the droplet), **private**; **enable versioning** (required —

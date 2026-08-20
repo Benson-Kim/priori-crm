@@ -1,0 +1,39 @@
+# systemd unit for the production API — committed, canonical copy.
+#
+# Installed by deploy/droplet_rebuild.sh as /etc/systemd/system/priori-api.service
+# (0644, root:root). This file is the config-as-code source the illustrative
+# snippet in docs/operations/deployment-setup.md §2.4 used to be: a rebuilt
+# droplet gets its unit from the repo, never from memory. If the live unit
+# ever needs to change (port, workers), change it HERE via MR and re-install.
+#
+# The bind address/port and worker count must stay in lockstep with
+# deploy/nginx-site.conf (proxy_pass http://127.0.0.1:8000) — committing the
+# pair together is what keeps them consistent by construction.
+#
+# Deliberately NO EnvironmentFile=: the app loads /srv/priori/current/api/.env
+# itself (api/app/lib/config.py, env_file=".env" relative to WorkingDirectory;
+# the release script symlinks shared/.env there). systemd's env parser is
+# stricter than python-dotenv (no inline comments, no quoting) and fails
+# quietly with subtly wrong values — see deployment-setup.md §2.4.
+#
+# systemd resolves WorkingDirectory at start, so a restart after the release
+# symlink swap picks up the new release with no unit edits — that is what
+# makes deploys (and rollbacks) work.
+
+[Unit]
+Description=Priori CRM API
+# postgresql.service: the database is on this droplet; ordering avoids a
+# crash-loop burst at boot while the cluster is still coming up. (Restart=
+# below would recover anyway — this just makes boot logs quiet and honest.)
+After=network.target postgresql.service
+
+[Service]
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/priori/current/api
+ExecStart=/srv/priori/current/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

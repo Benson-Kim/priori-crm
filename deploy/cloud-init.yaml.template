@@ -1,0 +1,43 @@
+#cloud-config
+# Droplet rebuild user-data — TEMPLATE, not live config. Issue #81.
+#
+# Paste (with placeholders filled) into the DigitalOcean "user data" field
+# when provisioning the replacement droplet (Ubuntu 24.04). First boot then
+# clones this repository and runs deploy/droplet_rebuild.sh unattended —
+# restore scenario 1 step 1 (docs/runbooks/database-backup-restore.md).
+#
+# Placeholders — fill BOTH before pasting; never commit a filled copy:
+#   <ref>    git ref to build from — normally main (what production deploys
+#            ship); a drill may pin a specific SHA.
+#   <token>  a GitLab PROJECT ACCESS TOKEN for this repo, role Reporter,
+#            scope read_repository ONLY, with a SHORT expiry. Cloud-init
+#            user-data is readable from the droplet's metadata service by
+#            any local process, and the clone URL persists in
+#            /opt/priori-crm/.git/config — treat the token as burned:
+#            REVOKE IT as soon as the rebuild completes. It can only read
+#            the repo (which holds no secrets), so the blast radius of a
+#            leak is bounded — but revoke it anyway.
+#
+# No secret other than that read-only token is ever in user-data: the
+# rebuild script installs config templates with their placeholders intact,
+# and the real secrets are hand-filled afterwards from the password manager
+# (the script prints the exact hand-finish list when it completes).
+#
+# Alternative without any token: provision the droplet with no user-data,
+# copy a checkout over (rsync -a --exclude .git . root@<ip>:/opt/priori-crm)
+# and run `sudo /opt/priori-crm/deploy/droplet_rebuild.sh` yourself.
+#
+# Progress/diagnostics on the droplet:
+#   cloud-init status --wait          # blocks until first boot finishes
+#   /var/log/priori-rebuild.log       # the rebuild script's own output
+#   /var/log/cloud-init-output.log    # everything else
+
+package_update: true
+packages:
+  - git
+
+runcmd:
+  - git clone --depth 1 --branch <ref> "https://priori-rebuild:<token>@gitlab.com/paoala-group/priori-crm.git" /opt/priori-crm
+  - bash /opt/priori-crm/deploy/droplet_rebuild.sh >>/var/log/priori-rebuild.log 2>&1
+
+final_message: "priori droplet rebuild bootstrap finished after $UPTIME s — check /var/log/priori-rebuild.log for the hand-finish list (secrets, DNS, TLS)"
