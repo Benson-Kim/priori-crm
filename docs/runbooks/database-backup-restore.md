@@ -42,11 +42,11 @@ get the same treatment:
 
 | | Hourly mirror | Nightly archive |
 |---|---|---|
-| Made by | `deploy/uploads_sync.sh` (cron, hourly): `rclone sync` to bucket `uploads-sync/` | `deploy/db_backup.sh`: tar to bucket `uploads/` |
+| Made by | `deploy/uploads_sync.sh` (cron, hourly): `rclone sync` through a **crypt** remote to bucket `uploads-sync/` | `deploy/db_backup.sh`: tar to bucket `uploads/` |
 | Exposure | ≤ ~1 hour | ≤ 24 hours |
 | Purpose | freshness — droplet loss costs at most an hour of documents | point-in-time archive |
-| Deletion safety | deletions propagate — **bucket versioning is required** so any deleted/overwritten file is recoverable as a prior version; `--max-delete` refuses mass deletions | tars are immutable snapshots |
-| Encryption | **plaintext in the bucket — accepted risk** (see anti-tamper section): per-file `rclone sync` needs stable names/mtimes for delta sync and versioning; client-side encryption here means an `rclone crypt` remote, filed as follow-up | age-encrypted client-side, same key as the nightly dumps |
+| Deletion safety | deletions propagate — **bucket versioning is required** so any deleted/overwritten file is recoverable as a prior version; `--max-delete` refuses mass deletions. Object names are encrypted — recovering a specific file's version needs the name mapping in §Hourly mirror encryption | tars are immutable snapshots |
+| Encryption | **client-side via `rclone crypt`** (#82): names + contents encrypted before upload; deterministic name encryption keeps delta sync, `--max-delete` and versioning working (§Hourly mirror encryption) | age-encrypted client-side, same key as the nightly dumps |
 
 Retention: newest 14 nightly dumps / 7 uploads tars locally (script
 defaults); bucket lifecycle expires `db/` and `uploads/` objects after 35
@@ -54,6 +54,83 @@ days. pgBackRest manages its own retention (`repo1-retention-full=2` ≈ two
 weeks of PITR range) — the lifecycle rules **must not touch the
 `pgbackrest/` prefix** (external deletion corrupts the repo) nor
 `uploads-sync/` or `heartbeats/`.
+
+### Hourly mirror encryption (rclone crypt)
+
+The hourly mirror is synced **through an rclone `crypt` remote** (#82), so
+proof-of-payment documents leave the droplet with names and contents
+encrypted — a leaked bucket key or a bucket-policy mistake yields
+ciphertext, matching the Tier-2 age posture. What holds this together:
+
+- **Remote layering.** The deploy user's rclone config defines two remotes:
+  the plain bucket remote (`spaces`, droplet key) and `spaces-crypt-uploads`
+  — `type = crypt`, `remote = spaces:priori-crm-backups/uploads-sync`,
+  `filename_encryption = standard`, `directory_name_encryption = true`. The
+  crypt remote wraps the path **inside** `uploads-sync/` so the literal
+  prefix stays plaintext in the bucket: the lifecycle exclusions and the
+  `heartbeats/` separation depend on it. `deploy/uploads_sync.sh` syncs to
+  the crypt remote (`UPLOADS_CRYPT_REMOTE` — deliberately not an `RCLONE_*`
+  name: rclone parses `RCLONE_*` environment variables as its own config,
+  and `RCLONE_CRYPT_REMOTE` would override the crypt remote's `remote`
+  setting to point at itself) and **refuses to run** if the
+  destination does not answer the crypt-only `rclone backend encode` probe —
+  a plain-remote misconfiguration must fail loudly, not silently mirror
+  plaintext. The freshness heartbeat stays on the plain remote: it is timing
+  metadata outside `uploads-sync/`, and the CI key that reads it never holds
+  the crypt password.
+- **Delta sync and deletion safety survive.** Crypt's file-name encryption
+  is deterministic and mtimes pass through, so an unchanged file is never
+  re-uploaded, a changed file transfers alone, `--max-delete` counts and
+  aborts exactly as before, and overwrites/deletes land on stable
+  (encrypted) object keys — bucket versioning keeps prior generations
+  exactly as for plaintext. (Verified by local simulation with rclone
+  v1.75 during #82 — no real bucket involved; re-verify against Spaces at
+  bring-up, step 12.)
+- **Key material** — two secrets, the crypt **password** and **salt**
+  ("password2"); both are required to read anything:
+
+  | Piece | Where |
+  |---|---|
+  | crypt password + salt | password manager (canonical — escrowed **before** touching the droplet, bring-up step 2) and the deploy user's rclone config 0600 (values are obscured, **not encrypted** — the config file itself is the secret). Exactly two places; never in CI, never on argv |
+
+  Unlike age (asymmetric — the droplet holds only the public recipient),
+  crypt is symmetric: the droplet **must** hold the decrypting key to sync
+  hourly. The residual exposure this leaves is recorded in the anti-tamper
+  section. The key is deliberately **not** the age identity nor the
+  pgBackRest passphrase — no two tiers share a point of loss.
+- **Recovering one named file's prior version under crypt.** Bucket object
+  names are ciphertext — the console alone can no longer identify a file.
+  The mapping is deterministic and needs the crypt config:
+  1. Compute the encrypted object key (offline, no API call):
+     `rclone backend encode spaces-crypt-uploads: 'invoices/2026/proof.pdf'`
+     → prints the object key under `uploads-sync/` (verify existence with
+     the plain remote; `rclone backend decode` inverts it).
+  2. With the **admin key** from a clean machine (as for any tamper
+     recovery): list that object's versions and restore the wanted
+     generation as the current object (S3 `CopyObject` with `versionId`;
+     for a deleted file, remove the delete marker or copy the last version
+     back to the same key).
+  3. Read it back decrypted through the crypt remote:
+     `rclone copy spaces-crypt-uploads:invoices/2026/proof.pdf ./restore/`
+     — or, after a full-mirror rollback, scenario 1 step 5 as usual.
+
+  Do **not** use `--s3-versions` through the crypt remote: it suffixes
+  object names with a version timestamp, which breaks crypt name decoding.
+  Use the encoded-key procedure above, or `--s3-version-at <time>` (rclone
+  ≥ 1.59) for a read-only point-in-time view through the crypt remote.
+  Steps 1 and 3 — and the "restore a prior ciphertext generation under the
+  same key, decrypt through crypt" round-trip — were verified by local
+  simulation; the Spaces version-listing/`CopyObject` mechanics are
+  standard S3 but **must be re-verified once at bring-up (step 12)**.
+- **Accepted trade-offs.** (1) Crypt exposes no hashes, so `rclone check`
+  degrades to size-only; for an on-demand integrity check use
+  `rclone cryptcheck /srv/priori/shared/uploads spaces-crypt-uploads:`.
+  (2) Rotating the crypt password changes every object name and content —
+  a full re-upload; prior versions stay readable only with the old key, so
+  keep the old key escrowed until the 14-day non-current window has aged
+  out. (3) Losing the crypt key makes the whole mirror unreadable; the
+  fallback is the nightly age-encrypted uploads tar (≤ 24 h stale) — which
+  is exactly why the keys are separate.
 
 ## Tier 1: continuous WAL archiving + physical backups (pgBackRest)
 
@@ -255,11 +332,19 @@ is irreversible for the recovery window.
          key alone — leaked, logged, or exposed by a bucket-policy mistake —
          now yields ciphertext), and it is the price of an automatically
          tested restore path. Rotate both on any suspicion.
-      2. the hourly `uploads-sync/` mirror is **plaintext in the bucket**:
-         per-file `rclone sync` relies on stable names/mtimes for delta
-         syncs and object versioning. Encrypting it client-side means an
-         `rclone crypt` remote (breaks direct object recovery and version
-         inspection) — filed as follow-up issue #82, not silently ignored.
+      2. the hourly `uploads-sync/` mirror is **client-side encrypted with
+         an `rclone crypt` remote** (#82 — previously an accepted plaintext
+         risk; crypt's deterministic name encryption turned out to preserve
+         delta syncs, `--max-delete` and per-object versioning, see §Hourly
+         mirror encryption). What remains accepted, deliberately: crypt is
+         symmetric, so the droplet necessarily holds the crypt key (deploy
+         user's rclone config, 0600, values obscured — not encrypted). A
+         fully compromised droplet can therefore read the mirror it writes
+         — no *new* exposure, since the droplet holds the source documents
+         in plaintext anyway; and version recovery of any file now requires
+         the escrowed crypt key plus rclone, never the bucket console
+         alone. In exchange, a leaked bucket key (droplet RW, CI read-only,
+         or admin) or a bucket-policy mistake now yields only ciphertext.
 - [ ] **`audit_events` is append-only** (docs/database.md §4) and every
       backup tier preserves it — PITR can therefore also reconstruct *what*
       an attacker or mistake changed, not just undo it.
@@ -318,7 +403,7 @@ events used to re-apply them — is preserved.
 | Physical/page corruption detected | Tier 1: full backup from **before** the corruption + PITR stopping just before it | physical restore is exact; if corruption predates all retained fulls, fall back to the newest clean nightly dump — logical dumps read rows and cannot carry page corruption |
 | Droplet loss | Tier 1: latest full + diff + replay of **all** archived WAL (scenario 1) | minutes of loss instead of 24 h; Tier 2 is the fallback path in the same scenario |
 | pgBackRest repo unusable (lost passphrase, poisoned repo) | Tier 2: newest `nightly-*.dump.age` (decrypt with the age identity from the password manager) | the independent tier — this is why it exists |
-| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning); else the nightly `uploads-*.tar.gz.age` (decrypt with the age identity first) | versioning keeps every generation for 14 days after deletion |
+| Uploaded document deleted/overwritten | prior object version in `uploads-sync/` (bucket versioning) — names are crypt-encrypted: map the file name to its object key with `rclone backend encode`, restore the version with the admin key, read it back through the crypt remote (§Hourly mirror encryption); else the nightly `uploads-*.tar.gz.age` (decrypt with the age identity first) | versioning keeps every generation for 14 days after deletion |
 | Bucket tampered with using the droplet's key | object versions, restored with the **admin key** from a clean machine | droplet key cannot purge versions |
 
 All restores are deliberate, data-loss-bearing human decisions — never
@@ -415,9 +500,13 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
    pg_restore --no-owner --no-privileges --exit-on-error -d "$PG_URL" \
      /srv/priori/backups/nightly-<utc>.dump
    ```
-5. Restore uploads — the hourly mirror is fresher than the nightly tar:
+5. Restore uploads — the hourly mirror is fresher than the nightly tar.
+   The mirror is crypt-encrypted (§Hourly mirror encryption): recreate the
+   crypt remote first with the crypt password + salt from the password
+   manager — entered interactively in `rclone config`, never on argv:
    ```bash
-   rclone sync spaces:priori-crm-backups/uploads-sync /srv/priori/shared/uploads
+   rclone config   # recreate "spaces-crypt-uploads": type=crypt, remote=spaces:priori-crm-backups/uploads-sync, filename_encryption=standard
+   rclone sync spaces-crypt-uploads: /srv/priori/shared/uploads
    chmod 700 /srv/priori/shared/uploads
    # fallback: fetch the newest uploads-<utc>.tar.gz.age from uploads/,
    # age -d -i <identity> it (as in step 4), then tar -xzf the result
@@ -548,11 +637,25 @@ later steps verify earlier ones.
        age keypair (`age-keygen`) on a trusted machine: store the **private
        identity** in the password manager (it later also becomes the
        `BACKUP_AGE_IDENTITY` CI variable, step 9); only the **public
-       recipient** line goes to the droplet (step 8).
+       recipient** line goes to the droplet (step 8). Generate the
+       uploads-mirror **crypt password and salt** (`openssl rand -base64
+       32`, twice) and store both in the password manager **before** they
+       ever touch the droplet — deliberately separate from both the
+       repo-cipher passphrase and the age identity (§Hourly mirror
+       encryption; no two tiers share a point of loss). No CI variable is
+       ever created for them.
 3. [ ] **Droplet packages**: `apt-get install pgbackrest rclone age
        postgresql-client`; `install -d -o postgres -g postgres -m 750
-       /var/log/pgbackrest`. Configure the deploy user's rclone remote
-       (`rclone config`, name `spaces`) with the droplet key.
+       /var/log/pgbackrest`. Configure the deploy user's rclone remotes
+       (`rclone config`): first `spaces` with the droplet key, then the
+       crypt remote `spaces-crypt-uploads` — `type=crypt`,
+       `remote=spaces:priori-crm-backups/uploads-sync`,
+       `filename_encryption=standard`, `directory_name_encryption=true`,
+       password + salt from step 2 entered interactively (never argv).
+       Confirm `rclone backend encode spaces-crypt-uploads: probe` prints
+       an encoded name (`deploy/uploads_sync.sh` uses the same probe as its
+       plaintext-misconfiguration guard), and note `rclone version` — the
+       optional `--s3-version-at` recovery view needs ≥ 1.59.
 4. [ ] **pgBackRest config**: fill `deploy/pgbackrest.conf.template` →
        `/etc/pgbackrest/pgbackrest.conf`, `postgres:postgres` 0600 (bucket
        key + cipher passphrase from step 2).
@@ -620,5 +723,12 @@ later steps verify earlier ones.
         SKIPPED rows remaining.
 12. [ ] **First restore test**: trigger the `restore-verify` schedule
         manually and watch it pass end-to-end; then run drill Variant B
-        (PITR to a scratch cluster) once, timed. Record both in the ops log.
+        (PITR to a scratch cluster) once, timed. Also run the **crypt
+        name-recovery drill** once against the real bucket (§Hourly mirror
+        encryption — the crypt/versioning interplay was verified only by
+        local simulation until this step): pick one synced upload, map its
+        name with `rclone backend encode`, confirm the object and its
+        versions are visible with the admin key, restore a prior generation,
+        and read it back decrypted through the crypt remote. Record all of
+        it in the ops log.
 13. [ ] Quarterly thereafter: the DR drill (§above), alternating variants.
