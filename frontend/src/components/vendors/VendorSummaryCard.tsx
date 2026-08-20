@@ -62,7 +62,6 @@ export function VendorSummaryCard({
   }));
   const [page, setPage] = useState(1);
   const [data, setData] = useState<VendorCardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,32 +73,47 @@ export function VendorSummaryCard({
     return params;
   }, [period, reportingDay]);
 
-  const fetchCard = useCallback(async () => {
-    if (!isReportPeriodReady(period, reportingDay)) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await getVendorCard(vendorId, card, {
-        ...periodParams(),
-        page,
-        per_page: PER_PAGE,
-      });
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load card");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [vendorId, card, page, period, periodParams, reportingDay]);
-
-  useEffect(() => {
-    void fetchCard();
-  }, [fetchCard]);
-
-  // Reset to page 1 whenever the filter changes.
-  useEffect(() => {
+  // Reset to page 1 whenever the filter changes — done in the picker's
+  // change handler (react.dev "you might not need an effect").
+  const handlePeriodChange = useCallback((value: ReportPeriodFilter) => {
+    setPeriod(value);
     setPage(1);
-  }, [period]);
+  }, []);
+
+  // Identity of the fetch the UI currently wants; null while a custom period
+  // is incomplete. isLoading derives from comparing it against the request
+  // that last settled instead of being set synchronously inside the effect
+  // (react-hooks/set-state-in-effect, #61).
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const requestKey = isReportPeriodReady(period, reportingDay)
+    ? `${vendorId}|${card}|${page}|${dateFrom ?? ""}|${dateTo ?? ""}`
+    : null;
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (requestKey === null) return;
+    let cancelled = false;
+    const params: { period_start?: string; period_end?: string } = {};
+    if (dateFrom) params.period_start = dateFrom;
+    if (dateTo) params.period_end = dateTo;
+    getVendorCard(vendorId, card, { ...params, page, per_page: PER_PAGE })
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setError(null);
+        setSettledKey(requestKey);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load card");
+        setSettledKey(requestKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, vendorId, card, page, dateFrom, dateTo]);
+
+  const isLoading = requestKey !== null && settledKey !== requestKey;
 
   const handleExport = async (kind: "excel" | "pdf") => {
     setIsExporting(true);
@@ -153,7 +167,7 @@ export function VendorSummaryCard({
         />
 
         {/* Date filter */}
-        <ReportPeriodPicker value={period} onChange={setPeriod} />
+        <ReportPeriodPicker value={period} onChange={handlePeriodChange} />
       </div>
 
       {/* Transaction list */}

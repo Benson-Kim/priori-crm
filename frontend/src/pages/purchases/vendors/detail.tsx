@@ -29,7 +29,7 @@ import {
   type VendorStatement
 } from "@/services/vendorApi";
 import { Download, Eye, FileClock, Pencil } from "lucide-react";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useEffectEvent, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 
@@ -110,7 +110,9 @@ export default function VendorDetailPage() {
 
   // Statement state
   const [statement, setStatement] = useState<VendorStatement | null>(null);
-  const [isLoadingStatement, setIsLoadingStatement] = useState(false);
+  // statementError stays real state because the export handlers also write
+  // it; the fetch settle callbacks below clear/set it. Loading derives from
+  // the statement request key further down.
   const [statementError, setStatementError] = useState<string | null>(null);
   const reportingDay = useReportingDate();
   const [statementPeriod, setStatementPeriod] = useState<ReportPeriodFilter>(
@@ -215,33 +217,46 @@ export default function VendorDetailPage() {
   );
 
 
-  const fetchStatement = useCallback(
-    async () => {
-      if (!id) return;
+  // Identity of the statement fetch the UI currently wants; null while the
+  // Statements tab is inactive or the period is incomplete. Loading derives
+  // from comparing it against the request that last settled instead of
+  // being set synchronously inside the effect
+  // (react-hooks/set-state-in-effect, #61).
+  const resolvedStatementPeriod = getResolvedPeriod();
+  // Bumped by the Retry button to re-issue the same request.
+  const [statementRetryTick, setStatementRetryTick] = useState(0);
+  const statementKey =
+    mainTab === "statements" && id && resolvedStatementPeriod
+      ? `${id}|${resolvedStatementPeriod.periodStart}|${resolvedStatementPeriod.periodEnd}|${statementRetryTick}`
+      : null;
+  const [statementSettledKey, setStatementSettledKey] = useState<string | null>(null);
 
-      const period = getResolvedPeriod()
-      if (!period) {
-        setStatement(null)
-        return
-      }
+  // An incomplete custom period on the Statements tab previously blanked the
+  // statement synchronously inside the effect; render-time adjustment per
+  // react.dev "adjusting state when props change".
+  if (mainTab === "statements" && statementKey === null && statement !== null) {
+    setStatement(null);
+  }
 
-      setIsLoadingStatement(true);
-      setStatementError(null);
-
-      try {
-        const { periodStart, periodEnd } = period;
-        const data = await getVendorStatement(id, periodStart, periodEnd);
+  const loadStatement = useEffectEvent((key: string, isCurrent: () => boolean) => {
+    if (!id) return;
+    const period = getResolvedPeriod();
+    if (!period) return;
+    getVendorStatement(id, period.periodStart, period.periodEnd)
+      .then((data) => {
+        if (!isCurrent()) return;
         setStatement(data);
-      } catch (err) {
+        setStatementError(null);
+        setStatementSettledKey(key);
+      })
+      .catch((err) => {
+        if (!isCurrent()) return;
         setStatementError(
           err instanceof Error ? err.message : "Failed to fetch statement"
         );
-      } finally {
-        setIsLoadingStatement(false);
-      }
-    },
-    [id, getResolvedPeriod]
-  );
+        setStatementSettledKey(key);
+      });
+  });
 
   /** Download this customer's statement as a PDF. */
   const handleDownloadPDFVendorStatement = useCallback(async () => {
@@ -290,15 +305,16 @@ export default function VendorDetailPage() {
   }, [fetchVendorData]);
 
   useEffect(() => {
-    if (mainTab === "statements") {
-      if (!isReportPeriodReady(statementPeriod, reportingDay)) {
-        setStatement(null)
-        return
-      }
+    if (statementKey === null) return;
+    let cancelled = false;
+    loadStatement(statementKey, () => !cancelled);
+    return () => {
+      cancelled = true;
+    };
+  }, [statementKey]);
 
-      void (async () => { await fetchStatement(); })();
-    }
-  }, [mainTab, fetchStatement, statementPeriod, reportingDay]);
+  const isLoadingStatement =
+    statementKey !== null && statementSettledKey !== statementKey;
 
   useEffect(() => {
     void (async () => { await fetchTransactions(); })();
@@ -813,7 +829,10 @@ export default function VendorDetailPage() {
             ) : statementError ? (
               <Card className="p-8 text-center">
                 <p className="text-red-500 mb-4">{statementError}</p>
-                <Button variant="primary" onClick={() => fetchStatement()}>
+                <Button
+                  variant="primary"
+                  onClick={() => setStatementRetryTick((tick) => tick + 1)}
+                >
                   Retry
                 </Button>
               </Card>
@@ -1022,43 +1041,49 @@ export function VendorSummaryCard({
   }));
   const [page, setPage] = useState(1);
   const [data, setData] = useState<VendorCardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const periodParams = useCallback(() => {
-    const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  // Reset to page 1 whenever the filter changes — done in the picker's
+  // change handler (react.dev "you might not need an effect").
+  const handlePeriodChange = useCallback((value: ReportPeriodFilter) => {
+    setPeriod(value);
+    setPage(1);
+  }, []);
+
+  // Identity of the fetch the UI currently wants; null while a custom period
+  // is incomplete. isLoading derives from comparing it against the request
+  // that last settled instead of being set synchronously inside the effect
+  // (react-hooks/set-state-in-effect, #61).
+  const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
+  const requestKey = isReportPeriodReady(period, reportingDay)
+    ? `${vendorId}|${card}|${page}|${dateFrom ?? ""}|${dateTo ?? ""}`
+    : null;
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (requestKey === null) return;
+    let cancelled = false;
     const params: { period_start?: string; period_end?: string } = {};
     if (dateFrom) params.period_start = dateFrom;
     if (dateTo) params.period_end = dateTo;
-    return params;
-  }, [period, reportingDay]);
-
-  const fetchCard = useCallback(async () => {
-    if (!isReportPeriodReady(period, reportingDay)) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await getVendorCard(vendorId, card, {
-        ...periodParams(),
-        page,
-        per_page: PER_PAGE,
+    getVendorCard(vendorId, card, { ...params, page, per_page: PER_PAGE })
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setError(null);
+        setSettledKey(requestKey);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load card");
+        setSettledKey(requestKey);
       });
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load card");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [vendorId, card, page, period, periodParams, reportingDay]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, vendorId, card, page, dateFrom, dateTo]);
 
-  useEffect(() => {
-    void fetchCard();
-  }, [fetchCard]);
-
-  // Reset to page 1 whenever the filter changes.
-  useEffect(() => {
-    setPage(1);
-  }, [period]);
+  const isLoading = requestKey !== null && settledKey !== requestKey;
 
 
   const total = data ? Number(data.total) : 0;
@@ -1072,7 +1097,7 @@ export function VendorSummaryCard({
         <p className="text-left font-bold text-lg text-content-primary">{title}</p>
 
         {/* Date filter */}
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
+        <ReportPeriodPicker value={period} onChange={handlePeriodChange} triggerClassName="bg-white p-2" />
       </div>
 
       {/* Transaction list */}
