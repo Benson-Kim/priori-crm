@@ -150,6 +150,22 @@ jobs:
             api/ "$SSH_TARGET:$REL/api/"
           rsync -az --delete frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
 
+      - name: Ship ops scripts
+        # /srv/priori/bin must never drift from deploy/*.sh in the repo: the
+        # cron-driven backup scripts used to be installed once by hand
+        # (runbook bring-up step 8) and then diverge the moment a script MR
+        # merged. Shipping them on every deploy makes the repo canonical.
+        # Crontab entries are config-as-code too: deploy/cron.d/*.cron
+        # (installed via the bring-up checklist; cron itself is not touched
+        # here because `crontab <file>` replaces a user's whole crontab and
+        # the postgres user's crontab needs sudo this job does not have).
+        env:
+          SSH_TARGET: ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}
+        run: |
+          ssh "$SSH_TARGET" "mkdir -p /srv/priori/bin"
+          rsync -az deploy/db_backup.sh deploy/uploads_sync.sh "$SSH_TARGET:/srv/priori/bin/"
+          ssh "$SSH_TARGET" "chmod 700 /srv/priori/bin/db_backup.sh /srv/priori/bin/uploads_sync.sh"
+
       - name: Back up, migrate, cut over
         # Everything consequential happens here, in deploy/production_release.sh:
         # pg_dump, then alembic, then the symlink swap and restart, then a health

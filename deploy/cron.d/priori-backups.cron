@@ -1,0 +1,21 @@
+# Deploy user's crontab — backup/DR schedule (config-as-code; see
+# docs/runbooks/database-backup-restore.md, bring-up checklist step 8).
+#
+# This file is the canonical source: a rebuilt droplet gets its schedule
+# from the repo, not from a human's memory of a runbook. Install/replace
+# as the deploy user with:
+#
+#   crontab deploy/cron.d/priori-backups.cron
+#
+# WARNING: `crontab <file>` replaces the user's ENTIRE crontab. If the
+# deploy user ever carries unrelated entries, merge them into this file
+# (in the repo, via MR) instead of hand-editing on the droplet — hand
+# edits are exactly the drift this file exists to prevent.
+
+# nightly DB dump + uploads tar, age-encrypted, copied offsite
+# (after the 00:15 UTC nightly transitions; before nothing that matters)
+15 1 * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/db_backup.sh >> /srv/priori/backups/backup.log 2>&1
+
+# hourly uploads mirror to the bucket (freshness tier; heartbeat for the
+# dead-man's switch)
+5 * * * * RCLONE_REMOTE=spaces:priori-crm-backups /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1

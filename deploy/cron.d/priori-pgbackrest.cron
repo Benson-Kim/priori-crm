@@ -1,0 +1,28 @@
+# Postgres user's crontab — pgBackRest schedule (config-as-code; see
+# docs/runbooks/database-backup-restore.md, §Tier 1 and bring-up step 8).
+#
+# This file is the canonical source: a rebuilt droplet gets its schedule
+# from the repo, not from a human's memory of a runbook. Install/replace
+# with:
+#
+#   sudo -u postgres crontab deploy/cron.d/priori-pgbackrest.cron
+#
+# WARNING: `crontab <file>` replaces the user's ENTIRE crontab — merge any
+# new entries into this file (in the repo, via MR), never hand-edit on the
+# droplet.
+#
+# The 00:30 slot finishes before the 01:15 nightly dump (deploy user's
+# crontab, priori-backups.cron). pgBackRest writes its own logs to
+# /var/log/pgbackrest; failures also surface through the CI freshness job.
+
+# weekly full backup — Sunday 00:30 UTC
+30 0 * * 0 pgbackrest --stanza=priori --type=full backup
+
+# daily differential — Monday-Saturday 00:30 UTC
+30 0 * * 1-6 pgbackrest --stanza=priori --type=diff backup
+
+# daily self-check: config sane, archiving round-trip works, repo reachable
+15 6 * * * pgbackrest --stanza=priori check
+
+# weekly deep verification of repository checksums
+45 6 * * 0 pgbackrest --stanza=priori verify
