@@ -382,7 +382,13 @@ sudo -u postgres rm -rf /var/lib/postgresql/16/scratch
 
 ### 1. Droplet loss (rebuild from offsite)
 
-1. Provision a new droplet; follow `docs/operations/deployment-setup.md` to
+1. Provision a new droplet **with the `priori-prod` tag** so the standing
+   DigitalOcean cloud firewall (inbound 22/80/443 only) covers it from first
+   boot, and apply the host-hardening baseline from a repo checkout —
+   `sudo deploy/host_hardening.sh` (sshd key-only policy,
+   unattended-upgrades; see `docs/operations/host-hardening.md`, and fill
+   its audit checklist so parity with the lost machine is verified, not
+   assumed). Then follow `docs/operations/deployment-setup.md` to
    recreate `/srv/priori/{releases,current,shared,backups}`, the deploy
    user, sudoers, nginx, systemd unit, and `shared/.env` (secrets from the
    password manager — they are not in any backup).
