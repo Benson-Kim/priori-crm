@@ -26,7 +26,7 @@ import {
   type TopSaleLine,
   type TopSales,
 } from "@/services/dashboardApi";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -176,37 +176,46 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
     defaultReportPeriod(reportingDay)
   );
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
   const periodReady = isReportPeriodReady(period, reportingDay);
 
-  // Stale-response guard: only the latest request may write state.
-  const seqRef = useRef(0);
+  // Identity of the fetch the UI currently wants; null while the period is
+  // incomplete. isLoading/error derive from it instead of being set
+  // synchronously inside the effect (react-hooks/set-state-in-effect, #61).
+  const requestKey = periodReady ? `${dateFrom}|${dateTo}|${currency}` : null;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null);
+
+  // Clear stale cards the moment the period becomes un-ready (previously a
+  // synchronous reset inside the effect). Render-time adjustment.
+  if (requestKey === null && summary !== null) {
+    setSummary(null);
+  }
+
+  // Stale-response guard: the cleanup cancels superseded requests.
   useEffect(() => {
-    if (!periodReady) {
-      seqRef.current++;
-      setSummary(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    const seq = ++seqRef.current;
-    setIsLoading(true);
-    setError(null);
+    if (requestKey === null) return;
+    let cancelled = false;
     getDashboardSummary({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
-        if (seq === seqRef.current) setSummary(data);
+        if (cancelled) return;
+        setSummary(data);
+        setSettled({ key: requestKey, error: null });
       })
       .catch((err) => {
-        if (seq === seqRef.current)
-          setError(err instanceof Error ? err.message : "Failed to load summary");
-      })
-      .finally(() => {
-        if (seq === seqRef.current) setIsLoading(false);
+        if (cancelled) return;
+        setSettled({
+          key: requestKey,
+          error: err instanceof Error ? err.message : "Failed to load summary",
+        });
       });
-  }, [periodReady, dateFrom, dateTo, currency]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, dateFrom, dateTo, currency]);
+
+  const isLoading = requestKey !== null && settled?.key !== requestKey;
+  const error = requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
   return (
     <section>
@@ -274,36 +283,41 @@ function CashflowWidget({ currency }: CashflowWidgetProps) {
     defaultReportPeriod(reportingDay)
   );
   const [series, setSeries] = useState<CashflowSeries | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
   const periodReady = isReportPeriodReady(period, reportingDay);
 
-  const seqRef = useRef(0);
+  // Derived isLoading/error keyed on the wanted fetch (see SummaryWidget).
+  const requestKey = periodReady ? `${dateFrom}|${dateTo}|${currency}` : null;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null);
+
+  if (requestKey === null && series !== null) {
+    setSeries(null);
+  }
+
   useEffect(() => {
-    if (!periodReady) {
-      seqRef.current++;
-      setSeries(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    const seq = ++seqRef.current;
-    setIsLoading(true);
-    setError(null);
+    if (requestKey === null) return;
+    let cancelled = false;
     getCashflowSeries({ range: "custom" as const, dateFrom, dateTo }, currency)
       .then((data) => {
-        if (seq === seqRef.current) setSeries(data);
+        if (cancelled) return;
+        setSeries(data);
+        setSettled({ key: requestKey, error: null });
       })
       .catch((err) => {
-        if (seq === seqRef.current)
-          setError(err instanceof Error ? err.message : "Failed to load cashflow");
-      })
-      .finally(() => {
-        if (seq === seqRef.current) setIsLoading(false);
+        if (cancelled) return;
+        setSettled({
+          key: requestKey,
+          error: err instanceof Error ? err.message : "Failed to load cashflow",
+        });
       });
-  }, [periodReady, dateFrom, dateTo, currency]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, dateFrom, dateTo, currency]);
+
+  const isLoading = requestKey !== null && settled?.key !== requestKey;
+  const error = requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
   const chartData = useMemo<CashflowChartDatum[]>(
     () =>
@@ -444,36 +458,41 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
     defaultReportPeriod(reportingDay)
   );
   const [topSales, setTopSales] = useState<TopSales | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
   const periodReady = isReportPeriodReady(period, reportingDay);
 
-  const seqRef = useRef(0);
+  // Derived isLoading/error keyed on the wanted fetch (see SummaryWidget).
+  const requestKey = periodReady ? `${dateFrom}|${dateTo}|${currency}` : null;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null);
+
+  if (requestKey === null && topSales !== null) {
+    setTopSales(null);
+  }
+
   useEffect(() => {
-    if (!periodReady) {
-      seqRef.current++;
-      setTopSales(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    const seq = ++seqRef.current;
-    setIsLoading(true);
-    setError(null);
+    if (requestKey === null) return;
+    let cancelled = false;
     getTopSales({ range: "custom" as const, dateFrom, dateTo }, currency, TOP_SALES_LIMIT)
       .then((data) => {
-        if (seq === seqRef.current) setTopSales(data);
+        if (cancelled) return;
+        setTopSales(data);
+        setSettled({ key: requestKey, error: null });
       })
       .catch((err) => {
-        if (seq === seqRef.current)
-          setError(err instanceof Error ? err.message : "Failed to load top sales");
-      })
-      .finally(() => {
-        if (seq === seqRef.current) setIsLoading(false);
+        if (cancelled) return;
+        setSettled({
+          key: requestKey,
+          error: err instanceof Error ? err.message : "Failed to load top sales",
+        });
       });
-  }, [periodReady, dateFrom, dateTo, currency]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, dateFrom, dateTo, currency]);
+
+  const isLoading = requestKey !== null && settled?.key !== requestKey;
+  const error = requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
   return (
     <Card padding="lg" className="relative flex flex-col gap-4 rounded-2xl">
@@ -519,40 +538,45 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
     defaultReportPeriod(reportingDay)
   );
   const [transactions, setTransactions] = useState<DashboardTransactions | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const { dateFrom, dateTo } = resolveReportPeriod(period, reportingDay);
   const periodReady = isReportPeriodReady(period, reportingDay);
 
-  const seqRef = useRef(0);
+  // Derived isLoading/error keyed on the wanted fetch (see SummaryWidget).
+  const requestKey = periodReady ? `${dateFrom}|${dateTo}|${currency}` : null;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null);
+
+  if (requestKey === null && transactions !== null) {
+    setTransactions(null);
+  }
+
   useEffect(() => {
-    if (!periodReady) {
-      seqRef.current++;
-      setTransactions(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    const seq = ++seqRef.current;
-    setIsLoading(true);
-    setError(null);
+    if (requestKey === null) return;
+    let cancelled = false;
     getRecentTransactions(
       { range: "custom" as const, dateFrom, dateTo },
       currency,
       RECENT_TRANSACTIONS_LIMIT,
     )
       .then((data) => {
-        if (seq === seqRef.current) setTransactions(data);
+        if (cancelled) return;
+        setTransactions(data);
+        setSettled({ key: requestKey, error: null });
       })
       .catch((err) => {
-        if (seq === seqRef.current)
-          setError(err instanceof Error ? err.message : "Failed to load transactions");
-      })
-      .finally(() => {
-        if (seq === seqRef.current) setIsLoading(false);
+        if (cancelled) return;
+        setSettled({
+          key: requestKey,
+          error: err instanceof Error ? err.message : "Failed to load transactions",
+        });
       });
-  }, [periodReady, dateFrom, dateTo, currency]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, dateFrom, dateTo, currency]);
+
+  const isLoading = requestKey !== null && settled?.key !== requestKey;
+  const error = requestKey !== null && settled?.key === requestKey ? settled.error : null;
 
   /*
    * One line per row. `col.className` lands on the body cells as well as the
