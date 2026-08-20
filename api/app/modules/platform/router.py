@@ -103,12 +103,15 @@ def list_owners(
     description=(
         "Paginated, filterable view over the audit_events rows written by "
         "the owner service: entitlement grants/revocations "
-        "(entity_type 'owner_module_setting') and tenant lifecycle changes "
-        "(entity_type 'owner_profile'). Newest first. Read-only evidence — "
-        "append-only is enforced by a database trigger (BEFORE UPDATE OR "
-        "DELETE raises), not just by application convention. The trail "
-        "records successful writes only: operator sign-ins, reads and "
-        "denied attempts are not audited."
+        "(entity_type 'owner_module_setting'), tenant lifecycle changes "
+        "(entity_type 'owner_profile') and operator-MFA events "
+        "(entity_type 'operator_mfa', ADR-0014: enrollment lifecycle, "
+        "recovery-code use, step-up grants AND denials). Newest first. "
+        "Read-only evidence — append-only is enforced by a database "
+        "trigger (BEFORE UPDATE OR DELETE raises), not just by "
+        "application convention. Beyond the ADR-0014 MFA events, the "
+        "trail records successful writes only: operator sign-ins and "
+        "reads are not audited."
     ),
     responses={403: {"description": "Caller is not a platform operator"}},
 )

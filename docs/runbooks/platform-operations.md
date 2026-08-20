@@ -51,6 +51,15 @@ Console: owner → "Tenant lifecycle" → Suspend/Reactivate (confirm dialog),
 or `PATCH /platform/owners/{owner_id}/status` with
 `{"status": "suspended" | "active"}`.
 
+> **Step-up required (#73, ADR-0014):** suspend/reactivate and every
+> entitlement PATCH demand a fresh second-factor proof in the
+> `X-MFA-Code` header (a live TOTP from your authenticator, or a
+> single-use recovery code). A live session is never sufficient; a code
+> is spent by the action it authorizes (two destructive actions within
+> one 30-second TOTP step need the next code). Until the console gains
+> its MFA UI (follow-up), perform these actions via the API — see
+> `platform-operator.md` for the curl flow.
+
 Semantics (enforced in code, this MR):
 
 - Suspension is **reversible and non-destructive** — no data is touched,
@@ -136,10 +145,13 @@ value, and export after deletion is impossible.
   2019 s. 43: 72 hours to the Commissioner where applicable; GDPR
   Art. 33 mirrors this). The platform audit trail is your evidence of
   what the operator *changed* and when — it is append-only at the
-  database (a `BEFORE UPDATE OR DELETE` trigger raises), but it records
-  **successful writes only**: operator sign-ins, reads (audit/owner
-  listings) and failed/denied attempts are not in the trail. Correlate
-  with API logs where those matter.
+  database (a `BEFORE UPDATE OR DELETE` trigger raises). It records
+  **successful writes plus the ADR-0014 operator-MFA events** (enrollment
+  lifecycle, recovery-code use, step-up grants **and denials** — a denied
+  step-up on an authenticated session is compromise signal, so it is
+  deliberately in the trail); operator sign-ins and reads (audit/owner
+  listings) are still not audited. Correlate with API logs where those
+  matter.
 
 ## Entitlement management
 
@@ -161,7 +173,7 @@ value, and export after deletion is impossible.
 | Outbox dead letters | `GET /internal/email-outbox/dead` weekly; requeue only after root-cause fix (`email-outbox-dlq.md`) | Dead letters are per-recipient today, not per-tenant (readiness audit #7) |
 | **Shared SES reputation** | Watch SES bounce/complaint metrics in the AWS console | All tenants send from one `SES_SENDER_EMAIL` (`api/app/lib/config.py:45`): one tenant's bad recipient lists degrade deliverability for everyone. A spike is a platform incident: identify the source recipients via the outbox table, suspend the offending flow, then remediate |
 | Storage growth | Disk/bucket usage monthly | Per-tenant attribution requires T4 key prefixes |
-| Operator-action review | `GET /platform/audit` weekly: every event should map to a logged commercial/incident reason | Unexplained events are treated as potential compromise → rotate credentials (platform-operator.md break-glass) |
+| Operator-action review | `GET /platform/audit` weekly: every event should map to a logged commercial/incident reason | Unexplained events are treated as potential compromise → rotate credentials (platform-operator.md break-glass). Treat any `step_up_denied` you cannot attribute to your own fumbled code as an active-session compromise signal: rotate the password AND reset/re-enroll MFA immediately |
 | Scheduler health | Existing GitLab scheduled-pipeline alerts (ADR-0005 scheduling notes) | Per-tenant job isolation lands with T5 |
 
 ## Quarterly access review of operator accounts
@@ -175,6 +187,11 @@ Once per quarter, with a second person where possible:
    delete (audit attribution).
 3. Confirm the last credential rotation is within 90 days
    (platform-operator.md); rotate if not.
+   Also confirm every active operator has an ACTIVE MFA enrollment
+   (`SELECT user_id, status, confirmed_at FROM operator_mfa_totp;`) and a
+   sensible stock of unused recovery codes
+   (`SELECT user_id, count(*) FROM operator_mfa_recovery_codes WHERE
+   used_at IS NULL GROUP BY user_id;`) — re-enroll/rotate where not.
 4. Re-verify no API-reachable operator creation/promotion exists: the
    isolation contract suite and QA finding 09 are the controls — check
    they are green in CI, and that no route outside `/platform` names
@@ -203,5 +220,6 @@ Honest status of every control this runbook relies on:
 | Per-tenant rate limits / quotas | ❌ (user/IP buckets only) | T5 |
 | Tenant-scoped export/offboarding tool | ❌ (whole-DB dump stands in while single-tenant) | T5 |
 | Row-Level Security backstop | ❌ (no tenant keys yet; role-creation SQL documented, `docs/operations/sql/create-db-roles.sql`) | Role split at T1, per-wave keys + FORCE RLS at T2–T4, policies at T6 (#80) |
-| Operator MFA / step-up auth | ❌ (login+OTP only, like all users) | Separate ADR — follow-up issue #73 |
+| Operator MFA / step-up auth | ✅ enforced (#73, ADR-0014): TOTP (RFC 6238) required for full operator token issuance; an UNENROLLED operator gets an enrollment-only token (403 on the console proper); fresh `X-MFA-Code` step-up proof demanded per destructive action (suspend/reactivate + every entitlement PATCH); replay-fenced, drift ±1 step, rate-limited; recovery codes hashed + single-use; seeds Fernet-encrypted at rest. **Not covered**: web console has no MFA UI yet (operator flows are API/curl — see platform-operator.md); WebAuthn is the documented upgrade path; an MFA reset does not revoke outstanding operator sessions (step-up still fails closed). CI: `api/tests/test_operator_mfa.py` | Console MFA UX, WebAuthn phase, session binding on MFA reset (follow-up issues) |
+| /platform IP allowlist (interim control, ADR-0014) | ✅ available, **off by default**: `PLATFORM_IP_ALLOWLIST` (comma-separated CIDRs); empty = disabled; malformed config refuses to boot; unparseable client IPs denied (fail closed). Honours `X-Forwarded-For` only when `RATE_LIMIT_TRUST_FORWARDED_FOR` is on | Enable per deployment once operator egress IPs are stable |
 | Quarterly access review | ❌ procedural only (this runbook) | Consider automation after first review |
