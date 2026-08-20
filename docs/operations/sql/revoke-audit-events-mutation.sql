@@ -1,0 +1,47 @@
+-- Revoke audit_events UPDATE/DELETE from app_runtime (ADR-0013, issue #80).
+--
+-- WHY: audit_events is the tamper-evidence trail for every operator and
+-- entitlement write. MR !77 already makes it append-only at the database
+-- via a BEFORE UPDATE OR DELETE trigger; this REVOKE layers a privilege
+-- boundary on top, so even a path that could drop or disable the trigger
+-- (only the table owner or a superuser can) still leaves request traffic
+-- without the raw privilege to rewrite history.
+--
+-- WHY THIS IS DOCUMENTED SQL AND NOT AN ALEMBIC MIGRATION: migrations may
+-- still run as the single pre-split role in any environment where the
+-- DBA has not executed the role split yet (and in dev/CI databases the
+-- app_runtime role does not exist at all — the REVOKE would error). A
+-- migration must be valid in every environment the chain runs in; this
+-- statement is only meaningful AFTER the split is live in a specific
+-- environment, which makes it a per-environment operator step, not a
+-- schema-history step. It is step 7 of the rollout checklist in
+-- docs/runbooks/platform-operations.md. Revisit folding it into a
+-- migration only once every environment has completed the split.
+--
+-- HOW TO USE: run as the DBA (or app_migrator once it owns the table),
+-- in the application database, after the ownership transfer and DSN
+-- cutover (steps 1-6 of the checklist) are verified:
+
+REVOKE UPDATE, DELETE ON audit_events FROM app_runtime;
+
+-- The blanket GRANT and ALTER DEFAULT PRIVILEGES in create-db-roles.sql
+-- intentionally include UPDATE/DELETE for all tables; this REVOKE narrows
+-- exactly one table afterwards. NOTE: default privileges apply per NEW
+-- object, so audit_events keeps this narrowed grant even across future
+-- migrations (Alembic ALTERs the existing table; it does not recreate it).
+-- If a future migration ever RECREATES audit_events, re-run this REVOKE.
+
+-- Verification — expect zero rows:
+--
+--   SELECT grantee, privilege_type
+--   FROM information_schema.role_table_grants
+--   WHERE table_name = 'audit_events'
+--     AND grantee = 'app_runtime'
+--     AND privilege_type IN ('UPDATE', 'DELETE');
+--
+-- And the append-only trigger must still be present (belt-and-braces):
+--
+--   SELECT tgname FROM pg_trigger
+--   WHERE tgrelid = 'audit_events'::regclass AND NOT tgisinternal;
+--   -- expect: trg_audit_events_append_only
+--   --         (see api/app/common/audit_triggers.py)

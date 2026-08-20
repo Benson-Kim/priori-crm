@@ -26,6 +26,19 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: PostgresDsn
+    # app_migrator/app_runtime role split (ADR-0013 Phase T1, issue #80).
+    # MIGRATOR_DATABASE_URL is the app_migrator DSN, consumed ONLY by Alembic
+    # (api/alembic/env.py) and the deploy scripts' pg_dump — never by API
+    # request traffic. Unset => single-role deployment: migrations fall back
+    # to DATABASE_URL and nothing changes.
+    MIGRATOR_DATABASE_URL: PostgresDsn | None = None
+    # Declare the role split active. When true (or when the API connects as
+    # the runtime role name itself), startup fails closed if the connection
+    # role owns any application table — ownership drift would silently turn
+    # the future FORCE RLS backstop into a no-op (see
+    # app/common/db_role_check.py). Leave false until the DBA has executed
+    # the split per the rollout checklist (issue #80).
+    DB_ROLE_SPLIT_ACTIVE: bool = False
     DB_POOL_SIZE: int = Field(default=20, ge=5, le=100)
     DB_MAX_OVERFLOW: int = Field(default=10, ge=0, le=50)
     DB_POOL_TIMEOUT: int = Field(default=30, ge=10, le=60)
@@ -128,12 +141,14 @@ class Settings(BaseSettings):
 
         return v
 
-    @field_validator("DATABASE_URL")
+    @field_validator("DATABASE_URL", "MIGRATOR_DATABASE_URL")
     @classmethod
-    def validate_database_url(cls, v: PostgresDsn) -> PostgresDsn:
-        """Ensure database URL is valid PostgreSQL connection."""
+    def validate_database_url(cls, v: PostgresDsn | None) -> PostgresDsn | None:
+        """Ensure database URLs are valid PostgreSQL connections."""
+        if v is None:
+            return v
         if not str(v).startswith(("postgresql://", "postgresql+psycopg2://")):
-            raise ValueError("DATABASE_URL must be a valid PostgreSQL URL")
+            raise ValueError("database URL must be a valid PostgreSQL URL")
         return v
 
     @field_validator("REPORTING_TIMEZONE")

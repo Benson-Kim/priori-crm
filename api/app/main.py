@@ -27,6 +27,7 @@ import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
 from app.common.database import engine
+from app.common.db_role_check import verify_runtime_role_ownership
 from app.common.dependencies import require_module
 from app.common.exceptions import register_exception_handlers
 from app.common.logging import setup_logging
@@ -73,6 +74,12 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Verifying database connection")
     # Base.metadata.create_all(bind=engine)  # Removed: using Alembic for migrations
+
+    # Fail closed on runtime-role table-ownership drift once the
+    # app_migrator/app_runtime split is active (ADR-0013 T1, issue #80).
+    # A no-op for single-role deployments: it only enforces when
+    # DB_ROLE_SPLIT_ACTIVE is set or the connection role IS app_runtime.
+    verify_runtime_role_ownership(engine)
 
     if settings.RATE_LIMIT_BACKEND == "redis" and settings.REDIS_URL:
         try:

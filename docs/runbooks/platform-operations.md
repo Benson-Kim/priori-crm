@@ -181,6 +181,64 @@ Once per quarter, with a second person where possible:
    PLATFORM_OPERATOR (the suite's static leg asserts this).
 5. Record the review (date, reviewers, findings) in the operations log.
 
+## Database role split rollout — single ordered sequence (issue #80)
+
+The `app_migrator`/`app_runtime` split (ADR-0013 Phase T1) is manual DBA
+work per environment; the repo-side plumbing (Alembic/`pg_dump` DSN
+precedence, the startup ownership-drift check, this checklist) ships ahead
+of it and is inert until activated. Do the steps **in this order** — later
+steps verify earlier ones. Step 2 needs a brief maintenance window; the
+DSN cutover (step 4) is the first step request traffic notices.
+
+1. [ ] **Create the roles** (DBA, once per environment): generate two
+       passwords into the secret store first, then run
+       [`docs/operations/sql/create-db-roles.sql`](../operations/sql/create-db-roles.sql)
+       from an **interactive** psql session — `\prompt`, never `-v` on the
+       command line (argv is visible in `ps` to every local account):
+       ```
+       psql -d <app db>
+         \prompt 'app_migrator password: ' migrator_password
+         \prompt 'app_runtime password: '  runtime_password
+         \i docs/operations/sql/create-db-roles.sql
+       ```
+       Idempotent — safe to re-run. Confirm both roles report
+       `rolsuper = f, rolbypassrls = f` (verification query in the file §5).
+2. [ ] **Transfer ownership** (maintenance window — brief; announce it):
+       as the current owner of the tables (or a superuser):
+       ```sql
+       REASSIGN OWNED BY <current app role> TO app_migrator;
+       ```
+3. [ ] **Verify ownership** — must return **zero rows** before going on:
+       ```sql
+       SELECT tablename, tableowner FROM pg_tables
+       WHERE schemaname = 'public' AND tableowner <> 'app_migrator';
+       ```
+4. [ ] **Split the DSNs in secrets** (host `.env`, never the repo): add
+       `MIGRATOR_DATABASE_URL` with the `app_migrator` credentials and
+       switch `DATABASE_URL` to the `app_runtime` credentials. From the
+       next deploy, Alembic and the pre-deploy `pg_dump` run as
+       `app_migrator` (`api/alembic/env.py`, `deploy/production_release.sh`)
+       — the deploy log line `DSN source: MIGRATOR_DATABASE_URL` confirms
+       it; API traffic runs as `app_runtime`.
+5. [ ] **Enable the startup check**: set `DB_ROLE_SPLIT_ACTIVE=true` in the
+       host `.env` and restart the API. Startup must log
+       `ownership drift check passed`; if the API refuses to start with an
+       `OWNERSHIP DRIFT` error, step 2 was incomplete — re-run it for the
+       named tables. (The check also self-arms on the `app_runtime` role
+       name, but set the flag anyway: it protects even if the DSN is later
+       misedited back to an owning role.)
+6. [ ] **Revoke audit-trail mutation** from the runtime role: run
+       [`docs/operations/sql/revoke-audit-events-mutation.sql`](../operations/sql/revoke-audit-events-mutation.sql)
+       and its verification queries (zero remaining UPDATE/DELETE grants on
+       `audit_events` for `app_runtime`; append-only trigger still present).
+7. [ ] **Record completion** (date, environment, operator) in the ops log
+       and on issue #80; update the ADR-0013 phase status if this was the
+       last environment.
+
+Note: `ENABLE`/`FORCE ROW LEVEL SECURITY` is **not** part of this
+checklist — it rides each tenant-key wave (issues #74, #76, #77) per
+ADR-0013, once tables actually carry `owner_profile_id`.
+
 ## Controls: enforced today vs planned
 
 Honest status of every control this runbook relies on:

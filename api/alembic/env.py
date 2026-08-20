@@ -28,7 +28,15 @@ config = context.config
 # Doubling the sign is configparser's own escape. Both readers below interpolate on
 # the way out (get_main_option offline, get_section online), so SQLAlchemy still
 # receives the original URL; verified byte-identical against the real staging value.
-config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL).replace("%", "%%"))
+#
+# Role split (ADR-0013 Phase T1, issue #80): once the app_migrator/app_runtime
+# split is live, migrations must run as app_migrator — the owner of every
+# application table — so MIGRATOR_DATABASE_URL (read by pydantic-settings from
+# the same .env / process environment as DATABASE_URL) takes precedence here.
+# Unset, it falls back to DATABASE_URL, so single-role environments keep
+# working unchanged. The API's request traffic never uses this URL.
+_migration_url = settings.MIGRATOR_DATABASE_URL or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", str(_migration_url).replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

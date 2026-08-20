@@ -173,6 +173,17 @@ tables).** Small/medium.
   before any tenant keys exist — is the cheapest point, and it makes the
   per-wave `FORCE ROW LEVEL SECURITY` in T2–T4 meaningful from day one.
   Role-creation SQL: `docs/operations/sql/create-db-roles.sql`.
+  **Status: repo-side plumbing in place** — `MIGRATOR_DATABASE_URL`
+  consumed by Alembic and the deploy scripts' `pg_dump` (falls back to
+  `DATABASE_URL`, so single-role environments are unchanged), a
+  fail-closed startup ownership-drift check behind `DB_ROLE_SPLIT_ACTIVE`
+  / `app_runtime` role-name detection
+  (`api/app/common/db_role_check.py`), the documented `audit_events`
+  REVOKE (`docs/operations/sql/revoke-audit-events-mutation.sql`) and the
+  ordered operator rollout checklist
+  (`docs/runbooks/platform-operations.md`). The database-side execution —
+  role creation, `REASSIGN OWNED`, DSN secret cutover — is manual DBA
+  work per environment, tracked in #80.
 
 **Phase T2 — schema wave 1: masters.** Medium.
 - Tables: `customers`, `customer_billing_profiles`, `vendors`, `deals`,

@@ -19,8 +19,16 @@
 -- 1) Roles ------------------------------------------------------------
 -- (psql does NOT substitute :'variables' inside dollar-quoted DO blocks,
 -- so the roles are created passwordless in the guarded block and the
--- passwords are set immediately after, where substitution works. Invoke:
---   psql -v migrator_password='…' -v runtime_password='…' -f this-file)
+-- passwords are set immediately after, where substitution works.
+-- Set the variables with \prompt from an interactive psql session — NOT
+-- with `psql -v migrator_password=…` on the command line, which exposes
+-- the passwords to every local account via argv/`ps` and the shell
+-- history (same rule as deploy/production_release.sh). Invoke:
+--   psql -d <app db>
+--     \prompt 'app_migrator password: ' migrator_password
+--     \prompt 'app_runtime password: '  runtime_password
+--     \i docs/operations/sql/create-db-roles.sql
+-- )
 
 DO $$
 BEGIN
@@ -80,6 +88,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
 --   -- expect: f / f for both.
 --
 -- 6) After the split is live (issue #80): revoke audit-trail mutation
--- from the runtime role, layered on the append-only trigger:
---
---   REVOKE UPDATE, DELETE ON audit_events FROM app_runtime;
+-- from the runtime role, layered on the append-only trigger — run
+-- revoke-audit-events-mutation.sql (same directory; explains why it is
+-- documented SQL, not a migration) and its verification queries.

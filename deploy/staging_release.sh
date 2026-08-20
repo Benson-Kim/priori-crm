@@ -42,7 +42,25 @@ pip install --quiet --upgrade -r requirements.txt
 # (and Passenger reloads lazily, on the next request). Migrations must
 # therefore be backward-compatible with the previous release — add nullable
 # columns first, drop old ones a release later. See deployment.md §5.3.
-log "Running migrations"
+#
+# Role split (ADR-0013 T1, issue #80): api/alembic/env.py prefers
+# MIGRATOR_DATABASE_URL from the host .env (parsed by pydantic-settings, the
+# same reader the app uses — never sourced by shell) and falls back to
+# DATABASE_URL, so a single-role staging keeps working unchanged. Log WHICH
+# key alembic will use — only the key name, never the value (no secrets in
+# deploy logs). python-dotenv is already in the venv (pydantic-settings dep,
+# installed above).
+MIGRATION_DSN_SOURCE="$(ENV_FILE="$APP_DIR/.env" python - <<'PY'
+import os
+
+from dotenv import dotenv_values
+
+values = dotenv_values(os.environ["ENV_FILE"])
+migrator = (values.get("MIGRATOR_DATABASE_URL") or "").strip()
+print("MIGRATOR_DATABASE_URL" if migrator else "DATABASE_URL")
+PY
+)"
+log "Running migrations (DSN source: $MIGRATION_DSN_SOURCE)"
 alembic upgrade head
 
 # Pre-flight: import the actual Passenger entrypoint in the venv, with the

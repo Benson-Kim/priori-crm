@@ -49,7 +49,7 @@ python3.12 -m venv "$REL/venv"
 "$REL/venv/bin/pip" install --quiet -r "$REL/api/requirements.txt"
 
 # --- backup ------------------------------------------------------------------
-# Read DATABASE_URL from the shared .env WITHOUT sourcing it. The file is
+# Read the database URL from the shared .env WITHOUT sourcing it. The file is
 # python-dotenv format (pydantic-settings loads it in the app), which is NOT
 # shell: the documented template value `APP_NAME=Business Central` is a valid
 # dotenv line, but sourced under `set -e` it assigns APP_NAME=Business and then
@@ -66,18 +66,34 @@ python3.12 -m venv "$REL/venv"
 # and prints a password-free libpq URL. It also normalises the SQLAlchemy
 # driver form (postgresql+psycopg2://), which libpq rejects but config.py
 # accepts (api/app/lib/config.py:135).
+#
+# Role split (ADR-0013 T1, issue #80): once the app_migrator/app_runtime split
+# is live, MIGRATOR_DATABASE_URL in the shared .env carries the app_migrator
+# DSN. It takes precedence here for pg_dump — the migrator role owns every
+# table, so the pre-deploy dump can never miss an object the runtime role was
+# not granted — mirroring exactly the precedence Alembic itself applies
+# (api/alembic/env.py reads the same .env via pydantic-settings, so the
+# migration below runs as app_migrator with NO extra plumbing in this script).
+# Unset, everything falls back to DATABASE_URL: single-role environments keep
+# working unchanged. The helper prints the chosen KEY NAME on line 1 (for the
+# log — never the value) and the password-free URL on line 2.
 PGPASSFILE="$(mktemp)" # mktemp creates 0600 — never widen this
 export PGPASSFILE
 trap 'rm -f "$PGPASSFILE"' EXIT
 
-PG_URL="$(ENV_FILE="$ROOT/shared/.env" "$REL/venv/bin/python" - <<'PY'
+PG_OUT="$(ENV_FILE="$ROOT/shared/.env" "$REL/venv/bin/python" - <<'PY'
 import os
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from dotenv import dotenv_values
 
 env_file = os.environ["ENV_FILE"]
-url = (dotenv_values(env_file).get("DATABASE_URL") or "").strip()
+values = dotenv_values(env_file)
+source_key = "MIGRATOR_DATABASE_URL"
+url = (values.get(source_key) or "").strip()
+if not url:
+    source_key = "DATABASE_URL"
+    url = (values.get(source_key) or "").strip()
 if not url:
     raise SystemExit(f"DATABASE_URL missing from {env_file}")
 
@@ -97,10 +113,15 @@ if parts.port:
     netloc = f"{netloc}:{parts.port}"
 if parts.username:
     netloc = f"{parts.username}@{netloc}"
+print(source_key)
 print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
 PY
 )"
-[ -n "$PG_URL" ] || { log "FATAL: could not extract DATABASE_URL from $ROOT/shared/.env"; exit 1; }
+PG_URL_SOURCE="$(printf '%s\n' "$PG_OUT" | head -n 1)"
+PG_URL="$(printf '%s\n' "$PG_OUT" | tail -n 1)"
+[ -n "$PG_URL" ] && [ "$PG_URL" != "$PG_URL_SOURCE" ] \
+  || { log "FATAL: could not extract a database URL from $ROOT/shared/.env"; exit 1; }
+log "Backup/migration DSN source: $PG_URL_SOURCE (role split: issue #80)"
 
 command -v pg_dump >/dev/null || {
   log "FATAL: pg_dump not found — install postgresql-client"
@@ -145,7 +166,10 @@ ls -1t "$ROOT/backups"/*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f -- || t
 # --- migrate -----------------------------------------------------------------
 # Its own step. If this fails, `set -e` aborts here: the symlink still points at
 # the old release and the service was never touched.
-log "Running migrations"
+# DSN: api/alembic/env.py prefers MIGRATOR_DATABASE_URL from the shared .env
+# (symlinked above) and falls back to DATABASE_URL — same precedence as the
+# pg_dump helper, logged there as the "DSN source" (issue #80).
+log "Running migrations (DSN source: $PG_URL_SOURCE)"
 cd "$REL/api"
 "$REL/venv/bin/alembic" upgrade head
 
