@@ -479,10 +479,71 @@ between the two variants so both paths stay rehearsed:
 - **Variant A (full rebuild):** scenario 1 on a throwaway droplet, through
   step 8 (app serving, document downloadable; the erasure re-apply of step
   7 may be simulated in a drill — pick one past erasure from `audit_events`
-  and prove it can be re-applied).
+  and prove it can be re-applied). The step-6 deploy runs via the **drill
+  deploy path** (next section), never via *Deploy production*.
 - **Variant B (PITR surgical):** scenario 0 against a scratch cluster —
   pick an arbitrary target time from yesterday, recover, extract one
   invoice + its payments, verify against `audit_events`.
+
+### Drill deploy path (Variant A, scenario 1 step 6)
+
+A drill cannot use *Deploy production*: `PROD_SSH_*` point at the live
+droplet and the health gate pins `https://accounting.priori.co.ke/api/v1/health`
+— against a throwaway droplet with production DNS untouched it could only
+deploy to the wrong machine or fail. Substituting a hand-rsync would validate
+the release *script* but never the workflow *plumbing* (artifact download,
+rsync steps, ops-script shipping) — leaving that plumbing to be exercised
+against a rebuilt machine for the first time during a real disaster. *Deploy
+DR drill* (`deploy-drill.yml`) runs the identical steps — both callers share
+`deploy-release.yml` — against the drill droplet:
+
+1. Provision the drill secrets. All four are **throwaway, generated for this
+   drill** (the values committed nowhere; a human sets them):
+   ```bash
+   ssh-keygen -t ed25519 -f /tmp/drill-deploy -N '' -C "drill $(date -u +%Y%m%d)"
+   # install /tmp/drill-deploy.pub in the drill droplet deploy user's authorized_keys, then:
+   gh secret set -R benson-priori/priori-crm DRILL_SSH_KEY      < /tmp/drill-deploy
+   gh secret set -R benson-priori/priori-crm DRILL_SSH_USER     --body "deploy"
+   gh secret set -R benson-priori/priori-crm DRILL_SSH_HOST     --body "<drill droplet IP>"
+   ssh-keyscan -H <drill droplet IP> | gh secret set -R benson-priori/priori-crm DRILL_KNOWN_HOSTS
+   rm -f /tmp/drill-deploy /tmp/drill-deploy.pub
+   ```
+2. Dispatch *Deploy DR drill* from the Actions tab, **on `main`** (a drill
+   rehearses a real droplet loss, and a real droplet loss deploys `main`):
+   type the droplet address twice, leave the health URL at
+   `http://localhost/api/v1/health` (the release script curls it *from* the
+   droplet), and type `drill` to confirm.
+3. The guards refuse any target that is production — by literal, by zone
+   (`*.priori.co.ke`), by equality with `PROD_SSH_HOST`, and by DNS
+   resolution (failing closed if production cannot be resolved to compare
+   against); the health URL is refused if it mentions the production host;
+   the typed host must equal the `DRILL_SSH_HOST` secret (catches typos and
+   a stale secret alike). If a guard trips, fix the input or the secret —
+   never work around the guard.
+4. When the droplet is destroyed at drill end, **delete all four `DRILL_*`
+   secrets** (`gh secret delete -R benson-priori/priori-crm DRILL_SSH_KEY`
+   etc.). A credential for a machine that no longer exists is pure
+   liability, and the next drill's host-vs-secret check only means something
+   if the secret was set fresh.
+
+**Fallback — hand-rsync substitution.** Only if the drill workflow itself is
+broken or GitHub is unavailable: build the SPA locally
+(`VITE_API_BASE_URL=http://<drill-ip> npm run build` in `frontend/`), then
+
+```bash
+ssh deploy@<drill-ip> "mkdir -p /srv/priori/releases/<sha>/api /srv/priori/releases/<sha>/frontend/dist"
+rsync -az --exclude '__pycache__/' --exclude '.venv/' --exclude 'tests/' \
+  api/ deploy@<drill-ip>:/srv/priori/releases/<sha>/api/
+rsync -az --delete frontend/dist/ deploy@<drill-ip>:/srv/priori/releases/<sha>/frontend/dist/
+ssh deploy@<drill-ip> "CI_COMMIT_SHA='<sha>' HEALTH_URL='http://localhost/api/v1/health' bash -s" \
+  < deploy/production_release.sh
+```
+
+This exercises the release script but **not** the workflow plumbing — a
+drill that had to fall back has found exactly the gap the drill exists to
+find: file an issue the same day and record the fallback in the ops log (the
+drill-deploy checklist item below stays unticked; the drill result is
+degraded, not passed in full).
 
 Checklist (record every timestamp in the ops log):
 
@@ -499,6 +560,10 @@ Checklist (record every timestamp in the ops log):
       assumes recovery works when the author is unreachable. Fix the escrow
       (naming, access grants, documentation) the same day and count the
       drill as failed.
+- [ ] Variant A: the step-6 deploy ran end-to-end via *Deploy DR drill*
+      (`deploy-drill.yml`) — this is what validates the workflow plumbing
+      against a rebuilt machine. If the hand-rsync fallback was used, leave
+      this unticked and file an issue on the workflow the same day.
 - [ ] Restore completed; for Variant A: `/api/v1/health` healthy, login
       works, a recent invoice opens, one uploaded document downloads.
 - [ ] Freshness of restored data measured: `SELECT max(created_at) FROM
