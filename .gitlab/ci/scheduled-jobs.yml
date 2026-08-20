@@ -25,9 +25,15 @@
 #   - API_BASE_URL        e.g. https://priori-crm-api.onrender.com
 #   - INTERNAL_API_SECRET must equal the API's INTERNAL_API_SECRET env var
 #
-# Alerting: any non-2xx response fails the job. Configure pipeline-failure
-# notifications / an integration on these scheduled pipelines so a missed or
-# failing run pages on-call (AC: alert if a job has not run in its window).
+# Alerting: any non-2xx response fails the job, and scheduled:notify-failure
+# (bottom of this file, when: on_failure) then POSTs the failure to the
+# shared channel behind ALERT_WEBHOOK_URL — routing lives in code, not in a
+# per-person notification setting. GitLab's built-in pipeline-failure e-mail
+# goes only to the schedule owner; keep it on as a backstop, but the webhook
+# is the alert of record (AC: alert if a job has not run in its window).
+#   - ALERT_WEBHOOK_URL   masked CI/CD variable: incoming-webhook URL of the
+#                         shared alerts channel (Slack/Mattermost/Google
+#                         Chat compatible {"text": ...} payload).
 
 .scheduled-base:
   stage: scheduled
@@ -141,3 +147,333 @@ scheduled:synthetic-critical-path:
       if [ -n "$FRONTEND_BASE_URL" ]; then
         probe "${FRONTEND_BASE_URL%/}/" ""
       fi
+
+# Read-only credential canary, shared by every job that touches the backup
+# bucket. The BACKUP_S3_* key is DOCUMENTED as read-only, but that scoping is
+# established by a manual bring-up step — nothing else enforces it. This
+# fragment attempts a tiny write and FAILS THE JOB IF THE WRITE SUCCEEDS,
+# turning the read-only assumption into a monitored invariant: a leaked
+# read-write CI key could corrupt the very backups these jobs protect.
+# Expects the RCLONE_CONFIG_BK_* environment to be exported already.
+.bucket-readonly-canary: &bucket-readonly-canary
+  - |
+    canary="bk:${BACKUP_S3_BUCKET}/ci-write-canary-${CI_PIPELINE_ID:-manual}"
+    if printf 'ci read-only canary\n' | rclone rcat "$canary" >/dev/null 2>&1; then
+      echo "FAIL: CI credentials could WRITE ${canary} — BACKUP_S3_ACCESS_KEY_ID is NOT read-only." >&2
+      echo "      Rescope or rotate the key (runbook bring-up checklist, step 2) before trusting any green run." >&2
+      rclone deletefile "$canary" >/dev/null 2>&1 || true
+      exit 1
+    fi
+    echo "OK: read-only canary — write attempt denied, CI key is scoped correctly"
+
+# Monthly backup restore test: fetch the newest nightly dump from the offsite
+# bucket (read-only credentials), restore it into a throwaway Postgres service
+# container, and verify it — migration stamp present, key tables non-empty,
+# newest audit_events row inside the RPO window (see deploy/db_restore_verify.sh
+# and docs/runbooks/database-backup-restore.md). A red run is the alert, same
+# convention as the synthetic monitoring. Production credentials are never
+# involved: the job sees only a read-only bucket key, the Tier-2 age
+# identity (needed to decrypt the dump it verifies — accepted residual risk,
+# see the runbook's anti-tamper section), and a scratch database that exists
+# solely for this pipeline.
+#
+# Schedule (CI/CD > Schedules): SCHEDULED_TASK=restore-verify  cron: 0 3 1 * *
+#
+# Required CI/CD variables (masked, not in repo):
+#   - BACKUP_S3_ENDPOINT           e.g. https://fra1.digitaloceanspaces.com
+#   - BACKUP_S3_BUCKET             e.g. priori-crm-backups
+#   - BACKUP_S3_ACCESS_KEY_ID      READ-ONLY key scoped to the backup bucket
+#   - BACKUP_S3_SECRET_ACCESS_KEY  its secret
+#   - BACKUP_AGE_IDENTITY          age private identity (AGE-SECRET-KEY-1…)
+#                                  that decrypts the nightly dumps — they are
+#                                  age-encrypted client-side by
+#                                  deploy/db_backup.sh. Escrowed canonically
+#                                  in the password manager; this variable is
+#                                  its only other location. It is written to
+#                                  a 0600 temp file, never argv.
+scheduled:db-restore-verify:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_TASK == "restore-verify"'
+  image: postgres:16-alpine   # pg_restore + psql; rclone added in before_script
+  services:
+    - name: postgres:16-alpine
+      alias: scratch-postgres
+  variables:
+    # The base job never checks out the repo; this one needs
+    # deploy/db_restore_verify.sh from the tree.
+    GIT_STRATEGY: fetch
+    # Scratch service credentials — disposable and pipeline-local, not secrets.
+    POSTGRES_DB: restore_verify
+    POSTGRES_USER: verify
+    POSTGRES_PASSWORD: scratch-only
+    # Password deliberately NOT in the URL (argv is visible in ps) — psql
+    # reads PGPASSWORD from the environment instead.
+    SCRATCH_DB_URL: postgresql://verify@scratch-postgres:5432/restore_verify
+    PGPASSWORD: scratch-only
+    RPO_HOURS: "26"
+  before_script:
+    - test -n "${BACKUP_S3_ENDPOINT:-}" || { echo "BACKUP_S3_ENDPOINT must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_BUCKET:-}" || { echo "BACKUP_S3_BUCKET must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_ACCESS_KEY_ID:-}" || { echo "BACKUP_S3_ACCESS_KEY_ID must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_SECRET_ACCESS_KEY:-}" || { echo "BACKUP_S3_SECRET_ACCESS_KEY must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_AGE_IDENTITY:-}" || { echo "BACKUP_AGE_IDENTITY must be set as a CI/CD variable (dumps are age-encrypted)." >&2; exit 1; }
+    - apk add --no-cache rclone age
+  script:
+    # rclone is configured via environment only — no config file on disk and
+    # no credentials on argv.
+    - export RCLONE_CONFIG_BK_TYPE=s3
+    - export RCLONE_CONFIG_BK_PROVIDER=Other
+    - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
+    - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
+    - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    - *bucket-readonly-canary
+    # Dump names embed a fixed-width UTC timestamp, so lexical sort order is
+    # chronological order and `sort | tail -1` is the newest dump. The grep
+    # pins the expected nightly-* naming: a stray manually-uploaded object
+    # sorting last must never be the file we restore. (`|| true` keeps an
+    # empty listing from failing the pipe — the emptiness check below owns
+    # that error.)
+    - LATEST="$(rclone lsf --files-only "bk:${BACKUP_S3_BUCKET}/db/" | { grep '^nightly-' || true; } | sort | tail -n 1)"
+    - test -n "$LATEST" || { echo "No dumps found in ${BACKUP_S3_BUCKET}/db/ — is the nightly backup running?" >&2; exit 1; }
+    # Quoted: an unquoted ': ' would turn this list item into a YAML mapping.
+    - 'echo "Newest offsite dump: $LATEST"'
+    - rclone copyto "bk:${BACKUP_S3_BUCKET}/db/${LATEST}" "./${LATEST}"
+    # Dumps are age-encrypted client-side (deploy/db_backup.sh). Hand the
+    # identity to the verify script as a 0600 file path — never argv. The
+    # script decrypts *.age inputs itself and restores plain .dump inputs
+    # unchanged, so a pre-encryption artifact would still verify.
+    - umask 077
+    - AGE_IDENTITY_FILE="$(mktemp)"
+    - export AGE_IDENTITY_FILE
+    - printf '%s\n' "$BACKUP_AGE_IDENTITY" > "$AGE_IDENTITY_FILE"
+    - bash deploy/db_restore_verify.sh "./${LATEST}"
+
+# Backup freshness — the dead-man's switch. A backup pipeline that silently
+# stops must be discovered within hours, not at restore time. This job lists
+# the offsite bucket with the same READ-ONLY credentials as
+# scheduled:db-restore-verify and fails red (the alert) if ANY tier is stale:
+#
+#   1. newest archived WAL segment       older than WAL_MAX_AGE_MIN (60 min)
+#   2. newest pgBackRest FULL backup     older than 8 days (weekly cadence + slack)
+#   3. newest pgBackRest full/diff       older than 2 days (daily diff cadence + slack)
+#   4. newest nightly-*.dump.age         older than 26 h
+#   5. newest uploads-*.tar.gz.age       older than 26 h
+#   6. uploads-sync heartbeat            older than UPLOADS_SYNC_MAX_AGE_MIN (120 min)
+#
+# Each check is reported independently, then a summary table, then a single
+# pass/fail — same shape as deploy/db_restore_verify.sh. Ages come from
+# object mtimes (checks 1, 4–6) and from pgBackRest's backup-label
+# timestamps (checks 2–3; labels are UTC and lexically sortable).
+#
+# TWO schedules drive this one job (CI/CD > Schedules, on develop,
+# pipeline-failure notifications on; both reuse the four BACKUP_S3_*
+# variables from scheduled:db-restore-verify — no new credentials):
+#
+#   SCHEDULED_TASK=backup-freshness      cron: 0 7 * * *    (daily, ALL checks)
+#   SCHEDULED_TASK=backup-freshness-wal  cron: 17 * * * *   (hourly, WAL check ONLY)
+#
+# Why the split: the WAL tier carries the RPO ≤ 5 min claim, and its 60-min
+# staleness budget checked once a day means a broken archive-push could stay
+# undetected for ~25 h. The hourly WAL-only run bounds detection of a stalled
+# WAL archive at ~2 h (hourly cadence + 60-min budget) while the heavier
+# full-bucket checks stay daily. The daily run still includes the WAL check,
+# so the daily schedule alone covers every tier if the hourly one is missing.
+#
+# Bring-up: set CHECK_PGBACKREST=0 (and CHECK_UPLOADS_SYNC=0) on the schedule
+# until the pgBackRest stanza / hourly sync are live, then remove the
+# overrides — a permanently red schedule trains everyone to ignore it. See
+# docs/runbooks/database-backup-restore.md, "Bring-up checklist".
+scheduled:backup-freshness:
+  extends: .scheduled-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($SCHEDULED_TASK == "backup-freshness" || $SCHEDULED_TASK == "backup-freshness-wal")'
+  image: alpine:3.20   # rclone + jq + GNU date added in before_script
+  variables:
+    WAL_MAX_AGE_MIN: "60"                # (1) RPO tier: WAL must land offsite continuously
+    PGBACKREST_FULL_MAX_AGE_DAYS: "8"    # (2) weekly full + 1 day slack
+    PGBACKREST_BACKUP_MAX_AGE_DAYS: "2"  # (3) daily diff (the Sunday full also satisfies this)
+    DUMP_MAX_AGE_HOURS: "26"             # (4) nightly pg_dump + scheduling slack
+    UPLOADS_TAR_MAX_AGE_HOURS: "26"      # (5) nightly uploads archive
+    UPLOADS_SYNC_MAX_AGE_MIN: "120"      # (6) hourly rclone sync + 1 missed run of slack
+    PGBACKREST_STANZA: "priori"
+    PGBACKREST_REPO_PATH: "pgbackrest"   # must match repo1-path in pgbackrest.conf
+    CHECK_PGBACKREST: "1"                # set "0" on the schedule until the stanza is live
+    CHECK_UPLOADS_SYNC: "1"              # set "0" on the schedule until the hourly sync is live
+  before_script:
+    - test -n "${BACKUP_S3_ENDPOINT:-}" || { echo "BACKUP_S3_ENDPOINT must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_BUCKET:-}" || { echo "BACKUP_S3_BUCKET must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_ACCESS_KEY_ID:-}" || { echo "BACKUP_S3_ACCESS_KEY_ID must be set as a CI/CD variable." >&2; exit 1; }
+    - test -n "${BACKUP_S3_SECRET_ACCESS_KEY:-}" || { echo "BACKUP_S3_SECRET_ACCESS_KEY must be set as a CI/CD variable." >&2; exit 1; }
+    # coreutils supplies GNU date (RFC3339 parsing); busybox date cannot.
+    - apk add --no-cache rclone jq coreutils
+  script:
+    # rclone configured via environment only — no config file, no argv creds.
+    - export RCLONE_CONFIG_BK_TYPE=s3
+    - export RCLONE_CONFIG_BK_PROVIDER=Other
+    - export RCLONE_CONFIG_BK_ENDPOINT="$BACKUP_S3_ENDPOINT"
+    - export RCLONE_CONFIG_BK_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID"
+    - export RCLONE_CONFIG_BK_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    - *bucket-readonly-canary
+    - |
+      now="$(date -u +%s)"
+      fail=0
+      SUMMARY=""
+
+      note() { SUMMARY="${SUMMARY}$(printf '%-36s %s' "$1" "$2")
+      "; }
+
+      # Epoch of the newest object under bucket/<path>, empty if none exist.
+      newest_epoch() {
+        ts="$(rclone lsjson -R --files-only "bk:${BACKUP_S3_BUCKET}/$1" 2>/dev/null | jq -r '[.[].ModTime] | max // empty')"
+        [ -n "$ts" ] && date -u -d "$ts" +%s
+      }
+
+      # Check that the newest object under a prefix is younger than a budget.
+      check_age() {
+        name="$1"; path="$2"; budget_min="$3"
+        e="$(newest_epoch "$path" || true)"
+        if [ -z "$e" ]; then
+          echo "FAIL: ${name} — nothing found under ${BACKUP_S3_BUCKET}/${path}" >&2
+          note "$name" "FAIL (nothing found)"
+          fail=1
+          return 0
+        fi
+        age_min=$(( (now - e) / 60 ))
+        if [ "$age_min" -gt "$budget_min" ]; then
+          echo "FAIL: ${name} — newest is ${age_min} min old (budget ${budget_min} min)" >&2
+          note "$name" "FAIL (${age_min}m > ${budget_min}m)"
+          fail=1
+        else
+          echo "OK: ${name} — newest is ${age_min} min old (budget ${budget_min} min)"
+          note "$name" "PASS (${age_min}m <= ${budget_min}m)"
+        fi
+      }
+
+      # Newest pgBackRest backup label matching a pattern. Labels look like
+      # 20260810-003000F (full) / ..._20260811-003000D (diff); the LAST
+      # timestamp in the directory name is the backup's start time (UTC).
+      newest_label() {
+        rclone lsf --dirs-only "bk:${BACKUP_S3_BUCKET}/${PGBACKREST_REPO_PATH}/backup/${PGBACKREST_STANZA}/" 2>/dev/null \
+          | grep -E "$1" | sed -E 's|.*_||; s|[FDI]/$||' | sort | tail -n 1
+      }
+
+      check_label_age() {
+        name="$1"; pattern="$2"; budget_min="$3"
+        lbl="$(newest_label "$pattern" || true)"
+        if [ -z "$lbl" ]; then
+          echo "FAIL: ${name} — no backup found in ${PGBACKREST_REPO_PATH}/backup/${PGBACKREST_STANZA}/" >&2
+          note "$name" "FAIL (nothing found)"
+          fail=1
+          return 0
+        fi
+        e="$(date -u -d "$(printf '%s' "$lbl" | sed -E 's/^(....)(..)(..)-(..)(..)(..)$/\1-\2-\3 \4:\5:\6/') UTC" +%s || true)"
+        if [ -z "$e" ]; then
+          echo "FAIL: ${name} — could not parse backup label '${lbl}'" >&2
+          note "$name" "FAIL (unparseable label)"
+          fail=1
+          return 0
+        fi
+        age_min=$(( (now - e) / 60 ))
+        if [ "$age_min" -gt "$budget_min" ]; then
+          echo "FAIL: ${name} — newest (${lbl}) is ${age_min} min old (budget ${budget_min} min)" >&2
+          note "$name" "FAIL (${age_min}m > ${budget_min}m)"
+          fail=1
+        else
+          echo "OK: ${name} — newest (${lbl}) is ${age_min} min old (budget ${budget_min} min)"
+          note "$name" "PASS (${age_min}m <= ${budget_min}m)"
+        fi
+      }
+
+      # Scope: the hourly schedule (SCHEDULED_TASK=backup-freshness-wal) runs
+      # ONLY the WAL check — the one tier whose 60-minute budget a daily
+      # cadence cannot honestly monitor. The daily schedule runs everything.
+      WAL_ONLY=0
+      if [ "${SCHEDULED_TASK:-}" = "backup-freshness-wal" ]; then
+        WAL_ONLY=1
+        echo "Scope: hourly WAL-only run (SCHEDULED_TASK=backup-freshness-wal)"
+      fi
+
+      if [ "$CHECK_PGBACKREST" = "1" ]; then
+        check_age "WAL archive" "${PGBACKREST_REPO_PATH}/archive/${PGBACKREST_STANZA}" "$WAL_MAX_AGE_MIN"
+        if [ "$WAL_ONLY" = "0" ]; then
+          check_label_age "pgBackRest full backup" '^[0-9]{8}-[0-9]{6}F/$' $(( PGBACKREST_FULL_MAX_AGE_DAYS * 1440 ))
+          check_label_age "pgBackRest full/diff backup" '^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?/$' $(( PGBACKREST_BACKUP_MAX_AGE_DAYS * 1440 ))
+        fi
+      else
+        echo "NOTICE: CHECK_PGBACKREST=0 — pgBackRest checks skipped (bring-up only; remove once the stanza is live)"
+        note "pgBackRest checks" "SKIPPED (CHECK_PGBACKREST=0)"
+      fi
+
+      if [ "$WAL_ONLY" = "0" ]; then
+        check_age "nightly pg_dump" "db" $(( DUMP_MAX_AGE_HOURS * 60 ))
+        check_age "nightly uploads archive" "uploads" $(( UPLOADS_TAR_MAX_AGE_HOURS * 60 ))
+
+        if [ "$CHECK_UPLOADS_SYNC" = "1" ]; then
+          check_age "uploads-sync heartbeat" "heartbeats" "$UPLOADS_SYNC_MAX_AGE_MIN"
+        else
+          echo "NOTICE: CHECK_UPLOADS_SYNC=0 — uploads-sync heartbeat check skipped (bring-up only)"
+          note "uploads-sync heartbeat" "SKIPPED (CHECK_UPLOADS_SYNC=0)"
+        fi
+      fi
+
+      echo ""
+      echo "==== backup freshness summary ===================="
+      printf '%s' "$SUMMARY"
+      echo "==================================================="
+      if [ "$fail" -ne 0 ]; then
+        echo "BACKUP FRESHNESS CHECK FAILED — a backup tier is stale or missing." >&2
+        exit 1
+      fi
+      echo "BACKUP FRESHNESS CHECK PASSED"
+
+# Failure routing — alerting as code, not as a per-person setting. GitLab's
+# built-in notification for a failed scheduled pipeline is an e-mail to the
+# schedule OWNER only; one person on leave means no alert. This job runs in
+# the `notify` stage with `when: on_failure`, i.e. exactly when any scheduled
+# job above went red, and POSTs the failure to the shared alerts channel.
+#
+# Required CI/CD variable (masked, Settings > CI/CD > Variables):
+#   - ALERT_WEBHOOK_URL   incoming-webhook URL of the shared channel. The
+#                         payload is {"text": "..."} (Slack / Mattermost /
+#                         Google Chat compatible).
+#
+# The webhook URL embeds its own secret token, so it must never hit argv
+# (visible in `ps`) — curl reads it from a 0600 config file instead.
+# If ALERT_WEBHOOK_URL is unset this job fails loudly: an unroutable alert
+# is itself a monitoring failure (the pipeline is already red at this point,
+# so this cannot break a healthy run).
+scheduled:notify-failure:
+  stage: notify
+  image: curlimages/curl:8.11.1
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_failure
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - |
+      if [ -z "${ALERT_WEBHOOK_URL:-}" ]; then
+        echo "ALERT_WEBHOOK_URL is not set — the failed scheduled pipeline was NOT routed to the shared channel." >&2
+        echo "Set it as a masked CI/CD variable (see docs/runbooks/database-backup-restore.md, bring-up checklist)." >&2
+        exit 1
+      fi
+      umask 077
+      cfg="$(mktemp)"
+      payload="$(mktemp)"
+      trap 'rm -f "$cfg" "$payload"' EXIT
+      printf 'url = "%s"\n' "$ALERT_WEBHOOK_URL" > "$cfg"
+      # All interpolated values are CI-provided paths/URLs/task names — no
+      # quotes or backslashes — so building the JSON with printf is safe.
+      printf '{"text":"Scheduled pipeline FAILED: task=%s project=%s pipeline=%s"}' \
+        "${SCHEDULED_TASK:-unknown}" "${CI_PROJECT_PATH}" "${CI_PIPELINE_URL}" > "$payload"
+      code=$(curl -sS -o /dev/null -w "%{http_code}" -K "$cfg" -X POST \
+        -H "Content-Type: application/json" \
+        --data "@$payload" \
+        --max-time 30 --retry 2 --retry-connrefused)
+      echo "webhook HTTP ${code}"
+      if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+        echo "Failure notification could NOT be delivered (HTTP ${code})." >&2
+        exit 1
+      fi
+      echo "Failure routed to the shared alerts channel."

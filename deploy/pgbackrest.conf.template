@@ -1,0 +1,64 @@
+# pgBackRest configuration — TEMPLATE, not a live config.
+#
+# Install on the production droplet as /etc/pgbackrest/pgbackrest.conf,
+# owned postgres:postgres, mode 0600 — it holds the bucket key and the
+# repo-cipher passphrase. Replace every <placeholder> before use; never
+# commit a filled-in copy.
+#
+# Why pgBackRest, and how this fits the backup architecture:
+#   docs/adr/0013-pitr-continuous-wal-archiving-pgbackrest.md
+# Bring-up order (stanza-create, first backup, cron, verification):
+#   docs/runbooks/database-backup-restore.md — "Bring-up checklist"
+#
+# Companion file: deploy/postgresql-archiving.conf.template holds the
+# postgresql.conf directives (archive_mode, archive_command, archive_timeout)
+# that point PostgreSQL at this configuration.
+
+[global]
+# --- Offsite repository: DigitalOcean Spaces (S3-compatible) -----------------
+repo1-type=s3
+repo1-s3-endpoint=<region>.digitaloceanspaces.com   # e.g. fra1.digitaloceanspaces.com
+repo1-s3-region=<region>                            # e.g. fra1
+repo1-s3-bucket=<bucket>                            # e.g. priori-crm-backups
+repo1-s3-uri-style=host
+# Everything pgBackRest writes lives under this prefix. The bucket's
+# lifecycle expiry rules must EXCLUDE this prefix: pgBackRest manages its own
+# retention, and an external lifecycle deletion corrupts the repository.
+repo1-path=/pgbackrest
+# The droplet's WRITE key (per-bucket Spaces key). pgBackRest needs delete
+# rights for its own retention expiry; the compensating anti-tamper controls
+# (bucket versioning, off-droplet admin key) are in the runbook.
+repo1-s3-key=<spaces-access-key-id>
+repo1-s3-key-secret=<spaces-secret-access-key>
+
+# --- Encryption at rest (client-side, before upload) --------------------------
+# AES-256-CBC. The passphrase is as critical as the backups themselves:
+# losing it makes EVERY physical backup and WAL segment unreadable. It must
+# exist in at least TWO secure locations — the password manager AND this
+# file (0600) on the droplet. Never on argv, never in the repo, never in CI.
+# Generate with: openssl rand -base64 48
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=<long-random-passphrase>
+
+# --- Retention -----------------------------------------------------------------
+# Keep 2 full backup sets. Expiring a full backup atomically expires its
+# dependent differentials and the WAL only that set needs, so with weekly
+# fulls this holds roughly two weeks of PITR range offsite.
+repo1-retention-full=2
+
+# --- Operational defaults --------------------------------------------------------
+process-max=2            # parallel compress/upload — keep modest; the API shares this droplet
+compress-type=gz
+compress-level=6
+start-fast=y             # begin backups with an immediate checkpoint
+delta=y                  # restores checksum-compare and copy only changed files
+log-level-console=info
+log-level-file=detail
+log-path=/var/log/pgbackrest
+
+# --- Stanza: one per PostgreSQL cluster ---------------------------------------
+[priori]
+# Ubuntu/PGDG defaults for PostgreSQL 16. Verify before stanza-create:
+#   sudo -u postgres psql -Atc 'show data_directory'
+pg1-path=/var/lib/postgresql/16/main
+pg1-port=5432

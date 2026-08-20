@@ -803,6 +803,17 @@ does not do is revert the migration** — if a release changed the schema, the o
 code may not run against it. That is why migrations should be expand/contract: add
 columns nullable, backfill, and drop the old column a release later.
 
+### 2.9 Backups & disaster recovery — do not stop at "it deploys"
+
+The droplet is not done when it deploys — it is done when it can be **lost**
+without losing the ledger. Backup/DR bring-up (Spaces bucket + versioning,
+pgBackRest WAL archiving + PITR, nightly dump + hourly uploads-sync crons, the
+CI backup-freshness and restore-verify schedules, and the first restore test)
+is a single ordered checklist in
+[`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md)
+(§"Bring-up checklist"). Do it as soon as §2.4 is verified — every day without
+it is a day of RPO exposure on a live financial ledger.
+
 ---
 
 ## Part 3 — Day to day
