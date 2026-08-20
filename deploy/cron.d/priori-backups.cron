@@ -21,5 +21,6 @@
 15 1 * * * BACKUP_BUCKET_REMOTE=spaces:priori-crm-backups /srv/priori/bin/db_backup.sh >> /srv/priori/backups/backup.log 2>&1
 
 # hourly uploads mirror to the bucket (freshness tier; heartbeat for the
-# dead-man's switch)
-5 * * * * BACKUP_BUCKET_REMOTE=spaces:priori-crm-backups /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1
+# dead-man's switch). The mirror goes THROUGH the crypt remote (client-side
+# encryption, #82); the plain remote is used only for the heartbeat.
+5 * * * * BACKUP_BUCKET_REMOTE=spaces:priori-crm-backups UPLOADS_CRYPT_REMOTE=spaces-crypt-uploads: /srv/priori/bin/uploads_sync.sh >> /srv/priori/backups/uploads-sync.log 2>&1
