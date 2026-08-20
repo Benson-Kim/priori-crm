@@ -1,0 +1,37 @@
+# PostgreSQL continuous-archiving directives — TEMPLATE, not a live config.
+#
+# Install on the production droplet as
+#   /etc/postgresql/16/main/conf.d/archiving.conf
+# (the Ubuntu/PGDG postgresql.conf ships with include_dir = 'conf.d'), or
+# append the directives to postgresql.conf if conf.d is not enabled.
+#
+# Requires /etc/pgbackrest/pgbackrest.conf to be installed first (see
+# deploy/pgbackrest.conf.template) and the stanza created — the
+# archive_command below fails otherwise, and PostgreSQL will retain WAL in
+# pg_wal until archiving succeeds.
+#
+# !! archive_mode requires a PostgreSQL RESTART, not a reload. Plan a brief
+#    maintenance window (a restart drops connections for a few seconds; the
+#    API reconnects). wal_level/archive_timeout/archive_command only need a
+#    reload once archive_mode is on.
+
+# Default since PostgreSQL 10, stated explicitly because archiving (and any
+# future replica) depends on it. 'minimal' would break archive_mode.
+wal_level = replica
+
+# Master switch for continuous archiving. RESTART required to change.
+archive_mode = on
+
+# Every completed WAL segment is pushed to the offsite, encrypted pgBackRest
+# repository. Synchronous per segment: a segment is not recycled until the
+# push succeeds, so a broken bucket/key shows up as WAL accumulating in
+# pg_wal (monitor disk) and as a red daily `pgbackrest check` / CI
+# backup-freshness run — never as silent data-loss exposure.
+archive_command = 'pgbackrest --stanza=priori archive-push %p'
+
+# Force a segment switch after at most 60 s of idle so quiet periods still
+# get their WAL offsite promptly. This is what bounds the RPO in minutes
+# (target: <= 5 min — docs/operations/slos.md SLO 4) instead of "whenever
+# 16 MB of WAL happens to fill". Cost: one (mostly empty, compressed)
+# segment per idle minute — trivial next to the ledger it protects.
+archive_timeout = 60

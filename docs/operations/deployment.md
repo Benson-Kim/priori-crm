@@ -859,6 +859,13 @@ jobs:
           ssh "$SSH_TARGET" "mkdir -p $REL/api $REL/frontend"
           rsync -az --exclude '__pycache__' api/ "$SSH_TARGET:$REL/api/"
           rsync -az frontend/dist/ "$SSH_TARGET:$REL/frontend/dist/"
+          # Ops scripts are config-as-code: ship them every deploy so
+          # /srv/priori/bin never drifts from deploy/*.sh in the repo.
+          # (Crontab entries live in deploy/cron.d/*.cron and are installed
+          # via the backup runbook's bring-up checklist, step 8.)
+          ssh "$SSH_TARGET" "mkdir -p /srv/priori/bin"
+          rsync -az deploy/db_backup.sh deploy/uploads_sync.sh "$SSH_TARGET:/srv/priori/bin/"
+          ssh "$SSH_TARGET" "chmod 700 /srv/priori/bin/db_backup.sh /srv/priori/bin/uploads_sync.sh"
           ssh "$SSH_TARGET" "CI_COMMIT_SHA=${{ github.sha }} bash -s" \
             < deploy/production_release.sh
 ```
@@ -920,6 +927,16 @@ the failed deploy. Two consequences, both real work:
   column in a *later* release. Then release N-1 still runs against schema N.
 - **The `pg_dump` is the true undo.** Restoring it is a deliberate, data-loss-bearing
   human decision — not something the pipeline should automate.
+
+> The pre-deploy dump is **deploy insurance only** — it runs only when a deploy
+> runs and lives on the same droplet as the database. The real DR posture is
+> layered: continuous WAL archiving with pgBackRest (PITR, RPO ≤ 5 min —
+> ADR-0013), the nightly offsite `pg_dump` as the independent logical tier, an
+> hourly offsite uploads mirror, a daily backup-freshness dead-man's switch and
+> the monthly automated restore test in CI, and step-by-step restore
+> procedures (PITR walkthrough, droplet-loss rebuild, quarterly timed drill) —
+> all in
+> [`../runbooks/database-backup-restore.md`](../runbooks/database-backup-restore.md).
 
 A deliberate rollback (as opposed to the automatic health-check one) is its own
 manual workflow; it only repoints the symlink to a release already on disk:
