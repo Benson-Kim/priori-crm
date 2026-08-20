@@ -96,6 +96,34 @@ workflow:
 # merge-request pipeline: every other job is path-filtered to api/**,
 # frontend/** or .gitlab-ci.yml, and GitLab records an empty MR pipeline as
 # FAILED (zero jobs) - which is exactly what kept MR !74 red.
+# GitHub workflows (.github/workflows/)
+#
+# actionlint gate for the GitHub Actions workflows that run the deploys
+# (deploy-production.yml, deploy-drill.yml, deploy-release.yml, …). These
+# files execute on the GitHub mirror, so nothing on GitLab exercises them
+# before merge; actionlint catches expression/typing/needs errors and invalid
+# workflow_call wiring statically. It also keeps an MR that touches only
+# .github/** from producing an empty (= failed) merge-request pipeline, the
+# same trap deploy:shellcheck covers for deploy/**.
+workflows:actionlint:
+  stage: lint
+  image: golang:1.23-alpine
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - .github/workflows/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - .github/workflows/**/*
+        - .gitlab-ci.yml
+  script:
+    # Pinned version, built from source via the Go module proxy (checksummed
+    # by go.sum verification) — no curl|sh of a release binary.
+    - go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+    - actionlint -version
+    - actionlint
+
 deploy:shellcheck:
   stage: lint
   image: koalaman/shellcheck-alpine:stable
