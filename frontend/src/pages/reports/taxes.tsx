@@ -19,7 +19,7 @@ import {
   type TaxByTypeRow,
   type TaxReportResponse
 } from "@/services/reportsApi";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/Button";
@@ -37,17 +37,13 @@ export default function TaxReportPage() {
   const reportingDay = useReportingDate();
   const [period, setPeriod] = useState<ReportPeriodFilter>(() => defaultReportPeriod(reportingDay));
   const previousReportingDay = useRef(reportingDay);
-  const [data, setData] = useState<TaxReportResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<TaxReportResponse | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [excluded, setExcluded] =
     useState<PaginatedApiResponse<ExcludedTaxTransaction> | null>(null);
   const [excludedPage, setExcludedPage] = useState(1);
   const [excludedPerPage, setExcludedPerPage] = useState(10);
-  const [excludedLoading, setExcludedLoading] = useState(false);
-  const [excludedError, setExcludedError] = useState<string | null>(null);
 
   useEffect(() => {
     const previousDefault = defaultReportPeriod(previousReportingDay.current);
@@ -60,57 +56,88 @@ export default function TaxReportPage() {
   }, [reportingDay]);
 
   const periodKey = JSON.stringify(buildReportPeriodParams(period, "KES", reportingDay));
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
-  useEffect(() => {
-    if (!isReportPeriodReady(period, reportingDay)) return;
-
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    setData(null);
-
-    getTaxReport(period, { reportingDate: reportingDay })
-      .then((res) => { if (!cancelled) setData(res); })
-      .catch((err: unknown) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load tax report");
-      })
-      .finally(() => { if (!cancelled) setIsLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [periodKey]);
-
-  useEffect(() => {
+  // Reset excluded-transactions pagination when the period changes.
+  // Render-time adjustment (react.dev "adjusting state when props change")
+  // instead of an effect.
+  const [prevPeriodKey, setPrevPeriodKey] = useState(periodKey);
+  if (periodKey !== prevPeriodKey) {
+    setPrevPeriodKey(periodKey);
     setExcludedPage(1);
-  }, [periodKey]);
+  }
 
+  // Fetch the tax report. Loading/error/data-visibility derive from
+  // comparing the request the UI currently wants against the one that last
+  // settled, instead of being set synchronously inside the effect
+  // (react-hooks/set-state-in-effect, #61). useEffectEvent reads the latest
+  // period/reportingDay without widening the effect's dependencies.
+  const requestKey = periodReady ? periodKey : null;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null);
+  const loadReport = useEffectEvent((key: string, isCurrent: () => boolean) => {
+    getTaxReport(period, { reportingDate: reportingDay })
+      .then((res) => {
+        if (!isCurrent()) return;
+        setReportData(res);
+        setSettled({ key, error: null });
+      })
+      .catch((err: unknown) => {
+        if (!isCurrent()) return;
+        setSettled({
+          key,
+          error: err instanceof Error ? err.message : "Failed to load tax report",
+        });
+      });
+  });
   useEffect(() => {
-    if (data?.completeness.status !== "partial") {
-      setExcluded(null);
-      setExcludedError(null);
-      return;
-    }
+    if (requestKey === null) return;
     let cancelled = false;
-    setExcludedLoading(true);
-    setExcludedError(null);
+    loadReport(requestKey, () => !cancelled);
+    return () => { cancelled = true; };
+  }, [requestKey]);
+  const isLoading = requestKey !== null && settled?.key !== requestKey;
+  const error = isLoading ? null : settled?.error ?? null;
+  // The report was previously blanked at fetch start and left blank after a
+  // failure; deriving visibility on the settle result preserves that.
+  const data = !isLoading && settled?.error === null ? reportData : null;
+
+  // Fetch excluded transactions while the report is partial (same derived
+  // recipe as above).
+  const excludedKey =
+    data?.completeness.status === "partial"
+      ? `${periodKey}|${excludedPage}|${excludedPerPage}`
+      : null;
+  const [excludedSettled, setExcludedSettled] = useState<{
+    key: string;
+    error: string | null;
+  } | null>(null);
+  const loadExcluded = useEffectEvent((key: string, isCurrent: () => boolean) => {
     getExcludedTaxTransactions(period, { page: excludedPage }, excludedPerPage, reportingDay)
       .then((response) => {
-        if (!cancelled) setExcluded(response);
+        if (!isCurrent()) return;
+        setExcluded(response);
+        setExcludedSettled({ key, error: null });
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setExcludedError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load excluded transactions"
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setExcludedLoading(false);
+        if (!isCurrent()) return;
+        setExcludedSettled({
+          key,
+          error:
+            err instanceof Error ? err.message : "Failed to load excluded transactions",
+        });
       });
+  });
+  useEffect(() => {
+    if (excludedKey === null) return;
+    let cancelled = false;
+    loadExcluded(excludedKey, () => !cancelled);
     return () => { cancelled = true; };
-  }, [data?.completeness.status, periodKey, excludedPage, excludedPerPage]);
+  }, [excludedKey]);
+  const excludedLoading = excludedKey !== null && excludedSettled?.key !== excludedKey;
+  const excludedError =
+    excludedKey !== null && excludedSettled?.key === excludedKey
+      ? excludedSettled.error
+      : null;
 
   const handleExport = async () => {
     if (!isReportPeriodReady(period, reportingDay)) return;

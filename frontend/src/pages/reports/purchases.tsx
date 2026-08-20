@@ -47,7 +47,7 @@ import {
   type PurchasesReportSummaryResponse,
   type PurchasesSourceCounts,
 } from "@/services/reportsApi";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 type ActiveTab = "summary" | "ledger" | "aged";
@@ -66,13 +66,9 @@ export default function PurchasesReportPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
 
   const [summary, setSummary] = useState<PurchasesReportSummaryResponse | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const [ledger, setLedger] = useState<PurchasesLedgerEntry[]>([]);
   const [counts, setCounts] = useState<PurchasesSourceCounts | null>(null);
-  const [ledgerLoading, setLedgerLoading] = useState(false);
-  const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [ledgerTotal, setLedgerTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -107,30 +103,61 @@ export default function PurchasesReportPage() {
   }, [reportingDay]);
 
   const periodKey = JSON.stringify(buildReportPeriodParams(period, currency, reportingDay));
+  const periodReady = isReportPeriodReady(period, reportingDay);
 
-  // Fetch Summary
-  useEffect(() => {
-    if (!isReportPeriodReady(period, reportingDay)) return;
-    let cancelled = false;
-    setSummaryLoading(true);
-    setSummaryError(null);
+  // Reset page when filters change. Render-time adjustment (react.dev
+  // "adjusting state when props change") instead of an effect, so the ledger
+  // fetch below never sees the stale page number.
+  const pageResetKey = `${periodKey}|${sourceFilter}|${debouncedSearch}|${perPage}`;
+  const [prevPageResetKey, setPrevPageResetKey] = useState(pageResetKey);
+  if (pageResetKey !== prevPageResetKey) {
+    setPrevPageResetKey(pageResetKey);
+    setPage(1);
+  }
+
+  // Fetch Summary. Loading/error derive from comparing the request the UI
+  // currently wants against the one that last settled, instead of being set
+  // synchronously inside the effect (react-hooks/set-state-in-effect, #61).
+  // useEffectEvent reads the latest period/currency/reportingDay without
+  // widening the effect's dependencies beyond the request identity.
+  const summaryKey = periodReady ? periodKey : null;
+  const [summarySettled, setSummarySettled] = useState<{
+    key: string;
+    error: string | null;
+  } | null>(null);
+  const loadSummary = useEffectEvent((key: string, isCurrent: () => boolean) => {
     getPurchasesReport(period, currency, reportingDay)
-      .then((res) => { if (!cancelled) setSummary(res); })
-      .catch((err: unknown) => {
-        if (!cancelled)
-          setSummaryError(err instanceof Error ? err.message : "Failed to load summary");
+      .then((res) => {
+        if (!isCurrent()) return;
+        setSummary(res);
+        setSummarySettled({ key, error: null });
       })
-      .finally(() => { if (!cancelled) setSummaryLoading(false); });
-    return () => { cancelled = true; };
-  }, [periodKey]);
-
-  // Fetch Ledger + Counts
+      .catch((err: unknown) => {
+        if (!isCurrent()) return;
+        setSummarySettled({
+          key,
+          error: err instanceof Error ? err.message : "Failed to load summary",
+        });
+      });
+  });
   useEffect(() => {
-    if (!isReportPeriodReady(period, reportingDay)) return;
+    if (summaryKey === null) return;
     let cancelled = false;
-    setLedgerLoading(true);
-    setLedgerError(null);
+    loadSummary(summaryKey, () => !cancelled);
+    return () => { cancelled = true; };
+  }, [summaryKey]);
+  const summaryLoading = summaryKey !== null && summarySettled?.key !== summaryKey;
+  const summaryError = summaryLoading ? null : summarySettled?.error ?? null;
 
+  // Fetch Ledger + Counts (same derived-loading recipe as the summary).
+  const ledgerKey = periodReady
+    ? `${periodKey}|${sourceFilter}|${debouncedSearch}|${page}|${perPage}`
+    : null;
+  const [ledgerSettled, setLedgerSettled] = useState<{
+    key: string;
+    error: string | null;
+  } | null>(null);
+  const loadLedger = useEffectEvent((key: string, isCurrent: () => boolean) => {
     Promise.all([
       getPurchasesLedger(period, currency, {
         source: sourceFilter === "all" ? undefined : sourceFilter,
@@ -145,24 +172,28 @@ export default function PurchasesReportPage() {
       }, reportingDay),
     ])
       .then(([ledgerRes, countsRes]) => {
-        if (!cancelled) {
-          setLedger(ledgerRes.items);
-          setLedgerTotal(ledgerRes.metadata.total ?? null);
-          setCounts(countsRes);
-        }
+        if (!isCurrent()) return;
+        setLedger(ledgerRes.items);
+        setLedgerTotal(ledgerRes.metadata.total ?? null);
+        setCounts(countsRes);
+        setLedgerSettled({ key, error: null });
       })
       .catch((err: unknown) => {
-        if (!cancelled)
-          setLedgerError(err instanceof Error ? err.message : "Failed to load ledger");
-      })
-      .finally(() => { if (!cancelled) setLedgerLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [periodKey, sourceFilter, debouncedSearch, page, perPage, reportingDay]);
-
+        if (!isCurrent()) return;
+        setLedgerSettled({
+          key,
+          error: err instanceof Error ? err.message : "Failed to load ledger",
+        });
+      });
+  });
   useEffect(() => {
-    setPage(1);
-  }, [periodKey, sourceFilter, debouncedSearch, perPage]);
+    if (ledgerKey === null) return;
+    let cancelled = false;
+    loadLedger(ledgerKey, () => !cancelled);
+    return () => { cancelled = true; };
+  }, [ledgerKey]);
+  const ledgerLoading = ledgerKey !== null && ledgerSettled?.key !== ledgerKey;
+  const ledgerError = ledgerLoading ? null : ledgerSettled?.error ?? null;
 
   const { sortedData: sortedLedger, sortKey, sortDirection, handleSort } =
     useTableSort(ledger);
@@ -173,7 +204,6 @@ export default function PurchasesReportPage() {
   );
 
   const handleExport = async () => {
-    setLedgerError(null);
     if (!isReportPeriodReady(period, reportingDay)) return;
     setIsExporting(true);
     setExportError(null);

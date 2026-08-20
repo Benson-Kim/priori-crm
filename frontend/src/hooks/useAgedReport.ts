@@ -33,35 +33,41 @@ export function useAgedReport<T>({
 }: UseAgedReportOptions<T>): UseAgedReportReturn<T> {
   const [currency, setCurrency] = useState(defaultCurrency);
   const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // tick triggers manual refetch without changing currency
   const [tick, setTick] = useState(0);
 
+  // Identity of the fetch the UI currently wants. isLoading/error derive
+  // from comparing it to the request that last settled, instead of being
+  // set synchronously inside the effect (react-hooks/set-state-in-effect).
+  const requestKey = `${currency}|${tick}`;
+  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(
+    null
+  );
+
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
     fetcher(currency)
       .then((res) => {
-        if (!cancelled) setData(res);
+        if (cancelled) return;
+        setData(res);
+        setSettled({ key: requestKey, error: null });
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          const msg =
-            err instanceof Error ? err.message : "Failed to load data";
-          setError(msg);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (cancelled) return;
+        setSettled({
+          key: requestKey,
+          error: err instanceof Error ? err.message : "Failed to load data",
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currency, tick, fetcher]);
+  }, [currency, tick, fetcher, requestKey]);
+
+  const isLoading = settled?.key !== requestKey;
+  const error = settled?.key === requestKey ? settled.error : null;
 
   return {
     data,
