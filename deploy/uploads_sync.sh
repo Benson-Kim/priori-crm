@@ -30,20 +30,27 @@ UPLOADS_DIR="${UPLOADS_DIR:-$ROOT/shared/uploads}"
 # rclone destination bucket root, e.g. "spaces:priori-crm-backups" — the same
 # value db_backup.sh uses. The mirror lives under <remote>/uploads-sync/ so
 # it never collides with the nightly tars under <remote>/uploads/.
-RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+#
+# Deliberately NOT named RCLONE_REMOTE (#85): rclone parses RCLONE_*
+# environment variables as its own configuration. There is no global
+# --remote flag today, so rclone happens to ignore that name — but any
+# future rclone release adding one would silently reinterpret our value as
+# rclone's own setting (exactly what happened with RCLONE_CRYPT_REMOTE /
+# --crypt-remote in #82).
+BACKUP_BUCKET_REMOTE="${BACKUP_BUCKET_REMOTE:-}"
 # Abort (exit non-zero, delete nothing further) if a single run would delete
 # more than this many remote files. Raise deliberately for a known clean-up.
 MAX_DELETE="${MAX_DELETE:-200}"
 
 log() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
 
-[ -n "$RCLONE_REMOTE" ] || { log "FATAL: RCLONE_REMOTE is not set (e.g. spaces:priori-crm-backups)"; exit 1; }
+[ -n "$BACKUP_BUCKET_REMOTE" ] || { log "FATAL: BACKUP_BUCKET_REMOTE is not set (e.g. spaces:priori-crm-backups)"; exit 1; }
 command -v rclone >/dev/null || { log "FATAL: rclone is not installed"; exit 1; }
 # A missing source directory must never be treated as "everything was
 # deleted" — refuse instead of propagating an unmounted/renamed directory.
 [ -d "$UPLOADS_DIR" ] || { log "FATAL: $UPLOADS_DIR does not exist — refusing to sync"; exit 1; }
 
-DEST="$RCLONE_REMOTE/uploads-sync"
+DEST="$BACKUP_BUCKET_REMOTE/uploads-sync"
 log "Syncing $UPLOADS_DIR -> $DEST (max-delete $MAX_DELETE)"
 rclone sync "$UPLOADS_DIR" "$DEST" \
   --max-delete "$MAX_DELETE" \
@@ -60,7 +67,7 @@ rclone sync "$UPLOADS_DIR" "$DEST" \
 # This marker's mtime can: it is touched only after a successful sync. It
 # lives OUTSIDE uploads-sync/ because sync would delete any file not present
 # in the source.
-rclone touch "$RCLONE_REMOTE/heartbeats/uploads-sync" || {
+rclone touch "$BACKUP_BUCKET_REMOTE/heartbeats/uploads-sync" || {
   rc=$?
   log "FATAL: could not update the uploads-sync heartbeat (exit $rc)"
   exit "$rc"
