@@ -12,8 +12,8 @@
 #   1. pg_dump -Fc | age -> backups/nightly-<UTC>.dump.age
 #   2. tar.gz | age of shared/uploads -> backups/uploads-<UTC>.tar.gz.age
 #   3. prune local copies (newest DB_RETAIN / UPLOADS_RETAIN kept)
-#   4. copy both artifacts offsite via rclone (RCLONE_REMOTE) — droplet loss
-#      must never take the only backups with it.
+#   4. copy both artifacts offsite via rclone (BACKUP_BUCKET_REMOTE) —
+#      droplet loss must never take the only backups with it.
 #
 # Client-side encryption (age, asymmetric): dumps and tars hold the full
 # financial ledger + PII, and bucket ACLs alone must not be what stands
@@ -44,7 +44,14 @@ DB_RETAIN="${DB_RETAIN:-14}"          # newest N nightly dumps kept locally
 UPLOADS_RETAIN="${UPLOADS_RETAIN:-7}" # newest N uploads archives kept locally
 # rclone destination, e.g. "spaces:priori-crm-backups". Offsite retention is
 # the bucket's lifecycle policy, not this script (see the runbook).
-RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+#
+# Deliberately NOT named RCLONE_REMOTE (#85): rclone parses RCLONE_*
+# environment variables as its own configuration. There is no global
+# --remote flag today, so rclone happens to ignore that name — but any
+# future rclone release adding one would silently reinterpret our value as
+# rclone's own setting (exactly what happened with RCLONE_CRYPT_REMOTE /
+# --crypt-remote in #82).
+BACKUP_BUCKET_REMOTE="${BACKUP_BUCKET_REMOTE:-}"
 # age PUBLIC recipient(s), one per line (from `age-keygen`; the matching
 # private identity lives in the password manager, never on the droplet).
 AGE_RECIPIENTS_FILE="${AGE_RECIPIENTS_FILE:-/etc/priori/backup-age-recipients.txt}"
@@ -57,13 +64,13 @@ log() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
 [ -f "$ENV_FILE" ] || { log "FATAL: $ENV_FILE missing"; exit 1; }
 [ -x "$VENV_PY" ] || { log "FATAL: $VENV_PY not found — is a release deployed?"; exit 1; }
 command -v pg_dump >/dev/null || { log "FATAL: pg_dump not found — install postgresql-client"; exit 1; }
-if [ -z "$RCLONE_REMOTE" ] && [ "$ALLOW_LOCAL_ONLY" != "1" ]; then
-  log "FATAL: RCLONE_REMOTE is not set. A droplet-local backup is not disaster"
-  log "       recovery. Set RCLONE_REMOTE (or ALLOW_LOCAL_ONLY=1 during setup)."
+if [ -z "$BACKUP_BUCKET_REMOTE" ] && [ "$ALLOW_LOCAL_ONLY" != "1" ]; then
+  log "FATAL: BACKUP_BUCKET_REMOTE is not set. A droplet-local backup is not disaster"
+  log "       recovery. Set BACKUP_BUCKET_REMOTE (or ALLOW_LOCAL_ONLY=1 during setup)."
   exit 1
 fi
-if [ -n "$RCLONE_REMOTE" ] && ! command -v rclone >/dev/null; then
-  log "FATAL: RCLONE_REMOTE is set but rclone is not installed"
+if [ -n "$BACKUP_BUCKET_REMOTE" ] && ! command -v rclone >/dev/null; then
+  log "FATAL: BACKUP_BUCKET_REMOTE is set but rclone is not installed"
   exit 1
 fi
 command -v age >/dev/null || { log "FATAL: age not found — install age (backups are client-side encrypted)"; exit 1; }
@@ -165,14 +172,14 @@ ls -1t "$BACKUP_DIR"/nightly-*.dump.age 2>/dev/null | tail -n +"$((DB_RETAIN + 1
 ls -1t "$BACKUP_DIR"/uploads-*.tar.gz.age 2>/dev/null | tail -n +"$((UPLOADS_RETAIN + 1))" | xargs -r rm -f -- || true
 
 # --- 4. offsite copy ----------------------------------------------------------
-if [ -n "$RCLONE_REMOTE" ]; then
-  log "Copying to $RCLONE_REMOTE"
-  rclone copyto "$DB_DUMP" "$RCLONE_REMOTE/db/$(basename "$DB_DUMP")" || {
+if [ -n "$BACKUP_BUCKET_REMOTE" ]; then
+  log "Copying to $BACKUP_BUCKET_REMOTE"
+  rclone copyto "$DB_DUMP" "$BACKUP_BUCKET_REMOTE/db/$(basename "$DB_DUMP")" || {
     log "FATAL: offsite copy of the database dump failed"
     exit 1
   }
   if [ -n "$UPLOADS_TAR" ]; then
-    rclone copyto "$UPLOADS_TAR" "$RCLONE_REMOTE/uploads/$(basename "$UPLOADS_TAR")" || {
+    rclone copyto "$UPLOADS_TAR" "$BACKUP_BUCKET_REMOTE/uploads/$(basename "$UPLOADS_TAR")" || {
       log "FATAL: offsite copy of the uploads archive failed"
       exit 1
     }
