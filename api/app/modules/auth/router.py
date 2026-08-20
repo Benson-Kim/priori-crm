@@ -36,9 +36,20 @@ def login(body: LoginRequest, db: DbSession):
 
 @router.post("/verify-otp", response_model=TokenResponse)
 def verify_otp(body: VerifyOTPRequest, db: DbSession):
-    """Step 2: Verify OTP and return JWT tokens."""
+    """Step 2: Verify OTP (and any operator second factor); return JWT tokens.
+
+    ``totp_code`` / ``recovery_code`` are the ADR-0014 operator second
+    factor: ignored for tenant users, required for enrolled platform
+    operators. Failures surface the same generic 401 as any credential
+    failure (enumeration safety).
+    """
     auth_service = AuthService(db)
-    access_token, refresh_token, user = auth_service.verify_otp(body.email, body.code)
+    access_token, refresh_token, user = auth_service.verify_otp(
+        body.email,
+        body.code,
+        totp_code=body.totp_code,
+        recovery_code=body.recovery_code,
+    )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,

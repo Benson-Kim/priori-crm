@@ -63,15 +63,18 @@ _SNAPSHOT_FIELDS = (
 
 _LOGO_DIRECTORY = "owner/logo"
 
-#: The audit_events.entity_type values written by this service — the exact
-#: scope of the operator audit read surface (GET /platform/audit):
-#: "owner_module_setting" from set_module_enabled_for_owner (asserted in
-#: tests/test_module_entitlements.py::TestAudit) and "owner_profile" from
-#: set_owner_status. Extend this tuple whenever the service audits a new
-#: entity type, or the platform surface silently stops showing it.
+#: The audit_events.entity_type values surfaced by the operator audit read
+#: surface (GET /platform/audit): "owner_module_setting" from
+#: set_module_enabled_for_owner (asserted in
+#: tests/test_module_entitlements.py::TestAudit), "owner_profile" from
+#: set_owner_status, and "operator_mfa" from OperatorMfaService (ADR-0014:
+#: enrollment lifecycle, recovery-code use, step-up grants/denials).
+#: Extend this tuple whenever a service audits a new platform entity type,
+#: or the platform surface silently stops showing it.
 PLATFORM_AUDIT_ENTITY_TYPES: tuple[str, ...] = (
     "owner_module_setting",
     "owner_profile",
+    "operator_mfa",
 )
 
 

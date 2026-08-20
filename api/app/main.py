@@ -23,6 +23,7 @@ import app.modules.invoices.models
 import app.modules.nurture.models
 import app.modules.onboarding.models
 import app.modules.owner.models
+import app.modules.platform.models
 import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models

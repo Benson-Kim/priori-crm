@@ -26,10 +26,20 @@ class LoginRequest(BaseModel):
 
 
 class VerifyOTPRequest(BaseModel):
-    """OTP verification request."""
+    """OTP verification request.
+
+    ``totp_code`` / ``recovery_code`` carry the second factor for enrolled
+    platform operators (ADR-0014). Both are optional and ignored for
+    tenant users; for an ENROLLED operator, one of them is required — a
+    missing/wrong value fails with the same generic 401 as a wrong
+    password or OTP, so the endpoint reveals nothing about the account
+    (enumeration safety).
+    """
 
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    totp_code: str | None = Field(default=None, max_length=16)
+    recovery_code: str | None = Field(default=None, max_length=64)
 
 
 class ResendOTPRequest(BaseModel):

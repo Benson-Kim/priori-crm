@@ -1,5 +1,6 @@
 """FastAPI dependencies for database sessions, authentication, and services."""
 
+import ipaddress
 import secrets
 from typing import Annotated
 
@@ -37,6 +38,37 @@ def _is_operator_surface(path: str) -> bool:
         if path == full or path.startswith(f"{full}/"):
             return True
     return False
+
+
+def _enforce_operator_mfa_scope(path: str, token: dict) -> None:
+    """Confine operator tokens without a full-MFA claim to enrollment only.
+
+    ADR-0014 (#73): a full operator token carries ``mfa == "totp"`` —
+    stamped at verify-otp only when the sign-in proved a TOTP/recovery
+    code against an ACTIVE enrollment, and propagated (never upgraded) by
+    refresh. Anything else — the ``"enroll"`` claim an unenrolled
+    operator receives, or a claimless legacy token (fail closed) — may
+    reach nothing under ``/platform`` except the ``/platform/mfa``
+    enrollment endpoints. ``/auth`` and ``/health`` stay reachable so the
+    constrained operator can still refresh, log out and probe health.
+    """
+    platform_root = f"{settings.API_V1_PREFIX}/platform"
+    if not (path == platform_root or path.startswith(f"{platform_root}/")):
+        return
+    if token.get("mfa") == "totp":
+        return
+    enroll_root = f"{platform_root}/mfa"
+    if path == enroll_root or path.startswith(f"{enroll_root}/"):
+        return
+    raise ForbiddenException(
+        detail=(
+            "Multi-factor enrollment is required before the platform "
+            "console can be used. Complete TOTP enrollment via "
+            "/platform/mfa, then sign in again with your authenticator "
+            "code."
+        ),
+        required_permission="mfa:totp",
+    )
 
 
 def get_current_user(
@@ -84,6 +116,7 @@ def get_current_user(
                 ),
                 required_permission="tenant-surface",
             )
+        _enforce_operator_mfa_scope(request.url.path, token)
         return user
 
     from app.constants.enums import OwnerStatus
@@ -223,6 +256,90 @@ def require_module(module_key: ModuleKey):
     return _check
 
 
+def require_step_up(action: str):
+    """Build a dependency demanding a fresh second-factor proof (ADR-0014).
+
+    Attach to destructive platform routes (tenant suspension, entitlement
+    changes). The caller must present a live TOTP code or a single-use
+    recovery code in the ``X-MFA-Code`` header ON THE DESTRUCTIVE REQUEST
+    ITSELF — a live session is never sufficient. Verification is
+    rate-limited, replay-fenced, and audited (grant AND denial; the
+    denial commits before the 401 propagates). ``action`` is the stable
+    label written into the audit event.
+    """
+
+    def _check(
+        db: DbSession,
+        current_user: CurrentUser,
+        x_mfa_code: Annotated[
+            str | None,
+            Header(
+                alias="X-MFA-Code",
+                description=(
+                    "Fresh TOTP code or single-use recovery code "
+                    "(step-up re-authentication, ADR-0014)"
+                ),
+            ),
+        ] = None,
+    ) -> None:
+        from app.modules.platform.service import OperatorMfaService
+
+        OperatorMfaService(db, current_user).verify_step_up(x_mfa_code, action=action)
+
+    return _check
+
+
+def _request_client_host(request: Request) -> str | None:
+    """Client address for the /platform IP allowlist.
+
+    Mirrors the rate limiter's trust decision exactly (one knob, one
+    meaning): the first hop of ``X-Forwarded-For`` is honoured only when
+    ``RATE_LIMIT_TRUST_FORWARDED_FOR`` is explicitly enabled; otherwise
+    the raw socket address is used.
+    """
+    if settings.RATE_LIMIT_TRUST_FORWARDED_FOR is True:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if isinstance(forwarded, str) and forwarded:
+            first_hop = forwarded.split(",")[0].strip()
+            if first_hop:
+                return first_hop
+    return request.client.host if request.client else None
+
+
+def enforce_platform_ip_allowlist(request: Request) -> None:
+    """Interim compensating control (ADR-0014): CIDR-gate /platform.
+
+    ``PLATFORM_IP_ALLOWLIST`` is a comma-separated CIDR list; empty =
+    disabled (the default). Fail-closed everywhere else: malformed
+    configuration is rejected at startup by the settings validator, and —
+    defence in depth — any entry or client address that fails to parse
+    HERE denies the request rather than skipping the check.
+    """
+    raw = settings.PLATFORM_IP_ALLOWLIST
+    entries = [item.strip() for item in raw.split(",") if item.strip()]
+    if not entries:
+        return
+
+    denial = ForbiddenException(
+        detail="Platform console access is not permitted from this network.",
+        required_permission="platform:allowlisted-ip",
+    )
+    try:
+        networks = [ipaddress.ip_network(entry, strict=False) for entry in entries]
+    except ValueError:
+        raise denial from None
+
+    host = _request_client_host(request)
+    if not host:
+        raise denial
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        raise denial from None
+    if not any(address in network for network in networks):
+        raise denial
+
+
 def verify_internal_secret(
     x_internal_secret: Annotated[str | None, Header(alias="X-Internal-Secret")] = None,
 ) -> None:
@@ -359,6 +476,19 @@ def get_owner_service(db: DbSession, current_user: CurrentUser):
 
 
 OwnerServiceDep = Annotated["OwnerService", Depends(get_owner_service)]  # noqa: F821
+
+
+def get_operator_mfa_service(db: DbSession, current_user: CurrentUser):
+    """Provide an OperatorMfaService scoped to the current request and user."""
+    from app.modules.platform.service import OperatorMfaService
+
+    return OperatorMfaService(db, current_user=current_user)
+
+
+OperatorMfaServiceDep = Annotated[
+    "OperatorMfaService",  # noqa: F821
+    Depends(get_operator_mfa_service),
+]
 
 
 def get_statements_service(db: DbSession, current_user: CurrentUser):

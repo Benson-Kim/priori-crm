@@ -159,8 +159,26 @@ class AuthService:
 
     # Verify OTP (Step 2)
 
-    def verify_otp(self, email: str, code: str) -> tuple[str, str, User]:
-        """Verify OTP and return (access_token, refresh_token, user)."""
+    def verify_otp(
+        self,
+        email: str,
+        code: str,
+        totp_code: str | None = None,
+        recovery_code: str | None = None,
+    ) -> tuple[str, str, User]:
+        """Verify OTP (and, for operators, the second factor); return tokens.
+
+        Returns ``(access_token, refresh_token, user)``. For platform
+        operators (ADR-0014) the issued tokens carry an ``mfa`` claim:
+        ``"totp"`` when the sign-in proved a TOTP/recovery code against an
+        ACTIVE enrollment, ``"enroll"`` when the operator is not yet
+        enrolled (constrained enrollment-only access). An enrolled
+        operator with a missing/wrong second factor fails with the same
+        generic 401 as any credential failure — enumeration-safe — and,
+        because the raise rolls the request back, the emailed OTP is not
+        burnt (it stays valid within its window for a retry with the
+        right code, bounded by the MFA attempt throttle).
+        """
         self._enforce_attempt_throttle(email)
 
         user = self._get_user_by_email(email)
@@ -208,6 +226,11 @@ class AuthService:
         # valid within its window should the org be reactivated.
         self._ensure_owner_not_suspended(user)
 
+        # Operator second factor (ADR-0014): checked after the OTP so a
+        # prober never learns MFA state without full credentials, and
+        # BEFORE the OTP is burnt so a raise leaves it valid for a retry.
+        extra_claims = self._operator_mfa_claims(user, totp_code, recovery_code)
+
         # Mark OTP as used and invalidate all other unused OTPs for this user.
         # Both writes flush within the request-scoped transaction; the commit
         # is owned by CommitOnSuccessRoute (app/common/routing.py), which
@@ -218,8 +241,10 @@ class AuthService:
 
         self._invalidate_pending_otps(user.id, exclude_id=otp.id)
 
-        access_token = create_access_token(subject=str(user.id))
-        refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
+        access_token = create_access_token(subject=str(user.id), extra=extra_claims)
+        refresh_token, _jti, _exp = create_refresh_token(
+            subject=str(user.id), extra=extra_claims
+        )
 
         return access_token, refresh_token, user
 
@@ -430,6 +455,36 @@ class AuthService:
         return deleted + reset_deleted
 
     # Private Helpers
+
+    def _operator_mfa_claims(
+        self, user: User, totp_code: str | None, recovery_code: str | None
+    ) -> dict | None:
+        """Resolve the operator ``mfa`` token claim, or fail generically.
+
+        ADR-0014 (#73): tenant users get no claim (returns ``None``). For
+        a platform operator, an ACTIVE enrollment REQUIRES a valid TOTP or
+        single-use recovery code — a missing/wrong/replayed one raises the
+        SAME generic 401 as every other credential failure in this flow,
+        so the endpoint never reveals that the account is an operator or
+        that MFA exists (enumeration safety). An unenrolled operator gets
+        the constrained ``"enroll"`` level: token issuance succeeds but
+        reaches only the /platform/mfa enrollment surface
+        (``_enforce_operator_mfa_scope``). Never creates or mutates any
+        account (QA finding 09).
+        """
+        from app.constants.enums import UserRole
+
+        if UserRole(user.role) is not UserRole.PLATFORM_OPERATOR:
+            return None
+
+        from app.modules.platform.service import OperatorMfaService
+
+        level = OperatorMfaService(self._db, user).check_login_second_factor(
+            totp_code, recovery_code
+        )
+        if level is None:
+            raise UnauthorizedException(_GENERIC_AUTH_ERROR)
+        return {"mfa": level}
 
     def _ensure_owner_not_suspended(self, user: User) -> None:
         """Reject the auth flow while the organisation is suspended.

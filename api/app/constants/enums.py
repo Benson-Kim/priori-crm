@@ -56,6 +56,21 @@ class OwnerStatus(StrEnum):
     SUSPENDED = "suspended"
 
 
+class OperatorMfaStatus(StrEnum):
+    """Lifecycle of one platform operator's TOTP enrollment (ADR-0014).
+
+    PENDING: a seed has been provisioned but not yet confirmed with a live
+    code — the operator remains unenrolled (constrained enrollment-only
+    tokens). ACTIVE: confirmed; a TOTP/recovery proof is now REQUIRED for
+    full operator token issuance and for step-up on destructive console
+    actions. Must stay identical to the IN-list in migration
+    ``e7f8a9b0c1d2``.
+    """
+
+    PENDING = "pending"
+    ACTIVE = "active"
+
+
 class ModuleKey(StrEnum):
     """Per-owner feature-toggleable application modules.
 

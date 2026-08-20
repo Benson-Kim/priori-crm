@@ -70,6 +70,21 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"
     RATE_LIMIT_TRUST_FORWARDED_FOR: bool = False
     RATE_LIMIT_BACKEND: Literal["memory", "redis"] = "memory"
+
+    # Operator MFA (ADR-0014): TOTP second factor + step-up for the
+    # /platform console. Drift = accepted clock skew in 30 s steps; attempt
+    # throttling shares the auth RateLimitStore backend (per-user bucket).
+    MFA_TOTP_DRIFT_STEPS: int = Field(default=1, ge=0, le=2)
+    MFA_MAX_ATTEMPTS: int = Field(default=5, ge=3, le=20)
+    MFA_ATTEMPT_WINDOW_SECONDS: int = Field(default=300, ge=30, le=3600)
+    # Optional dedicated Fernet key (urlsafe-base64, 32 bytes) for TOTP-seed
+    # encryption at rest; empty = derived from JWT_SECRET_KEY (ADR-0014
+    # documents the trade-off). Recommended set in production.
+    MFA_ENCRYPTION_KEY: str = ""
+    # Interim compensating control (ADR-0014): comma-separated CIDRs allowed
+    # to reach /platform. Empty = disabled. Malformed entries fail here at
+    # startup (fail closed) rather than silently disabling the check.
+    PLATFORM_IP_ALLOWLIST: str = ""
     TOKEN_DENYLIST_BACKEND: Literal["memory", "redis"] = "memory"  # noqa: S105 — backend name, not a secret
     REDIS_URL: str = ""
 
@@ -126,6 +141,52 @@ class Settings(BaseSettings):
         if v.lower() in insecure_defaults:
             raise ValueError("JWT_SECRET_KEY must not be a default/insecure value")
 
+        return v
+
+    @field_validator("MFA_ENCRYPTION_KEY")
+    @classmethod
+    def validate_mfa_encryption_key(cls, v: str) -> str:
+        """Reject a malformed Fernet key at startup (fail closed).
+
+        A key that Fernet would refuse must stop the application from
+        booting, not surface later as undecryptable TOTP seeds.
+        """
+        if not v:
+            return v
+        import base64
+
+        try:
+            decoded = base64.urlsafe_b64decode(v.encode("ascii"))
+        except Exception as exc:  # binascii.Error / UnicodeEncodeError
+            raise ValueError(
+                "MFA_ENCRYPTION_KEY must be a urlsafe-base64-encoded 32-byte key"
+            ) from exc
+        if len(decoded) != 32:
+            raise ValueError(
+                "MFA_ENCRYPTION_KEY must decode to exactly 32 bytes (Fernet key)"
+            )
+        return v
+
+    @field_validator("PLATFORM_IP_ALLOWLIST")
+    @classmethod
+    def validate_platform_ip_allowlist(cls, v: str) -> str:
+        """Reject malformed CIDR entries at startup (fail closed, ADR-0014).
+
+        An unparseable allowlist must never degrade to "check disabled":
+        the application refuses to boot instead.
+        """
+        import ipaddress
+
+        for entry in (item.strip() for item in v.split(",")):
+            if not entry:
+                continue
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"PLATFORM_IP_ALLOWLIST entry {entry!r} is not a valid "
+                    "IP network (CIDR)"
+                ) from exc
         return v
 
     @field_validator("DATABASE_URL")

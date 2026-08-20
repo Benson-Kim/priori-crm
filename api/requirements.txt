@@ -22,6 +22,9 @@ email-validator
 python-jose==3.5.0
 passlib==1.7.4
 bcrypt
+# Fernet (AES-CBC + HMAC) encryption of operator TOTP seeds at rest
+# (ADR-0014, app/common/mfa.py). The TOTP math itself is stdlib.
+cryptography==50.0.0
 boto3==1.43.6
 botocore==1.43.6
 
