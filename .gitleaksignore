@@ -42,3 +42,25 @@ bbd3a2a077eaa019988f16fbba58cee482799675:backend/tests/test_opaque_cursors.py:ge
 bbd3a2a077eaa019988f16fbba58cee482799675:backend/tests/test_opaque_cursors.py:generic-api-key:206
 e13ed14e6fd077e15f0031886e835f174de3b965:web/src/modules/users/__tests__/users-api.network.test.ts:generic-api-key:131
 1bb3a4afcd3289d836771ae50b307abd75f20485:web/src/modules/users/__tests__/users-api.network.test.ts:generic-api-key:97
+
+# Reviewed 2026-08-21. Test literals from two feature branches, both verified
+# against the source before being listed here. Neither file is reachable from
+# any branch these findings block — `fetch-depth: 0` plus `gitleaks git .`
+# scans every ref in the repository, so a constant committed on ANY branch
+# fails secret detection on EVERY open pull request until it is listed. That
+# is why entries appear here for work that has not merged.
+#
+# #73 operator MFA — `JWT_SECRET_KEY="a-sufficiently-long-test-secret-key-123456"`,
+# passed to Settings() inside `pytest.raises(ValidationError)` to prove a
+# malformed config refuses to boot. The value is chosen to be long enough to
+# reach the validator under test; it signs nothing.
+9ec30a74c561994d505466803bc12ce5ddc77851:api/tests/test_operator_mfa.py:generic-api-key:652
+9ec30a74c561994d505466803bc12ce5ddc77851:api/tests/test_operator_mfa.py:generic-api-key:666
+
+# #83 edge-authenticated context headers — `EDGE_KEY =
+# "edge-test-key-0000000000000000000000000000"`, a module-level constant the
+# HMAC skew/replay tests sign fake geo headers with. The real key comes from
+# ABAC_EDGE_HMAC_KEY at runtime and is not in this repository.
+91e8d523141b17e0c17f8cef67e17b24ab90e306:api/tests/test_edge_authentication.py:generic-api-key:178
+91e8d523141b17e0c17f8cef67e17b24ab90e306:api/tests/test_edge_authentication.py:generic-api-key:180
+91e8d523141b17e0c17f8cef67e17b24ab90e306:api/tests/test_edge_authentication.py:generic-api-key:194
