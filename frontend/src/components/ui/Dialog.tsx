@@ -74,7 +74,7 @@ export function Dialog({
 
         <div className="flex flex-col gap-8">
           {description && (
-            <p className="text-base text-gray-800 p-6 bg-white border border-gray-200 rounded-xl">
+            <p className="text-[20px] text-gray-800 p-6 bg-white border border-gray-200 rounded-xl">
               {description}
             </p>
           )}
@@ -83,21 +83,16 @@ export function Dialog({
 
           {onConfirm && (
             <div className="flex items-center gap-8 justify-end">
-              {/*
-               * These carried a hard-coded 20px plus a hand-written
-               * `border-gray-600 text-gray-600`, which stood in for the
-               * colours `outline-secondary` was meant to supply but could not
-               * while its tokens were undefined. Both now come from the
-               * variant and the size.
-               */}
-              <Button variant="outline-secondary" onClick={onClose} className="px-6">
+              <Button
+                variant="outline-secondary"
+                onClick={onClose}
+              >
                 {cancelLabel}
               </Button>
               <Button
                 variant={variant === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
                 loading={isLoading}
-                className="px-6"
               >
                 {confirmLabel}
               </Button>

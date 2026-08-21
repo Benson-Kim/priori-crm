@@ -278,6 +278,7 @@ export default function ExpensesPage() {
                 {/* Actions Bar */}
                 <div className="flex flex-col xl:flex-row xl:flex-wrap justify-between items-start xl:items-center gap-4">
                     <FilterTabs
+                        variant="brand-outline"
                         tabs={TABS}
                         activeTab={activeTab}
                         onTabChange={setActiveTab}

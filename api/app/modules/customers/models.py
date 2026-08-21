@@ -67,6 +67,11 @@ class Customer(Base):
             name="ck_customers_business_requires_company_name",
         ),
         CheckConstraint(
+            "(customer_type = 'individual' AND first_name IS NOT NULL AND last_name IS NOT NULL) OR "
+            "(customer_type = 'business')",
+            name="ck_customers_individual_requires_name",
+        ),
+        CheckConstraint(
             f"industry IS NULL OR industry IN ({_INDUSTRY_CHECK_VALUES})",
             name="ck_customers_valid_industry",
         ),
@@ -142,18 +147,18 @@ class Customer(Base):
         comment="Company website URL",
     )
 
-    first_name: Mapped[str] = mapped_column(
+    first_name: Mapped[str | None] = mapped_column(
         String(100),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="Contact person first name",
+        comment="Contact person first name (required for individual customers)",
     )
 
-    last_name: Mapped[str] = mapped_column(
+    last_name: Mapped[str | None] = mapped_column(
         String(100),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="Contact person last name",
+        comment="Contact person last name (required for individual customers)",
     )
 
     # Optional: a customer may be recorded from a phone call or a walk-in with
@@ -323,13 +328,19 @@ class Customer(Base):
         if self.customer_type == CustomerType.BUSINESS:
             name = self.company_name
         else:
-            name = f"{self.first_name} {self.last_name}"
+            name = self.full_name
         return f"<Customer(id={self.id}, type={self.customer_type}, name='{name}')>"
 
     @property
     def full_name(self) -> str:
-        """Get customer's full name."""
-        return f"{self.first_name} {self.last_name}".strip()
+        """Get customer's full name.
+
+        Business customers may have no contact-person name on file — the
+        names are optional there (only individuals are required to supply
+        both), so this falls back to an empty string per part rather than
+        rendering the literal "None".
+        """
+        return f"{self.first_name or ''} {self.last_name or ''}".strip()
 
     @property
     def display_name(self) -> str:

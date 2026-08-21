@@ -222,6 +222,7 @@ export default function SalesReportPage() {
             value={currency}
             onChange={setCurrency}
             aria-label="Currency"
+            triggerClassName="px-4 py-3 rounded-2xl"
           />
         </div>
       </div>

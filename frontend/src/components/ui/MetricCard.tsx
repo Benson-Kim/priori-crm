@@ -15,7 +15,7 @@ export interface MetricChange {
 interface MetricCardProps {
   label: string;
   value: string;
-  /** Pass `null` while loading so the badge renders a dash placeholder. */
+  /** Pass `null` (or a change with empty `text`) to render no badge at all. */
   change: MetricChange | null;
 }
 
@@ -26,21 +26,23 @@ const TONE_CLASSES: Record<MetricChange["tone"], string> = {
 };
 
 export const MetricCard = ({ label, value, change }: MetricCardProps) => (
-  <div className="relative flex flex-col justify-between rounded-2xl border border-gray-200 bg-white px-6 py-3 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
+  <div className="relative flex flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 gap-2 backdrop-blur-md shadow-[4px_4px_4px_0px_rgba(0,0,0,0.02)]">
     {/*
      * The delta sits beside the label, not beside the amount. Sharing a row
      * with the badge left the value about 126px in a four-up card, which is
      * not enough for "Ksh 1,250,000.00" at any readable size \u2014 it wrapped, and
      * clamping it to one line only traded the wrap for hidden digits.
      */}
-    <div className="flex items-start justify-between gap-3 py-3">
-      <p className="text-gray-500 text-lg">{label}</p>
-      <span
-        className={`shrink-0 text-sm font-semibold p-2 rounded-lg ${change ? TONE_CLASSES[change.tone] : TONE_CLASSES.neutral
-          }`}
-      >
-        {change ? change.text : "\u2014"}
-      </span>
+    <div className="flex items-start justify-between gap-3">
+      <p className="text-gray-500 text-sm leading-4.5">{label}</p>
+
+      {change && change.text && (
+        <span
+          className={`shrink-0 text-sm font-semibold p-2 rounded-lg ${TONE_CLASSES[change.tone]}`}
+        >
+          {change.text}
+        </span>
+      )}
     </div>
     {/*
      * One line, always: "Ksh" must never sit above its digits. The clamp is
@@ -50,7 +52,7 @@ export const MetricCard = ({ label, value, change }: MetricCardProps) => (
      * an amount too long even at the small end.
      */}
     <p
-      className="min-w-0 truncate whitespace-nowrap py-3 font-bold text-gray-800 leading-8 text-[clamp(0.9375rem,1.35vw,1.5rem)]"
+      className="min-w-0 truncate whitespace-nowrap font-bold text-gray-800 leading-8 text-[clamp(0.875rem,1.35vw,1.5rem)]"
       title={value}
     >
       {value}

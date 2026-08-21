@@ -1,7 +1,9 @@
-import { Bell, ChevronDown, Search, Sun } from "lucide-react";
+import { Bell, ChevronDown, HelpCircle, LogOut, Search, Settings, Sun } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Avatar } from "@/components/ui/Avatar";
-import { useAuth } from "@/hooks/auth-context";
+import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
+import { useAuth, useCanEditOwner } from "@/hooks/auth-context";
 
 type HeaderProps = {
   title: string;
@@ -26,16 +28,48 @@ export function Header({
   onSearchChange,
   searchPlaceholder = "Search companies, deals…",
 }: Readonly<HeaderProps>) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  // Settings visibility mirrors the backend owner-profile write roles
+  // (MANAGER/ADMIN), same gate the sidebar used before this moved here.
+  const canEditOwner = useCanEditOwner();
+
+  const profileItems: DropdownItem[] = [
+    ...(canEditOwner
+      ? [
+          {
+            key: "settings",
+            label: "Settings",
+            icon: <Settings size={16} />,
+            onClick: () => navigate("/settings"),
+          },
+        ]
+      : []),
+    {
+      key: "help",
+      label: "Help",
+      icon: <HelpCircle size={16} />,
+      onClick: () => navigate("/help"),
+    },
+    {
+      key: "logout",
+      label: "Logout",
+      icon: <LogOut size={16} />,
+      onClick: () => {
+        logout();
+        navigate("/login", { replace: true });
+      },
+    },
+  ];
 
   return (
     <header className="bg-[linear-gradient(90deg,#F9FAFB_50.33%,rgba(217,226,235,0.2)_100.65%)] px-4 py-3 rounded-t-lg border border-gray-200 flex items-center justify-between">
       <div className="">
-        <h1 className="text-2xl font-bold tracking-normal leading-8 text-content-primary">
+        <h1 className="text-[20px] font-bold tracking-normal leading-7.5 text-content-primary">
           {title}
         </h1>
         {description && (
-          <p className="text-base text-content-secondary leading-6">
+          <p className="text-[12px] text-content-secondary leading-4.5">
             {description}
           </p>
         )}
@@ -72,18 +106,52 @@ export function Header({
           <Sun size={24} />
         </button>
 
-        <div className="flex items-center gap-2 ml-1 cursor-pointer hover:bg-black/5 rounded-full transition-colors">
-          {user ? (
-            <Avatar
-              name={`${user.first_name} ${user.last_name}`}
-              size={32}
-              color="var(--color-sd-brand)"
-            />
-          ) : (
-            <span className="h-8 w-8 rounded-full bg-sd-surface shrink-0" />
-          )}
-          <ChevronDown size={24} className="text-gray-500 mr-1 shrink-0" />
-        </div>
+        <Dropdown
+          className="ml-1"
+          panelClassName="min-w-56 flex flex-col gap-1"
+          items={profileItems}
+          /*
+           * The trigger below is an avatar plus a chevron — Avatar is
+           * aria-hidden and the icon carries no text, so without this the
+           * button announces as unnamed. It is the only route to Settings
+           * and Help, so naming it is what makes those reachable by screen
+           * reader and voice control.
+           */
+          triggerLabel={user ? `Profile menu for ${user.first_name}` : "Profile menu"}
+          trigger={
+            <span className="flex items-center gap-2 rounded-full p-1 pr-2 hover:bg-black/5 transition-colors">
+              {user ? (
+                <Avatar
+                  name={`${user.first_name} ${user.last_name}`}
+                  size={32}
+                  color="var(--color-sd-brand)"
+                />
+              ) : (
+                <span className="h-8 w-8 rounded-full bg-sd-surface shrink-0" />
+              )}
+              <ChevronDown size={24} className="text-gray-500 shrink-0" />
+            </span>
+          }
+          header={
+            user && (
+              <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-gray-100">
+                <Avatar
+                  name={`${user.first_name} ${user.last_name}`}
+                  size={32}
+                  color="var(--color-priori-purple)"
+                />
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate text-xs font-semibold text-gray-900">
+                    {user.first_name} {user.last_name}
+                  </p>
+                  <p className="truncate text-[10px] text-gray-600 capitalize">
+                    {user.role}
+                  </p>
+                </div>
+              </div>
+            )
+          }
+        />
       </div>
     </header>
   );

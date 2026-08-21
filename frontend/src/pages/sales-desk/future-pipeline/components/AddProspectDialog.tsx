@@ -167,7 +167,7 @@ export function AddProspectDialog({
                         value={form.note}
                         onChange={(event) => set("note", event.target.value)}
                         placeholder="Budget opens new FY. Wants Business Premium for 80 users."
-                        className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-base text-gray-900 placeholder:text-gray-400"
+                        className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm text-gray-900 placeholder:text-gray-400"
                     />
                 </div>
 

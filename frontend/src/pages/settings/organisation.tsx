@@ -181,7 +181,6 @@ export default function OrganisationSettingsPage() {
               variant="outline-secondary"
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 border-gray-300 text-gray-600"
             >
               <UploadCloud size={18} /> Upload
             </Button>
@@ -201,7 +200,6 @@ export default function OrganisationSettingsPage() {
                 }
               }}
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 border-gray-300 text-gray-600"
             >
               <Trash size={18} /> Remove
             </Button>
@@ -264,7 +262,6 @@ export default function OrganisationSettingsPage() {
             type="submit"
             variant="primary"
             loading={isSubmitting}
-            className="flex items-center justify-center gap-2"
           >
             <CheckCircle size={18} /> Save changes
           </Button>

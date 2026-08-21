@@ -210,7 +210,6 @@ export default function DocumentSettingsPage() {
           type="submit"
           variant="primary"
           loading={isSubmitting}
-          className="flex items-center justify-center gap-2"
         >
           <CheckCircle size={18} /> Save changes
         </Button>

@@ -229,7 +229,6 @@ export function ExpenseEditor({
             variant="primary"
             onClick={handleSubmit}
             loading={isLoading}
-            className="px-8 py-3 flex items-center gap-2"
           >
             <Save size={18} /> Save &amp; Continue
           </Button>
@@ -271,7 +270,7 @@ export function ExpenseEditor({
               </h2>
               {/* Reference */}
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
-                <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
+                <label className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap">
                   EXP No.
                 </label>
                 <Input
@@ -284,7 +283,7 @@ export function ExpenseEditor({
                 {/* Expense Date */}
                 <label
                   htmlFor="expense-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Expense Date
                 </label>
@@ -303,7 +302,7 @@ export function ExpenseEditor({
 
                 <label
                   htmlFor="due-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Due Date
                 </label>
@@ -323,7 +322,7 @@ export function ExpenseEditor({
 
                 <label
                   htmlFor="currency-select"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Currency
                 </label>
@@ -336,7 +335,7 @@ export function ExpenseEditor({
                 />
 
                 {/* Recurring Bill */}
-                <span className="text-base font-bold leading-6 text-gray-800 text-right flex-1 whitespace-nowrap">
+                <span className="text-sm font-bold leading-5 text-gray-800 text-right flex-1 whitespace-nowrap">
                   Recurring Bill?
                 </span>
                 <label className="relative inline-flex items-center text-right cursor-pointer shrink-0">
@@ -390,7 +389,7 @@ export function ExpenseEditor({
                 </span>
               </div>
 
-              {/* VAT - Only show if restricted mode (view mode) or if there is actually tax */}
+              { }
               {(restrictedMode || totals.taxTotal > 0) && (
                 <>
                   <Divider />
@@ -443,7 +442,6 @@ export function ExpenseEditor({
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="flex items-center gap-2"
             >
               <Plus size={16} />{" "}
               {isUploading ? "Uploading..." : "Attach Document"}

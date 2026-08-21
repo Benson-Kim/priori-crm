@@ -1,47 +1,24 @@
 import type { MetricChange } from "@/components/ui/MetricCard";
 import { type ClassValue, clsx } from "clsx";
-import { extendTailwindMerge } from "tailwind-merge";
+import { twMerge } from "tailwind-merge";
 import { DEFAULT_CURRENCY } from "./constants";
-
-/**
- * tailwind-merge, taught about the dense type scale.
- *
- * `--text-dense-*` (index.css) generates `text-dense-md` and friends, but
- * tailwind-merge only knows Tailwind's stock scale. An unrecognised `text-*`
- * is assumed to be a *colour*, so merging `text-white` with `text-dense-md`
- * dropped the colour and left buttons drawing their inherited ink on a brand
- * fill. Registering the three sizes puts them in the font-size group, where
- * they override each other and leave colours alone.
- */
-const twMerge = extendTailwindMerge({
-  extend: {
-    classGroups: {
-      "font-size": [{ text: ["dense-xs", "dense-sm", "dense-md"] }],
-    },
-  },
-});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 /**
- * The shared field treatment: hover, and active/focus.
- *
- * This sat on a blue `focus:ring-2` that never fired — it is applied to the
- * wrapper around a field, and a wrapper is not itself focusable, so `focus:`
- * never matched and the only thing users saw was the base-layer ring on the
- * inner element. Text fields therefore lit up differently from selects, which
- * carry their own purple treatment.
- *
- * `focus-within` is the mechanism a wrapper needs, and it also matches when
- * the element itself is focused, so a focusable trigger (the calendar) can
- * share it. The colours are `InlineSelect`'s, which is the control the rest of
- * the app is being matched to.
+ * Focus treatment for a text-field wrapper: the visible border lives on an
+ * outer div, but focus lands on the `<input>` inside it, so `focus-within`
+ * is what fires — a plain `focus:` here never matches (the div itself is
+ * never focused) and silently renders nothing. Purple to match every other
+ * focused/open control (InlineSelect, CalendarPicker, the global
+ * `input:focus-visible` rule in index.css).
  */
 export const focusInput = [
-  "hover:border-priori-purple/50",
-  "focus-within:border-priori-purple focus-within:ring-1 focus-within:ring-priori-purple",
+  "focus-within:ring-1",
+  "focus-within:ring-priori-purple/20",
+  "focus-within:border-priori-purple",
 ];
 
 export const focusRing = [
@@ -251,11 +228,6 @@ export function formatKenyanPhoneInput(value: string) {
   return [part1, part2, part3].filter(Boolean).join(" ");
 };
 
-/**
- * The nine local digits of a Kenyan number, from any shape a record holds it
- * in (`+254712345678`, `0712345678`, `712 345 678`). This is the shape
- * `KenyanPhoneInput` speaks in.
- */
 export function toLocalKenyanDigits(value: string) {
   return getKenyanPhoneDigits(value);
 };
@@ -272,6 +244,11 @@ export function toInternationalKenyanPhone(localDigits: string) {
 
 export function getKenyanPhoneGhostText(value: string) {
   const digits = getKenyanPhoneDigits(value);
+
+  // Nothing typed yet: the loop below only matches once digitCount has
+  // advanced past zero, so an empty field fell through to "" and the mask
+  // only appeared after the first keystroke. Show the full mask up front.
+  if (digits.length === 0) return PHONE_MASK;
 
   let digitCount = 0;
 

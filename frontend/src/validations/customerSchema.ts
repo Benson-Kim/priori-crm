@@ -4,8 +4,18 @@ export const customerSchema = z
   .object({
     customerType: z.string().min(1, "Please select a customer type"),
     companyName: z.string().optional(),
-    firstName: z.string().min(2, "First name must be at least 2 characters"),
-    lastName: z.string().min(2, "Last name must be at least 2 characters"),
+    // Required for individuals only (enforced below); a business customer is
+    // identified by companyName and may have no contact person on file yet.
+    firstName: z
+      .string()
+      .min(2, "First name must be at least 2 characters")
+      .optional()
+      .or(z.literal("")),
+    lastName: z
+      .string()
+      .min(2, "Last name must be at least 2 characters")
+      .optional()
+      .or(z.literal("")),
     // Email, phone, website and postal code are optional. Each still
     // validates its format when filled in, so an empty field is accepted
     // but a malformed one is not.
@@ -57,6 +67,18 @@ export const customerSchema = z
       message: "Phone number is required for individual customers.",
       path: ["phone"],
     }
-  );
+  )
+  // Names are conditionally required: a business is identified by
+  // companyName and may have no contact person on file yet, but an
+  // individual has no other identity to fall back on. Mirrors the API's
+  // CustomerCreate.validate_individual_name.
+  .refine((data) => !(data.customerType === "individual" && !data.firstName), {
+    message: "First name is required for individual customers.",
+    path: ["firstName"],
+  })
+  .refine((data) => !(data.customerType === "individual" && !data.lastName), {
+    message: "Last name is required for individual customers.",
+    path: ["lastName"],
+  });
 
 export type CustomerFormData = z.infer<typeof customerSchema>;

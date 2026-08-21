@@ -129,7 +129,7 @@ export function VendorSummaryCard({
     <Card className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-4">
       {/* Header: title + total */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-left text-base font-bold text-content-primary">{title}</p>
+        <p className="text-left text-sm font-bold text-content-primary">{title}</p>
         <Dropdown
           // disabled={isExporting || !data}
           trigger={

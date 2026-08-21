@@ -139,7 +139,7 @@ export function CustomerDetailsForm({
                 {/* First Name & Last Name */}
                 <div className="grid grid-cols-2 gap-6">
 
-                    <Field id="firstName" label="First Name" required>
+                    <Field id="firstName" label="First Name" required={customerType === "individual"}>
                         <Controller
                             name="firstName"
                             control={control}
@@ -154,7 +154,7 @@ export function CustomerDetailsForm({
                             )}
                         />
                     </Field>
-                    <Field id="lastName" label="Last Name" required>
+                    <Field id="lastName" label="Last Name" required={customerType === "individual"}>
                         <Controller
                             name="lastName"
                             control={control}
@@ -356,14 +356,12 @@ export function CustomerDetailsForm({
                     onClick={onCancel}
                     disabled={isLoading}
                     variant="outline"
-                    className="flex-1 px-3 py-4 border border-priori-purple/50 text-priori-purple font-bold text-lg rounded-lg hover:bg-priori-purple/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Cancel
                 </Button>
                 <Button
                     type="submit"
                     disabled={isLoading}
-                    className="flex-1 px-3 py-4 bg-priori-purple text-white font-bold text-lg rounded-lg hover:bg-priori-purple/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Save className="w-5 h-5" />
                     {isLoading ? "Saving..." : "Save"}

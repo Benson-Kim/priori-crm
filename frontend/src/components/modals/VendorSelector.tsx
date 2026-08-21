@@ -26,14 +26,14 @@ function VendorDropdown({
     const [isFocused, setIsFocused] = useState(false);
 
     return (
-        <div className="absolute z-20 top-full mt-2 w-[572px] p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
+        <div className="absolute z-20 top-full mt-2 w-143 p-6 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto left-0">
             <Button
                 variant="outline"
                 onClick={() => {
                     onClose();
                     onAddNew();
                 }}
-                className="w-full text-xl mb-6"
+                className="w-full mb-6"
             >
                 <Plus size={20} /> Add New Vendor
             </Button>
@@ -63,7 +63,7 @@ function VendorDropdown({
                         onClick={() => onSelectVendor(v)}
                     >
                         <Building2 size={24} stroke="#475467" />
-                        <span className={`block text-sm text-gray-800 `}>
+                        <span className={`block text-[14px] text-gray-800 `}>
                             {v.vendor_name} {v.email ? `(${v.email})` : ''}
                         </span>
                     </button>
@@ -189,7 +189,7 @@ export function VendorSelector({
 
             {restrictedMode ? (
                 <div className="flex flex-col gap-1">
-                    <p className="text-base font-bold text-priori-purple">{vendorName || vendorId}</p>
+                    <p className="text-[16px] font-bold text-priori-purple">{vendorName || vendorId}</p>
                     {vendorDetails && (
                         <>
                             {vendorDetails.address && (
@@ -205,7 +205,7 @@ export function VendorSelector({
                     <div className="relative">
                             {/* <button
                             type="button"
-                            className="text-priori-purple font-bold text-base flex items-center gap-1 hover:underline text-left w-fit"
+                            className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left w-fit"
                             onClick={() => setShowDropdown(!showDropdown)}
                         >
                             {vendorName} <SquarePen size={18} />
@@ -215,7 +215,7 @@ export function VendorSelector({
                             onClick={() => setShowDropdown(!showDropdown)}
                             className="flex items-center justify-between w-full max-w-[320px] py-3 px-3 gap-3 rounded-lg border border-gray-300 cursor-pointer hover:border-priori-purple transition-all"
                             >
-                                <span className="text-base font-medium text-gray-900 truncate">
+                                <span className="text-[16px] font-medium text-gray-900 truncate">
                                     {vendorName || "Select vendor"}
                                 </span>
 
@@ -243,7 +243,7 @@ export function VendorSelector({
                 <div className="relative">
                     <button
                         type="button"
-                        className="text-priori-purple font-bold text-base flex items-center gap-1 hover:underline text-left"
+                        className="text-priori-purple font-bold text-[16px] flex items-center gap-1 hover:underline text-left"
                         onClick={() => setShowDropdown(!showDropdown)}
                     >
                         Select Vendor <SquarePen size={18} />

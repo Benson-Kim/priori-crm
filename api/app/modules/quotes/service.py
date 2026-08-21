@@ -371,7 +371,9 @@ class QuoteService(BaseDocumentService):
                 if row.customer_type == "business" and row.company_name:
                     display_name = row.company_name
                 else:
-                    display_name = f"{row.first_name} {row.last_name}".strip()
+                    display_name = (
+                        f"{row.first_name or ''} {row.last_name or ''}".strip()
+                    )
 
                 items.append(
                     QuoteSummary(

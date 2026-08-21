@@ -52,6 +52,16 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/site.webmanifest" />
 
+    <!-- Poppins: declared as the app-wide font in index.css but was never
+         actually being loaded, so every page was silently falling back to
+         the browser's default sans-serif. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap"
+      rel="stylesheet"
+    />
+
     <!-- Performance: pre-load the app entry module for a faster first paint.
          (The API origin is warmed at runtime in appConfig, which reads
          VITE_API_BASE_URL; a build-time placeholder here would ship a broken

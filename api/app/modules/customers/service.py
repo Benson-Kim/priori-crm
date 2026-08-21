@@ -561,6 +561,36 @@ class CustomerService(ServiceBase):
                     ],
                 )
 
+            # Same resulting-state check for names: business customers may
+            # have no contact person on file, but an individual has no other
+            # identity to fall back on. Catches both clearing a name on an
+            # individual and switching a name-less company to individual.
+            resulting_first_name = update_data.get("first_name", customer.first_name)
+            resulting_last_name = update_data.get("last_name", customer.last_name)
+            if resulting_type == CustomerType.INDIVIDUAL and (
+                not resulting_first_name or not resulting_last_name
+            ):
+                raise ValidationException(
+                    detail=(
+                        "First name and last name are required for "
+                        "individual customers."
+                    ),
+                    errors=[
+                        {
+                            "field": "first_name",
+                            "message": (
+                                "First name is required for individual customers."
+                            ),
+                        },
+                        {
+                            "field": "last_name",
+                            "message": (
+                                "Last name is required for individual customers."
+                            ),
+                        },
+                    ],
+                )
+
             # Normalize email to lowercase before conflict check + persist
             if "email" in update_data and update_data["email"] is not None:
                 update_data["email"] = update_data["email"].strip().lower()

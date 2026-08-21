@@ -106,7 +106,7 @@ function PaymentUploader({
 
     return (
         <div className="space-y-2">
-            <Label className="font-bold text-base">{title}</Label>
+            <Label className="font-bold text-sm">{title}</Label>
 
             {/* Existing documents (edit mode) with a delete button. */}
             {existing.length > 0 && (
@@ -137,7 +137,7 @@ function PaymentUploader({
                 type="button"
                 variant="outline"
                 onClick={() => inputRef.current?.click()}
-                className="flex items-center gap-2 w-full border-dashed h-20 text-base"
+                className="w-full border-dashed h-20"
             >
                 <Plus size={18} /> {title}
             </Button>
@@ -454,7 +454,7 @@ export function RecordPaymentModal({
                     <div className="space-y-4">
                         <div className={`grid gap-3 items-end transition-all duration-700 ease-in-out ${currencyDiffers ? "grid-cols-[1fr_auto_1fr]" : "grid-cols-1"}`}>
                             <div className={`space-y-2 transition-all duration-700 ease-in-out ${exchangeDirection === "poToPayment" ? "order-3" : "order-1"}`}>
-                                <Label htmlFor="payment-currency" className="font-bold text-base">Payment Currency</Label>
+                                <Label htmlFor="payment-currency" className="font-bold text-sm">Payment Currency</Label>
                                 <Select
                                     id="payment-currency"
                                     value={paymentCurrency}
@@ -479,7 +479,7 @@ export function RecordPaymentModal({
 
                             {currencyDiffers && (
                                 <div className={`space-y-2 transition-all duration-700 ease-in-out ${exchangeDirection === "poToPayment" ? "order-1" : "order-3"}`}>
-                                    <Label htmlFor="poCurrency" className="font-bold text-base">PO Currency</Label>
+                                    <Label htmlFor="poCurrency" className="font-bold text-sm">PO Currency</Label>
                                     <Input
                                         value={poCurrency}
                                         disabled
@@ -497,7 +497,7 @@ export function RecordPaymentModal({
                         >
                             <div className="space-y-4 pt-1">
                                 <div className="space-y-2">
-                                    <Label htmlFor="exchange-rate" className="font-bold text-base">
+                                    <Label htmlFor="exchange-rate" className="font-bold text-sm">
                                         Exchange Rate ({displayedRateHelper})
                                     </Label>
                                     <Input
@@ -522,7 +522,7 @@ export function RecordPaymentModal({
                 )}
 
                 <div className="space-y-2">
-                    <Label htmlFor="payment-amount" className="font-bold text-base">
+                    <Label htmlFor="payment-amount" className="font-bold text-sm">
                         {isPurchaseOrder ? `Amount (${paymentCurrency})` : "Amount"}
                     </Label>
                     <Input
@@ -536,7 +536,7 @@ export function RecordPaymentModal({
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="payment-date" className="font-bold text-base">Date</Label>
+                    <Label htmlFor="payment-date" className="font-bold text-sm">Date</Label>
                     <CalendarPicker
                         id="payment-date"
                         variant="form"
@@ -555,7 +555,7 @@ export function RecordPaymentModal({
                 {/* payment_method: invoice payments only. */}
                 {entityType === "invoice" && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-method" className="font-bold text-base">Payment Method</Label>
+                        <Label htmlFor="payment-method" className="font-bold text-sm">Payment Method</Label>
                         <Select
                             id="payment-method"
                             value={paymentMethod}
@@ -566,7 +566,7 @@ export function RecordPaymentModal({
                 )}
 
                 <div className="space-y-2">
-                    <Label htmlFor="payment-reference" className="font-bold text-base">
+                    <Label htmlFor="payment-reference" className="font-bold text-sm">
                         {isPurchaseOrder ? "Payment Ref #" : "Reference (optional)"}
                     </Label>
                     <Input
@@ -581,7 +581,7 @@ export function RecordPaymentModal({
                 {/* Invoice number: purchase orders only (free-text, optional). */}
                 {isPurchaseOrder && (
                     <div className="space-y-2">
-                        <Label htmlFor="payment-invoice" className="font-bold text-base">Invoice # (optional)</Label>
+                        <Label htmlFor="payment-invoice" className="font-bold text-sm">Invoice # (optional)</Label>
                         <Input
                             id="payment-invoice"
                             type="text"
@@ -593,7 +593,7 @@ export function RecordPaymentModal({
                 )}
 
                 <div className="space-y-2">
-                    <Label htmlFor="payment-notes" className="font-bold text-base">Notes (optional)</Label>
+                    <Label htmlFor="payment-notes" className="font-bold text-sm">Notes (optional)</Label>
                     <Input
                         id="payment-notes"
                         type="text"

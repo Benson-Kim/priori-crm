@@ -744,7 +744,7 @@ export default function VendorDetailPage() {
                       value={typeTab}
                       onChange={(value) => setTypeTab(value as VendorTxnType)}
                       aria-label="Transaction type"
-                      triggerClassName="p-2.5 text-sm"
+                      triggerClassName="px-4 py-3 rounded-2xl"
                     />
                   </div>
                 </div>
@@ -1072,7 +1072,7 @@ export function VendorSummaryCard({
         <p className="text-left font-bold text-lg text-content-primary">{title}</p>
 
         {/* Date filter */}
-        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white p-2" />
+        <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
       </div>
 
       {/* Transaction list */}

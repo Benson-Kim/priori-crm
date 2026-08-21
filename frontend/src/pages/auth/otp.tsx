@@ -164,15 +164,15 @@ export default function OTPPage() {
                   </button>
                 </div>
               ) : (
-                  <div className="py-1 flex flex-wrap items-center justify-center gap-2">
-                    <span className="text-danger font-normal">Code expired.</span>
-                    <button type="button" disabled={submitting}
-                      onClick={() => void handleResend()}
-                      className="text-sky-blue disabled:opacity-50 cursor-pointer"
-                    >
-                      Resend OTP
-                    </button>
-                  </div>
+                <div className="py-1 flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-danger font-normal">Code expired.</span>
+                  <button type="button" disabled={submitting}
+                    onClick={() => void handleResend()}
+                    className="text-sky-blue disabled:opacity-50 cursor-pointer"
+                  >
+                    Resend OTP
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -180,14 +180,14 @@ export default function OTPPage() {
           <div className="flex items-center justify-between gap-4">
             <Button type="button" variant="outline" size="lg" disabled={submitting}
               onClick={() => navigate("/login")}
-              className="w-full text-lg font-bold"
+              className="w-full"
             >
               <ArrowLeft />
               Back
             </Button>
             <Button type="button" variant="primary" size="lg" loading={submitting}
               onClick={() => void submitCode(code)}
-              className="w-full text-lg font-bold"
+              className="w-full"
             >
               Continue
             </Button>

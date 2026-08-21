@@ -386,7 +386,7 @@ export function DocumentEditor({
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4 items-center w-full max-w-130">
 
                 {/* Reference */}
-                <label className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap">
+                <label className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap">
                   {`${referenceLabel} No.`}
                 </label>
                 <Input
@@ -398,7 +398,7 @@ export function DocumentEditor({
                 {/* Transaction Date */}
                 <label
                   htmlFor="order-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Transaction Date
                 </label>
@@ -419,7 +419,7 @@ export function DocumentEditor({
                 {/* Due Date */}
                 <label
                   htmlFor="due-date"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Due Date
                 </label>
@@ -437,7 +437,7 @@ export function DocumentEditor({
                 {/* RFQ/RFP Number */}
                 {/* <label
                   htmlFor="rfq-input"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   RFQ/RFP Number
                 </label>
@@ -453,7 +453,7 @@ export function DocumentEditor({
                 {/* VAT Toggle */}
                 <label
                   htmlFor="vat-enabled"
-                  className="text-base font-bold leading-6 text-gray-800 text-right whitespace-nowrap"
+                  className="text-sm font-bold leading-5 text-gray-800 text-right whitespace-nowrap"
                 >
                   Add VAT
                 </label>
@@ -547,7 +547,6 @@ export function DocumentEditor({
             variant="outline"
             onClick={onPreview}
             disabled={!onPreview}
-            className="px-8 py-3"
           >
             Preview
           </Button>
@@ -558,7 +557,6 @@ export function DocumentEditor({
               variant="primary"
               onClick={handleSubmit}
               loading={isLoading}
-              className="px-8 py-3 flex items-center gap-2"
             >
               <Save size={18} /> Save &amp; Continue
             </Button>
