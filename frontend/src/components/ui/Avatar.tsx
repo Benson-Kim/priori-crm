@@ -16,10 +16,10 @@ export type AvatarSize = 24 | 28 | 32 | 36;
 
 /** Avatar initials: Poppins Bold 10–13 white, scaled to the avatar size. */
 const SIZE_STYLES: Record<AvatarSize, string> = {
-  24: "h-6 w-6 text-[10px]",
-  28: "h-7 w-7 text-[11px]",
-  32: "h-8 w-8 text-[12px]",
-  36: "h-9 w-9 text-[13px]",
+  24: "h-6 w-6 text-dense-xs",
+  28: "h-7 w-7 text-dense-sm",
+  32: "h-8 w-8 text-xs",
+  36: "h-9 w-9 text-dense-md",
 };
 
 interface AvatarProps {

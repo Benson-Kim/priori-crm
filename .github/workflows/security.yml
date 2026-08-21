@@ -50,8 +50,10 @@ on:
         type: boolean
         default: true
         required: false
+  # `develop` is deliberately absent — deploy-staging.yml calls this workflow on
+  # every push there. See §3.7 and the note in api-ci.yml.
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main, develop]
 

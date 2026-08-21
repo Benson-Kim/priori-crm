@@ -57,9 +57,44 @@
   --color-gray-700: #344054;
   --color-gray-800: #1d2939;
 
+  /*
+   * Neutral button surfaces.
+   *
+   * `button-variants.ts` has always referenced `bg-neutral`, `bg-secondary`,
+   * `text-secondary-foreground`, `bg-accent` and `text-accent-foreground`,
+   * but none of them were ever defined here, so those utilities emitted
+   * nothing and the `neutral`, `secondary`, `ghost`, `outline-neutral` and
+   * `outline-secondary` variants rendered with no colour of their own —
+   * which is why call sites re-stated a border and a text colour by hand.
+   * Defining them on the existing gray ramp makes the variants mean what
+   * they say.
+   */
+  --color-neutral: var(--color-gray-600);
+  --color-secondary: var(--color-gray-100);
+  --color-secondary-foreground: var(--color-gray-700);
+  --color-accent: var(--color-gray-100);
+  --color-accent-foreground: var(--color-gray-800);
+
   --font-sans: "Poppins", sans-serif;
   /* Menlo for codes/IDs (Sales Desk: profile codes, quote IDs, tenant domains). */
   --font-mono: "Menlo", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /*
+   * Dense type scale.
+   *
+   * Tailwind's ramp bottoms out at `text-xs` (12px), but the Sales Desk and
+   * the app shell are drawn at 13, 11 and 10 — deliberately tighter than the
+   * shared pages, and previously written as one-off `text-[13px]` arbitrary
+   * values at ~90 call sites. Named here so the density is a decision with
+   * one definition rather than a number repeated everywhere.
+   *
+   * No `--*--line-height` is paired with these on purpose: arbitrary font
+   * sizes emit no line-height, so leaving it inherited keeps these tokens a
+   * drop-in for the values they replace.
+   */
+  --text-dense-xs: 0.625rem;
+  --text-dense-sm: 0.6875rem;
+  --text-dense-md: 0.8125rem;
 
   /*
    * Sales Desk palette.
@@ -125,13 +160,33 @@
 
 @layer base {
   * {
-    font-family: "Poppins", sans-serif;
     margin: 0;
     padding: 0;
   }
 
+  /*
+   * Poppins is set on the body and inherited, not forced onto `*`.
+   *
+   * The universal selector also hit `code`, `pre`, `kbd` and `samp`, whose
+   * inherited monospace it overrode, so the profile codes, quote ids and
+   * tenant domains `--font-mono` exists for rendered in Poppins unless the
+   * element happened to carry `font-mono` explicitly. Inheritance gives every
+   * element the same font without overriding anything that sets its own.
+   */
   body {
+    font-family: var(--font-sans);
     @apply bg-gray-100 text-gray-800 overflow-x-hidden;
+  }
+
+  /*
+   * Form controls do not inherit the document font, so they are named
+   * explicitly. This is what `* { font-family }` was really buying.
+   */
+  input,
+  select,
+  textarea,
+  button {
+    font-family: inherit;
   }
 
   td[data-selected="true"] button {
@@ -139,12 +194,9 @@
   }
 
   /*
-   * `.ui-input` opts out: those inputs live inside a wrapper div that already
-   * draws its own rounded border/ring on `focus-within` (Input, SearchInput).
-   * Without the exclusion this rule still wins on specificity over the
-   * input's own `ring-0`/`outline-none` utilities, painting a second,
-   * square ring on the input itself, nested inside the wrapper's rounded
-   * one.
+   * `.ui-input` is excluded: the shared Input draws its focus ring on the
+   * wrapper (which is the box the user sees), so letting the inner element
+   * ring as well drew two rings, one inside the other.
    */
   input:not(.ui-input):focus-visible,
   textarea:focus-visible,

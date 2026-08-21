@@ -570,8 +570,8 @@ export default function PurchaseOrderDetailPage() {
                     <div className="rounded-2xl border border-gray-200 bg-white flex flex-col gap-6 h-fit lg:col-span-3 space-y-4">
                         <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100">
                             <div className="min-w-0">
-                                <p className="text-[14px] text-gray-500">Vendor</p>
-                                <p className="text-[20px] font-bold text-gray-800 truncate">
+                                <p className="text-sm text-gray-500">Vendor</p>
+                                <p className="text-xl font-bold text-gray-800 truncate">
                                     {po.vendor?.vendor_name ?? po.vendor_id}
                                 </p>
                             </div>
@@ -619,7 +619,7 @@ export default function PurchaseOrderDetailPage() {
                         </div>
 
                         <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
-                            <h3 className="text-[18px] font-bold text-gray-800">Payments</h3>
+                            <h3 className="text-lg font-bold text-gray-800">Payments</h3>
 
                             <div className="overflow-x-auto rounded-b-lg">
                                 <Table
@@ -720,8 +720,8 @@ export default function PurchaseOrderDetailPage() {
 function OverviewField({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <div className="min-w-0 p-4">
-            <p className="text-[14px] text-gray-500">{label}</p>
-            <p className="text-[14px] text-gray-800 font-bold truncate">{value}</p>
+            <p className="text-sm text-gray-500">{label}</p>
+            <p className="text-sm text-gray-800 font-bold truncate">{value}</p>
         </div>
     );
 }

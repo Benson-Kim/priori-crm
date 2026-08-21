@@ -228,6 +228,20 @@ export function formatKenyanPhoneInput(value: string) {
   return [part1, part2, part3].filter(Boolean).join(" ");
 };
 
+export function toLocalKenyanDigits(value: string) {
+  return getKenyanPhoneDigits(value);
+};
+
+/**
+ * The `+254…` form, for the modules that store a phone number that way
+ * (vendors, desk companies). Empty in, empty out, so an untouched blank field
+ * is not turned into a bare country code.
+ */
+export function toInternationalKenyanPhone(localDigits: string) {
+  const digits = getKenyanPhoneDigits(localDigits);
+  return digits ? `+254${digits}` : "";
+};
+
 export function getKenyanPhoneGhostText(value: string) {
   const digits = getKenyanPhoneDigits(value);
 

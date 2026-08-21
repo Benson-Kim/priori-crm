@@ -139,15 +139,15 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
      */
     <div className="relative z-50 -translate-x-1/2 -translate-y-[calc(100%+14px)]">
       <div className="flex min-w-36 flex-col items-center justify-center rounded-3xl bg-[#f8f9fb] px-6 py-4 shadow-[0_8px_24px_rgba(16,24,40,0.12)]">
-        <p className="text-[17px] font-medium text-gray-600">{fullLabel}</p>
+        <p className="text-lg font-medium text-gray-600">{fullLabel}</p>
         <p
-          className="mt-2 text-[20px] font-bold leading-7"
+          className="mt-2 text-xl font-bold leading-7"
           style={{ color: CASHFLOW_COLORS.income }}
         >
           {money(payload[0].value)}
         </p>
         <p
-          className="text-[20px] font-bold leading-7"
+          className="text-xl font-bold leading-7"
           style={{ color: CASHFLOW_COLORS.expense }}
         >
           {money(payload[1]?.value ?? 0)}
@@ -212,13 +212,13 @@ function SummaryWidget({ currency, onCurrencyChange }: SummaryWidgetProps) {
     <section>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center mb-4">
         <div className="flex flex-col gap-4 sm:w-full sm:flex-row sm:items-center sm:justify-end-safe">
-            <InlineSelect
-              options={CURRENCY_OPTIONS}
-              value={currency}
-              onChange={onCurrencyChange}
-              aria-label="Display currency"
+          <InlineSelect
+            options={CURRENCY_OPTIONS}
+            value={currency}
+            onChange={onCurrencyChange}
+            aria-label="Display currency"
             triggerClassName="bg-white px-4 py-3 rounded-2xl"
-            />
+          />
           <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
         </div>
       </div>
@@ -477,30 +477,33 @@ function TopSalesWidget({ currency }: TopSalesWidgetProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h4 className="text-sm leading-5 text-gray-900 font-medium">Top Sales</h4>
         <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
+      </div >
+
+    { error && (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        {error}
       </div>
+    )
+}
 
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
-        </div>
-      )}
-
-      {isLoading ? (
-        <LoadingState message="Loading top sales..." />
-      ) : (
-        <Table
-          columns={SALES_COLUMNS}
-          data={topSales?.items ?? []}
-          rowKey={(item) => item.item_name}
-          className="border border-gray-200 rounded-xl"
-          // Half-width card: the shared 600px floor would scroll here, and
-          // fixed layout is what gives the truncated product name a width to
-          // clamp against (auto layout sizes columns to content instead).
-          tableClassName="min-w-0 table-fixed"
-          emptyMessage="No sales available for the selected period."
-        />
-      )}
-    </Card>
+{
+  isLoading ? (
+    <LoadingState message="Loading top sales..." />
+  ) : (
+    <Table
+      columns={SALES_COLUMNS}
+      data={topSales?.items ?? []}
+      rowKey={(item) => item.item_name}
+      className="border border-gray-200 rounded-xl"
+      // Half-width card: the shared 600px floor would scroll here, and
+      // fixed layout is what gives the truncated product name a width to
+      // clamp against (auto layout sizes columns to content instead).
+      tableClassName="min-w-0 table-fixed"
+      emptyMessage="No sales available for the selected period."
+    />
+  )
+}
+    </Card >
   );
 }
 
@@ -656,27 +659,30 @@ function TransactionsWidget({ currency }: TransactionsWidgetProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <ReportPeriodPicker value={period} onChange={setPeriod} triggerClassName="bg-white" />
           <Button variant="outline">View all</Button>
-        </div>
+        </div >
+      </div >
+
+    { error && (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        {error}
       </div>
+    )
+}
 
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
-        </div>
-      )}
-
-      {isLoading ? (
-        <LoadingState message="Loading transactions..." />
-      ) : (
-        <Table
-          columns={columns}
-          data={transactions?.items ?? []}
-          rowKey={(item) => item.id}
-          className="border border-gray-200 rounded-xl"
-          emptyMessage="No transactions available for the selected period."
-        />
-      )}
-    </Card>
+{
+  isLoading ? (
+    <LoadingState message="Loading transactions..." />
+  ) : (
+    <Table
+      columns={columns}
+      data={transactions?.items ?? []}
+      rowKey={(item) => item.id}
+      className="border border-gray-200 rounded-xl"
+      emptyMessage="No transactions available for the selected period."
+    />
+  )
+}
+    </Card >
   );
 }
 

@@ -124,8 +124,8 @@ export default function OTPPage() {
           </div>
 
           <div className="text-center">
-            <h3 className="text-[24px] font-bold text-cocoa mb-2">Verify it&apos;s you</h3>
-            <p className="text-gray-700 text-[20px] whitespace-nowrap">
+            <h3 className="text-2xl font-bold text-cocoa mb-2">Verify it&apos;s you</h3>
+            <p className="text-gray-700 text-xl whitespace-nowrap">
               A 6-digit code was sent to{" "}
               <span className="font-bold">{email ? maskEmail(email) : "your email"}</span>
             </p>
@@ -145,7 +145,7 @@ export default function OTPPage() {
           </div>
 
           <div className="py-1">
-            <div className="text-[18px] leading-7 text-gray-700">
+            <div className="text-lg leading-7 text-gray-700">
               {secondsLeft > 0 ? (
                 <div className="py-1 flex flex-wrap items-center gap-2">
                   <p className="font-normal m-0">
@@ -164,15 +164,15 @@ export default function OTPPage() {
                   </button>
                 </div>
               ) : (
-                  <div className="py-1 flex flex-wrap items-center justify-center gap-2">
-                    <span className="text-danger font-normal">Code expired.</span>
-                    <button type="button" disabled={submitting}
-                      onClick={() => void handleResend()}
-                      className="text-sky-blue disabled:opacity-50 cursor-pointer"
-                    >
-                      Resend OTP
-                    </button>
-                  </div>
+                <div className="py-1 flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-danger font-normal">Code expired.</span>
+                  <button type="button" disabled={submitting}
+                    onClick={() => void handleResend()}
+                    className="text-sky-blue disabled:opacity-50 cursor-pointer"
+                  >
+                    Resend OTP
+                  </button>
+                </div>
               )}
             </div>
           </div>

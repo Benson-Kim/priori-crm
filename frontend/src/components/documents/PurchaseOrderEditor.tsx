@@ -491,7 +491,7 @@ export function PurchaseOrderEditor({
         {/* Top Section */}
         <div className="p-6 flex justify-between">
           <DocumentOwnerHeader editable={!restrictedMode} />
-          <h2 className="text-[22px] font-black text-priori-purple tracking-wider mb-1 uppercase">
+          <h2 className="text-2xl font-black text-priori-purple tracking-wider mb-1 uppercase">
             PURCHASE ORDER
           </h2>
         </div>
@@ -602,7 +602,7 @@ export function PurchaseOrderEditor({
 
         {/* Line Items */}
         <div className="p-6 flex flex-col gap-6">
-          <h3 className="text-[20px] leading-7 font-bold text-gray-800">
+          <h3 className="text-xl leading-7 font-bold text-gray-800">
             Item Details
           </h3>
           {errors.lineItems && (
@@ -643,7 +643,7 @@ export function PurchaseOrderEditor({
 
               <Divider />
 
-              <div className="flex justify-between items-center font-bold text-[16px] text-gray-900">
+              <div className="flex justify-between items-center font-bold text-base text-gray-900">
                 <span>Total</span>
                 <span>
                   {formatCurrency(totals.subtotal + totals.taxTotal, currency)}
@@ -657,7 +657,7 @@ export function PurchaseOrderEditor({
         <div className="px-8 py-6">
           <label
             htmlFor="notes-input"
-            className="block text-[16px] font-bold text-gray-800 mb-3"
+            className="block text-base font-bold text-gray-800 mb-3"
           >
             Notes
           </label>
@@ -668,13 +668,13 @@ export function PurchaseOrderEditor({
             placeholder="Add notes here"
             rows={2}
             disabled={restrictedMode}
-            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
+            className="w-full p-4 border border-gray-300 rounded-xl text-base outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
           />
         </div>
         <div className="px-8 pb-6">
           <label
             htmlFor="terms-input"
-            className="block text-[16px] font-bold text-gray-800 mb-3"
+            className="block text-base font-bold text-gray-800 mb-3"
           >
             Terms & Conditions
           </label>
@@ -686,7 +686,7 @@ export function PurchaseOrderEditor({
             rows={2}
             maxLength={2000}
             disabled={restrictedMode}
-            className="w-full p-4 border border-gray-300 rounded-xl text-[16px] outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
+            className="w-full p-4 border border-gray-300 rounded-xl text-base outline-none focus:border-priori-purple resize-none placeholder-gray-400 disabled:bg-gray-50"
           />
         </div>
 

@@ -100,10 +100,10 @@ export default function ResetPasswordPage() {
           </div>
 
           <div className="text-center">
-            <h1 className="text-[24px] font-bold text-cocoa mb-2">
+            <h1 className="text-2xl font-bold text-cocoa mb-2">
               {done ? "Password reset" : "Set a new password"}
             </h1>
-            <p className="text-gray-700 text-[20px]">
+            <p className="text-gray-700 text-xl">
               {done
                 ? "Your password has been reset. Redirecting you to sign in..."
                 : "Choose a strong new password for your account."}
@@ -113,7 +113,7 @@ export default function ResetPasswordPage() {
 
         {!hasToken ? (
           <div className="flex flex-col gap-8">
-            <p role="alert" className="text-gray-700 text-[16px] leading-6 text-center">
+            <p role="alert" className="text-gray-700 text-base leading-6 text-center">
               This reset link is missing or invalid. Request a new one to
               continue.
             </p>
@@ -138,7 +138,7 @@ export default function ResetPasswordPage() {
         ) : (
           <form className="space-y-8" onSubmit={handleSubmit} noValidate>
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-cocoa py-1 font-bold text-[18px] leading-7">New Password</Label>
+              <Label htmlFor="password" className="text-cocoa py-1 font-bold text-lg leading-7">New Password</Label>
               <Input
                 id="password"
                 name="password"
@@ -155,7 +155,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirm_password" className="text-cocoa py-1 font-bold text-[18px] leading-7">Confirm Password</Label>
+              <Label htmlFor="confirm_password" className="text-cocoa py-1 font-bold text-lg leading-7">Confirm Password</Label>
               <Input
                 id="confirm_password"
                 name="confirm_password"
@@ -171,7 +171,7 @@ export default function ResetPasswordPage() {
               />
             </div>
 
-            <p className="text-gray-600 text-[14px] leading-5 -mt-4">
+            <p className="text-gray-600 text-sm leading-5 -mt-4">
               Use at least 8 characters with one letter and one number.
             </p>
 
@@ -193,7 +193,7 @@ export default function ResetPasswordPage() {
 
             <Link
               to="/login"
-              className="flex items-center justify-center gap-2 text-[16px] text-priori-purple hover:underline"
+              className="flex items-center justify-center gap-2 text-base text-priori-purple hover:underline"
             >
               <ArrowLeft className="size-4" />
               Back to sign in

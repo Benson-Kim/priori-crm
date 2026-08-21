@@ -237,8 +237,20 @@ export function Table<T>({
                         // holding long free text clamp their own width and put
                         // the full value in a title.
                         "whitespace-nowrap",
+                        /*
+                         * Desk rows are 53px on the design: a 52px cell box
+                         * (`h-13`) plus the 1px divider the row carries. The
+                         * height is set rather than derived from padding
+                         * because the tallest thing in a cell varies — a 24px
+                         * avatar here, a chip there — so padding alone made
+                         * the pitch drift between desk tables.
+                         *
+                         * `height` on a cell is a minimum, so the two-line
+                         * rows in the pipeline workspace still grow past it
+                         * instead of clipping.
+                         */
                         isSalesDesk
-                          ? "px-cell-x py-cell-y text-[13px] leading-5 text-sd-ink"
+                          ? "h-13 px-cell-x py-cell-y text-dense-md leading-5 text-sd-ink"
                           : "px-4 py-3 text-sm text-content-primary leading-6",
                         col.className
                       )}

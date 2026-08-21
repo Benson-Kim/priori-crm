@@ -315,7 +315,7 @@ export default function TaxReportPage() {
                 netVatClass,
               ].join(" ")}
             >
-              <p className="text-gray-500 text-[18px] py-3">
+              <p className="text-gray-500 text-lg py-3">
                 {data.completeness.status === "partial"
                   ? "Net VAT Estimate - KES documents only"
                   : "Net VAT Estimate"}

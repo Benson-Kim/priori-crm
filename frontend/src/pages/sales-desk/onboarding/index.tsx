@@ -34,10 +34,10 @@ function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
             <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <h2 id={headingId} className="text-[15px] font-bold text-sd-ink">
+                        <h2 id={headingId} className="text-sm font-bold text-sd-ink">
                             {onboarding.company_name}
                         </h2>
-                        <p className="pt-0.5 text-[13px] text-sd-muted">{onboarding.plan}</p>
+                        <p className="pt-0.5 text-dense-md text-sd-muted">{onboarding.plan}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-sd-brand-bg px-2.5 py-0.5 text-xs font-semibold text-priori-purple">
                         {percent}%
@@ -50,7 +50,7 @@ function ChecklistCard({ onboarding, onToggle }: Readonly<ChecklistCardProps>) {
                     aria-label={`${onboarding.company_name} delivery progress`}
                 />
 
-                <p className="pt-2 text-[13px] text-sd-muted">
+                <p className="pt-2 text-dense-md text-sd-muted">
                     {onboarding.completed_count} of {onboarding.total_count} tasks complete
                 </p>
             </div>
@@ -179,7 +179,7 @@ export default function SalesDeskOnboardingPage() {
             {isLoading ? (
                 <LoadingState message="Loading onboarding..." className="h-64" />
             ) : onboardings.length === 0 ? (
-                <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-[13px] text-sd-muted">
+                <p className="rounded-2xl border border-sd-border bg-sd-card p-10 text-center text-dense-md text-sd-muted">
                     Nothing in delivery.
                 </p>
             ) : (

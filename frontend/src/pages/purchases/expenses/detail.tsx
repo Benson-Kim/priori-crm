@@ -265,18 +265,18 @@ export default function ExpensesDetailPage() {
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <PaperclipIcon size={24} className="text-gray-700" />
                                 <div className="min-w-0">
-                                    <p className="text-gray-800 text-[16px] truncate" title={doc.filename}>{doc.filename}</p>
+                                    <p className="text-gray-800 text-base truncate" title={doc.filename}>{doc.filename}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-6">
-                                <p className="text-[16px] text-gray-500">{doc.file_size_kb.toFixed(1)} KB</p>
+                                <p className="text-base text-gray-500">{doc.file_size_kb.toFixed(1)} KB</p>
                                 <Button onClick={() => handleFileDownload(doc.id, doc.filename)} aria-label="Download document"
                                     className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-priori-purple hover:text-priori-purple hover:bg-transparent">
-                                    <Download size={24} /> <span className="text-[16px] text-priori-purple">Download</span>
+                                    <Download size={24} /> <span className="text-base text-priori-purple">Download</span>
                                 </Button>
                                 <Button onClick={() => handleFileDelete(doc.id, doc.filename)} aria-label="Delete document"
                                     className="p-0 border-0 shadow-none bg-transparent flex items-center gap-2 text-gray-600 hover:text-priori-purple hover:bg-transparent">
-                                    <X size={24} /> <span className="text-[16px] text-gray-800">Delete</span>
+                                    <X size={24} /> <span className="text-base text-gray-800">Delete</span>
                                 </Button>
                             </div>
                         </div>

@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 import { currencyOptions, customerTypeOptions } from "@/lib/enums";
-import { formatKenyanPhoneInput, getKenyanPhoneGhostText, normalizeKenyanPhoneNumber } from "@/lib/utils";
+import { KenyanPhoneInput } from "@/components/ui/KenyanPhoneInput";
+import { normalizeKenyanPhoneNumber } from "@/lib/utils";
 import { customerSchema, type CustomerFormData } from "@/validations/customerSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronLeft, Save } from "lucide-react";
@@ -193,39 +194,17 @@ export function CustomerDetailsForm({
                         <Controller
                             name="phone"
                             control={control}
-                            render={({ field }) => {
-                                const formattedValue = formatKenyanPhoneInput(field.value ?? "");
-
-                                return (
-                                    <Input
-                                        id="phone"
-                                        prefix="+254"
-                                        type="tel"
-                                        name={field.name}
-                                        ref={field.ref}
-                                        value={formattedValue}
-                                        ghostText={getKenyanPhoneGhostText(formattedValue)}
-                                        onBlur={field.onBlur}
-                                        onChange={(event) => {
-                                            const digitsOnly = event.target.value.replace(/\D/g, "");
-
-                                            let localDigits = digitsOnly;
-
-                                            if (localDigits.startsWith("254")) {
-                                                localDigits = localDigits.slice(3);
-                                            }
-
-                                            if (localDigits.startsWith("0")) {
-                                                localDigits = localDigits.slice(1);
-                                            }
-
-                                            field.onChange(localDigits.slice(0, 9));
-                                        }}
-                                        placeholder=""
-                                        error={errors.phone?.message}
-                                    />
-                                );
-                            }}
+                            render={({ field }) => (
+                                <KenyanPhoneInput
+                                    id="phone"
+                                    name={field.name}
+                                    ref={field.ref}
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    onBlur={field.onBlur}
+                                    error={errors.phone?.message}
+                                />
+                            )}
                         />
                     </Field>
                 </div>

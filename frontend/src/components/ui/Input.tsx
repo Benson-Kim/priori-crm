@@ -28,7 +28,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <div className="flex flex-col gap-1.5 w-full">
         <div
           className={cn(
-            "flex items-center w-full px-3 overflow-hidden gap-3 rounded-lg border bg-gray-50 transition-all",
+            "flex items-center w-full px-3 overflow-hidden gap-3 rounded-lg border transition-all",
+            /*
+             * Empty reads as a grey well, filled reads white — the same rule
+             * the Sales Desk select follows, so a field and a select sitting
+             * side by side agree about what "has a value" looks like.
+             *
+             * Driven off the DOM rather than the `value` prop: a dozen fields
+             * are wired with react-hook-form's `register`, which passes no
+             * `value`, and those would never have turned white. `Input`
+             * guarantees a placeholder below so `:placeholder-shown` is a
+             * reliable proxy for emptiness even on fields that set none.
+             */
+            "bg-gray-50 has-[input:not(:placeholder-shown)]:bg-white",
             error ? hasErrorInput : ["border-gray-300", focusInput],
             wrapperClassName
           )}
@@ -55,6 +67,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                 className
               )}
               {...props}
+              /*
+               * A single space when the caller sets none, so
+               * `:placeholder-shown` above still distinguishes empty from
+               * filled. Without it the selector is permanently true on such a
+               * field and it renders white while empty. Visually and to a
+               * screen reader this is the same as having no placeholder.
+               *
+               * `||`, not `??`: the phone fields pass `placeholder=""` because
+               * their ghost text stands in for one, and an empty string is not
+               * nullish — it would slip through and leave those fields white.
+               */
+              placeholder={props.placeholder || " "}
             />
           </div>
 

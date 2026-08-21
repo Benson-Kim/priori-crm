@@ -21,11 +21,11 @@ function Column({
 }: Readonly<{ label: string; headline: string; caption: string; isLast?: boolean }>) {
     return (
         <div className={isLast ? "px-4 py-3" : "border-sd-border px-4 py-3 lg:border-r"}>
-            <p className="text-[10px] font-bold tracking-[0.25px] text-sd-muted uppercase">
+            <p className="text-dense-xs font-bold tracking-[0.25px] text-sd-muted uppercase">
                 {label}
             </p>
-            <p className="pt-1 text-[13px] font-bold text-sd-ink">{headline}</p>
-            <p className="pt-0.5 text-[11px] text-sd-muted">{caption}</p>
+            <p className="pt-1 text-dense-md font-bold text-sd-ink">{headline}</p>
+            <p className="pt-0.5 text-dense-sm text-sd-muted">{caption}</p>
         </div>
     );
 }

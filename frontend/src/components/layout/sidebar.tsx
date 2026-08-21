@@ -285,7 +285,6 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
             </nav>
 
             <div className="flex shrink-0 flex-col gap-1 pt-2">
-
                 {!collapsed && (
                     <div className={FOOTER}>
                         {user && (
@@ -299,32 +298,37 @@ export function Sidebar({ badgeCounts }: Readonly<SidebarProps>) {
                                     <p className="truncate text-xs font-semibold text-gray-900">
                                         {user.first_name} {user.last_name}
                                     </p>
-                                    <p className="truncate text-[10px] text-gray-600 capitalize">
+                                    <p className="truncate text-dense-xs text-gray-600 capitalize">
                                         {user.role}
                                     </p>
                                 </div>
                             </div>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                logout();
-                                navigate("/login", { replace: true });
-                            }}
-                            aria-label="Logout"
-                            title={collapsed ? "Logout" : undefined}
-                            className={cn(
-                                ITEM_BASE,
-                                ITEM_IDLE,
-                                "cursor-pointer",
-                                collapsed && "justify-center px-0"
-                            )}
-                        >
-                            <LogOut className={ICON} />
-                            {!collapsed && "Logout"}
-                        </button>
+                        <p className="px-1 text-dense-xs leading-relaxed text-gray-600">
+                            &copy; 2026 Business Central &middot; All Rights Reserved
+                            <br />
+                            Version: 1.0.188-288
+                        </p>
                     </div>
                 )}
+                <button
+                    type="button"
+                    onClick={() => {
+                        logout();
+                        navigate("/login", { replace: true });
+                    }}
+                    aria-label="Logout"
+                    title={collapsed ? "Logout" : undefined}
+                    className={cn(
+                        ITEM_BASE,
+                        ITEM_IDLE,
+                        "cursor-pointer",
+                        collapsed && "justify-center px-0"
+                    )}
+                >
+                    <LogOut className={ICON} />
+                    {!collapsed && "Logout"}
+                </button>
             </div>
         </aside>
     );

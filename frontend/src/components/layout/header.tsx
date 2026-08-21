@@ -89,7 +89,7 @@ export function Header({
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
-              className="h-9 w-64 rounded-full border border-sd-border bg-sd-surface pr-4 pl-8 text-[13px] text-sd-ink placeholder:text-sd-faint"
+              className="h-9 w-64 rounded-full border border-sd-border bg-sd-surface pr-4 pl-8 text-dense-md text-sd-ink placeholder:text-sd-faint"
             />
           </div>
         )}
@@ -97,7 +97,7 @@ export function Header({
         <button className="relative p-2 text-gray-500 hover:text-content-primary transition-colors cursor-pointer rounded-full hover:bg-black/5">
           <Bell size={24} fill="#667085" />
           {notificationCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sd-brand px-1 text-[10px] font-bold text-white">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sd-brand px-1 text-dense-xs font-bold text-white">
               {notificationCount}
             </span>
           )}
