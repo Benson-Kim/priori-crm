@@ -1,15 +1,19 @@
 import hashlib
 import logging
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.common.audit import record_audit_event
 from app.common.exceptions import (
     BadRequestException,
     RateLimitException,
+    StepUpRequiredException,
     UnauthorizedException,
 )
 from app.common.rate_limit_store import RateLimitStore, build_rate_limit_store
@@ -21,9 +25,13 @@ from app.common.security import (
     verify_password,
 )
 from app.common.token_denylist import TokenDenylist, build_token_denylist
+from app.constants.enums import SessionStatus
 from app.lib.config import settings
 from app.lib.email import email_service
-from app.modules.auth.models import OTPCode, PasswordResetToken, User
+from app.modules.auth.models import OTPCode, PasswordResetToken, User, UserSession
+
+if TYPE_CHECKING:
+    from app.common.authz.context import AccessContext
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +156,18 @@ class AuthService:
 
     # Verify OTP (Step 2)
 
-    def verify_otp(self, email: str, code: str) -> tuple[str, str, User]:
-        """Verify OTP and return (access_token, refresh_token, user)."""
+    def verify_otp(
+        self, email: str, code: str, context: "AccessContext | None" = None
+    ) -> tuple[str, str, User]:
+        """Verify OTP and return (access_token, refresh_token, user).
+
+        ``context`` is the zero-trust gate's per-request ``AccessContext``
+        (#67), threaded through by the router: success absorbs it into the
+        user's behavioural baseline (a passed step-up folds the triggering
+        soft signals in, so the same new device/place never re-challenges);
+        exhausting the attempt budget terminates the user's challenged
+        sessions (repeated failed step-ups are a HARD signal).
+        """
         self._enforce_attempt_throttle(email)
 
         user = self._get_user_by_email(email)
@@ -187,6 +205,19 @@ class AuthService:
             otp.attempt_count += 1
             if otp.attempt_count >= settings.AUTH_MAX_OTP_ATTEMPTS:
                 otp.is_used = True
+                # Repeated failed step-ups are a HARD signal (#67): whoever
+                # is burning the OTP budget cannot read the inbox — the
+                # challenged sessions they are trying to launder die now
+                # and only a full, successful re-auth restores access. A
+                # legitimate user's challenged session was already unusable
+                # (only re-auth clears it), so this locks out no one.
+                # Committed with the attempt counter below, durably past
+                # the 401 this raise causes.
+                self._terminate_user_sessions(
+                    user.id,
+                    "failed_step_up",
+                    statuses=(SessionStatus.CHALLENGE_REQUIRED.value,),
+                )
             self._db.commit()
             raise UnauthorizedException(_GENERIC_AUTH_ERROR)
 
@@ -200,8 +231,38 @@ class AuthService:
 
         self._invalidate_pending_otps(user.id, exclude_id=otp.id)
 
-        access_token = create_access_token(subject=str(user.id))
-        refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
+        # Continuous session risk (#67): every completed OTP verification
+        # mints a FRESH session whose id travels as the `sid` claim in both
+        # tokens. This is also how a step-up challenge is satisfied: the
+        # challenged session stays challenged forever; re-authenticating
+        # yields a new, cleanly-scored session.
+        # `sua` ("stepped-up-at") records that this instant is backed by a
+        # completed OTP. The static ABAC rules (off-hours, unknown-geo) read
+        # it so their CHALLENGE is answerable: without it those rules depend
+        # only on the wall clock and the path, which no amount of
+        # re-authenticating can change, turning every 401 into a lockout for
+        # the whole window. It rides in BOTH tokens so a rotation can carry
+        # it forward unchanged.
+        session = self._create_session(user)
+        claims = {
+            "sid": str(session.id),
+            "sua": int(datetime.now(UTC).timestamp()),
+        }
+
+        # Baseline absorption (#67): a completed OTP proves inbox control
+        # from THIS device, at THIS place, at THIS hour — fold the context
+        # into the user's behavioural baseline so the same new device/place
+        # never re-fires as a soft signal (no repeated challenges for a
+        # context the user has already verified). Rides this request's
+        # transaction, atomic with the session mint.
+        from app.common.authz.baselines import absorb_context
+
+        absorb_context(self._db, user.id, context)
+
+        access_token = create_access_token(subject=str(user.id), extra=claims)
+        refresh_token, _jti, _exp = create_refresh_token(
+            subject=str(user.id), extra=claims
+        )
 
         return access_token, refresh_token, user
 
@@ -284,6 +345,12 @@ class AuthService:
         # user's whole refresh-token family so any outstanding refresh token
         # (including an attacker's) is rejected. The user signs in afresh.
         self._revoke_token_family(str(user.id))
+        # The fence only reaches REFRESH tokens. An attacker's already-issued
+        # ACCESS token stays valid for up to JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        # after the victim rotates their password — the window the reset
+        # exists to close. Terminating the session rows shuts it now, because
+        # the zero-trust gate re-checks session status on every request (#67).
+        self._terminate_user_sessions(user.id, "password_reset")
 
         logger.info("Password reset completed for user %s", user.email)
 
@@ -325,6 +392,25 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedException("Invalid or inactive user.")
 
+        # Continuous session risk (#67): a refresh never launders session
+        # state. A terminated session's tokens are dead, and a challenged
+        # session cannot be rotated back to life — the caller must re-run
+        # the full login → OTP flow, which mints a fresh session.
+        sid = payload.get("sid")
+        session = self._get_session(sid)
+        if sid is not None and session is None:
+            raise UnauthorizedException("Refresh token has been revoked.")
+        if session is not None:
+            if session.status == SessionStatus.TERMINATED.value:
+                raise UnauthorizedException("Refresh token has been revoked.")
+            if session.status == SessionStatus.CHALLENGE_REQUIRED.value:
+                raise StepUpRequiredException(
+                    detail=(
+                        "Additional verification is required. Please sign in "
+                        "again to receive a verification code."
+                    )
+                )
+
         # Rotate: atomically spend the presented token BEFORE minting the
         # new pair. revoke_if_new is a single revoke-and-report operation,
         # so exactly one concurrent presenter of a given jti can win this
@@ -340,8 +426,24 @@ class AuthService:
             )
             raise UnauthorizedException("Refresh token has been revoked.")
 
-        access_token = create_access_token(subject=str(user.id))
-        new_refresh_token, _jti, _exp = create_refresh_token(subject=str(user.id))
+        # Carry the session claims across the rotation UNCHANGED (#67).
+        #
+        # `sid`: without this the rotated pair carries no session at all, so
+        # continuous risk scoring silently stops applying to a session after
+        # its first refresh — the feature would expire with the original
+        # access token.
+        #
+        # `sua`: copied, never re-stamped. Re-stamping would let anyone
+        # holding a stolen refresh token launder an indefinite step-up
+        # without ever proving an OTP, which is precisely what the claim
+        # exists to prove. For the same reason the step-up rules cannot lean
+        # on `iat`, which rotation resets by design.
+        claims = {k: payload[k] for k in ("sid", "sua") if payload.get(k) is not None}
+
+        access_token = create_access_token(subject=str(user.id), extra=claims)
+        new_refresh_token, _jti, _exp = create_refresh_token(
+            subject=str(user.id), extra=claims
+        )
 
         return access_token, new_refresh_token
 
@@ -359,6 +461,23 @@ class AuthService:
             return
 
         self._revoke_refresh_payload(payload)
+
+        # Continuous session risk (#67): logout kills the whole session, so
+        # any still-live ACCESS token carrying this `sid` dies with it —
+        # zero trust, not just refresh-token revocation.
+        session = self._get_session(payload.get("sid"))
+        if session is not None and session.status != SessionStatus.TERMINATED.value:
+            session.status = SessionStatus.TERMINATED.value
+            session.termination_reason = "logout"
+            record_audit_event(
+                self._db,
+                actor_id=session.user_id,
+                entity_type="session",
+                entity_id=session.id,
+                action="session_terminated",
+                after={"why": "logout"},
+            )
+            self._db.flush()
 
     # Maintenance
 
@@ -421,6 +540,61 @@ class AuthService:
 
         ttl = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
         _refresh_token_denylist().set_fence(f"user:{user_id}", time.time(), ttl)
+
+    def _create_session(self, user: User) -> UserSession:
+        """Mint a fresh, cleanly-scored session row (#67).
+
+        Flush-only: the row commits with the verify-otp request via
+        ``CommitOnSuccessRoute``, atomically with the OTP consumption.
+        Context fields (ip, geo, device) start empty and are populated by
+        the zero-trust gate on the session's first scored request.
+        """
+        session = UserSession(user_id=user.id, status=SessionStatus.ACTIVE.value)
+        self._db.add(session)
+        self._db.flush()
+        logger.info("Session %s created for user %s", session.id, user.email)
+        return session
+
+    def _get_session(self, sid: str | None) -> UserSession | None:
+        """Resolve a `sid` claim to its session row (None for legacy tokens)."""
+        if not sid:
+            return None
+        try:
+            session_id = uuid.UUID(str(sid))
+        except ValueError:
+            return None
+        return self._db.get(UserSession, session_id)
+
+    def _terminate_user_sessions(
+        self, user_id, reason: str, statuses: tuple[str, ...] | None = None
+    ) -> None:
+        """Terminate a user's sessions, audited (#67).
+
+        By default every non-terminated session dies (password reset).
+        ``statuses`` narrows the sweep — the failed-step-up path kills only
+        CHALLENGE_REQUIRED sessions, so an attacker burning the OTP budget
+        cannot use it to knock out the victim's healthy active sessions.
+        """
+        query = self._db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.status != SessionStatus.TERMINATED.value,
+        )
+        if statuses is not None:
+            query = query.filter(UserSession.status.in_(statuses))
+        sessions = query.all()
+        for session in sessions:
+            session.status = SessionStatus.TERMINATED.value
+            session.termination_reason = reason
+            record_audit_event(
+                self._db,
+                actor_id=session.user_id,
+                entity_type="session",
+                entity_id=session.id,
+                action="session_terminated",
+                after={"why": reason},
+            )
+        if sessions:
+            self._db.flush()
 
     @staticmethod
     def _hash_otp(code: str) -> str:

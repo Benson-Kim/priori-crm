@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.common.dependencies import DbSession, verify_internal_secret
 from app.common.routing import CommitOnSuccessRoute
@@ -35,10 +35,20 @@ def login(body: LoginRequest, db: DbSession):
 
 
 @router.post("/verify-otp", response_model=TokenResponse)
-def verify_otp(body: VerifyOTPRequest, db: DbSession):
-    """Step 2: Verify OTP and return JWT tokens."""
+def verify_otp(request: Request, body: VerifyOTPRequest, db: DbSession):
+    """Step 2: Verify OTP and return JWT tokens.
+
+    The zero-trust gate's request context rides along (#67): a successful
+    verification absorbs this device/place/hour into the user's
+    behavioural baseline — a passed step-up is exactly the evidence that
+    makes them trusted.
+    """
     auth_service = AuthService(db)
-    access_token, refresh_token, user = auth_service.verify_otp(body.email, body.code)
+    access_token, refresh_token, user = auth_service.verify_otp(
+        body.email,
+        body.code,
+        context=getattr(request.state, "access_context", None),
+    )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,

@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,22 @@ from app.main import app
 # settings), so it stays fully tested. The middleware reads this setting on
 # every dispatch, so flipping it here is sufficient.
 settings.RATE_LIMIT_ENABLED = False
+
+# The ABAC off-hours window (#67) stays LIVE for the whole suite, at its
+# production 22h -> 6h setting.
+#
+# It was previously pinned to 0/0 (disabled) here because a nightly CI run
+# saw step-up challenges. That was a symptom, not a test problem: the rule
+# read only the wall clock and the path, so its challenge could not be
+# answered by authenticating — it was an unconditional lockout for the
+# window, and disabling it in CI hid exactly the defect worth catching.
+#
+# Now that a completed OTP stamps the `sua` claim and the rule honours it,
+# a normally-authenticated caller passes at any hour. `auth_headers` below
+# mints that claim by default, so business tests are time-of-day
+# independent *because the product is*, not because the rule is off.
+settings.ABAC_OFF_HOURS_START = 22
+settings.ABAC_OFF_HOURS_END = 6
 
 # Prefer the real PostgreSQL database (provided by the CI service via
 # DATABASE_URL) so Postgres-only constructs - gen_random_uuid(),
@@ -110,6 +127,60 @@ def reset_auth_throttle():
     yield
     _auth_throttle_store.cache_clear()
     _refresh_token_denylist.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_volume_store():
+    """Reset the session data-access volume counter between tests.
+
+    It is an lru_cache'd process-wide store (Redis in production, in-memory
+    here), so without clearing it one test's request burst would count
+    toward another's window.
+    """
+    from app.common.authz.risk import _volume_store
+
+    _volume_store.cache_clear()
+    yield
+    _volume_store.cache_clear()
+
+
+def auth_headers(
+    user,
+    *,
+    stepped_up: bool = True,
+    stepped_up_at: datetime | None = None,
+    session_id=None,
+) -> dict:
+    """Bearer headers for ``user``, stepped-up by default.
+
+    The default models a NORMALLY authenticated caller: real users reach the
+    API by completing login → OTP, which stamps `sua`. Minting tokens
+    without it would make every test look like a stale session and put the
+    whole suite back at the mercy of the wall clock.
+
+    ``stepped_up=False`` models a stale or pre-`sua` token — the shape the
+    off-hours and unknown-geo challenges exist to catch.
+
+    ``stepped_up_at`` pins the claim to an explicit instant. Tests that
+    freeze the gate's clock MUST pass it: otherwise the claim is stamped at
+    real wall-clock time while the request is evaluated at the frozen one,
+    and whether the token reads as fresh depends on which way the two
+    happen to drift — a coin flip, not a test.
+    """
+    from app.common.security import create_access_token
+
+    claims: dict = {}
+    if session_id is not None:
+        claims["sid"] = str(session_id)
+    if stepped_up_at is not None:
+        claims["sua"] = int(stepped_up_at.timestamp())
+    elif stepped_up:
+        claims["sua"] = int(datetime.now(UTC).timestamp())
+    return {
+        "Authorization": (
+            f"Bearer {create_access_token(subject=str(user.id), extra=claims or None)}"
+        )
+    }
 
 
 @pytest.fixture

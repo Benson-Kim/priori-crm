@@ -25,6 +25,8 @@ import app.modules.owner.models
 import app.modules.purchase_orders.models
 import app.modules.quotes.models
 import app.modules.vendors.models
+from app.common.authz.db_guard import install_zero_trust_db_guard
+from app.common.authz.enforcement import zero_trust_gate
 from app.common.database import engine
 from app.common.dependencies import require_module
 from app.common.exceptions import register_exception_handlers
@@ -97,6 +99,11 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Application factory for the Business Central API."""
+    # Zero-trust DB guard (#67): refuse ORM access on request-scoped
+    # sessions that carry no ALLOW verdict from the gate below. Installed
+    # before any request can run; idempotent.
+    install_zero_trust_db_guard()
+
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
@@ -105,6 +112,10 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.is_development else None,
         openapi_url="/openapi.json" if settings.is_development else None,
         lifespan=lifespan,
+        # Context-aware access control (#67): the zero-trust gate runs on
+        # EVERY request, ahead of module gates and the require_role /
+        # require_privileged RBAC dependencies it layers on top of.
+        dependencies=[Depends(zero_trust_gate)],
     )
 
     # Middleware executes in reverse order of registration: the last one

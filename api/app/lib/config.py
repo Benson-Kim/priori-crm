@@ -55,6 +55,115 @@ class Settings(BaseSettings):
         "Authorization,Content-Type,X-Request-ID,X-Internal-Secret"
     )
 
+    # Context-aware access control (ABAC + zero trust, issue #67).
+    # The policy engine evaluates per-request context (time of day,
+    # geolocation, device fingerprint, IP reputation, resource sensitivity)
+    # on top of the existing RBAC gates; it can only restrict, never widen.
+    ABAC_ENABLED: bool = True
+    # Trust edge-supplied context headers (X-Geo-Country/-Lat/-Lon,
+    # X-Device-Fingerprint). Enable ONLY behind a proxy/CDN that sets and
+    # strips these headers; otherwise they are attacker-controlled.
+    ABAC_TRUST_CONTEXT_HEADERS: bool = False
+    # Comma-separated bad-reputation sources: exact IPs, CIDR ranges, or
+    # literal client identifiers. Matching requests are denied outright.
+    ABAC_IP_DENYLIST: str = ""
+    # Comma-separated ISO country codes to refuse (requires a geo signal).
+    ABAC_GEO_BLOCKLIST: str = ""
+    # Off-hours window in the organisation's REPORTING_TIMEZONE: sensitive
+    # access inside it triggers an OTP step-up challenge. start == end
+    # disables the window (the test suite pins 0/0 for determinism).
+    ABAC_OFF_HOURS_START: int = Field(default=22, ge=0, le=23)
+    ABAC_OFF_HOURS_END: int = Field(default=6, ge=0, le=23)
+    # How long a completed OTP step-up satisfies the static context rules.
+    # Sized to a WORK SHIFT, not a transaction: 30min across a 22h→6h night
+    # would mean ~16 OTP emails, which is nagging rather than security. The
+    # guarantee is unchanged at any TTL — an attacker holding a stolen token
+    # has no inbox, so they can never mint a fresh `sua` claim at all.
+    ABAC_STEP_UP_TTL_MINUTES: int = Field(default=480, ge=1, le=1440)
+    # Audit ALLOW decisions too (deny/challenge/terminate always audited).
+    # Default OFF: one audit INSERT per business request is real write
+    # amplification, and the non-allow decisions — the ones with evidentiary
+    # value — are always recorded regardless of this switch.
+    ABAC_AUDIT_ALLOW_DECISIONS: bool = False
+
+    # Continuous session risk scoring (issue #67). Behavioural anomalies
+    # add their score to the session; crossing the challenge threshold
+    # forces a step-up (login → OTP mints a fresh session), crossing the
+    # terminate threshold kills the session outright. Scores decay with
+    # time (see RISK_DECAY_PER_HOUR) so benign noise accumulated over a
+    # long-lived session cannot eventually challenge a legitimate user.
+    # Thresholds implement the graduated, evidence-weighted model:
+    # low risk (< challenge) = allow + log; moderate = OTP step-up;
+    # high (>= terminate) = kill the session. The terminate default (100)
+    # sits ABOVE the largest possible single-request batch of SOFT signals
+    # (new device 25 + new country 25 + unusual hour 10 + volume 30 = 90),
+    # so soft evidence alone — the benign-unusual shapes: new place, new
+    # laptop, night work, a busy minute — can reach a challenge but NEVER
+    # a termination. Only HARD signals (impossible travel, exfiltration-
+    # scale reads) or hard+soft corroboration cross the terminate line.
+    RISK_CHALLENGE_THRESHOLD: int = Field(default=60, ge=1, le=10000)
+    RISK_TERMINATE_THRESHOLD: int = Field(default=100, ge=1, le=10000)
+    # Impossible travel: implied speed between consecutive geolocated
+    # requests above this many km/h is an anomaly (900 ≈ airliner cruise).
+    RISK_IMPOSSIBLE_TRAVEL_KMH: int = Field(default=900, ge=100, le=10000)
+    RISK_SCORE_IMPOSSIBLE_TRAVEL: int = Field(default=70, ge=0, le=10000)
+    RISK_SCORE_DEVICE_CHANGE: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_VOLUME_ANOMALY: int = Field(default=30, ge=0, le=10000)
+    RISK_SCORE_PRIVILEGE_ESCALATION: int = Field(default=25, ge=0, le=10000)
+    # SOFT signals against the per-user behavioural baseline (issue #67):
+    # evaluated once, on a session's first scored request, and only when the
+    # user HAS a baseline to deviate from. Individually all sit below the
+    # challenge threshold (allow + log); in combination they can reach a
+    # step-up but never a termination (see RISK_TERMINATE_THRESHOLD).
+    # Weights: an unknown device or country is real evidence (25 each — two
+    # together still allow); an odd hour is the weakest signal there is (10)
+    # because night work is how deadlines get met.
+    RISK_SCORE_NEW_DEVICE: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_NEW_COUNTRY: int = Field(default=25, ge=0, le=10000)
+    RISK_SCORE_UNUSUAL_HOUR: int = Field(default=10, ge=0, le=10000)
+    # HARD signal: exfiltration-scale reads. A burst this far past the
+    # ordinary ceiling is not a busy minute; it terminates directly.
+    RISK_SCORE_EXFILTRATION: int = Field(default=100, ge=0, le=10000)
+    # Minimum hour observations before the unusual-hour signal may fire:
+    # with fewer samples the user HAS no "typical hours" and absence of
+    # history must not read as anomaly (fail-safe degradation).
+    RISK_BASELINE_MIN_HOUR_OBSERVATIONS: int = Field(default=50, ge=1, le=100000)
+    # Data-access volume ceiling: requests per rolling window per session.
+    # Counted in the shared RateLimitStore (Redis in production), NOT on the
+    # session row: a Postgres counter is rolled back by any failing request,
+    # which would let an attacker reset their own window for free by probing
+    # endpoints that error.
+    RISK_VOLUME_WINDOW_SECONDS: int = Field(default=60, ge=5, le=3600)
+    RISK_VOLUME_MAX_REQUESTS: int = Field(default=300, ge=1, le=100000)
+    # Typical-volume learning (issue #67): the per-user baseline keeps an
+    # EWMA of requests per window PER SENSITIVITY CLASS. Once at least
+    # RISK_VOLUME_MIN_LEARNED_WINDOWS active windows are observed for a
+    # class, the mild-volume ceiling adapts to
+    #   clamp(ewma * RISK_VOLUME_DEVIATION_MULTIPLIER,
+    #         RISK_VOLUME_MIN_CEILING, RISK_VOLUME_MAX_REQUESTS)
+    # so a user who typically reads 10 invoices/minute is flagged (softly)
+    # at 40, not at the global 300. Unlearned classes use the global
+    # ceiling. The mild signal is SOFT either way — it logs or corroborates,
+    # never challenges alone. The exfiltration HARD ceiling is absolute:
+    # RISK_VOLUME_MAX_REQUESTS * RISK_VOLUME_EXFIL_MULTIPLIER requests per
+    # window across all classes, because no legitimate workflow reads at 5x
+    # the global ceiling regardless of personal habits.
+    RISK_VOLUME_DEVIATION_MULTIPLIER: int = Field(default=4, ge=2, le=100)
+    RISK_VOLUME_MIN_CEILING: int = Field(default=30, ge=1, le=100000)
+    RISK_VOLUME_MIN_LEARNED_WINDOWS: int = Field(default=3, ge=1, le=1000)
+    RISK_VOLUME_LEARNING_ALPHA: float = Field(default=0.3, ge=0.01, le=1.0)
+    RISK_VOLUME_EXFIL_MULTIPLIER: int = Field(default=5, ge=2, le=100)
+    # Points shed per hour since the last anomaly. Without decay, benign
+    # noise (a browser auto-update +25, one busy minute +30, a stray 403
+    # +25) accumulates past the challenge threshold on any long-lived
+    # session. Decay applies ONLY to the score: a session already flipped to
+    # challenge_required or terminated is never restored in place.
+    RISK_DECAY_PER_HOUR: int = Field(default=10, ge=0, le=10000)
+    # Session lifetimes. Exceeding either terminates the session with its
+    # own audited reason, so an expiry is never mistaken for a risk kill.
+    SESSION_MAX_AGE_HOURS: int = Field(default=24, ge=1, le=8760)
+    SESSION_IDLE_TIMEOUT_MINUTES: int = Field(default=720, ge=5, le=43200)
+
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=10, le=1000)
