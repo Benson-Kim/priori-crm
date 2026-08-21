@@ -110,6 +110,14 @@ export function Header({
           className="ml-1"
           panelClassName="min-w-56 flex flex-col gap-1"
           items={profileItems}
+          /*
+           * The trigger below is an avatar plus a chevron — Avatar is
+           * aria-hidden and the icon carries no text, so without this the
+           * button announces as unnamed. It is the only route to Settings
+           * and Help, so naming it is what makes those reachable by screen
+           * reader and voice control.
+           */
+          triggerLabel={user ? `Profile menu for ${user.first_name}` : "Profile menu"}
           trigger={
             <span className="flex items-center gap-2 rounded-full p-1 pr-2 hover:bg-black/5 transition-colors">
               {user ? (

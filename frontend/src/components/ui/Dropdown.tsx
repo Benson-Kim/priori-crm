@@ -20,9 +20,16 @@ interface DropdownProps {
   header?: ReactNode;
   /** Override the panel's default width (`min-w-44 max-w-60`). */
   panelClassName?: string;
+  /**
+   * Accessible name for the trigger button. Required whenever `trigger`
+   * renders no text — an avatar and a chevron icon give a screen reader
+   * nothing to announce, so the control reads as an unnamed button. The
+   * default "Actions" trigger names itself, which is why this is optional.
+   */
+  triggerLabel?: string;
 }
 
-export function Dropdown({ items, trigger, className, disabled, header, panelClassName }: Readonly<DropdownProps>) {
+export function Dropdown({ items, trigger, className, disabled, header, panelClassName, triggerLabel }: Readonly<DropdownProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -71,8 +78,12 @@ export function Dropdown({ items, trigger, className, disabled, header, panelCla
   return (
     <div ref={ref} className={cn("relative inline-block", className)}>
       <button
+        type="button"
         disabled={disabled}
         onClick={toggleDropdown}
+        aria-label={triggerLabel}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
         /*
          * No background of its own. The trigger sits inside a table cell or a
          * host-styled wrapper (`className` lands on the wrapper, not here), so
