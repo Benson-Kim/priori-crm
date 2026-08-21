@@ -32,8 +32,8 @@ export function useCustomerForm(customerId?: string): UseCustomerFormReturn {
             setInitialData({
                 customerType: customer.customer_type,
                 companyName: customer.company_name || "",
-                firstName: customer.first_name,
-                lastName: customer.last_name,
+                firstName: customer.first_name || "",
+                lastName: customer.last_name || "",
                 email: customer.email || "",
                 // Optional: strip the country prefix only when a number is
                 // on file. Calling .replace() on an absent phone throws.
